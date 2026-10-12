@@ -1,0 +1,73 @@
+{
+  "fixture_type": "synthetic_policy_check_not_real_leaderboard",
+  "schema_version": "1.0",
+  "evidence_weights": {
+    "b1": 0.6,
+    "b2": 0.4
+  },
+  "policy": {
+    "coverage_threshold": 0.5,
+    "missing_prior": 0.5,
+    "missing_penalty": 0.1,
+    "near_tie_epsilon": 0.02,
+    "tier_proxy": {
+      "low": 0,
+      "medium": 0.5,
+      "high": 1
+    },
+    "lambda_cost": {
+      "quality": 0,
+      "balanced": 0.15,
+      "cost": 0.3
+    }
+  },
+  "profiles": [
+    {
+      "id": "synthetic-a",
+      "cost_tier": "high",
+      "scores": {
+        "b1": 0.9,
+        "b2": 0.8
+      }
+    },
+    {
+      "id": "synthetic-b",
+      "cost_tier": "low",
+      "scores": {
+        "b1": 0.95,
+        "b2": null
+      }
+    },
+    {
+      "id": "synthetic-c",
+      "cost_tier": "medium",
+      "scores": {
+        "b1": 0.85,
+        "b2": 0.85
+      }
+    }
+  ],
+  "expected": {
+    "coverage": {
+      "synthetic-a": 1,
+      "synthetic-b": 0.6,
+      "synthetic-c": 1
+    },
+    "quality": {
+      "synthetic-a": 0.86,
+      "synthetic-b": 0.73,
+      "synthetic-c": 0.85
+    },
+    "balanced_scores": {
+      "synthetic-a": 0.71,
+      "synthetic-b": 0.73,
+      "synthetic-c": 0.775
+    },
+    "winner": {
+      "quality": "synthetic-a",
+      "balanced": "synthetic-c",
+      "cost": "synthetic-b"
+    }
+  }
+}
+

@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "run_id": "r-synthetic-001",
+  "nonce": "000102030405060708090a0b0c0d0e0f",
+  "profile_fingerprint": "synthetic-profile-fingerprint-not-live",
+  "status": "partial",
+  "result_file": "result.synthetic.md",
+  "result_sha256": "6d1c04f6c831ed0642ab3f24deeac58393cb26de555d13b4c53bbf9ad04d5858",
+  "checks": [
+    {
+      "command": "actual API/herdr smoke",
+      "outcome": "not_run",
+      "notes": "형식 검증 예제이며 실제 실행 증거가 아님"
+    }
+  ]
+}

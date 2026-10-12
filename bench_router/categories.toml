@@ -1,0 +1,33 @@
+# P: 초기 정책 (03 문서 "카테고리와 evidence 매핑"). 각 카테고리 합 = 1.
+# 바꾸면 routing.POLICY_VERSION도 올린다.
+[mapping.coding_repo]
+swe_verified_exact = 0.6
+aa_coding = 0.4
+
+[mapping.terminal_ops]
+terminal_exact = 0.7
+aa_coding = 0.3
+
+[mapping.code_gen]
+aa_coding = 1.0
+
+[mapping.webdev]
+arena_webdev = 0.6
+aa_coding = 0.4
+
+[mapping.math_reasoning]
+arena_text_math = 1.0
+
+[mapping.analysis]
+aa_intelligence = 0.6
+arena_text = 0.4
+
+[mapping.writing]
+arena_text = 1.0
+
+[mapping.vision_doc]
+arena_document = 0.5
+arena_vision = 0.5
+
+[mapping.general]
+aa_intelligence = 1.0

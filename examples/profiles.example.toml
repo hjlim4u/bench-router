@@ -1,0 +1,20 @@
+# 비활성 placeholder입니다. 실제 CLI/model/version/계정을 검증한 뒤 변경하세요.
+schema_version = "1.0"
+default_profile = "local-codex-example"
+fallback_order = ["local-codex-example"]
+
+[[profile]]
+id = "local-codex-example"
+enabled = false
+kind = "codex"
+executable = "codex"
+args = ["-m", "REPLACE_WITH_VERIFIED_MODEL_ID"]
+model_id = "REPLACE_WITH_CANONICAL_MODEL_ID"
+harness_id = "codex-cli"
+reasoning_effort = "unknown"
+config_revision = "replace-after-verification"
+cost_tier = "high"
+inference_local = false
+context_tokens = 0
+capabilities = ["filesystem_write"]
+

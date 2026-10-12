@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "task_id": "synthetic-smoke-001",
+  "round": 1,
+  "summary": "Create a short design note in the provided result directory and return the execution manifest.",
+  "prompt": "합성 smoke test입니다. 저장소 코드를 변경하지 말고, 결과 디렉터리에 bench-router 실행 계약에 맞는 짧은 설명 결과를 작성하세요.",
+  "cwd": "/ABSOLUTE/PATH/TO/SMOKE_PROJECT",
+  "context_files": [],
+  "categories": {
+    "analysis": 1
+  },
+  "category_confidence": 0.9,
+  "constraints": {
+    "max_cost_tier": "high",
+    "min_context_tokens": 0,
+    "local_only": false,
+    "timeout_ms": 900000,
+    "required_capabilities": [
+      "filesystem_write"
+    ]
+  },
+  "priority": "balanced",
+  "exclude_profiles": []
+}
+
