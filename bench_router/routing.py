@@ -285,6 +285,10 @@ def load_categories(path):
     return mapping
 
 
+def config_hash(cfg, mapping):
+    return canonical_hash({"profiles": cfg, "categories": mapping})
+
+
 def profile_fingerprint(p):
     # ponytail: CLI 버전 미포함("unknown") — dry-run은 프로세스를 띄우지 않는다.
     # P2에서 --version probe를 넣으면 refresh의 snapshot fingerprint도 같은 입력으로 계산해야 한다.
@@ -542,7 +546,7 @@ def route(t, cfg, mapping, snap, snap_warnings, now):
             "task_id": t["task_id"], "round": t["round"], "run_id": None, "selected": selected,
             "selection_mode": mode, "classification": cls, "candidates": out_cands, "excluded": excluded,
             "snapshot_id": snap["snapshot_id"] if snap else None, "policy_version": POLICY_VERSION,
-            "config_hash": canonical_hash({"profiles": cfg, "categories": mapping}),
+            "config_hash": config_hash(cfg, mapping),
             "task_hash": semantic_task_hash(t), "warnings": warnings, "sources": sources}
 
 

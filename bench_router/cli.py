@@ -2,13 +2,14 @@
 import argparse
 import json
 import os
+import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 from . import routing as r
 
-EXIT = {"selected": 0, "no_eligible_profile": 13}
+EXIT = {"selected": 0, "no_eligible_profile": 13, "ok": 0, "partial_failure": 16, "failed": 16, "conflict": 14}
 BUNDLED_CATEGORIES = Path(__file__).with_name("categories.toml")
 
 
@@ -16,13 +17,45 @@ def _xdg(var, fallback):
     return Path(os.environ.get(var) or Path.home() / fallback) / "bench-router"
 
 
-def _load(args):
-    task = r.validate_task(r.load_json_strict(args.task, r.TASK_MAX_BYTES))
+def _config(args):
     cfg = r.load_profiles(args.config_dir / "profiles.toml")
     cats = args.config_dir / "categories.toml"
-    mapping = r.load_categories(cats if cats.exists() else BUNDLED_CATEGORIES)
+    return cfg, r.load_categories(cats if cats.exists() else BUNDLED_CATEGORIES)
+
+
+def _load(args):
+    task = r.validate_task(r.load_json_strict(args.task, r.TASK_MAX_BYTES))
+    cfg, mapping = _config(args)
     snap, snap_warnings = r.load_snapshot(args.cache_dir)
     return r.route(task, cfg, mapping, snap, snap_warnings, datetime.now(timezone.utc))
+
+
+def _refresh(args):
+    from . import data  # refresh 경로에서만 import (route cold start에 영향 없음)
+    cfg, mapping = _config(args)
+    aliases = data.load_aliases(args.config_dir / "aliases.toml")
+    import_doc = None
+    if args.import_file:
+        if args.source not in data.SOURCES or not data.SOURCES[args.source].get("manual"):
+            raise r.InputError("--import requires --source of a manual source: "
+                               + ", ".join(s for s, m in data.SOURCES.items() if m.get("manual")))
+        import_doc = data.validate_import(r.load_json_strict(args.import_file, 16 * 1024 * 1024), args.source)
+    elif args.source and args.source not in data.AUTO_SOURCES:
+        raise r.InputError(f"--source must be one of {data.AUTO_SOURCES} (manual sources need --import)")
+    try:
+        return data.refresh(args.cache_dir, cfg, mapping, aliases, datetime.now(timezone.utc),
+                            only=args.source, force=args.force, import_doc=import_doc)
+    except data.LockBusy as e:
+        return {"schema_version": r.SCHEMA_VERSION, "status": "conflict", "error": {"code": "lock", "message": str(e)}}
+
+
+def _status(args):
+    from . import data
+    try:
+        cfg_hash = r.config_hash(*_config(args))
+    except r.InputError:
+        cfg_hash = None
+    return data.status(args.cache_dir, datetime.now(timezone.utc), cfg_hash)
 
 
 def explain_text(res):
@@ -61,27 +94,33 @@ def main(argv=None):
     rp.add_argument("--dry-run", action="store_true")
     ep = sub.add_parser("explain", help="human-readable dry-run with all candidates")
     ep.add_argument("--task", required=True)
+    fp = sub.add_parser("refresh", help="fetch sources and publish the routing snapshot")
+    fp.add_argument("--source")
+    fp.add_argument("--force", action="store_true", help="ignore TTL")
+    fp.add_argument("--import", dest="import_file", help="approved manual observations (swe/tb)")
+    sub.add_parser("status", help="source age, failures, unmatched models, snapshot/config state")
     args = ap.parse_args(argv)
 
     try:
         if args.cmd == "route" and not args.dry_run:
             raise r.InputError("live route is not implemented yet (P2); use --dry-run")
-        res = _load(args)
+        res = {"refresh": _refresh, "status": _status}.get(args.cmd, _load)(args)
     except r.InputError as e:
         print(json.dumps({"schema_version": r.SCHEMA_VERSION, "status": "error",
                           "error": {"code": "validation", "message": str(e)}}, ensure_ascii=False))
         return 2
-    except OSError as e:
+    except (OSError, sqlite3.Error) as e:
         print(json.dumps({"schema_version": r.SCHEMA_VERSION, "status": "error",
                           "error": {"code": "io", "message": str(e)}}, ensure_ascii=False))
         return 15
 
     if args.cmd == "explain":
         print(explain_text(res))
-    else:
+        return EXIT[res["status"]]
+    if args.cmd == "route":
         res["candidates_total"] = len(res["candidates"])
         res["candidates"] = res["candidates"][:3]  # top3 요약, 전체는 explain
-        print(json.dumps(res, ensure_ascii=False))
+    print(json.dumps(res, ensure_ascii=False))
     return EXIT[res["status"]]
 
 
