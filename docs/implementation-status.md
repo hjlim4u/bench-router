@@ -73,10 +73,18 @@ herdr는 `~/.local/bin/herdr`(0.9.3). 비로그인 셸에서는 PATH에 없으�
 - fingerprint의 CLI 버전은 계속 "unknown"이다. 버전 probe를 넣으면 refresh도 같은 입력으로 계산해야 한다.
 - decisions/feedback은 SQLite가 아니라 run 디렉터리 파일(`decision.json`, `feedback.jsonl`)에 남긴다. 집계가 필요해지면 DB로 옮긴다.
 
+- **live 2차 (2026-10-12 14:02, Arena 복구 후)**: Arena refresh 성공(66s, 요청 17, 재시도 2, revision `e16f9023…`).
+  - A `smoke-002` writing: **`benchmark_score`로 claude-opus-high 선택**(arena_text norm 0.998, coverage 1.0). codex-sol-high는 coverage 0으로 순위 계산에서 빠짐. 33s `completed`/`success`, SHA-256 독립 계산 일치, 재호출 시 재전송 없음(프롬프트 전용 문자열 1회), workspace를 닫은 뒤에도 collect가 completed.
+  - B `smoke-003` 같은 작업 + `exclude_profiles=[claude-opus-high]`: **codex-sol-high**(`fallback_insufficient_evidence`). 44s `completed`/`success`, SHA-256 일치, 재전송 없음, 닫은 뒤 collect도 completed. Agent가 자체 보고한 check 하나(`git status`, cwd가 git 저장소가 아님)는 failed였지만 결과와는 무관.
+  - 두 run 모두 feedback `success` 기록. 열린 workspace 0, `brsmoke` 서버 정지.
+  - codex: 0.162.1(공식 standalone installer, 사용자 범위), ChatGPT 로그인, `codex exec`로 `gpt-6.1-sol` 접근 확인.
+
 ## live smoke에서 드러난 것과 결정
 - **위임 cwd는 Claude Code에서 미리 신뢰된 폴더여야 한다.** 처음 보는 폴더는 신뢰 확인 창 → herdr `agent_not_ready` → 라우터 `blocked`(프롬프트 0회). 보안 확인이므로 자동 응답하지 않는다. Orchestrator 전제 조건.
 - **결과 계약에서 "원자적 기록" 요구를 뺐다(04 문서와 다름).** 이 문구 때문에 Agent가 `mv`·python 검증을 시도했고, `acceptEdits` 모드에서 권한 승인 대기(blocked)에 걸렸다. 라우터는 settled 이후에만 검사하고 해시까지 확인하므로 원자성은 실익이 없다. 지금은 "마지막에 한 번에 작성, 해시는 `sha256sum result.md`"로 지시한다.
 - 프로필 args에 `--allowedTools Bash(sha256sum:*)`를 추가했다(해시 계산 외 Bash는 승인 필요).
+- codex 프로필은 `-s workspace-write -a never`로 둔다(cwd 안에서만 쓰기, 승인 요청 없음, 실패는 모델에 반환). bypass 옵션은 쓰지 않는다.
+- Arena의 codex 모델은 `gpt-6.1-sol-max`(effort max)만 있다. 프로필 effort가 `high`이므로 alias로 연결하지 않았다(effort가 다르면 별도 cohort). 그래서 codex는 현재 evidence가 없다.
 - 프롬프트 이후 blocked면 `pane read --source visible` 화면을 `diagnostic_tail`로 반환한다. blocked 상태에서 `agent read --lines 2000`은 `agent_not_idle`로 거부된다.
 - `pane read`/`agent read`는 JSON이 아닌 텍스트를 출력한다(초기 fake가 틀렸던 부분, 수정함).
 - 진행 중 run의 workspace를 닫으면 Agent도 종료된다. smoke 정리는 completed일 때만 한다.
@@ -109,11 +117,14 @@ herdr는 `~/.local/bin/herdr`(0.9.3). 비로그인 셸에서는 PATH에 없으�
   ```
 - WSL 기본 사용자 계정 미생성(현재 root로 실행). `wsl -d Ubuntu`로 한 번 실행해 생성 권장.
 - JSON Schema 파일(task/output): 런타임 validator가 계약을 강제하므로 생략.
-- **benchmark-selected live 실행 미검증**: smoke는 근거 데이터 없이 default로 선택됐다. HF datasets-server 장애(500/502/timeout)로 WSL 사용자 캐시에 Arena 데이터가 없다.
-- 실제 프로필 설정: WSL `~/.config/bench-router/{profiles.toml,aliases.toml}`(사용자 hjlim4u). 프로필은 하나(claude-opus-high: `--model claude-opus-5-5 --effort high --permission-mode acceptEdits --allowedTools Bash(sha256sum:*)`), Arena alias는 `claude-opus-5.5-high`. 후보가 하나뿐이라 라우팅 비교는 아직 의미가 없다.
+- 실제 프로필 설정: WSL `~/.config/bench-router/{profiles.toml,aliases.toml}`(사용자 hjlim4u).
+  - claude-opus-high: `--model claude-opus-5-5 --effort high --permission-mode acceptEdits --allowedTools Bash(sha256sum:*)`, cost high, Arena alias `claude-opus-5.5-high`.
+  - codex-sol-high: `-m gpt-6.1-sol -c model_reasoning_effort="high" -s workspace-write -a never`, cost medium, alias 없음.
+- 두 프로필 모두 evidence를 갖고 점수를 비교하는 경우는 아직 없다. codex의 effort를 max로 바꿔 Arena와 맞추거나(비용 증가), AA 키로 AA evidence를 추가해야 한다.
+- 라우팅 효과 평가(06 문서: baseline 대비 작업군 성공률·비용·지연)는 하지 않았다.
 
 ## 다음 한 가지 작업
-HF 복구 후 `refresh --source arena` → `status`로 Arena evidence 확인 → 두 번째 프로필(예: codex 또는 sonnet)을 추가하고 benchmark_score 선택으로 live route 1회.
+두 프로필 모두 evidence를 갖게 만든다(AA 키 설정 또는 codex effort 정책 결정) → 같은 작업에서 benchmark_score로 두 후보를 비교하는 live route 1회 → 06의 작업군 비교 설계.
 
 ## 사용자에게 필요한 정보
 - 실제 사용할 프로필(CLI/모델 ID/reasoning/cost tier/context/capability)과 그에 맞는 aliases.
