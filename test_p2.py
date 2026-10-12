@@ -49,8 +49,8 @@ class FakeHerdr:
         if (group, verb) == ("workspace", "create"):
             return self._ok({"type": "workspace_created", "workspace": {"workspace_id": "w7"},
                              "tab": {"tab_id": "w7:t1"}, "root_pane": {"pane_id": self.pane, "cwd": argv[3]}})
-        if (group, verb) == ("pane", "read"):
-            return self._ok({"type": "pane_read", "read": {"text": "$ claude\nclaude: command not found"}})
+        if (group, verb) == ("pane", "read"):  # 0.9.3 실측: JSON이 아닌 터미널 텍스트
+            return subprocess.CompletedProcess([], 0, "$ claude\nclaude: command not found\n", "")
         if group != "agent":
             raise AssertionError(argv)
         if verb == "start":
@@ -134,6 +134,9 @@ class P2(unittest.TestCase):
                 self.assertEqual((out["status"], out["delivery_state"], fake.prompts), (status, "not_attempted", []))
                 self.assertIn("command not found", out["diagnostic_tail"])
                 self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "execution_failed")
+                rc = hd.load_receipt(self.cwd, out["run_id"])  # 원래 실패 원인 보존
+                obs = rc["pre_prompt_failure"]["observation"] if status == "blocked" else rc["last_observation"]
+                self.assertEqual(obs["error"]["code"], code)
         out = self.run_(FakeHerdr(), self.task(task_id="t-missing"), w=lambda _: None)
         self.assertEqual(out["status"], "no_eligible_profile")
         self.assertEqual(out["excluded"], [{"profile": "a", "reasons": ["executable_not_found"]}])

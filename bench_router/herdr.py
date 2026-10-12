@@ -48,8 +48,9 @@ def _iso(t):
 
 # ---------- herdr 호출 ----------
 
-def call(argv, timeout_s, session=None, runner=subprocess.run):
-    """(result, error). shell 없이 argv 전달 — prompt 문자열은 해석되지 않는다."""
+def call(argv, timeout_s, session=None, runner=subprocess.run, raw=False):
+    """(result, error). shell 없이 argv 전달 — prompt 문자열은 해석되지 않는다.
+    raw=True: stdout 텍스트 그대로 (pane/agent read는 JSON이 아닌 텍스트를 출력 — 0.9.3 실측)."""
     cmd = [HERDR_BIN, *(["--session", session] if session else []), *argv]
     try:
         p = runner(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -60,6 +61,8 @@ def call(argv, timeout_s, session=None, runner=subprocess.run):
     except FileNotFoundError:
         return None, {"code": "herdr_not_found", "message": f"{HERDR_BIN} not on PATH"}
     if p.returncode == 0:
+        if raw:
+            return p.stdout, None
         try:
             return json.loads(p.stdout)["result"], None
         except (ValueError, KeyError, TypeError):
@@ -205,8 +208,9 @@ def _observe(rc, state=None, error=None, note=None):
 def _tail(rc, h):
     if not rc.get("pane_id"):
         return None
-    res, err = h(["pane", "read", rc["pane_id"], "--source", "recent-unwrapped", "--lines", "20"], SHORT_CALL_S)
-    return None if err else res.get("read", {}).get("text")
+    text, err = h(["pane", "read", rc["pane_id"], "--source", "recent-unwrapped", "--lines", "20"], SHORT_CALL_S,
+                  raw=True)
+    return None if err else text[-4000:]
 
 
 def settle(rc, state):
@@ -241,8 +245,8 @@ def _remaining_ms(deadline_mono):
 
 def execute(rc, prompt, profile, session=None, runner=subprocess.run):
     """새 workspace → agent start → 상태 확인 → (submission_attempted 기록) → prompt --wait 1회 → 계약 검사."""
-    def h(argv, timeout_s):
-        return call(argv, timeout_s, session, runner)
+    def h(argv, timeout_s, raw=False):
+        return call(argv, timeout_s, session, runner, raw)
 
     deadline = time.monotonic() + rc["timeout_ms"] / 1000
 
@@ -321,8 +325,10 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
         return rc
     if rc["delivery_state"] == "not_attempted":  # prompt를 보낸 적 없음: 회수할 작업이 없다
         if rc["status"] not in SETTLED_STATUSES:
+            rc["pre_prompt_failure"] = {"status": rc["status"], "observation": rc["last_observation"]}
             rc["status"] = "execution_failed"
-            _observe(rc, note=f"prompt was never sent (was {rc['status']}); start a new round to retry")
+            _observe(rc, note=f"prompt was never sent (was {rc['pre_prompt_failure']['status']}); "
+                              "resolve the cause, then dispatch a new round")
             save(rc)
         return rc
     g, err = h(["agent", "get", rc["agent_name"]], SHORT_CALL_S)
