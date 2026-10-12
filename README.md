@@ -321,7 +321,7 @@ run 디렉터리에는 `receipt.json`, `decision.json`, `result.md`, `result.jso
 ## 테스트
 
 ```bash
-python3 -m unittest test_p0 test_p1 test_p2     # 34 tests, WSL/Linux
+python3 -m unittest test_p0 test_p1 test_p2     # 35 tests, WSL/Linux
 ```
 
 | 파일 | 범위 |
@@ -338,7 +338,7 @@ herdr는 0.9.3에서 실측한 응답 형식을 따르는 fake로 대체합니�
 
 | 항목 | 결과 |
 |---|---|
-| 오프라인 테스트 | 34/34 통과 |
+| 오프라인 테스트 | 35/35 통과 |
 | AA 실호출 | 성공 (Free tier, index v4.3, 4페이지, 697개 모델) |
 | Arena 실호출 | 성공 (revision `e16f9023…`). HF 장애 중에는 180초 상한에서 실패 처리되고 last-good 유지됨 |
 | herdr + Claude Code / Codex live 위임 | 성공. 미해결 run 차단, 재전송 없음, 결과 해시 일치, 정리 뒤 collect 확인 |
