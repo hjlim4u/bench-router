@@ -44,6 +44,8 @@ class FakeHerdr:
         argv = cmd[1:]
         if argv[0] == "--session":
             argv = argv[2:]
+        if argv[-1] == "--help":  # 0.9.3 help 형식(docs/evidence/herdr-0.9.3/help_agent_start.txt)
+            return subprocess.CompletedProcess([], 0, "  --kind <KIND>\n    [possible values: pi, claude, codex]\n", "")
         self.calls.append(argv[:2])
         group, verb = argv[0], argv[1]
         if (group, verb) == ("workspace", "create"):
@@ -140,6 +142,14 @@ class P2(unittest.TestCase):
         out = self.run_(FakeHerdr(), self.task(task_id="t-missing"), w=lambda _: None)
         self.assertEqual(out["status"], "no_eligible_profile")
         self.assertEqual(out["excluded"], [{"profile": "a", "reasons": ["executable_not_found"]}])
+
+    def test_kinds_from_herdr_help(self):
+        self.assertEqual(hd.herdr_kinds(runner=FakeHerdr()), {"pi", "claude", "codex"})
+        no_help = lambda *a, **k: subprocess.CompletedProcess([], 2, "", "unknown flag")
+        self.assertIsNone(hd.herdr_kinds(runner=no_help))
+        p = {"kind": "aider", "executable": "aider"}
+        self.assertEqual(hd.probe(p, which, {"claude"}), "herdr_kind_unsupported")
+        self.assertIsNone(hd.probe(p, which, None))  # help를 못 읽으면 kind 검사 생략
 
     def test_v22_not_idle_before_prompt(self):
         for st in ("working", "blocked", "unknown"):

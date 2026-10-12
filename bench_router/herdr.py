@@ -18,10 +18,6 @@ from pathlib import Path
 
 from . import routing as r
 
-# herdr 0.9.3 `agent start --help`의 --kind 값. 각 kind는 같은 이름의 canonical executable을 실행한다.
-HERDR_KINDS = {"pi", "claude", "codex", "gemini", "cursor", "devin", "agy", "cline", "omp", "mastracode", "opencode",
-               "copilot", "kimi", "kiro", "droid", "amp", "grok", "hermes", "kilo", "qodercli", "qwen", "letta",
-               "maki", "muse"}
 HERDR_BIN = os.environ.get("BENCH_ROUTER_HERDR", "herdr")
 START_TIMEOUT_MAX_MS = 300_000  # herdr agent start 상한
 START_TIMEOUT_MIN_MS = 5_000    # ponytail: herdr에 명시된 최소값 없음. 이보다 적은 예산이면 시작하지 않는다.
@@ -74,9 +70,18 @@ def call(argv, timeout_s, session=None, runner=subprocess.run, raw=False):
         return None, {"code": f"exit_{p.returncode}", "message": (p.stderr or p.stdout)[:300]}
 
 
-def probe(p, which=shutil.which):
-    """live 가용성. 실행 파일 존재와 herdr kind 지원만 확인한다(로그인/모델 접근은 확인하지 않음)."""
-    if p["kind"] not in HERDR_KINDS:
+def herdr_kinds(session=None, runner=subprocess.run):
+    """설치된 herdr가 지원하는 --kind 집합(`agent start --help`의 possible values). 읽지 못하면 None.
+    목록을 코드에 복제하지 않아 herdr 업그레이드로 kind가 늘어도 수정이 필요 없다."""
+    out, err = call(["agent", "start", "--help"], SHORT_CALL_S, session, runner, raw=True)
+    m = re.search(r"possible values: ([^\]]+)\]", out or "")
+    return {k.strip() for k in m.group(1).split(",")} if m else None
+
+
+def probe(p, which=shutil.which, kinds=None):
+    """live 가용성. 실행 파일 존재와 herdr kind 지원만 확인한다(로그인/모델 접근은 확인하지 않음).
+    kinds=None(herdr 도움말을 못 읽음): kind 검사를 건너뛰고 agent start 오류로 드러나게 둔다."""
+    if kinds is not None and p["kind"] not in kinds:
         return "herdr_kind_unsupported"
     if p["executable"] != p["kind"]:
         return "executable_kind_mismatch"  # herdr --kind는 canonical executable을 실행
@@ -365,7 +370,8 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
 def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which):
     """live route. 선택 → receipt → herdr 실행. 같은 (task_id, round)는 재전송 없이 collect."""
     now = _now()
-    availability = {p["id"]: probe(p, which) for p in cfg["profile"]}
+    kinds = herdr_kinds(session, runner)
+    availability = {p["id"]: probe(p, which, kinds) for p in cfg["profile"]}
     res = r.route(t, cfg, mapping, snap, snap_warnings, now, availability)
     if res["status"] != "selected":
         return res

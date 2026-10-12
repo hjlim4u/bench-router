@@ -286,7 +286,7 @@ WantedBy=timers.target
 
 `route`(dry-run 없이)는 다음 순서로 동작합니다.
 
-1. 가용성을 확인합니다(herdr kind 지원, PATH의 실행 파일). 로그인과 모델 접근은 확인하지 않고 `auth_unverified` 경고만 남깁니다. 이어서 프로필을 선택합니다.
+1. 가용성을 확인합니다(herdr kind 지원 — 설치된 herdr의 `agent start --help`에서 읽음, PATH의 실행 파일). 로그인과 모델 접근은 확인하지 않고 `auth_unverified` 경고만 남깁니다. 이어서 프로필을 선택합니다.
 2. `<cwd>/.bench-router/dispatch.lock`을 잡습니다. cwd당 동시에 하나만 위임합니다.
 3. 같은 `(task_id, round)`의 receipt가 있으면 처리 방식이 갈립니다. 내용 hash가 같으면 **재전송 없이 collect**로 회수하고, 다르면 `conflict`입니다. 아직 정리되지 않은 다른 run이 있으면 새 위임을 막습니다(`unresolved_run`).
 4. `run_id`(UUID)와 128-bit nonce를 만들고 receipt를 원자적으로 기록합니다. 선택 근거는 `decision.json`에 남깁니다.
