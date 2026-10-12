@@ -2,6 +2,7 @@
 
 route 경로는 네트워크·herdr·파일 쓰기를 하지 않는다. 계산 정책은 03 문서, 계약은 04 문서.
 """
+import contextlib
 import hashlib
 import json
 import math
@@ -62,6 +63,22 @@ def warn(code, message, source_id=None):
 def canonical_hash(obj):
     data = json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+def atomic_write(path, data):
+    path = Path(path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with open(tmp, "wb") as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+    with contextlib.suppress(OSError):  # 디렉터리 fsync는 POSIX에서만
+        fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
 
 
 # ---------- 엄격 JSON ----------
@@ -475,8 +492,9 @@ EVIDENCE_FIELDS = ("raw", "normalized", "scope", "cohort_id", "metric_version", 
                    "fetched_at", "published_at", "evaluated_at")
 
 
-def route(t, cfg, mapping, snap, snap_warnings, now):
-    """dry-run 선택. 같은 task/config/snapshot/now면 결과가 동일하다."""
+def route(t, cfg, mapping, snap, snap_warnings, now, availability=None):
+    """프로필 선택. availability=None이면 dry-run(미확인), live면 {profile_id: 제외 사유 또는 None}.
+    같은 task/config/snapshot/availability/now면 결과가 동일하다."""
     warnings = list(snap_warnings)
     cls = classify(t)
     if cls["stage"] == "fallback":
@@ -493,6 +511,8 @@ def route(t, cfg, mapping, snap, snap_warnings, now):
     cands, excluded = [], []
     for p in sorted(cfg["profile"], key=lambda p: p["id"]):
         reasons = hard_filter(p, t)
+        if availability is not None and availability.get(p["id"]):
+            reasons.append(availability[p["id"]])
         if reasons:
             excluded.append({"profile": p["id"], "reasons": reasons})
             continue
@@ -526,14 +546,17 @@ def route(t, cfg, mapping, snap, snap_warnings, now):
         out_cands.append({"profile": c["profile"], "score": _r(c["score"]), "quality": _r(c["quality"]),
                           "coverage": _r(c["coverage"]), "coverage_band": coverage_band(c["coverage"]),
                           "exact_evidence_weight": _r(c["exact_evidence_weight"]), "cost_proxy": c["cost_proxy"],
-                          "evidence": c["evidence"], "availability_verified": False})
+                          "evidence": c["evidence"], "availability_verified": availability is not None})
 
     selected = None
     if pick:
         chosen = next(c for c in cands if c["profile"] == pick)
         selected = {"profile": pick, "profile_fingerprint": chosen["profile_fingerprint"],
                     "agent_name": None, "pane_id": None}
-        warnings.append(warn("availability_unverified", "dry-run: CLI/auth readiness not probed"))
+        if availability is None:
+            warnings.append(warn("availability_unverified", "dry-run: CLI/auth readiness not probed"))
+        else:
+            warnings.append(warn("auth_unverified", "executable found; model access/login not probed"))
         if mode != "benchmark_score":
             warnings.append(warn("insufficient_evidence", f"no candidate with coverage >= "
                                  f"{POLICY['coverage_threshold']}; {mode}, not a benchmark-optimal choice"))

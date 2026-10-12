@@ -114,8 +114,6 @@ class P0(unittest.TestCase):
         self.assertEqual((code, res["status"], res["selected"]), (13, "no_eligible_profile", None))
         self.assertEqual(res["excluded"], [{"profile": "local-codex-example", "reasons": ["disabled"]}])
         self.assertIn("snapshot_unusable", [w["code"] for w in res["warnings"]])
-        with contextlib.redirect_stdout(io.StringIO()):  # live route는 P2 전까지 거부
-            self.assertEqual(cli.main(["--config-dir", str(cfg_dir), "route", "--task", str(task_file)]), 2)
 
     def test_v06_default_obeys_constraints(self):
         ps = [profile("dflt", inference_local=False), profile("loc", inference_local=True)]

@@ -422,22 +422,6 @@ def build_snapshot(db, cfg, mapping, aliases, now):
     return r.validate_snapshot(snap)
 
 
-def atomic_write(path, data):
-    path = Path(path)
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    with open(tmp, "wb") as f:
-        f.write(data)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp, path)
-    with contextlib.suppress(OSError):  # 디렉터리 fsync는 POSIX에서만
-        fd = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-
-
 def publish(cache_dir, snap, now):
     """현재 유효본 → last-good, 새 snapshot → snapshot.json (각각 원자 교체). 재현본은 ARCHIVE_DAYS 보관."""
     cache_dir = Path(cache_dir)
@@ -445,13 +429,13 @@ def publish(cache_dir, snap, now):
     cur = cache_dir / "snapshot.json"
     try:
         r.validate_snapshot(r.load_json_strict(cur, r.SNAPSHOT_MAX_BYTES))
-        atomic_write(cache_dir / "snapshot.last-good.json", cur.read_bytes())
+        r.atomic_write(cache_dir / "snapshot.last-good.json", cur.read_bytes())
     except r.InputError:
         pass  # 없거나 손상된 현재본은 last-good으로 승격하지 않음
-    atomic_write(cur, data)
+    r.atomic_write(cur, data)
     archive = cache_dir / "snapshots"
     archive.mkdir(exist_ok=True)
-    atomic_write(archive / f"{snap['snapshot_id']}.json", data)
+    r.atomic_write(archive / f"{snap['snapshot_id']}.json", data)
     cutoff = now.timestamp() - ARCHIVE_DAYS * 86400
     for f in archive.glob("*.json"):
         if f.stat().st_mtime < cutoff:

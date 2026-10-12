@@ -9,7 +9,9 @@ from pathlib import Path
 
 from . import routing as r
 
-EXIT = {"selected": 0, "no_eligible_profile": 13, "ok": 0, "partial_failure": 16, "failed": 16, "conflict": 14}
+EXIT = {"selected": 0, "completed": 0, "ok": 0, "recorded": 0, "blocked": 10, "timed_out": 11, "waiting": 11,
+        "delivery_uncertain": 11, "execution_failed": 12, "result_invalid": 12, "no_eligible_profile": 13,
+        "conflict": 14, "partial_failure": 16, "failed": 16}
 BUNDLED_CATEGORIES = Path(__file__).with_name("categories.toml")
 
 
@@ -27,7 +29,20 @@ def _load(args):
     task = r.validate_task(r.load_json_strict(args.task, r.TASK_MAX_BYTES))
     cfg, mapping = _config(args)
     snap, snap_warnings = r.load_snapshot(args.cache_dir)
+    if args.cmd == "route" and not args.dry_run:
+        from . import herdr  # live 경로에서만
+        return herdr.dispatch(task, cfg, mapping, snap, snap_warnings, args.herdr_session)
     return r.route(task, cfg, mapping, snap, snap_warnings, datetime.now(timezone.utc))
+
+
+def _collect(args):
+    from . import herdr
+    return herdr.collect_run(args.cwd, args.run_id, args.wait_ms, args.herdr_session)
+
+
+def _feedback(args):
+    from . import herdr
+    return herdr.feedback(args.cwd, args.run_id, args.outcome, args.evaluator, args.note)
 
 
 def _refresh(args):
@@ -89,7 +104,9 @@ def main(argv=None):
     ap.add_argument("--config-dir", type=Path, default=_xdg("XDG_CONFIG_HOME", ".config"))
     ap.add_argument("--cache-dir", type=Path, default=_xdg("XDG_CACHE_HOME", ".cache"))
     sub = ap.add_subparsers(dest="cmd", required=True)
-    rp = sub.add_parser("route", help="select a profile (--dry-run only until P2)")
+    ap.add_argument("--herdr-session", default=os.environ.get("BENCH_ROUTER_HERDR_SESSION") or None,
+                    help="named herdr session (default: herdr's default session)")
+    rp = sub.add_parser("route", help="select a profile and delegate via herdr (--dry-run: select only)")
     rp.add_argument("--task", required=True)
     rp.add_argument("--dry-run", action="store_true")
     ep = sub.add_parser("explain", help="human-readable dry-run with all candidates")
@@ -99,12 +116,21 @@ def main(argv=None):
     fp.add_argument("--force", action="store_true", help="ignore TTL")
     fp.add_argument("--import", dest="import_file", help="approved manual observations (swe/tb)")
     sub.add_parser("status", help="source age, failures, unmatched models, snapshot/config state")
+    cp = sub.add_parser("collect", help="observe/collect an existing run; never re-sends the prompt")
+    cp.add_argument("--run-id", required=True)
+    cp.add_argument("--cwd", required=True)
+    cp.add_argument("--wait-ms", type=int, default=0, help="wait while the agent is still working")
+    bp = sub.add_parser("feedback", help="record the orchestrator's verified outcome")
+    bp.add_argument("--run-id", required=True)
+    bp.add_argument("--cwd", required=True)
+    bp.add_argument("--outcome", required=True, choices=["success", "partial", "fail"])
+    bp.add_argument("--evaluator")
+    bp.add_argument("--note")
     args = ap.parse_args(argv)
 
     try:
-        if args.cmd == "route" and not args.dry_run:
-            raise r.InputError("live route is not implemented yet (P2); use --dry-run")
-        res = {"refresh": _refresh, "status": _status}.get(args.cmd, _load)(args)
+        res = {"refresh": _refresh, "status": _status, "collect": _collect, "feedback": _feedback}.get(
+            args.cmd, _load)(args)
     except r.InputError as e:
         print(json.dumps({"schema_version": r.SCHEMA_VERSION, "status": "error",
                           "error": {"code": "validation", "message": str(e)}}, ensure_ascii=False))
