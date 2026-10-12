@@ -124,14 +124,20 @@ herdr는 `~/.local/bin/herdr`(0.9.3). 비로그인 셸에서는 PATH에 없으�
 - WSL 기본 사용자 계정 미생성(현재 root로 실행). `wsl -d Ubuntu`로 한 번 실행해 생성 권장.
 - JSON Schema 파일(task/output): 런타임 validator가 계약을 강제하므로 생략.
 - 실제 프로필 설정: WSL `~/.config/bench-router/{profiles.toml,aliases.toml}`(사용자 hjlim4u).
-  - claude-opus-high: `--model claude-opus-5-5 --effort high --permission-mode acceptEdits --allowedTools Bash(sha256sum:*)`, cost high, Arena alias `claude-opus-5.5-high`.
-  - codex-sol-high: `-m gpt-6.1-sol -c model_reasoning_effort="high" -s workspace-write -a never`, cost medium, alias 없음.
+  - claude-opus-high: `--model claude-opus-5-5 --effort high --permission-mode auto`, cost high, alias Arena `claude-opus-5.5-high` / AA `claude-opus-5-5-high`.
+  - codex-sol-high: `-m gpt-6.1-sol -c model_reasoning_effort="high" -s workspace-write -a never`, cost medium, alias AA `gpt-6-1-sol-high`.
 - 라우팅 효과 평가(06 문서: baseline 대비 작업군 성공률·비용·지연)는 하지 않았다. 지금까지의 live run은 모두 합성 smoke 작업이다.
 - `cost_tier`(claude high, codex medium)는 정책 proxy다. 실제 요금·구독 비용은 측정하지 않았다.
 - OS timer 미설치(systemd 예시 참조. `EnvironmentFile=%h/.config/bench-router/env`).
 
+## 작업군 비교 v1 (2026-10-12, `eval/results/v1.md`)
+- 과제 20개(8개 카테고리) × 프로필 2개, 쌍당 1회. 성공 기준은 라우터 completed **그리고** hidden check 통과. 과제·check는 `eval/workset.py`, 실행 전 `ee3faa0`에 고정. 초기 상태에서는 불합격, 참조 정답(`eval/reference.py`)에서는 합격하는지 자체 검사함.
+- fixed-default(claude) 20/20, low-cost-first(codex) 19/20, bench-router 20/20. 평균 시간 38.6 / 83.9 / 40.9초. cost proxy 20 / 10 / 19(정책값, 실제 비용 아님).
+- 천장 효과 때문에 성공률은 판별 불가. bench-router는 18/20에서 default와 같은 선택을 했고, 그중 12개는 근거 부족 때문이다. 한계는 evidence coverage다.
+- pilot에서 claude `acceptEdits` 프로필이 자체 테스트 실행 중 승인 대기로 blocked → 권한 설정 차이를 재는 비교가 되므로 claude 프로필을 `--permission-mode auto`로 변경(config_revision 2026-10-12c).
+
 ## 다음 한 가지 작업
-06의 작업군 비교: 실제 작업 20개 내외(저장소 수정·터미널·웹·한국어 작성·분석 등)에 acceptance check를 먼저 고정하고, 고정 default / 저비용 우선 / bench-router 정책을 같은 조건에서 비교한다.
+coding_repo·terminal_ops의 evidence coverage 보강: SWE-bench Verified / Terminal-Bench 4.0 공식 결과에서 claude-code·codex-cli 하네스와 effort가 일치하는 행을 찾아 `refresh --import`. 그다음 판별력 있는 작업군 v2(어려운 과제, 반복 실행).
 
 ## 사용자에게 필요한 정보
 - 실제 사용할 프로필(CLI/모델 ID/reasoning/cost tier/context/capability)과 그에 맞는 aliases.
