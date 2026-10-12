@@ -136,6 +136,13 @@ herdr는 `~/.local/bin/herdr`(0.9.3). 비로그인 셸에서는 PATH에 없으�
 - 천장 효과 때문에 성공률은 판별 불가. bench-router는 18/20에서 default와 같은 선택을 했고, 그중 12개는 근거 부족 때문이다. 한계는 evidence coverage다.
 - pilot에서 claude `acceptEdits` 프로필이 자체 테스트 실행 중 승인 대기로 blocked → 권한 설정 차이를 재는 비교가 되므로 claude 프로필을 `--permission-mode auto`로 변경(config_revision 2026-10-12c).
 
+## 비용 측정 방법 (결정 2026-10-12, `eval/cost.py`)
+- **토큰은 실측**: claude `~/.claude/projects/<cwd를 -로 바꾼 이름>/*.jsonl`의 마지막 `cost-state.modelUsage`. codex `~/.codex/sessions/**/rollout-*.jsonl` 중 `session_meta.cwd`가 같은 세션의 마지막 `token_count.total_token_usage`. run마다 cwd가 다르므로 cwd로 귀속한다.
+- **금액은 API 환산 USD**(구독 실제 지출 아님): codex는 AA `pricing` × 토큰(OpenAI `input_tokens`는 cached 포함 → 빼서 계산). claude는 Claude Code `costUSD`를 쓴다. AA 단가 + 1시간 캐시 쓰기 단가($8/M, 입력 단가의 2배)로 계산한 값과 v1 20 run 모두 1e-16 이내로 일치함을 확인했다. AA의 cache write 단가($5/M)는 5분 캐시 기준이라 그대로 쓰면 22% 과소추정된다.
+- v1 결과: 성공 1건당 fixed-default $0.234, low-cost-first $0.070, bench-router $0.217. API 환산 합계 $4.69 / $1.33 / $4.35.
+- 사용법: `python3 eval/run.py --tag T` 다음에 `python3 eval/cost.py --tag T` → `eval/results/T-cost.md`.
+- 라우터 자체에는 아직 연결하지 않았다(receipt/feedback에 토큰 미기록). 정책의 `cost_tier`를 실측 기반으로 보정하려면 run 수가 더 필요하다.
+
 ## 다음 한 가지 작업
 coding_repo·terminal_ops의 evidence coverage 보강: SWE-bench Verified / Terminal-Bench 4.0 공식 결과에서 claude-code·codex-cli 하네스와 effort가 일치하는 행을 찾아 `refresh --import`. 그다음 판별력 있는 작업군 v2(어려운 과제, 반복 실행).
 
