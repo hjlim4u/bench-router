@@ -21,6 +21,7 @@ DB_SCHEMA_VERSION = 1
 HTTP_TIMEOUT_S = 30
 HTTP_MAX_BYTES = 20 * 1024 * 1024
 HTTP_RETRIES = 2  # 일시 장애만, 최초 1회 + 2회
+SOURCE_MAX_SECONDS = 180  # 소스 1회 refresh의 전체 상한(요청·재시도·대기 포함). 넘으면 실패, last-good 유지
 KEEP_PAYLOADS = 3
 ARCHIVE_DAYS = 30
 
@@ -69,9 +70,20 @@ def _iso(t):
 
 # ---------- HTTP ----------
 
+def _left_s(budget):
+    if budget is None or "deadline" not in budget:
+        return float("inf")
+    left = budget["deadline"] - time.monotonic()
+    if left <= 0:
+        raise SourceError(f"source deadline exceeded ({budget['max_seconds']}s)")
+    return left
+
+
 def http_get_json(url, headers=None, budget=None):
-    """bounded GET. 401/403/429는 재시도 없음, 5xx/네트워크는 최대 HTTP_RETRIES회. 헤더(키)는 에러에 넣지 않는다."""
+    """bounded GET. 401/403/429는 재시도 없음, 5xx/네트워크는 최대 HTTP_RETRIES회. 헤더(키)는 에러에 넣지 않는다.
+    budget: {"used", "max"} 요청 수 상한, 선택적으로 {"deadline"(monotonic), "max_seconds"} 전체 시간 상한."""
     for attempt in range(HTTP_RETRIES + 1):
+        timeout = min(HTTP_TIMEOUT_S, _left_s(budget))
         if budget is not None:
             if budget["used"] >= budget["max"]:
                 raise SourceError(f"request budget exhausted ({budget['max']})")
@@ -79,7 +91,7 @@ def http_get_json(url, headers=None, budget=None):
         req = urllib.request.Request(url, headers={"User-Agent": "bench-router/1", "Accept": "application/json",
                                                    **(headers or {})})
         try:
-            with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = resp.read(HTTP_MAX_BYTES + 1)
             if len(data) > HTTP_MAX_BYTES:
                 raise SourceError("response too large")
@@ -89,6 +101,7 @@ def http_get_json(url, headers=None, budget=None):
             except (UnicodeDecodeError, json.JSONDecodeError, r.InputError) as e:
                 raise SourceError(f"invalid JSON response: {e}")
         except urllib.error.HTTPError as e:
+            e.close()
             print(f"bench-router: GET {url.split('?')[0]} -> HTTP {e.code} (attempt {attempt + 1})", file=sys.stderr)
             if e.code in (401, 403):
                 raise SourceError(f"HTTP {e.code}: authentication/permission (not retried)")
@@ -101,7 +114,7 @@ def http_get_json(url, headers=None, budget=None):
                   file=sys.stderr)
             if attempt == HTTP_RETRIES:
                 raise SourceError(f"network error: {getattr(e, 'reason', e)}")
-        time.sleep(2 ** attempt)
+        time.sleep(min(2 ** attempt, _left_s(budget)))
 
 
 # ---------- adapters: fetch → payload(원본) / parse(payload) → observations ----------
@@ -317,7 +330,8 @@ def refresh_source(db, sid, now, force=False, import_doc=None, get_json=None, en
         age_h = (now - datetime.fromisoformat(src["last_success_at"])).total_seconds() / 3600
         if age_h < meta["ttl_hours"]:
             return {"result": "skipped_fresh", "requests": 0}
-    budget = {"used": 0, "max": meta.get("max_requests", 0)}
+    budget = {"used": 0, "max": meta.get("max_requests", 0), "max_seconds": SOURCE_MAX_SECONDS,
+              "deadline": time.monotonic() + SOURCE_MAX_SECONDS}
     db.execute("UPDATE sources SET last_attempt_at=? WHERE id=?", (_iso(now), sid))
     db.commit()
     try:

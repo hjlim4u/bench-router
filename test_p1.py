@@ -163,6 +163,18 @@ class P1(unittest.TestCase):
         with mock.patch("urllib.request.urlopen", side_effect=raiser(503)), mock.patch("time.sleep"):
             with self.assertRaisesRegex(d.SourceError, "budget"):
                 d.http_get_json(d.AA_URL, budget=budget)
+        # 전체 시간 상한: 느린 서버에서 재시도가 이어져도 마감 후에는 요청하지 않음
+        clock = [0.0]
+        def slow(req, timeout):
+            self.assertLessEqual(timeout, 10 - clock[0] + 1e-9)  # 요청별 timeout도 남은 시간으로 축소
+            clock[0] += timeout
+            raise TimeoutError()
+        budget = {"used": 0, "max": 100, "max_seconds": 10, "deadline": 10.0}
+        with mock.patch("urllib.request.urlopen", side_effect=slow) as m,                 mock.patch("time.monotonic", side_effect=lambda: clock[0]),                 mock.patch("time.sleep", side_effect=lambda s: clock.__setitem__(0, clock[0] + s)):
+            with self.assertRaisesRegex(d.SourceError, "deadline exceeded"):
+                for _ in range(5):
+                    d.http_get_json(d.AA_URL, budget=budget)
+            self.assertEqual(m.call_count, 1)  # 첫 요청이 10초 전부 사용 → 재시도 없이 종료
         res = d.refresh(self.cache, self.cfg, MAPPING, self.aliases, NOW, only="aa", get_json=FakeHTTP(), env={})
         self.assertIn("not set", res["sources"]["aa"]["error"])
         self.assertNotIn("SECRET", json.dumps(self.refresh(FakeHTTP(fail_page=1), force=True)))
