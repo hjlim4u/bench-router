@@ -41,7 +41,10 @@ herdr는 `~/.local/bin/herdr`(0.9.3). 비로그인 셸에서는 PATH에 없으�
 - mutation: P0 정책값 3종 변경 시 P0 테스트 실패. P2에서 결과 검사 무력화(9개 실패), 기존 receipt 무시(3개 실패), timed_out을 settled로 취급(2개 실패)을 각각 잡아냄.
 - **Arena live (E2, 2026-10-12)**: 공개 API로 refresh 성공. 요청 17회, revision `e16f9023298691b4596eca61b4e31161dff31200`, cohort N = text_style_control/overall 414, text_style_control/math 400, webdev/overall 141, document_style_control/overall 44 (publish 2026-09-13), vision_style_control/overall 165. datasets-server read timeout 2회는 재시도로 복구됨. 두 번째 실행은 TTL skip(0.1s).
 - **Arena live 상한 확인 (2026-10-12 13:33)**: HF datasets-server가 500/502/read timeout을 내던 시점에 `refresh --source arena --force`가 정확히 180초에 실패로 종료(exit 16, 요청 14회). 상한 도입 전에는 같은 상황에서 4분 이상 응답 없이 실행됐다.
-- **AA live: 미검증** — `ARTIFICIAL_ANALYSIS_API_KEY` 없음. 문서(E1) 스키마로 fixture만 통과. 키가 없으면 refresh는 aa 실패로 exit 16(정상 동작, Arena last-good 유지).
+- **AA live (E2, 2026-10-12 14:06)**: Free tier, `intelligence_index_version` 4.3, 4 pages × 200, 모델 697개, 요청 4회, 2초. 응답 스키마는 문서(E1)와 일치. 키는 WSL `~/.config/bench-router/env`(600)에 두고 실행 시 `set -a; . ~/.config/bench-router/env`로 읽는다.
+  - AA slug는 reasoning effort별로 나뉜다(`claude-opus-5-5-high`, `gpt-6-1-sol-high` 등). 프로필 effort와 같은 변형을 alias로 연결했다.
+  - 이 신모델들은 `coding_index`가 null이다 → `aa_coding` 결측 → code_gen은 두 후보 모두 coverage 0 → default.
+  - 키가 대화 기록에 노출됐다. 재발급(rotate)을 권장한다.
 - **herdr live (E2)**: 0.9.3 설치, named session `brprobe`로 headless 서버 → `workspace create` → `agent start`(claude 미설치) → `agent get`/`prompt`(없는 agent) → `pane read` → `workspace close` → `server stop`까지 실측. 응답 형식은 `docs/evidence/herdr-0.9.3/`과 test_p2 fake에 반영.
 - **live Agent smoke: 통과 (2026-10-12 13:51, WSL 사용자 hjlim4u)** — herdr 0.9.3 named session `brsmoke`, Claude Code 2.1.296, 프로필 `claude-opus-high`(default 선택: Arena 데이터 없음 → `default_insufficient_evidence`).
   - round 1 → 미해결(blocked) 상태에서 round 2 시도: `conflict`/`unresolved_run`(exit 14). round 1 collect → Agent 없음 → `execution_failed`로 정리.
@@ -78,6 +81,9 @@ herdr는 `~/.local/bin/herdr`(0.9.3). 비로그인 셸에서는 PATH에 없으�
   - B `smoke-003` 같은 작업 + `exclude_profiles=[claude-opus-high]`: **codex-sol-high**(`fallback_insufficient_evidence`). 44s `completed`/`success`, SHA-256 일치, 재전송 없음, 닫은 뒤 collect도 completed. Agent가 자체 보고한 check 하나(`git status`, cwd가 git 저장소가 아님)는 failed였지만 결과와는 무관.
   - 두 run 모두 feedback `success` 기록. 열린 workspace 0, `brsmoke` 서버 정지.
   - codex: 0.162.1(공식 standalone installer, 사용자 범위), ChatGPT 로그인, `codex exec`로 `gpt-6.1-sol` 접근 확인.
+
+- **live 3차: 두 후보를 점수로 비교한 선택 (2026-10-12 14:10)**: `smoke-004` general/balanced. claude Q 0.996 / S 0.846, codex Q 0.977 / S 0.902(둘 다 coverage 1.0, AA intelligence) → **codex-sol-high `benchmark_score`**. 48s `completed`/`success`, SHA-256 일치, 재전송 없음, 닫은 뒤 collect도 completed, feedback 기록.
+  - dry-run 매트릭스: general — quality→claude, balanced/cost→codex. analysis — 모두 claude(codex는 Arena 근거가 없어 coverage 0.6, 결측 페널티). writing — claude(codex coverage 0). code_gen — default(coding_index null).
 
 ## live smoke에서 드러난 것과 결정
 - **위임 cwd는 Claude Code에서 미리 신뢰된 폴더여야 한다.** 처음 보는 폴더는 신뢰 확인 창 → herdr `agent_not_ready` → 라우터 `blocked`(프롬프트 0회). 보안 확인이므로 자동 응답하지 않는다. Orchestrator 전제 조건.
@@ -120,11 +126,12 @@ herdr는 `~/.local/bin/herdr`(0.9.3). 비로그인 셸에서는 PATH에 없으�
 - 실제 프로필 설정: WSL `~/.config/bench-router/{profiles.toml,aliases.toml}`(사용자 hjlim4u).
   - claude-opus-high: `--model claude-opus-5-5 --effort high --permission-mode acceptEdits --allowedTools Bash(sha256sum:*)`, cost high, Arena alias `claude-opus-5.5-high`.
   - codex-sol-high: `-m gpt-6.1-sol -c model_reasoning_effort="high" -s workspace-write -a never`, cost medium, alias 없음.
-- 두 프로필 모두 evidence를 갖고 점수를 비교하는 경우는 아직 없다. codex의 effort를 max로 바꿔 Arena와 맞추거나(비용 증가), AA 키로 AA evidence를 추가해야 한다.
-- 라우팅 효과 평가(06 문서: baseline 대비 작업군 성공률·비용·지연)는 하지 않았다.
+- 라우팅 효과 평가(06 문서: baseline 대비 작업군 성공률·비용·지연)는 하지 않았다. 지금까지의 live run은 모두 합성 smoke 작업이다.
+- `cost_tier`(claude high, codex medium)는 정책 proxy다. 실제 요금·구독 비용은 측정하지 않았다.
+- OS timer 미설치(systemd 예시 참조. `EnvironmentFile=%h/.config/bench-router/env`).
 
 ## 다음 한 가지 작업
-두 프로필 모두 evidence를 갖게 만든다(AA 키 설정 또는 codex effort 정책 결정) → 같은 작업에서 benchmark_score로 두 후보를 비교하는 live route 1회 → 06의 작업군 비교 설계.
+06의 작업군 비교: 실제 작업 20개 내외(저장소 수정·터미널·웹·한국어 작성·분석 등)에 acceptance check를 먼저 고정하고, 고정 default / 저비용 우선 / bench-router 정책을 같은 조건에서 비교한다.
 
 ## 사용자에게 필요한 정보
 - 실제 사용할 프로필(CLI/모델 ID/reasoning/cost tier/context/capability)과 그에 맞는 aliases.
