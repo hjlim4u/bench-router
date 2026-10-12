@@ -14,7 +14,7 @@
 - route는 `data`/`urllib.request`를 import하지 않는다(test_v17에서 확인).
 - 소스별 refresh 전체 상한 `SOURCE_MAX_SECONDS=180`: 요청·재시도·대기를 모두 포함하고, 요청별 timeout과 재시도 대기는 남은 시간으로 줄인다. 넘으면 해당 소스는 실패 처리되고 last-good을 유지한다. (HF datasets-server가 느릴 때 refresh가 25분까지 늘어질 수 있던 빈틈을 막음.)
 
-### P2 — herdr 위임 (fixture 검증 완료, live smoke 대기)
+### P2 — herdr 위임 (fixture + live smoke 통과)
 - `bench_router/herdr.py`: herdr CLI argv 호출, live 가용성 probe(herdr kind / executable PATH), cwd별 dispatch lock, receipt(`<cwd>/.bench-router/runs/<run_id>/receipt.json`), 새 workspace → `agent start` → `agent get` 확인 → `submission_attempted` fsync → `agent prompt --wait` 1회 → 결과 계약 검사. collect/feedback.
 - CLI: `route`(live), `collect --run-id --cwd [--wait-ms]`, `feedback --run-id --cwd --outcome`, 전역 `--herdr-session`(또는 `BENCH_ROUTER_HERDR_SESSION`). herdr 경로 지정은 `BENCH_ROUTER_HERDR`.
 - 실행 디렉터리: `receipt.json`, `decision.json`(선택 근거), `result.md`/`result.json`(Agent 작성), `feedback.jsonl`.
@@ -22,7 +22,7 @@
 ## 재현
 ```bash
 cd /mnt/d/Projects/bench-router-handoff
-python3 -m unittest test_p0 test_p1 test_p2   # 33 tests (fcntl → WSL/Linux)
+python3 -m unittest test_p0 test_p1 test_p2   # 34 tests (fcntl → WSL/Linux)
 BR="python3 -m bench_router.cli --config-dir CFG --cache-dir CACHE"
 $BR refresh            # aa, arena (TTL 내면 skip; --force)
 $BR refresh --source tb --import tb.json
@@ -37,13 +37,18 @@ herdr는 `~/.local/bin/herdr`(0.9.3). 비로그인 셸에서는 PATH에 없으�
 설정 디렉터리(기본 `~/.config/bench-router`): `profiles.toml`(필수), `aliases.toml`(선택), `categories.toml`(선택, 없으면 내장본).
 
 ## 검증 결과
-- offline: P0+P1+P2 33/33 통과 (WSL). P0만 Windows Python 3.13에서도 통과.
+- offline: P0+P1+P2 34/34 통과 (WSL). P0만 Windows Python 3.13에서도 통과.
 - mutation: P0 정책값 3종 변경 시 P0 테스트 실패. P2에서 결과 검사 무력화(9개 실패), 기존 receipt 무시(3개 실패), timed_out을 settled로 취급(2개 실패)을 각각 잡아냄.
 - **Arena live (E2, 2026-10-12)**: 공개 API로 refresh 성공. 요청 17회, revision `e16f9023298691b4596eca61b4e31161dff31200`, cohort N = text_style_control/overall 414, text_style_control/math 400, webdev/overall 141, document_style_control/overall 44 (publish 2026-09-13), vision_style_control/overall 165. datasets-server read timeout 2회는 재시도로 복구됨. 두 번째 실행은 TTL skip(0.1s).
 - **Arena live 상한 확인 (2026-10-12 13:33)**: HF datasets-server가 500/502/read timeout을 내던 시점에 `refresh --source arena --force`가 정확히 180초에 실패로 종료(exit 16, 요청 14회). 상한 도입 전에는 같은 상황에서 4분 이상 응답 없이 실행됐다.
 - **AA live: 미검증** — `ARTIFICIAL_ANALYSIS_API_KEY` 없음. 문서(E1) 스키마로 fixture만 통과. 키가 없으면 refresh는 aa 실패로 exit 16(정상 동작, Arena last-good 유지).
 - **herdr live (E2)**: 0.9.3 설치, named session `brprobe`로 headless 서버 → `workspace create` → `agent start`(claude 미설치) → `agent get`/`prompt`(없는 agent) → `pane read` → `workspace close` → `server stop`까지 실측. 응답 형식은 `docs/evidence/herdr-0.9.3/`과 test_p2 fake에 반영.
-- **live Agent smoke: 미실행** — WSL에 claude CLI가 없다(로그인 필요).
+- **live Agent smoke: 통과 (2026-10-12 13:51, WSL 사용자 hjlim4u)** — herdr 0.9.3 named session `brsmoke`, Claude Code 2.1.296, 프로필 `claude-opus-high`(default 선택: Arena 데이터 없음 → `default_insufficient_evidence`).
+  - round 1 → 미해결(blocked) 상태에서 round 2 시도: `conflict`/`unresolved_run`(exit 14). round 1 collect → Agent 없음 → `execution_failed`로 정리.
+  - round 2 live: 25초, `completed`, task_outcome `success`, delivery `activity_observed`. result.json의 run_id/nonce/fingerprint 일치, `result_sha256` = 독립 계산 `0b56510e…9ca5`. run 디렉터리 밖 파일 변경 없음.
+  - 같은 round 재호출: `reused_receipt=true`, 같은 run_id. transcript에서 프롬프트 전용 문자열("검증 토큰:")이 1회 → 재전송 없음.
+  - collect: completed. workspace `w1` 닫고 서버 정지 후 collect: 저장된 settled 기록(completed) 반환. feedback `success` 기록.
+  - run: `~/br-smoke/.bench-router/runs/02c537a0-5e05-476b-a512-0860b83ca2dc/`
 
 ## 실측으로 확인된 사실 (E1 → E2)
 - Arena는 parquet이지만 HF datasets-server `/filter` JSON(100행/요청)으로 같은 행을 받음 → pyarrow 불필요. 컬럼: model_name, organization, license, rating, rating_lower/upper, variance, vote_count, rank, category, leaderboard_publish_date. license CC BY 4.0.
@@ -67,6 +72,14 @@ herdr는 `~/.local/bin/herdr`(0.9.3). 비로그인 셸에서는 PATH에 없으�
 - workspace/pane은 자동으로 닫지 않는다. 출력의 `workspace_id`로 사용자가 정리한다.
 - fingerprint의 CLI 버전은 계속 "unknown"이다. 버전 probe를 넣으면 refresh도 같은 입력으로 계산해야 한다.
 - decisions/feedback은 SQLite가 아니라 run 디렉터리 파일(`decision.json`, `feedback.jsonl`)에 남긴다. 집계가 필요해지면 DB로 옮긴다.
+
+## live smoke에서 드러난 것과 결정
+- **위임 cwd는 Claude Code에서 미리 신뢰된 폴더여야 한다.** 처음 보는 폴더는 신뢰 확인 창 → herdr `agent_not_ready` → 라우터 `blocked`(프롬프트 0회). 보안 확인이므로 자동 응답하지 않는다. Orchestrator 전제 조건.
+- **결과 계약에서 "원자적 기록" 요구를 뺐다(04 문서와 다름).** 이 문구 때문에 Agent가 `mv`·python 검증을 시도했고, `acceptEdits` 모드에서 권한 승인 대기(blocked)에 걸렸다. 라우터는 settled 이후에만 검사하고 해시까지 확인하므로 원자성은 실익이 없다. 지금은 "마지막에 한 번에 작성, 해시는 `sha256sum result.md`"로 지시한다.
+- 프로필 args에 `--allowedTools Bash(sha256sum:*)`를 추가했다(해시 계산 외 Bash는 승인 필요).
+- 프롬프트 이후 blocked면 `pane read --source visible` 화면을 `diagnostic_tail`로 반환한다. blocked 상태에서 `agent read --lines 2000`은 `agent_not_idle`로 거부된다.
+- `pane read`/`agent read`는 JSON이 아닌 텍스트를 출력한다(초기 fake가 틀렸던 부분, 수정함).
+- 진행 중 run의 workspace를 닫으면 Agent도 종료된다. smoke 정리는 completed일 때만 한다.
 
 ## P1에서 정한 것 (문서에 없던 세부)
 - evidence ↔ cohort: `aa_intelligence`/`aa_coding` = AA Free 해당 index(metric_version = intelligence_index_version; coding은 별도 버전 없음). `arena_text`=text_style_control/overall, `arena_text_math`=text_style_control/math, `arena_webdev`=webdev/overall, `arena_document`=document_style_control/overall, `arena_vision`=vision_style_control/overall. 바꾸면 `data.ARENA_COHORTS`와 policy version.
@@ -96,10 +109,11 @@ herdr는 `~/.local/bin/herdr`(0.9.3). 비로그인 셸에서는 PATH에 없으�
   ```
 - WSL 기본 사용자 계정 미생성(현재 root로 실행). `wsl -d Ubuntu`로 한 번 실행해 생성 권장.
 - JSON Schema 파일(task/output): 런타임 validator가 계약을 강제하므로 생략.
-- P2 live smoke: WSL에 Claude Code 설치·로그인 필요. 실제 프로필 설정은 WSL `~/.config/bench-router/{profiles.toml,aliases.toml}`에 작성해 두었다(claude-opus-high: `--model claude-opus-5-5 --effort high --permission-mode acceptEdits`, Arena alias `claude-opus-5.5-high`).
+- **benchmark-selected live 실행 미검증**: smoke는 근거 데이터 없이 default로 선택됐다. HF datasets-server 장애(500/502/timeout)로 WSL 사용자 캐시에 Arena 데이터가 없다.
+- 실제 프로필 설정: WSL `~/.config/bench-router/{profiles.toml,aliases.toml}`(사용자 hjlim4u). 프로필은 하나(claude-opus-high: `--model claude-opus-5-5 --effort high --permission-mode acceptEdits --allowedTools Bash(sha256sum:*)`), Arena alias는 `claude-opus-5.5-high`. 후보가 하나뿐이라 라우팅 비교는 아직 의미가 없다.
 
 ## 다음 한 가지 작업
-WSL에서 claude 로그인 → 06의 smoke 절차: `refresh` → `status` → `route --dry-run` → live `route`(task.synthetic 형태, `/tmp/br-smoke`) → 같은 task 재호출(재전송 없음 확인) → `collect` → `feedback` → workspace 정리.
+HF 복구 후 `refresh --source arena` → `status`로 Arena evidence 확인 → 두 번째 프로필(예: codex 또는 sonnet)을 추가하고 benchmark_score 선택으로 live route 1회.
 
 ## 사용자에게 필요한 정보
 - 실제 사용할 프로필(CLI/모델 ID/reasoning/cost tier/context/capability)과 그에 맞는 aliases.

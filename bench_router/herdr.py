@@ -140,7 +140,10 @@ def contract_text(rc):
             f"실행 식별자: {rc['run_id']}\n검증 토큰: {rc['nonce']}\n프로필 지문: {rc['profile_fingerprint']}\n"
             f"결과 디렉터리(절대 경로): {rd}\n\n"
             "요청된 작업을 수행하고, result.md에 결과/변경/검증/미완료 사항을 기록하세요.\n"
-            "result.md를 완성한 뒤 result.json을 마지막에 원자적으로 기록하세요.\n"
+            "result.md를 완성한 뒤 result.json을 마지막에 한 번에 작성하세요.\n"
+            # 라우터는 settled(idle/done) 이후에만 검사하므로 원자적 쓰기는 불필요. mv/검증 스크립트는
+            # 권한 승인(blocked)을 유발했다(smoke 2026-10-12 실측).
+            "임시 파일·이동(mv)·별도 검증 스크립트는 필요 없습니다. 해시는 `sha256sum result.md`로 계산하세요.\n"
             "result.json은 schema_version(\"1.0\"), run_id, nonce, profile_fingerprint,\n"
             "status, result_file, result_sha256, checks를 포함해야 합니다.\n"
             "status는 success, partial, fail 중 실제 작업 결과에 맞게 선택하세요.\n"
@@ -208,8 +211,8 @@ def _observe(rc, state=None, error=None, note=None):
 def _tail(rc, h):
     if not rc.get("pane_id"):
         return None
-    text, err = h(["pane", "read", rc["pane_id"], "--source", "recent-unwrapped", "--lines", "20"], SHORT_CALL_S,
-                  raw=True)
+    # visible: blocked 상태의 alternate-screen에서는 긴 recent 읽기가 거부된다(agent_not_idle, 0.9.3 실측)
+    text, err = h(["pane", "read", rc["pane_id"], "--source", "visible"], SHORT_CALL_S, raw=True)
     return None if err else text[-4000:]
 
 
@@ -312,6 +315,8 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run):
         return rc
     rc["delivery_state"] = "activity_observed"  # --wait는 working/blocked 관찰을 요구한다
     settle(rc, ((pr or {}).get("agent") or {}).get("agent_status"))
+    if rc["status"] == "blocked":  # 승인/질문 화면을 Orchestrator에 전달
+        rc["diagnostic_tail"] = _tail(rc, h)
     save(rc)
     return rc
 

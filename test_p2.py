@@ -245,6 +245,12 @@ class P2(unittest.TestCase):
         out = self.run_(FakeHerdr(on_prompt=write_result(status="fail")), self.task(task_id="t9"))
         self.assertEqual((out["status"], out["task_outcome"]), ("completed", "fail"))  # 수신 성공 ≠ 작업 성공
 
+    def test_blocked_after_prompt_returns_screen(self):
+        out = self.run_(FakeHerdr(after_status="blocked"))  # live smoke: mv 권한 승인 대기
+        self.assertEqual((out["status"], out["delivery_state"]), ("blocked", "activity_observed"))
+        self.assertIn("command not found", out["diagnostic_tail"])
+        self.assertNotIn("원자적", hd.contract_text(hd.load_receipt(self.cwd, out["run_id"])))
+
     def test_prompt_size_limit(self):
         with self.assertRaises(r.InputError):
             self.run_(FakeHerdr(), self.task(prompt="x" * hd.MAX_PROMPT_ARG_BYTES))
