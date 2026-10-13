@@ -16,6 +16,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from . import locking
 from . import routing as r
 
 HERDR_BIN = os.environ.get("BENCH_ROUTER_HERDR", "herdr")
@@ -124,17 +125,10 @@ def receipts(cwd):
 
 @contextlib.contextmanager
 def dispatch_lock(cwd):
-    import fcntl  # Linux/macOS(WSL)
     bench_dir(cwd).mkdir(exist_ok=True)
-    with open(bench_dir(cwd) / "dispatch.lock", "a") as f:
-        try:
-            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise Busy("another bench-router dispatch/collect holds the lock for this cwd")
-        try:
-            yield
-        finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+    with locking.exclusive(bench_dir(cwd) / "dispatch.lock",
+                           Busy("another bench-router dispatch/collect holds the lock for this cwd")):
+        yield
 
 
 # ---------- 결과 계약 ----------

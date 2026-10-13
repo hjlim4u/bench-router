@@ -1,10 +1,11 @@
-"""P2 검증 V19–V29 (06 문서). herdr는 0.9.3 실측 응답 형식을 따르는 fake. WSL/Linux에서 실행(fcntl).
+"""P2 검증 V19–V29 (06 문서). herdr는 0.9.3 실측 응답 형식을 따르는 fake.
 실행: python3 -m unittest -v test_p2"""
 import hashlib
 import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -85,7 +86,7 @@ def write_result(status="success", nonce=None, body="# 결과\n작업 완료\n",
              "nonce": nonce or re.search(r"검증 토큰: (\S+)", prompt).group(1),
              "profile_fingerprint": re.search(r"프로필 지문: (\S+)", prompt).group(1), "status": status,
              "result_file": "result.md", "checks": [{"command": "true", "outcome": "passed", "notes": ""}]}
-        (rd / "result.md").write_text(body, "utf-8")
+        (rd / "result.md").write_bytes(body.encode("utf-8"))
         m["result_sha256"] = sha or hashlib.sha256(body.encode()).hexdigest()
         (rd / "result.json").write_text(json.dumps(m), "utf-8")
     return act
@@ -237,6 +238,12 @@ class P2(unittest.TestCase):
         self.assertEqual(self.run_(fake, self.task(prompt="different"))["status"], "conflict")
         with hd.dispatch_lock(self.cwd):
             self.assertEqual(self.run_(fake, self.task(task_id="t2"))["status"], "conflict")
+            child = subprocess.run([sys.executable, "-c",
+                                    "import sys\nfrom bench_router import herdr as h\n"
+                                    "try:\n with h.dispatch_lock(sys.argv[1]): print('acquired')\n"
+                                    "except h.Busy: print('busy')",
+                                    self.cwd], capture_output=True, text=True, check=True)
+            self.assertEqual(child.stdout.strip(), "busy")
         stuck = FakeHerdr(prompt_error="timeout", after_status="working")
         self.run_(stuck, self.task(task_id="t3"))
         blocked = self.run_(fake, self.task(task_id="t4"))

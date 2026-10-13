@@ -35,7 +35,7 @@ OS timer / 수동 ── bench-router refresh ──▶ AA API, Arena dataset, �
 
 ## 요구 사항
 
-- Linux 또는 WSL2. refresh·dispatch 잠금에 `fcntl`을 쓰기 때문에 Windows 네이티브에서는 `route --dry-run`/`explain`만 동작합니다.
+- Linux, WSL2 또는 네이티브 Windows. refresh·dispatch는 운영체제의 프로세스 간 파일 잠금을 사용합니다.
 - Python 3.11 이상.
 - live 위임에는 [herdr](https://herdr.dev/docs/install/)와, 프로필에 쓸 Agent CLI 설치·로그인이 필요합니다. 검증 환경은 herdr 0.9.3, Claude Code 2.1.296, codex-cli 0.162.1입니다.
 - AA 데이터를 쓰려면 Artificial Analysis API 키(Free tier로 충분)가 필요합니다.
@@ -46,6 +46,20 @@ OS timer / 수동 ── bench-router refresh ──▶ AA API, Arena dataset, �
 cd /path/to/bench-router-handoff
 python3 -m bench_router.cli --help
 ```
+
+### 여러 Agent에서 Skill 사용
+
+[`skills/bench-router/SKILL.md`](skills/bench-router/SKILL.md)가 유일한 Skill 원본입니다. 각 Agent의 Skill 검색 디렉터리에 이 폴더의 심볼릭 링크(Windows에서는 junction)를 만드세요. 복사본을 배포하면 업데이트가 갈라집니다. 예를 들어 `REPO`와 `AGENT_SKILLS`를 실제 절대 경로로 지정한 뒤 실행합니다.
+
+```bash
+ln -s "$REPO/skills/bench-router" "$AGENT_SKILLS/bench-router"
+```
+
+```powershell
+New-Item -ItemType Junction -Path "$AgentSkills\bench-router" -Target "$Repo\skills\bench-router"
+```
+
+Skill의 `scripts/cli.py`는 링크의 실제 저장소 경로를 찾아 어떤 작업 디렉터리에서도 기존 CLI를 실행합니다. 같은 OS 실행 환경의 Agent는 동일 사용자 설정·캐시를 공유합니다. 네이티브 Windows와 WSL은 잠금 구현이 다르므로 둘이 같은 물리 캐시를 동시에 쓰지 마세요. 한 환경으로 실행을 통일하면 사본 없이 공유할 수 있습니다. `route`는 캐시를 갱신하지 않으며, 정기 `refresh`는 사용자당 한 곳에서만 예약하세요. 수동 `refresh`도 동일 잠금과 캐시를 사용합니다. Windows에서는 작업 스케줄러에 이 스크립트의 `refresh` 명령을 한 번 등록할 수 있습니다.
 
 ---
 
@@ -243,7 +257,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 - **응답 처리**: 응답 크기 상한 20 MiB, 요청 수 상한(aa 50, arena 60)을 둡니다. 401/403/429는 재시도하지 않고, 5xx와 네트워크 오류는 최대 2회 재시도합니다.
 - **시간 상한**: source마다 전체 **180초** 상한이 있습니다. 요청별 timeout과 재시도 대기도 남은 시간에 맞춰 줄어듭니다.
 - **실패 시**: 페이지 하나라도 실패하거나 스키마가 다르면 그 source의 새 데이터를 게시하지 않고 last-good을 유지합니다. 원본이 같으면 `unchanged`로 확인 시각만 갱신합니다.
-- **저장**: SQLite(`bench-router.db`: sources / snapshots / observations)에 source별 원본을 최근 3개까지 보관합니다. 동시 refresh는 `fcntl` 잠금으로 막습니다.
+- **저장**: SQLite(`bench-router.db`: sources / snapshots / observations)에 source별 원본을 최근 3개까지 보관합니다. 동시 refresh는 운영체제 파일 잠금으로 막습니다.
 - **게시**: `snapshot.json`은 임시 파일에 쓰고 fsync한 뒤 `os.replace`로 교체합니다. 직전 유효본은 `snapshot.last-good.json`으로 옮기고, 재현용 사본은 `snapshots/`에 30일간 보관합니다.
 - **route 쪽 처리**: snapshot이 없거나 손상됐으면 last-good을 쓰고, 그것도 없으면 근거 없이 제약을 통과한 default를 선택합니다. route는 refresh를 시작하지 않습니다.
 - **Arena 중복 이름**: 원본에 같은 이름의 별개 항목이 있을 수 있습니다(실측 사례 있음). 이런 항목은 모집단에는 포함하되 `이름#rank=N`으로 구분해, 이름만으로 매칭되지 않게 합니다.
@@ -316,12 +330,10 @@ WantedBy=timers.target
 
 run 디렉터리에는 `receipt.json`, `decision.json`, `result.md`, `result.json`, `feedback.jsonl`이 남습니다. herdr workspace는 자동으로 닫지 않으므로 출력의 `workspace_id`로 정리하세요. 진행 중인 run의 workspace를 닫으면 Agent도 종료됩니다.
 
----
-
 ## 테스트
 
 ```bash
-python3 -m unittest test_p0 test_p1 test_p2     # 35 tests, WSL/Linux
+python3 -m unittest test_p0 test_p1 test_p2     # Linux/WSL2/Windows
 ```
 
 | 파일 | 범위 |

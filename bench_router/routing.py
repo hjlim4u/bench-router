@@ -8,6 +8,7 @@ import json
 import math
 import os
 import re
+import time
 import tomllib
 from datetime import datetime
 from pathlib import Path
@@ -72,7 +73,17 @@ def atomic_write(path, data):
         f.write(data)
         f.flush()
         os.fsync(f.fileno())
-    os.replace(tmp, path)
+    try:
+        for attempt in range(10):
+            try:
+                os.replace(tmp, path)
+                break
+            except PermissionError:
+                if os.name != "nt" or attempt == 9:
+                    raise
+                time.sleep(0.05)  # Windows readers can briefly block replacement.
+    finally:
+        tmp.unlink(missing_ok=True)
     with contextlib.suppress(OSError):  # 디렉터리 fsync는 POSIX에서만
         fd = os.open(path.parent, os.O_RDONLY)
         try:

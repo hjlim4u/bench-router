@@ -1,0 +1,34 @@
+# Repository Guidelines
+
+## Project Structure & Module Organization
+
+`bench_router/` contains the CLI (`cli.py`), routing policy (`routing.py`), benchmark collection and snapshots (`data.py`), herdr dispatch (`herdr.py`), and bundled category weights (`categories.toml`). `eval/` holds comparison and cost scripts. `examples/` contains sample profiles, tasks, and synthetic results. Root-level `test_p0.py`, `test_p1.py`, and `test_p2.py` cover routing, data refresh, and dispatch respectively. Numbered root documents describe the design; `docs/evidence/` records external API evidence.
+
+## Build, Test, and Development Commands
+
+Use Python 3.11+ on Linux or WSL2. Run commands from the repository root; there is no installation or build step.
+
+```bash
+python3 -m bench_router.cli --help
+python3 -m bench_router.cli status
+python3 -m bench_router.cli route --task task.json --dry-run
+python3 -m unittest test_p0 test_p1 test_p2
+```
+
+`--help` lists CLI options. `status` inspects cached sources and snapshots. The dry run selects a profile without network access, herdr calls, or file writes; it needs a valid task and `profiles.toml`. The final command runs the offline test suite. Refresh and live dispatch require Linux or WSL2 because locking uses `fcntl`.
+
+## Coding Style & Naming Conventions
+
+Match the existing Python style: four-space indentation, `snake_case` modules/functions, `PascalCase` classes, and `UPPER_SNAKE_CASE` constants. Keep JSON output contracts and input validation explicit. Use standard-library facilities where practical; no formatter or linter is configured in this repository. Test methods follow `test_vNN_description`, matching the numbered validation cases.
+
+## Testing Guidelines
+
+Use `unittest`; add a focused case to the matching `test_p*.py` file when changing behavior. Tests should use synthetic data or fake herdr responses, not live services. Run the full suite before a pull request. No coverage threshold is configured. For changes to live dispatch, also report any manual herdr smoke test performed.
+
+## Commit & Pull Request Guidelines
+
+Recent commits use concise, scoped subjects such as `docs: ...`, `eval: ...`, `herdr: ...`, and `bench-router: ...`; follow that pattern. In pull requests, explain the behavior change, relevant contract or configuration changes, and test results. Link an issue when one exists. Include sample CLI output for interface changes; screenshots are only useful if a visual artifact changes.
+
+## Configuration & Secrets
+
+Start with `examples/profiles.example.toml`. Keep `profiles.toml` and API credentials in the user config directory, not in commits. Supply `ARTIFICIAL_ANALYSIS_API_KEY` through the environment for AA refreshes.

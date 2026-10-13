@@ -14,6 +14,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
+from . import locking
 from . import routing as r
 
 ADAPTER_VERSION = "1"
@@ -310,16 +311,8 @@ def open_db(path):
 
 @contextlib.contextmanager
 def refresh_lock(cache_dir):
-    import fcntl  # Linux/macOS(WSL) 전용. Windows lock은 미지원(05 문서).
-    with open(Path(cache_dir) / "refresh.lock", "a") as f:
-        try:
-            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise LockBusy("another refresh is running")
-        try:
-            yield
-        finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+    with locking.exclusive(Path(cache_dir) / "refresh.lock", LockBusy("another refresh is running")):
+        yield
 
 
 def refresh_source(db, sid, now, force=False, import_doc=None, get_json=None, env=None):

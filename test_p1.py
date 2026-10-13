@@ -1,10 +1,12 @@
-"""P1 검증 V11–V18 (06 문서). source 응답은 합성 fixture, 네트워크 없음. WSL/Linux에서 실행(fcntl).
+"""P1 검증 V11–V18 (06 문서). source 응답은 합성 fixture, 네트워크 없음.
 실행: python3 -m unittest -v test_p1"""
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 import urllib.error
 import urllib.parse
@@ -183,6 +185,12 @@ class P1(unittest.TestCase):
         with d.refresh_lock(self.cache):
             with self.assertRaises(d.LockBusy):
                 self.refresh()
+            child = subprocess.run([sys.executable, "-c",
+                                    "import sys\nfrom bench_router import data as d\n"
+                                    "try:\n with d.refresh_lock(sys.argv[1]): print('acquired')\n"
+                                    "except d.LockBusy: print('busy')",
+                                    str(self.cache)], capture_output=True, text=True, check=True)
+            self.assertEqual(child.stdout.strip(), "busy")
         self.refresh()
         first = self.snap()["snapshot_id"]
         self.refresh(force=True, now=NOW + timedelta(hours=1))
@@ -191,6 +199,32 @@ class P1(unittest.TestCase):
         snap, warnings = r.load_snapshot(self.cache)
         self.assertEqual(snap["snapshot_id"], first)
         self.assertEqual([w["code"] for w in warnings], ["snapshot_unusable", "snapshot_last_good"])
+        self.assertEqual(list(self.cache.glob(".*.tmp")), [])
+
+    @unittest.skipUnless(os.name == "nt", "Windows file sharing")
+    def test_v15_reader_does_not_break_atomic_publish(self):
+        path = self.cache / "snapshot.json"
+        path.write_bytes(b"old")
+        started = threading.Event()
+        errors = []
+
+        def write():
+            started.set()
+            try:
+                r.atomic_write(path, b"new")
+            except OSError as e:
+                errors.append(e)
+
+        with path.open("rb"):
+            worker = threading.Thread(target=write)
+            worker.start()
+            self.assertTrue(started.wait(1))
+            worker.join(0.1)
+            self.assertTrue(worker.is_alive())
+        worker.join(2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(path.read_bytes(), b"new")
         self.assertEqual(list(self.cache.glob(".*.tmp")), [])
 
     def test_v16_ttl_skip(self):
