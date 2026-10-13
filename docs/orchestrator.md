@@ -45,6 +45,16 @@ python3 -m bench_router.cli route --task task.json --context context.json --prof
 python3 -m bench_router.cli route --task task.json --context context.json --profile my-codex
 ```
 
-`evaluate` returns `status: "ok"`, `selected: null`, every eligible candidate, and excluded profiles with reasons. Candidate `context_facts` includes cost, estimates, price source, context requirement, and signals. It does not probe live executable availability; live `route` probes again before dispatch. The Orchestrator chooses a profile from `candidates`. The normal `route` command without `--profile` continues to make the router's benchmark-based selection.
+`evaluate` returns schema `2.0`: `inputs` (task/config/context hashes, snapshot, router policy and metric registry versions), `task_facts`, and one entry per configured profile in profile-ID order. The order carries no ranking. Each entry has:
+
+- `eligible`;
+- `constraints`: every applied required check, with `passed`, `code` on failure, `metric`, `observed`, `limit`;
+- `facts`: registered metrics with `freshness`, including `cost.estimated_usd` (the router's computed cost uses source `router:io2-v1`);
+- `unrecognized_metrics`;
+- `evaluations.benchmark` (eligible profiles only): `status ok|insufficient|unavailable`, `quality`, `coverage`, `evidence`, and `legacy_score`. `legacy_score` is the old automatic-route score, not an overall ranking.
+
+`evaluate --format 1` keeps the previous candidate/excluded shape for one release.
+
+`evaluate` does not probe live executable availability; live `route` probes again before dispatch. The Orchestrator chooses a profile from the eligible entries. The normal `route` command without `--profile` continues to make the router's benchmark-based selection. `explain` prints that selection plus the same constraint results and facts.
 
 The run response includes `delivery_state` and `reassignment`. `safe_to_retry` means the prompt was not submitted. `collect_first` means delivery or completion remains uncertain; use `collect --run-id ID --cwd DIR` before deciding whether to reassign. `review_result` means the agent acted; inspect its result and workspace before sending the task elsewhere. A fallback execution uses a **new round** and normally excludes the previous profile in its new task. Reusing a task ID and round collects the existing receipt; choosing another profile for that same round returns `conflict`. These markers do not reserve a budget or guarantee that actual charges stay below estimated cost.

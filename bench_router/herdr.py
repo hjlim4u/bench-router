@@ -371,7 +371,7 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
     if kinds is False:
         kinds = herdr_kinds(session, runner)
     availability = {p["id"]: probe(p, which, kinds) for p in cfg["profile"]}
-    res = (r.evaluate(t, cfg, mapping, snap, snap_warnings, now, availability, context) if profile_id
+    res = (r.evaluate_v1(t, cfg, mapping, snap, snap_warnings, now, availability, context) if profile_id
            else r.route(t, cfg, mapping, snap, snap_warnings, now, availability, context))
     if profile_id:
         res = r.pin_selection(res, cfg, profile_id, selection_mode)

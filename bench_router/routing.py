@@ -175,6 +175,8 @@ TASK_MAX_BYTES = 1024 * 1024
 # ---------- context.json: Orchestrator 공급 지표 (docs/routing-contracts.md §2) ----------
 
 CONTEXT_SCHEMA_VERSION = "2.0"
+EVALUATE_SCHEMA_VERSION = "2.0"
+ROUTER_COST_SOURCE = "router:io2-v1"
 METRIC_REGISTRY_VERSION = "1"
 # 지표 정의표. 단위·대상·수명 검증이 필요한 새 지표는 여기에 한 줄 추가한다.
 # 선호 방향(클수록 좋다 등)은 정책이므로 두지 않는다. 의미·단위를 바꾸면 METRIC_REGISTRY_VERSION을 올린다.
@@ -377,6 +379,11 @@ def context_facts(profile, context, now):
     else:
         missing = ("price_expired" if any(metrics.get(k, {}).get("freshness") == "expired" for k in COST_INPUTS)
                    else "estimate_or_price_missing")
+    if "cost.estimated_usd" not in usable and (cost is not None or "cost.estimated_usd" not in metrics):
+        metrics["cost.estimated_usd"] = (
+            {"value": float(cost), "unit": "usd", "source": ROUTER_COST_SOURCE, "status": "ok", "freshness": "fresh"}
+            if cost is not None else
+            {"status": "missing", "reason": missing, "source": ROUTER_COST_SOURCE, "freshness": "missing"})
     pin, pout = raw.get("price.input_usd_per_mtok", {}), raw.get("price.output_usd_per_mtok", {})
     price = ({"input_usd_per_million_tokens": pin["value"], "output_usd_per_million_tokens": pout["value"],
               "source": pin["source"], "as_of": pin.get("observed_at")} if "value" in pin and "value" in pout else None)
@@ -676,13 +683,17 @@ def coverage_band(c):
     return "sufficient" if c >= 0.8 - EPS else "partial" if c >= 0.5 - EPS else "insufficient"
 
 
+def legacy_score(c, priority):
+    """legacy 자동 선택 점수 = quality − λ·cost tier proxy. coverage 문턱 미달이면 None. 종합 점수가 아니다."""
+    c["cost_proxy"] = POLICY["tier_proxy"][c["cost_tier"]]
+    ranked = c["quality"] is not None and c["coverage"] >= POLICY["coverage_threshold"] - EPS
+    c["score"] = c["quality"] - POLICY["lambda_cost"][priority] * c["cost_proxy"] if ranked else None
+
+
 def select(cands, priority, default, fallback_order):
     """cands: 제약 통과 후보 [{profile, cost_tier, coverage, quality}]. score를 채우고 (선택 id, mode)."""
-    lam = POLICY["lambda_cost"][priority]
     for c in cands:
-        c["cost_proxy"] = POLICY["tier_proxy"][c["cost_tier"]]
-        ranked = c["quality"] is not None and c["coverage"] >= POLICY["coverage_threshold"] - EPS
-        c["score"] = c["quality"] - lam * c["cost_proxy"] if ranked else None
+        legacy_score(c, priority)
     ranked = [c for c in cands if c["score"] is not None]
     if ranked:
         top = max(c["score"] for c in ranked)
@@ -700,46 +711,62 @@ def select(cands, priority, default, fallback_order):
     return None, "none"
 
 
-def _fail(code, metric=None, observed=None, limit=None):
-    return [{"code": code, "metric": metric, "observed": observed, "limit": limit}]
+def _check(passed, code, metric=None, observed=None, limit=None, **kw):
+    """제약 결과 1개. code는 실패 시에만 채운다(1.0 탈락 사유 문자열과 동일)."""
+    return [{"passed": passed, "code": None if passed else code, "metric": metric,
+             "observed": observed, "limit": limit, **kw}]
 
 
-def _capacity(p, required, metric):
-    if not required or p["context_tokens"] >= required:
+def _context_capacity(p, t, x):
+    # task 최소 요구와 context의 필요 토큰 중 큰 쪽이 기준. 용량 미설정(0)은 결측 → 제외.
+    reqs = [(t["constraints"]["min_context_tokens"], "min_context_tokens"),
+            ((x["facts"] or {}).get("required_context_tokens", 0), "tokens.required_context")]
+    required, metric = max(reqs, key=lambda r: r[0])
+    if not required:
         return []
-    return _fail("context_unknown" if p["context_tokens"] == 0 else "context_insufficient",
-                 metric, p["context_tokens"], required)
+    cap = p["context_tokens"]
+    return _check(cap >= required, "context_unknown" if cap == 0 else "context_insufficient",
+                  metric, cap, required, on_missing="exclude")
 
 
-def _cost_cap(p, t, x):
+def _estimated_cost(p, t, x):
     cap = x["context"].get("max_estimated_cost_usd") if x["context"] else None
     if cap is None:
         return []
     if x["cost"] is None:  # 결측은 0이 아니다: 상한이 있으면 제외
-        return _fail("estimated_cost_unknown", "estimated_cost_usd", None, cap)
-    return _fail("estimated_cost_exceeds_max", "estimated_cost_usd", float(x["cost"]), cap) \
-        if x["cost"] > Decimal(str(cap)) else []
+        return _check(False, "estimated_cost_unknown", "cost.estimated_usd", None, cap, on_missing="exclude")
+    return _check(x["cost"] <= Decimal(str(cap)), "estimated_cost_exceeds_max", "cost.estimated_usd",
+                  float(x["cost"]), cap, on_missing="exclude")
 
 
-# 필수 제약. 이름 → (profile, task, x) -> 실패 결과 목록. x = {context, facts, cost, metrics, availability}.
+def _capabilities(p, t, x):
+    need = sorted(set(t["constraints"]["required_capabilities"]))
+    missing = [c for c in need if c not in p["capabilities"]]
+    if not need:
+        return []
+    if not missing:
+        return _check(True, None, "capabilities", sorted(p["capabilities"]), need)
+    return [r for c in missing for r in _check(False, f"missing_capability:{c}", "capabilities", None, c)]
+
+
+# 필수 제약. 이름 → (profile, task, x) -> 결과 목록([] = 적용 안 됨). x = {context, facts, cost, metrics, availability}.
 # 실패는 어떤 점수로도 상쇄되지 않는다. 새 지표로 거르려면 여기에 함수 하나를 추가한다.
 # dict 순서 = 탈락 사유 출력 순서(route 1.0 호환).
 CONSTRAINTS = {
-    "enabled": lambda p, t, x: [] if p["enabled"] else _fail("disabled"),
-    "task_exclusion": lambda p, t, x: _fail("excluded_by_task") if p["id"] in t["exclude_profiles"] else [],
-    "cost_tier": lambda p, t, x: _fail("cost_tier_exceeds_max", "cost_tier", p["cost_tier"],
-                                       t["constraints"]["max_cost_tier"])
-    if TIERS[p["cost_tier"]] > TIERS[t["constraints"]["max_cost_tier"]] else [],
-    "min_context": lambda p, t, x: _capacity(p, t["constraints"]["min_context_tokens"], "min_context_tokens"),
-    "capabilities": lambda p, t, x: [r for c in sorted(set(t["constraints"]["required_capabilities"])
-                                                       - set(p["capabilities"]))
-                                     for r in _fail(f"missing_capability:{c}", "capabilities", None, c)],
-    "local_only": lambda p, t, x: _fail("not_local_inference")
-    if t["constraints"]["local_only"] and not p["inference_local"] else [],
-    "required_context": lambda p, t, x: _capacity(p, x["facts"]["required_context_tokens"] if x["facts"] else 0,
-                                                  "required_context_tokens"),
-    "estimated_cost": _cost_cap,
-    "availability": lambda p, t, x: _fail(x["availability"]) if x["availability"] else [],
+    "enabled": lambda p, t, x: _check(p["enabled"], "disabled", "enabled", p["enabled"], True),
+    "task_exclusion": lambda p, t, x: _check(p["id"] not in t["exclude_profiles"], "excluded_by_task",
+                                             "exclude_profiles", p["id"], t["exclude_profiles"])
+    if t["exclude_profiles"] else [],
+    "cost_tier": lambda p, t, x: _check(TIERS[p["cost_tier"]] <= TIERS[t["constraints"]["max_cost_tier"]],
+                                        "cost_tier_exceeds_max", "cost_tier", p["cost_tier"],
+                                        t["constraints"]["max_cost_tier"]),
+    "context_capacity": _context_capacity,
+    "capabilities": _capabilities,
+    "local_only": lambda p, t, x: _check(p["inference_local"], "not_local_inference", "inference_local",
+                                         p["inference_local"], True) if t["constraints"]["local_only"] else [],
+    "estimated_cost": _estimated_cost,
+    "availability": lambda p, t, x: [] if not x["live"] else _check(not x["availability"], x["availability"],
+                                                                      "availability", x["availability"], None),
 }
 
 
@@ -747,8 +774,9 @@ EVIDENCE_FIELDS = ("raw", "normalized", "scope", "cohort_id", "metric_version", 
                    "fetched_at", "published_at", "evaluated_at")
 
 
-def benchmark_evaluation(p, fp, a, snap, sources, warnings):
-    """benchmark 평가기. coverage는 benchmark 근거 충족도일 뿐, 전체 판단 정보의 충족도가 아니다."""
+def benchmark_evaluation(p, fp, a, snap, sources, warnings, priority):
+    """benchmark 평가기. coverage는 benchmark 근거 충족도일 뿐, 전체 판단 정보의 충족도가 아니다.
+    legacy_score는 기존 자동 선택 정책의 점수이며 종합 순위가 아니다."""
     sp = snap["profiles"].get(p["id"]) if snap else None
     stale_cfg = sp is not None and sp["fingerprint"] != fp
     if stale_cfg:
@@ -767,7 +795,12 @@ def benchmark_evaluation(p, fp, a, snap, sources, warnings):
         rows.append(row)
     cov, q = coverage_quality(a, normalized)
     exact = sum(a[b] for b in a if normalized[b] is not None and sp["evidence"][b]["scope"] == "exact_profile")
-    return {"coverage": cov, "quality": q, "exact_evidence_weight": exact, "evidence": rows}
+    ev = {"coverage": cov, "quality": q, "exact_evidence_weight": exact, "evidence": rows, "cost_tier": p["cost_tier"]}
+    legacy_score(ev, priority)
+    ev["status"] = ("unavailable" if q is None else "ok" if cov >= POLICY["coverage_threshold"] - EPS
+                    else "insufficient")
+    del ev["cost_tier"]
+    return ev
 
 
 def assess(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
@@ -792,15 +825,16 @@ def assess(t, cfg, mapping, snap, snap_warnings, now, availability=None, context
     cands = []
     for p in sorted(cfg["profile"], key=lambda p: p["id"]):
         cost, facts, metrics = context_facts(p, context, now) if context is not None else (None, None, {})
-        x = {"context": context, "facts": facts, "cost": cost, "metrics": metrics,
+        x = {"context": context, "facts": facts, "cost": cost, "metrics": metrics, "live": availability is not None,
              "availability": availability.get(p["id"]) if availability is not None else None}
-        failures = [dict(f, constraint=name) for name, check in CONSTRAINTS.items() for f in check(p, t, x)]
+        results = [dict(f, constraint=name) for name, check in CONSTRAINTS.items() for f in check(p, t, x)]
         c = {"profile": p["id"], "profile_fingerprint": profile_fingerprint(p), "cost_tier": p["cost_tier"],
-             "eligible": not failures, "constraint_failures": failures, "context_facts": facts,
+             "eligible": all(f["passed"] for f in results), "constraints": results, "context_facts": facts,
              "metrics": metrics, "evaluations": {}}
         if c["eligible"]:
             # ponytail: 평가기 1개라 직접 호출. 두 번째가 생기면 evaluations에 키 하나 추가.
-            c["evaluations"]["benchmark"] = benchmark_evaluation(p, c["profile_fingerprint"], a, snap, sources, warnings)
+            c["evaluations"]["benchmark"] = benchmark_evaluation(p, c["profile_fingerprint"], a, snap, sources,
+                                                                 warnings, t["priority"])
         cands.append(c)
     return {"task": t, "classification": cls, "candidates": cands, "warnings": warnings, "sources": sources,
             "context": context, "availability_verified": availability is not None,
@@ -834,7 +868,7 @@ def _result_v1(asmt, cands, status, selected, mode, warnings):
     return {"schema_version": SCHEMA_VERSION, "status": status,
             "task_id": t["task_id"], "round": t["round"], "run_id": None, "selected": selected,
             "selection_mode": mode, "classification": asmt["classification"], "candidates": out_cands,
-            "excluded": [{"profile": c["profile"], "reasons": [f["code"] for f in c["constraint_failures"]]}
+            "excluded": [{"profile": c["profile"], "reasons": [f["code"] for f in c["constraints"] if not f["passed"]]}
                          for c in asmt["candidates"] if not c["eligible"]],
             "snapshot_id": asmt["snapshot_id"], "policy_version": POLICY_VERSION,
             "config_hash": asmt["config_hash"], "task_hash": asmt["task_hash"],
@@ -867,14 +901,39 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
     return _result_v1(asmt, cands, "selected" if pick else "no_eligible_profile", selected, mode, warnings)
 
 
-def evaluate(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
-    """선택 없이 후보 반환. 최종 선택은 Orchestrator."""
+def evaluate_v1(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
+    """1.0 형식의 선택 없는 후보 목록. route --profile 경로와 `evaluate --format 1`이 쓴다."""
     asmt = assess(t, cfg, mapping, snap, snap_warnings, now, availability, context)
-    cands = _legacy_cands(asmt)
-    # ponytail: 1.0 출력의 score/cost_proxy를 채우려고 legacy 점수식만 빌린다(선택 결과는 버림).
-    # evaluate 2.0에서 evaluations.benchmark.legacy_score로 옮기면 이 호출은 사라진다.
-    select(cands, t["priority"], None, [])
-    return _result_v1(asmt, cands, "ok", None, "orchestrator_choice", asmt["warnings"])
+    return _result_v1(asmt, _legacy_cands(asmt), "ok", None, "orchestrator_choice", asmt["warnings"])
+
+
+def evaluate(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
+    """evaluate 2.0: 전 프로필의 사실·제약 결과·평가기 결과. 순위와 최종 선택은 Orchestrator 몫.
+    candidates는 profile ID순이며 순서에 의미가 없다."""
+    asmt = assess(t, cfg, mapping, snap, snap_warnings, now, availability, context)
+    context = asmt["context"]
+    cands = []
+    for c in asmt["candidates"]:
+        ev = c["evaluations"].get("benchmark")
+        cands.append({"profile": c["profile"], "profile_fingerprint": c["profile_fingerprint"],
+                      "eligible": c["eligible"], "constraints": c["constraints"],
+                      "facts": {k: m for k, m in c["metrics"].items() if k in METRICS},
+                      "unrecognized_metrics": {k: m for k, m in c["metrics"].items() if k not in METRICS},
+                      "evaluations": {} if ev is None else {"benchmark": {
+                          **{k: v for k, v in ev.items() if k != "score"},
+                          "quality": _r(ev["quality"]), "coverage": _r(ev["coverage"]),
+                          "coverage_band": coverage_band(ev["coverage"]),
+                          "exact_evidence_weight": _r(ev["exact_evidence_weight"]),
+                          "legacy_score": _r(ev["score"])}}})
+    t = asmt["task"]
+    return {"schema_version": EVALUATE_SCHEMA_VERSION, "status": "ok", "task_id": t["task_id"], "round": t["round"],
+            "inputs": {"task_hash": asmt["task_hash"], "config_hash": asmt["config_hash"],
+                       "snapshot_id": asmt["snapshot_id"],
+                       "context_hash": canonical_hash(context) if context is not None else None,
+                       "router_policy_version": POLICY_VERSION, "metric_registry_version": METRIC_REGISTRY_VERSION},
+            "task_facts": asmt["task_metrics"], "max_estimated_cost_usd": (context or {}).get("max_estimated_cost_usd"),
+            "candidates": cands, "availability_verified": asmt["availability_verified"],
+            "classification": asmt["classification"], "sources": asmt["sources"], "warnings": asmt["warnings"]}
 
 
 def pin_selection(res, cfg, profile_id, mode="orchestrator_pinned"):

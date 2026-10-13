@@ -67,16 +67,16 @@ class P0(unittest.TestCase):
                                 "source": "test", "as_of": "2026-10-13T00:00:00+00:00"},
                       "signals": {"orchestrator.latency": {"value": 4, "unit": "seconds", "source": "test"}}},
                 "b": {"required_context_tokens": 2000}}}, [p["id"] for p in ps])
-        res = r.evaluate(self.task(), config(ps), MAPPING, None, [], NOW, context=context)
+        res = r.evaluate_v1(self.task(), config(ps), MAPPING, None, [], NOW, context=context)
         self.assertEqual((res["status"], res["selected"], len(res["candidates"])), ("ok", None, 1))
         self.assertEqual(res["candidates"][0]["context_facts"]["estimated_cost_usd"], 0.003)
         self.assertEqual(res["excluded"], [{"profile": "b", "reasons": ["context_unknown", "estimated_cost_unknown"]}])
         self.assertEqual(r.pin_selection(res, config(ps), "a")["selected"]["profile"], "a")
         self.assertEqual(r.pin_selection(res, config(ps), "b")["status"], "no_eligible_profile")
-        over = r.evaluate(self.task(), config(ps), MAPPING, None, [], NOW,
+        over = r.evaluate_v1(self.task(), config(ps), MAPPING, None, [], NOW,
                           context={**context, "max_estimated_cost_usd": 0.0029})
         self.assertIn("estimated_cost_exceeds_max", over["excluded"][0]["reasons"])
-        no_cap = r.evaluate(self.task(), config(ps), MAPPING, None, [], NOW,
+        no_cap = r.evaluate_v1(self.task(), config(ps), MAPPING, None, [], NOW,
                             context=r.validate_context({"schema_version": "1.0", "profiles": {"b": {}}}, ["a", "b"]))
         unknown = next(c for c in no_cap["candidates"] if c["profile"] == "b")
         self.assertEqual((unknown["context_facts"]["estimated_cost_usd"],
@@ -88,14 +88,17 @@ class P0(unittest.TestCase):
         ps[1]["context_tokens"] = ps[2]["context_tokens"] = 8000
         asmt = r.assess(t, config(ps), MAPPING, None, [], NOW)
         self.assertEqual([c["profile"] for c in asmt["candidates"]], ["a", "b", "c"])
-        self.assertEqual(asmt["candidates"][2]["constraint_failures"],
-                         [{"code": "context_insufficient", "metric": "min_context_tokens", "observed": 1000,
-                           "limit": 4000, "constraint": "min_context"}])
+        failed = [x for x in asmt["candidates"][2]["constraints"] if not x["passed"]]
+        self.assertEqual(failed, [{"passed": False, "code": "context_insufficient", "metric": "min_context_tokens",
+                                   "observed": 1000, "limit": 4000, "on_missing": "exclude",
+                                   "constraint": "context_capacity"}])
+        self.assertEqual([x["constraint"] for x in asmt["candidates"][0]["constraints"]],
+                         ["enabled", "cost_tier", "context_capacity"])
         self.assertIsNone(asmt["candidates"][0]["evaluations"]["benchmark"]["quality"])
         self.assertEqual(asmt["candidates"][2]["evaluations"], {})
         # benchmark 없음 + default/fallback 없음: 자동 선택은 실패해도 평가는 유효 후보를 돌려준다
         self.assertEqual(r.route(t, config(ps), MAPPING, None, [], NOW)["status"], "no_eligible_profile")
-        self.assertEqual([c["profile"] for c in r.evaluate(t, config(ps), MAPPING, None, [], NOW)["candidates"]],
+        self.assertEqual([c["profile"] for c in r.evaluate_v1(t, config(ps), MAPPING, None, [], NOW)["candidates"]],
                          ["a", "b"])
 
     def test_v37_context_v2_metric_contract(self):
@@ -106,7 +109,7 @@ class P0(unittest.TestCase):
                   "price.output_usd_per_mtok": m(2, "usd/mtok", observed_at=fresh)}
         ctx = lambda metrics, **top: {"schema_version": "2.0", "profiles": {"a": {"metrics": metrics}}, **top}
         ps = [profile("a")]
-        ev = lambda c: r.evaluate(self.task(), config(ps), MAPPING, None, [], NOW, context=c)
+        ev = lambda c: r.evaluate_v1(self.task(), config(ps), MAPPING, None, [], NOW, context=c)
         tokens = {"tokens.estimated_input": m(1000), "tokens.estimated_output": m(1000)}
         # 같은 사실의 1.0 입력과 2.0 입력은 같은 결과
         v1 = {"schema_version": "1.0", "max_estimated_cost_usd": 0.01, "profiles": {"a": {
@@ -144,6 +147,44 @@ class P0(unittest.TestCase):
         norm = r.validate_context(v1, ["a"])
         self.assertEqual(r.validate_context(norm, ["a"]), norm)  # 정규형은 다시 넣어도 그대로
 
+    def test_v38_evaluate_v2_reports_facts_constraints_and_benchmark(self):
+        ps = [profile("b", "high"), profile("a")]
+        ev = {"b": {"swe_verified_exact": 0.9, "aa_coding": 0.9}, "a": {"swe_verified_exact": 0.4, "aa_coding": 0.6}}
+        t = self.task(categories={"coding_repo": 1}, constraints={"max_cost_tier": "medium"})
+        fresh = "2026-10-11T00:00:00+00:00"
+        ctx = {"schema_version": "2.0", "max_estimated_cost_usd": 0.01, "profiles": {"a": {"metrics": {
+            "tokens.estimated_input": {"value": 1000, "unit": "tokens", "source": "o"},
+            "tokens.estimated_output": {"value": 1000, "unit": "tokens", "source": "o"},
+            "price.input_usd_per_mtok": {"value": 1, "unit": "usd/mtok", "source": "o", "observed_at": fresh},
+            "price.output_usd_per_mtok": {"value": 2, "unit": "usd/mtok", "source": "o", "observed_at": fresh},
+            "acme.vibe": {"value": 3, "unit": "stars", "source": "x"}}}}}
+        snap = snapshot(ev, ps)
+        res = r.evaluate(t, config(ps), MAPPING, snap, [], NOW, context=ctx)
+        self.assertEqual((res["schema_version"], [c["profile"] for c in res["candidates"]]), ("2.0", ["a", "b"]))
+        a, b = res["candidates"]
+        self.assertEqual(a["facts"]["cost.estimated_usd"]["value"], 0.003)
+        self.assertEqual(a["facts"]["cost.estimated_usd"]["source"], r.ROUTER_COST_SOURCE)
+        self.assertEqual(set(a["unrecognized_metrics"]), {"acme.vibe"})
+        cost_check = next(x for x in a["constraints"] if x["constraint"] == "estimated_cost")
+        self.assertEqual((cost_check["passed"], cost_check["observed"], cost_check["limit"]), (True, 0.003, 0.01))
+        # 탈락 후보도 목록에 남고, 실패 근거(관측값·기준값)를 함께 보인다. 상한 둘 다 독립 제약.
+        self.assertFalse(b["eligible"])
+        self.assertEqual({x["code"] for x in b["constraints"] if not x["passed"]},
+                         {"cost_tier_exceeds_max", "estimated_cost_unknown"})
+        self.assertEqual(b["evaluations"], {})
+        # legacy_score는 route 1.0의 score와 같다. 미등록 지표가 늘어도 benchmark 결과는 불변.
+        legacy = r.route(t, config(ps), MAPPING, snap, [], NOW, context=ctx)
+        self.assertEqual(a["evaluations"]["benchmark"]["status"], "ok")
+        self.assertIsNotNone(a["evaluations"]["benchmark"]["legacy_score"])
+        self.assertEqual(a["evaluations"]["benchmark"]["legacy_score"], legacy["candidates"][0]["score"])
+        ctx["profiles"]["a"]["metrics"]["acme.other"] = {"value": 1, "source": "x"}
+        again = r.evaluate(t, config(ps), MAPPING, snap, [], NOW, context=ctx)
+        self.assertEqual(again["candidates"][0]["evaluations"], a["evaluations"])
+        self.assertNotEqual(again["inputs"]["context_hash"], res["inputs"]["context_hash"])
+        text = cli.explain_text({**legacy, "assessment": res})
+        self.assertIn("constraint estimated_cost pass cost.estimated_usd=0.003 limit=0.01", text)
+        self.assertIn("FAIL cost_tier_exceeds_max", text)
+
     def test_v12_context_rejects_invalid_cost_facts(self):
         base = {"schema_version": "1.0", "max_estimated_cost_usd": 1, "profiles": {"a": {}}}
         for bad in ({**base, "max_estimated_cost_usd": float("nan")},
@@ -161,11 +202,16 @@ class P0(unittest.TestCase):
         task_file = Path(self.cwd) / "task.json"
         task_file.write_text(json.dumps({"schema_version": "1.0", "task_id": "t1", "round": 1,
                                          "summary": "s", "prompt": "p", "cwd": self.cwd}), "utf-8")
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            code = cli.main(["--config-dir", str(cfg_dir), "--cache-dir", str(Path(self.cwd) / "cache"),
-                             "evaluate", "--task", str(task_file)])
-        res = json.loads(out.getvalue())
+        def run(*extra):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = cli.main(["--config-dir", str(cfg_dir), "--cache-dir", str(Path(self.cwd) / "cache"),
+                                 "evaluate", "--task", str(task_file), *extra])
+            return code, json.loads(out.getvalue())
+        code, res = run()
+        self.assertEqual((code, res["schema_version"], res["status"]), (0, "2.0", "ok"))
+        self.assertEqual(sum(c["eligible"] for c in res["candidates"]), 1)
+        code, res = run("--format", "1")
         self.assertEqual((code, res["status"], res["selected"], len(res["candidates"])), (0, "ok", None, 1))
 
     def test_v01_synthetic_fixture(self):

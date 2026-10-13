@@ -36,10 +36,16 @@ def _load(args):
         return herdr.dispatch(task, cfg, mapping, snap, snap_warnings, args.herdr_session,
                               profile_id=args.profile, context=context, selection_mode="orchestrator_pinned")
     now = datetime.now(timezone.utc)
-    if args.cmd == "evaluate" or (args.cmd == "route" and args.profile):
-        res = r.evaluate(task, cfg, mapping, snap, snap_warnings, now, context=context)
-        return r.pin_selection(res, cfg, args.profile) if args.cmd == "route" else res
-    return r.route(task, cfg, mapping, snap, snap_warnings, now, context=context)
+    if args.cmd == "evaluate":
+        return (r.evaluate_v1 if args.format == "1" else r.evaluate)(task, cfg, mapping, snap, snap_warnings, now,
+                                                                     context=context)
+    if args.cmd == "route" and args.profile:
+        res = r.evaluate_v1(task, cfg, mapping, snap, snap_warnings, now, context=context)
+        return r.pin_selection(res, cfg, args.profile)
+    res = r.route(task, cfg, mapping, snap, snap_warnings, now, context=context)
+    if args.cmd == "explain":  # 선택은 route, 사실·제약 근거는 evaluate 2.0에서
+        res["assessment"] = r.evaluate(task, cfg, mapping, snap, snap_warnings, now, context=context)
+    return res
 
 
 def _parallel(args):
@@ -88,6 +94,28 @@ def _status(args):
     return data.status(args.cache_dir, datetime.now(timezone.utc), cfg_hash)
 
 
+def _metric_text(mid, m):
+    if m["freshness"] == "missing":
+        return f"{mid} MISSING ({m.get('reason')}) src={m['source']}"
+    return (f"{mid}={m['value']}" + (f" {m['unit']}" if m.get("unit") else "") + f" src={m['source']} {m['freshness']}"
+            + (f" age_h={m['age_hours']}" if "age_hours" in m else "") + (f" ({m['reason']})" if m.get("reason") else ""))
+
+
+def _assessment_lines(a):
+    """evaluate 2.0의 사실·제약 결과. 순위 정보가 아니다."""
+    lines = [f"assessment (registry {a['inputs']['metric_registry_version']}, "
+             f"max_estimated_cost_usd={a['max_estimated_cost_usd']}):"]
+    lines += [f"  task {_metric_text(k, m)}" for k, m in a["task_facts"].items()]
+    for c in a["candidates"]:
+        lines.append(f"  {c['profile']}: {'eligible' if c['eligible'] else 'EXCLUDED'}")
+        for x in c["constraints"]:
+            lines.append(f"    constraint {x['constraint']} {'pass' if x['passed'] else 'FAIL ' + x['code']} "
+                         f"{x['metric']}={x['observed']} limit={x['limit']}")
+        lines += [f"    fact {_metric_text(k, m)}" for k, m in c["facts"].items()]
+        lines += [f"    unrecognized {_metric_text(k, m)}" for k, m in c["unrecognized_metrics"].items()]
+    return lines
+
+
 def explain_text(res):
     cls = res["classification"]
     lines = [f"task {res['task_id']} round {res['round']} · policy {res['policy_version']} · snapshot {res['snapshot_id']}",
@@ -104,6 +132,8 @@ def explain_text(res):
                          f"src={e['source_id']}@{e['source_revision']} published={e['published_at'] or 'unknown'}"
                          + (" STALE" if e["stale"] else "") + (f" missing={e['missing_reason']}" if e["missing_reason"] else ""))
     lines += ["excluded:"] + [f"  {x['profile']}: {', '.join(x['reasons'])}" for x in res["excluded"]]
+    if res.get("assessment"):
+        lines += _assessment_lines(res["assessment"])
     lines += ["warnings:"] + [f"  {w['code']}: {w['message']}" + (f" [{w['source_id']}]" if w["source_id"] else "")
                               for w in res["warnings"]]
     lines += ["sources:"] + [f"  {sid}: last_success={s['last_success_at']} age_h={s['age_hours']} "
@@ -126,9 +156,11 @@ def main(argv=None):
     rp.add_argument("--context", help="Orchestrator metrics: estimates, prices, signals (context JSON 1.0|2.0)")
     rp.add_argument("--profile", help="execute this eligible profile selected by the Orchestrator")
     rp.add_argument("--dry-run", action="store_true")
-    vp = sub.add_parser("evaluate", help="return all eligible candidates without selecting or executing")
+    vp = sub.add_parser("evaluate", help="report facts, constraint results and evaluations for every profile; no selection")
     vp.add_argument("--task", required=True)
     vp.add_argument("--context", help="Orchestrator metrics: estimates, prices, signals (context JSON 1.0|2.0)")
+    vp.add_argument("--format", choices=["1", "2"], default="2",
+                    help="output schema; 1 = legacy candidate list (deprecated)")
     ep = sub.add_parser("explain", help="human-readable dry-run with all candidates")
     ep.add_argument("--task", required=True)
     ep.add_argument("--context", help="Orchestrator metrics: estimates, prices, signals (context JSON 1.0|2.0)")
