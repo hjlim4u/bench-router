@@ -28,11 +28,18 @@ def _config(args):
 def _load(args):
     task = r.validate_task(r.load_json_strict(args.task, r.TASK_MAX_BYTES))
     cfg, mapping = _config(args)
+    context = (r.validate_context(r.load_json_strict(args.context, r.TASK_MAX_BYTES),
+                                  [p["id"] for p in cfg["profile"]]) if args.context else None)
     snap, snap_warnings = r.load_snapshot(args.cache_dir)
     if args.cmd == "route" and not args.dry_run:
         from . import herdr  # live 경로에서만
-        return herdr.dispatch(task, cfg, mapping, snap, snap_warnings, args.herdr_session)
-    return r.route(task, cfg, mapping, snap, snap_warnings, datetime.now(timezone.utc))
+        return herdr.dispatch(task, cfg, mapping, snap, snap_warnings, args.herdr_session,
+                              profile_id=args.profile, context=context, selection_mode="orchestrator_pinned")
+    now = datetime.now(timezone.utc)
+    if args.cmd == "evaluate" or (args.cmd == "route" and args.profile):
+        res = r.evaluate(task, cfg, mapping, snap, snap_warnings, now, context=context)
+        return r.pin_selection(res, cfg, args.profile) if args.cmd == "route" else res
+    return r.route(task, cfg, mapping, snap, snap_warnings, now, context=context)
 
 
 def _parallel(args):
@@ -116,9 +123,15 @@ def main(argv=None):
                     help="named herdr session (default: herdr's default session)")
     rp = sub.add_parser("route", help="select a profile and delegate via herdr (--dry-run: select only)")
     rp.add_argument("--task", required=True)
+    rp.add_argument("--context", help="Orchestrator estimates and price facts (JSON)")
+    rp.add_argument("--profile", help="execute this eligible profile selected by the Orchestrator")
     rp.add_argument("--dry-run", action="store_true")
+    vp = sub.add_parser("evaluate", help="return all eligible candidates without selecting or executing")
+    vp.add_argument("--task", required=True)
+    vp.add_argument("--context", help="Orchestrator estimates and price facts (JSON)")
     ep = sub.add_parser("explain", help="human-readable dry-run with all candidates")
     ep.add_argument("--task", required=True)
+    ep.add_argument("--context", help="Orchestrator estimates and price facts (JSON)")
     fp = sub.add_parser("refresh", help="fetch sources and publish the routing snapshot")
     fp.add_argument("--source")
     fp.add_argument("--force", action="store_true", help="ignore TTL")

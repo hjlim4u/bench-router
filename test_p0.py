@@ -58,6 +58,54 @@ class P0(unittest.TestCase):
     def run_route(self, t, profiles, ev, **cfg_kw):
         return r.route(t, config(profiles, **cfg_kw), MAPPING, snapshot(ev, profiles), [], NOW)
 
+    def test_v11_orchestrator_facts_and_budget(self):
+        ps = [profile("a", context_tokens=8000), profile("b", context_tokens=0)]
+        context = r.validate_context({"schema_version": "1.0", "complexity": {"level": "high", "reason": "multiple files"},
+            "max_estimated_cost_usd": 0.003, "profiles": {
+                "a": {"estimated_input_tokens": 1000, "estimated_output_tokens": 1000, "required_context_tokens": 2000,
+                      "price": {"input_usd_per_million_tokens": 1, "output_usd_per_million_tokens": 2,
+                                "source": "test", "as_of": "2026-10-13T00:00:00+00:00"},
+                      "signals": {"orchestrator.latency": {"value": 4, "unit": "seconds", "source": "test"}}},
+                "b": {"required_context_tokens": 2000}}}, [p["id"] for p in ps])
+        res = r.evaluate(self.task(), config(ps), MAPPING, None, [], NOW, context=context)
+        self.assertEqual((res["status"], res["selected"], len(res["candidates"])), ("ok", None, 1))
+        self.assertEqual(res["candidates"][0]["context_facts"]["estimated_cost_usd"], 0.003)
+        self.assertEqual(res["excluded"], [{"profile": "b", "reasons": ["context_unknown", "estimated_cost_unknown"]}])
+        self.assertEqual(r.pin_selection(res, config(ps), "a")["selected"]["profile"], "a")
+        self.assertEqual(r.pin_selection(res, config(ps), "b")["status"], "no_eligible_profile")
+        over = r.evaluate(self.task(), config(ps), MAPPING, None, [], NOW,
+                          context={**context, "max_estimated_cost_usd": 0.0029})
+        self.assertIn("estimated_cost_exceeds_max", over["excluded"][0]["reasons"])
+        no_cap = r.evaluate(self.task(), config(ps), MAPPING, None, [], NOW,
+                            context=r.validate_context({"schema_version": "1.0", "profiles": {"b": {}}}, ["a", "b"]))
+        unknown = next(c for c in no_cap["candidates"] if c["profile"] == "b")
+        self.assertEqual((unknown["context_facts"]["estimated_cost_usd"],
+                          unknown["context_facts"]["cost_missing_reason"]), (None, "estimate_or_price_missing"))
+
+    def test_v12_context_rejects_invalid_cost_facts(self):
+        base = {"schema_version": "1.0", "max_estimated_cost_usd": 1, "profiles": {"a": {}}}
+        for bad in ({**base, "max_estimated_cost_usd": float("nan")},
+                    {**base, "profiles": {"missing": {}}},
+                    {**base, "profiles": {"a": {"price": {"input_usd_per_million_tokens": 1}}}},
+                    {**base, "profiles": {"a": {"signals": {"latency": {"value": 1, "unit": "s", "source": "x"}}}}}):
+            with self.subTest(bad=bad), self.assertRaises(r.InputError):
+                r.validate_context(bad, ["a"])
+
+    def test_v13_evaluate_cli_returns_full_candidate_list(self):
+        cfg_dir = Path(self.cwd) / "cfg"
+        cfg_dir.mkdir()
+        example = (EX / "profiles.example.toml").read_text("utf-8")
+        (cfg_dir / "profiles.toml").write_text(example.replace("enabled = false", "enabled = true"), "utf-8")
+        task_file = Path(self.cwd) / "task.json"
+        task_file.write_text(json.dumps({"schema_version": "1.0", "task_id": "t1", "round": 1,
+                                         "summary": "s", "prompt": "p", "cwd": self.cwd}), "utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = cli.main(["--config-dir", str(cfg_dir), "--cache-dir", str(Path(self.cwd) / "cache"),
+                             "evaluate", "--task", str(task_file)])
+        res = json.loads(out.getvalue())
+        self.assertEqual((code, res["status"], res["selected"], len(res["candidates"])), (0, "ok", None, 1))
+
     def test_v01_synthetic_fixture(self):
         fx = json.loads((EX / "scoring.synthetic.json").read_text("utf-8"))
         a, exp = fx["evidence_weights"], fx["expected"]

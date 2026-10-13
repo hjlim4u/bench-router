@@ -114,6 +114,28 @@ class P2(unittest.TestCase):
     def receipt(self, out):
         return json.loads(Path(out["receipt_path"]).read_text("utf-8"))
 
+    def test_v35_pinned_profile_replay_and_retry_guidance(self):
+        self.cfg = config([*self.cfg["profile"], profile("b", kind="claude", executable="claude")], default="a")
+        fake = FakeHerdr(on_prompt=write_result())
+        context = {"schema_version": "1.0", "profiles": {"a": {
+            "estimated_input_tokens": 1000, "estimated_output_tokens": 1000,
+            "price": {"input_usd_per_million_tokens": 1, "output_usd_per_million_tokens": 2,
+                      "source": "test", "as_of": "2026-10-13T00:00:00+00:00"}}}}
+        first = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], runner=fake, which=which,
+                            profile_id="a", context=context, selection_mode="orchestrator_pinned")
+        self.assertEqual((first["status"], first["selection_mode"], first["reassignment"]),
+                         ("completed", "orchestrator_pinned", "review_result"))
+        repriced = {**context, "profiles": {"a": {**context["profiles"]["a"],
+                    "price": {**context["profiles"]["a"]["price"], "output_usd_per_million_tokens": 4}}}}
+        replay = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], runner=fake, which=which,
+                             profile_id="a", context=repriced, selection_mode="orchestrator_pinned")
+        self.assertEqual(replay["context_hash"], first["context_hash"])
+        self.assertEqual(replay["candidates"][0]["context_facts"]["estimated_cost_usd"], 0.003)
+        conflict = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], runner=fake, which=which,
+                               profile_id="b", selection_mode="orchestrator_pinned")
+        self.assertEqual((conflict["status"], len(fake.prompts)), ("conflict", 1))
+        self.assertEqual(conflict["warnings"][-1]["code"], "profile_round_conflict")
+
     def test_v19_prompt_is_argv_not_shell(self):
         evil = "x $(touch /tmp/pwned) `id`; rm -rf ~\n\"quoted\" 'single' \\ & | > <"
         fake = FakeHerdr(on_prompt=write_result())

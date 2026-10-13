@@ -363,7 +363,7 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
 # ---------- 진입점 ----------
 
 def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
-             profile_id=None, extra_args=(), kinds=False):
+             profile_id=None, extra_args=(), kinds=False, context=None, selection_mode="parallel_pinned"):
     """live route. 선택 → receipt → herdr 실행. 같은 (task_id, round)는 재전송 없이 collect.
     profile_id: 제약·가용성을 통과한 후보 중 이 프로필로 고정(parallel fanout).
     extra_args: agent argv 뒤에 붙임(지문에는 포함하지 않음). kinds: 미리 읽은 herdr kind 집합."""
@@ -371,17 +371,10 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
     if kinds is False:
         kinds = herdr_kinds(session, runner)
     availability = {p["id"]: probe(p, which, kinds) for p in cfg["profile"]}
-    res = r.route(t, cfg, mapping, snap, snap_warnings, now, availability)
+    res = (r.evaluate(t, cfg, mapping, snap, snap_warnings, now, availability, context) if profile_id
+           else r.route(t, cfg, mapping, snap, snap_warnings, now, availability, context))
     if profile_id:
-        p = next((p for p in cfg["profile"] if p["id"] == profile_id), None)
-        if p is None or profile_id not in {c["profile"] for c in res["candidates"]}:
-            return {**res, "status": "no_eligible_profile", "selected": None}
-        res = {**res, "status": "selected", "selection_mode": "parallel_pinned",
-               "selected": {"profile": profile_id, "profile_fingerprint": r.profile_fingerprint(p),
-                            "agent_name": None, "pane_id": None}}
-    if res["status"] != "selected":
-        return res
-    profile = next(p for p in cfg["profile"] if p["id"] == res["selected"]["profile"])
+        res = r.pin_selection(res, cfg, profile_id, selection_mode)
     try:
         with dispatch_lock(t["cwd"]):
             existing = [x for x in receipts(t["cwd"]) if x["task_id"] == t["task_id"] and x["round"] == t["round"]]
@@ -391,8 +384,16 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
                     return {**res, "status": "conflict", "run_id": rc["run_id"],
                             "warnings": res["warnings"] + [r.warn("task_round_conflict",
                                                                   "same task_id/round with different content")]}
+                if profile_id and rc["profile"] != profile_id:
+                    return {**res, "status": "conflict", "run_id": rc["run_id"],
+                            "warnings": res["warnings"] + [r.warn("profile_round_conflict",
+                                                                  "same task_id/round already uses another profile")]}
                 rc = collect(rc, t["constraints"]["timeout_ms"], session, runner)
-                return output(res, rc, reused=True)
+                prior = r.load_json_strict(Path(rc["run_dir"]) / "decision.json", r.SNAPSHOT_MAX_BYTES)
+                return output(prior, rc, reused=True)
+            if res["status"] != "selected":
+                return res
+            profile = next(p for p in cfg["profile"] if p["id"] == res["selected"]["profile"])
             unresolved = [x["run_id"] for x in receipts(t["cwd"]) if x["status"] not in SETTLED_STATUSES]
             if unresolved:
                 return {**res, "status": "conflict", "warnings": res["warnings"] + [r.warn(
@@ -454,4 +455,7 @@ def output(res, rc, reused=False):
     out["selected"] = {**(out.get("selected") or {}), "profile": rc["profile"],
                        "profile_fingerprint": rc["profile_fingerprint"], "agent_name": rc["agent_name"],
                        "pane_id": rc["pane_id"]}
+    out["reassignment"] = ("collect_first" if rc["delivery_state"] in ("submission_attempted", "uncertain")
+                            or rc["status"] in ("timed_out", "waiting", "delivery_uncertain") else
+                            "safe_to_retry" if rc["delivery_state"] == "not_attempted" else "review_result")
     return out

@@ -11,6 +11,7 @@ import re
 import time
 import tomllib
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 
 SCHEMA_VERSION = "1.0"
@@ -169,6 +170,83 @@ TASK_OPTIONAL = ("context_files", "categories", "category_confidence", "constrai
 CONSTRAINT_DEFAULTS = {"max_cost_tier": "high", "min_context_tokens": 0, "local_only": False,
                        "timeout_ms": 900000, "required_capabilities": []}
 TASK_MAX_BYTES = 1024 * 1024
+
+
+def validate_context(raw, profile_ids):
+    """Validate Orchestrator-supplied estimates; prices are never fetched by the router."""
+    if not isinstance(raw, dict) or set(raw) - {"schema_version", "complexity", "max_estimated_cost_usd", "profiles"}:
+        raise InputError("context: object with known fields required")
+    if raw.get("schema_version") != SCHEMA_VERSION:
+        raise InputError(f"context.schema_version must be {SCHEMA_VERSION!r}")
+    out = {"schema_version": SCHEMA_VERSION, "profiles": {}}
+    if "complexity" in raw:
+        item = raw["complexity"]
+        if not isinstance(item, dict) or set(item) != {"level", "reason"} or item["level"] not in TIERS:
+            raise InputError("context.complexity: level low|medium|high and reason required")
+        out["complexity"] = {"level": item["level"], "reason": _str(item["reason"], "context.complexity.reason", 4000)}
+    if "max_estimated_cost_usd" in raw:
+        out["max_estimated_cost_usd"] = _num(raw["max_estimated_cost_usd"], "context.max_estimated_cost_usd", 0)
+    profiles = raw.get("profiles", {})
+    if not isinstance(profiles, dict) or set(profiles) - set(profile_ids):
+        raise InputError("context.profiles: object with configured profile ids required")
+    for pid, item in profiles.items():
+        if not isinstance(item, dict) or set(item) - {"estimated_input_tokens", "estimated_output_tokens", "required_context_tokens", "price", "signals"}:
+            raise InputError(f"context.profiles.{pid}: unknown fields")
+        p = {}
+        for key in ("estimated_input_tokens", "estimated_output_tokens", "required_context_tokens"):
+            if key in item:
+                p[key] = _int(item[key], f"context.profiles.{pid}.{key}", 0, 1_000_000_000_000)
+        if "price" in item:
+            price = item["price"]
+            keys = {"input_usd_per_million_tokens", "output_usd_per_million_tokens", "source", "as_of"}
+            if not isinstance(price, dict) or set(price) != keys:
+                raise InputError(f"context.profiles.{pid}.price: {sorted(keys)} required")
+            p["price"] = {key: _num(price[key], f"context.profiles.{pid}.price.{key}", 0, 1_000_000_000)
+                          for key in ("input_usd_per_million_tokens", "output_usd_per_million_tokens")}
+            p["price"]["source"] = _str(price["source"], f"context.profiles.{pid}.price.source", 500)
+            _parse_time(price["as_of"], f"context.profiles.{pid}.price.as_of")
+            p["price"]["as_of"] = price["as_of"]
+        signals = item.get("signals", {})
+        if not isinstance(signals, dict):
+            raise InputError(f"context.profiles.{pid}.signals: object required")
+        p["signals"] = {}
+        for name, signal in signals.items():
+            if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*", name):
+                raise InputError(f"context.profiles.{pid}.signals: namespaced name required")
+            if not isinstance(signal, dict) or set(signal) != {"value", "unit", "source"}:
+                raise InputError(f"context.profiles.{pid}.signals.{name}: value, unit, source required")
+            p["signals"][name] = {"value": _num(signal["value"], f"context.profiles.{pid}.signals.{name}.value"),
+                                  "unit": _str(signal["unit"], f"context.profiles.{pid}.signals.{name}.unit", 100),
+                                  "source": _str(signal["source"], f"context.profiles.{pid}.signals.{name}.source", 500)}
+        out["profiles"][pid] = p
+    return out
+
+
+def context_facts(profile, context):
+    item = context["profiles"].get(profile["id"], {})
+    required = item.get("required_context_tokens", 0)
+    reasons = []
+    if required and profile["context_tokens"] < required:
+        reasons.append("context_unknown" if profile["context_tokens"] == 0 else "context_insufficient")
+    price = item.get("price")
+    if price and "estimated_input_tokens" in item and "estimated_output_tokens" in item:
+        cost = (Decimal(item["estimated_input_tokens"]) * Decimal(str(price["input_usd_per_million_tokens"]))
+                + Decimal(item["estimated_output_tokens"]) * Decimal(str(price["output_usd_per_million_tokens"]))) / 1_000_000
+        missing = None
+    else:
+        cost, missing = None, "estimate_or_price_missing"
+    cap = context.get("max_estimated_cost_usd")
+    if cap is not None:
+        if cost is None:
+            reasons.append("estimated_cost_unknown")
+        elif cost > Decimal(str(cap)):
+            reasons.append("estimated_cost_exceeds_max")
+    facts = {"estimated_cost_usd": float(cost) if cost is not None else None,
+             "cost_missing_reason": missing, "required_context_tokens": required,
+             "estimated_input_tokens": item.get("estimated_input_tokens"),
+             "estimated_output_tokens": item.get("estimated_output_tokens"),
+             "price": price, "signals": item.get("signals", {})}
+    return reasons, facts
 
 
 def validate_task(raw):
@@ -503,9 +581,11 @@ EVIDENCE_FIELDS = ("raw", "normalized", "scope", "cohort_id", "metric_version", 
                    "fetched_at", "published_at", "evaluated_at")
 
 
-def route(t, cfg, mapping, snap, snap_warnings, now, availability=None):
+def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
     """프로필 선택. availability=None이면 dry-run(미확인), live면 {profile_id: 제외 사유 또는 None}.
     같은 task/config/snapshot/availability/now면 결과가 동일하다."""
+    if context is not None:
+        context = validate_context(context, [p["id"] for p in cfg["profile"]])
     warnings = list(snap_warnings)
     cls = classify(t)
     if cls["stage"] == "fallback":
@@ -522,6 +602,10 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None):
     cands, excluded = [], []
     for p in sorted(cfg["profile"], key=lambda p: p["id"]):
         reasons = hard_filter(p, t)
+        facts = None
+        if context is not None:
+            context_reasons, facts = context_facts(p, context)
+            reasons.extend(context_reasons)
         if availability is not None and availability.get(p["id"]):
             reasons.append(availability[p["id"]])
         if reasons:
@@ -548,7 +632,8 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None):
         exact = sum(a[b] for b in a if normalized[b] is not None
                     and sp["evidence"][b]["scope"] == "exact_profile")
         cands.append({"profile": p["id"], "profile_fingerprint": fp, "cost_tier": p["cost_tier"],
-                      "coverage": cov, "quality": q, "exact_evidence_weight": exact, "evidence": rows})
+                      "coverage": cov, "quality": q, "exact_evidence_weight": exact, "evidence": rows,
+                      "context_facts": facts})
 
     pick, mode = select(cands, t["priority"], cfg["default_profile"], cfg["fallback_order"])
     cands.sort(key=lambda c: (c["score"] is None, -(c["score"] or 0), c["profile"]))
@@ -557,7 +642,8 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None):
         out_cands.append({"profile": c["profile"], "score": _r(c["score"]), "quality": _r(c["quality"]),
                           "coverage": _r(c["coverage"]), "coverage_band": coverage_band(c["coverage"]),
                           "exact_evidence_weight": _r(c["exact_evidence_weight"]), "cost_proxy": c["cost_proxy"],
-                          "evidence": c["evidence"], "availability_verified": availability is not None})
+                          "evidence": c["evidence"], "availability_verified": availability is not None,
+                          **({"context_facts": c["context_facts"]} if context is not None else {})})
 
     selected = None
     if pick:
@@ -581,7 +667,25 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None):
             "selection_mode": mode, "classification": cls, "candidates": out_cands, "excluded": excluded,
             "snapshot_id": snap["snapshot_id"] if snap else None, "policy_version": POLICY_VERSION,
             "config_hash": config_hash(cfg, mapping),
-            "task_hash": semantic_task_hash(t), "warnings": warnings, "sources": sources}
+            "task_hash": semantic_task_hash(t), "warnings": warnings, "sources": sources,
+            **({"decision_context": context, "context_hash": canonical_hash(context), "complexity": context.get("complexity"),
+                "max_estimated_cost_usd": context.get("max_estimated_cost_usd")} if context is not None else {})}
+
+
+def evaluate(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
+    res = route(t, cfg, mapping, snap, snap_warnings, now, availability, context)
+    selection_warnings = {"availability_unverified", "auth_unverified", "insufficient_evidence", "partial_evidence", "proxy_only"}
+    return {**res, "status": "ok", "selected": None, "selection_mode": "orchestrator_choice",
+            "warnings": [w for w in res["warnings"] if w["code"] not in selection_warnings]}
+
+
+def pin_selection(res, cfg, profile_id, mode="orchestrator_pinned"):
+    p = next((p for p in cfg["profile"] if p["id"] == profile_id), None)
+    if p is None or profile_id not in {c["profile"] for c in res["candidates"]}:
+        return {**res, "status": "no_eligible_profile", "selected": None}
+    return {**res, "status": "selected", "selection_mode": mode,
+            "selected": {"profile": profile_id, "profile_fingerprint": profile_fingerprint(p),
+                         "agent_name": None, "pane_id": None}}
 
 
 def _r(x):
