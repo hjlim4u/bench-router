@@ -83,6 +83,38 @@ class P3(unittest.TestCase):
     def run_(self, g, fake):
         return pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which)
 
+    def test_v40_group_v2_orchestrator_selections(self):
+        task = {"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "do it",
+                "categories": {"general": 1}, "category_confidence": 0.9}
+        context = {"schema_version": "2.0", "profiles": {p: {"metrics": {
+            "cost.estimated_usd": {"value": 0.01, "unit": "usd", "source": "quote@1"}}} for p in ("a", "b")}}
+        # Orchestrator는 group 수준 task(cwd=group.cwd)로 evaluate해서 digest를 얻는다
+        digest = r.evaluate(r.validate_task({**task, "cwd": self.cwd}), self.cfg, MAPPING, None, [],
+                            pl.datetime.now(pl.timezone.utc), context=context)["assessment_digest"]
+        sel = lambda pid: {"schema_version": "2.0", "profile": pid, "assessment_digest": digest,
+                           "policy": {"id": "orch-diverse", "version": "1"}, "reason": f"{pid} for diversity"}
+        raw = {"schema_version": "2.0", "group_id": "g2", "cwd": self.cwd, "isolation": "deliberate",
+               "tasks": [{"task": task, "context": context, "selections": [sel("b"), sel("a")]}]}
+        fake = MultiHerdr(agent_act())
+        out = self.run_(pl.validate_group(raw), fake)
+        self.assertEqual((out["status"], out["schema_version"], out["fanout"]), ("completed", "2.0", 2), out)
+        self.assertEqual([m["profile"] for m in out["members"]], ["b", "a"])  # router 순위가 아닌 Orchestrator 선택
+        self.assertIn("estimate_round1_only", [w["code"] for w in out["warnings"]])
+        decision = json.loads((Path(out["members"][0]["rounds"][0]["receipt_path"]).parent / "decision.json")
+                              .read_text("utf-8"))
+        self.assertEqual((decision["selection"]["reason"], decision["decision_context"]["profiles"]["b"]["metrics"]
+                          ["cost.estimated_usd"]["value"]), ("b for diversity", 0.01))
+        # 평가 후 설정 변경 → 그룹 전체 실행 안 함
+        self.cfg = config([*self.cfg["profile"], profile("c")], default="a")
+        stale_fake = MultiHerdr(agent_act())
+        stale = self.run_(pl.validate_group({**raw, "group_id": "g3"}), stale_fake)
+        self.assertEqual((stale["status"], stale_fake.prompts), ("stale_assessment", []))
+        for bad in ({**raw, "fanout": 2},
+                    {**raw, "tasks": [{"task": task, "selections": [sel("a"), sel("a")]}]},
+                    {**raw, "tasks": [{"task": task, "selections": []}]}):
+            with self.subTest(bad=bad), self.assertRaises(r.InputError):
+                pl.validate_group(bad)
+
     def test_v30_isolated_worktrees(self):
         fake = MultiHerdr(agent_act())
         out = self.run_(self.group(), fake)

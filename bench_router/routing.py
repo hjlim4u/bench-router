@@ -974,11 +974,12 @@ def validate_selection(raw):
             "reason": _str(raw["reason"], "selection.reason", 4000)}
 
 
-def apply_selection(res, cfg, profile_id, selection=None, mode="orchestrator_pinned"):
+def apply_selection(res, cfg, profile_id, selection=None, mode="orchestrator_pinned", check_digest=True):
     """evaluate_v1 결과에 외부 선택을 적용한다. selection이 있으면 평가 당시 정적 입력과 지금이 같아야 한다.
-    profile_id만 오면(기록 없는 고정) 실행은 하되 selection_unrecorded로 알린다."""
+    profile_id만 오면(기록 없는 고정) 실행은 하되 selection_unrecorded로 알린다.
+    check_digest=False는 호출자가 이미 같은 판단 입력으로 digest를 검사한 경우만(parallel worker)."""
     if selection is not None:
-        if selection["assessment_digest"] != res["assessment_digest"]:
+        if check_digest and selection["assessment_digest"] != res["assessment_digest"]:
             return {**res, "status": "stale_assessment", "selected": None,
                     "selection": {"source": "orchestrator", **selection},
                     "warnings": res["warnings"] + [warn("stale_assessment",

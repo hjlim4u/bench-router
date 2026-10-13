@@ -20,6 +20,7 @@ from . import routing as r
 
 ISOLATION = ("isolated", "shared", "deliberate")
 GROUP_KEYS = ("schema_version", "group_id", "cwd", "isolation", "fanout", "max_parallel", "tasks")
+GROUP_SCHEMA_VERSION = "2.0"  # tasks[i] = {task, context?, selections[]}: Orchestrator가 고른 프로필로 fanout
 MAX_AGENTS = 16
 ADD_DIR_KINDS = {"claude", "codex"}  # 둘 다 --add-dir 지원 (docs/evidence/claude_help.txt, codex_help.txt)
 VOTE_MAX = 64 * 1024
@@ -29,17 +30,19 @@ ROUND_KEYS = ("status", "round", "run_id", "result_path", "task_outcome", "works
 def validate_group(raw):
     if not isinstance(raw, dict):
         raise r.InputError("group: JSON object required")
-    unknown = set(raw) - set(GROUP_KEYS)
+    v2 = raw.get("schema_version") == GROUP_SCHEMA_VERSION
+    unknown = set(raw) - set(GROUP_KEYS) | ({"fanout"} & set(raw) if v2 else set())
     if unknown:
-        raise r.InputError(f"group: unknown fields {sorted(unknown)}")
+        raise r.InputError(f"group: unknown fields {sorted(unknown)}" + (" (2.0: fanout = selections per task)" if v2 else ""))
     missing = [k for k in ("schema_version", "group_id", "cwd", "tasks") if k not in raw]
     if missing:
         raise r.InputError(f"group: missing fields {missing}")
-    if raw["schema_version"] != r.SCHEMA_VERSION:
-        raise r.InputError(f"group.schema_version must be {r.SCHEMA_VERSION!r}")
+    if raw["schema_version"] not in (r.SCHEMA_VERSION, GROUP_SCHEMA_VERSION):
+        raise r.InputError(f"group.schema_version must be {r.SCHEMA_VERSION!r} or {GROUP_SCHEMA_VERSION!r}")
     if not isinstance(raw["group_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", raw["group_id"]):
         raise r.InputError("group.group_id: [A-Za-z0-9][A-Za-z0-9_-]{0,63} required")
-    g = {"group_id": raw["group_id"], "isolation": raw.get("isolation", "isolated"),
+    g = {"schema_version": raw["schema_version"], "group_id": raw["group_id"],
+         "isolation": raw.get("isolation", "isolated"),
          "fanout": r._int(raw.get("fanout", 1), "group.fanout", 1, 8),
          "max_parallel": r._int(raw.get("max_parallel", 4), "group.max_parallel", 1, MAX_AGENTS)}
     if g["isolation"] not in ISOLATION:
@@ -51,16 +54,33 @@ def validate_group(raw):
     tasks = raw["tasks"]
     if not isinstance(tasks, list) or not tasks:
         raise r.InputError("group.tasks: non-empty array required")
-    if len(tasks) * g["fanout"] > MAX_AGENTS:
-        raise r.InputError(f"group: tasks × fanout must be <= {MAX_AGENTS}")
-    g["raw_tasks"], g["tasks"] = [], []
+    g["raw_tasks"], g["tasks"], g["contexts"], g["selections"] = [], [], [], ([] if v2 else None)
     for i, rt in enumerate(tasks):
         if not isinstance(rt, dict):
             raise r.InputError(f"group.tasks[{i}]: object required")
+        if v2:  # context는 프로필 목록이 필요해 plan에서 검증한다(실행 전)
+            if set(rt) - {"task", "context", "selections"} or not isinstance(rt.get("task"), dict):
+                raise r.InputError(f"group.tasks[{i}]: task, optional context, selections required")
+            sels = rt.get("selections")
+            if not isinstance(sels, list) or not 1 <= len(sels) <= 8:
+                raise r.InputError(f"group.tasks[{i}].selections: 1..8 selections required")
+            sels = [r.validate_selection(x) for x in sels]
+            if len({x["profile"] for x in sels}) != len(sels):
+                raise r.InputError(f"group.tasks[{i}].selections: duplicate profile")
+            g["selections"].append(sels)
+            g["contexts"].append(rt.get("context"))
+            rt = rt["task"]
+        else:
+            g["contexts"].append(None)
         if "cwd" in rt:
             raise r.InputError(f"group.tasks[{i}].cwd: set by group.cwd (each agent gets its own worktree)")
         g["raw_tasks"].append(rt)
         g["tasks"].append(r.validate_task({**rt, "cwd": g["cwd"]}))
+    agents = sum(len(x) for x in g["selections"]) if v2 else len(tasks) * g["fanout"]
+    if agents > MAX_AGENTS:
+        raise r.InputError(f"group: total agents (tasks × fanout) must be <= {MAX_AGENTS}")
+    if v2:
+        g["fanout"] = max(len(x) for x in g["selections"])
     ids = [t["task_id"] for t in g["tasks"]]
     if len(set(ids)) != len(ids):
         raise r.InputError("group.tasks: duplicate task_id")
@@ -68,10 +88,20 @@ def validate_group(raw):
 
 
 def plan(g, cfg, mapping, snap, snap_warnings, availability):
-    """task마다 route 1회 → selected 다음 후보 순서로 서로 다른 프로필 fanout개."""
+    """1.0(legacy): task마다 route 1회 → selected 다음 후보 순서로 서로 다른 프로필 fanout개.
+    2.0: task마다 단건 route --selection과 같은 평가(evaluate_v1 + 제약 + digest)로 Orchestrator 선택을 검사한다.
+    digest 기준은 group 수준 task(cwd=group.cwd, 원래 prompt) — Orchestrator도 그 task로 evaluate한다."""
     now = datetime.now(timezone.utc)
     members, warnings = [], []
     for i, t in enumerate(g["tasks"]):
+        if g["selections"] is not None:
+            res = r.evaluate_v1(t, cfg, mapping, snap, snap_warnings, now, availability, g["contexts"][i])
+            for k, sel in enumerate(g["selections"][i], 1):
+                chk = r.apply_selection(res, cfg, None, sel)
+                members.append({"label": f"{t['task_id']}-{k}", "index": i, "task_id": t["task_id"],
+                                "profile": sel["profile"], "selection": sel, "rounds": [],
+                                "status": "planned" if chk["status"] == "selected" else chk["status"]})
+            continue
         res = r.route(t, cfg, mapping, snap, snap_warnings, now, availability)
         if res["status"] != "selected":
             members.append({"label": f"{t['task_id']}-1", "index": i, "task_id": t["task_id"], "profile": None,
@@ -165,13 +195,16 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
     kinds = None if dry_run else herdr.herdr_kinds(session, runner)
     availability = None if dry_run else {p["id"]: herdr.probe(p, which, kinds) for p in cfg["profile"]}
     members, warnings = plan(g, cfg, mapping, snap, snap_warnings, availability)
-    out = {"schema_version": r.SCHEMA_VERSION, "group_id": g["group_id"], "isolation": g["isolation"],
+    out = {"schema_version": g["schema_version"], "group_id": g["group_id"], "isolation": g["isolation"],
            "fanout": g["fanout"], "shared_dir": None if g["isolation"] == "isolated" else str(shared),
            "members": members, "consensus": None, "warnings": warnings}
-    labels = [m["label"] for m in members if m["profile"]]
+    labels = [m["label"] for m in members if m["status"] == "planned"]
     for m in members:
         m["worktree"] = str(Path(g["cwd"]) / ".bench-router" / "worktrees" / g["group_id"] / m["label"])
         m["branch"] = f"br/{g['group_id']}/{m['label']}"
+    if any(m["status"] == "stale_assessment" for m in members):  # 일부만 옛 판단으로 돌리지 않는다
+        return {**out, "status": "stale_assessment", "warnings": warnings + [r.warn(
+            "stale_assessment", "a selection's assessment_digest no longer matches; re-evaluate the group's tasks")]}
     if dry_run:
         out["status"] = "selected" if labels else "no_eligible_profile"
         return out
@@ -181,7 +214,7 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
     shared.mkdir(parents=True, exist_ok=True)
     profiles = {p["id"]: p for p in cfg["profile"]}
     collab = g["isolation"] != "isolated"
-    for pid in {m["profile"] for m in members if m["profile"]}:
+    for pid in {m["profile"] for m in members if m["status"] == "planned"}:
         if collab and profiles[pid]["kind"] not in ADD_DIR_KINDS:
             warnings.append(r.warn("shared_dir_not_granted", f"{pid}: no known --add-dir for kind "
                                    f"{profiles[pid]['kind']}; it may not write to the shared dir"))
@@ -193,8 +226,14 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
             t = r.validate_task({**rt, "cwd": str(wt), "round": rt["round"] + round_add,
                                  "prompt": rt["prompt"] + collab_text(g, m, labels, shared) + extra_prompt})
             extra = ["--add-dir", str(shared)] if collab and profiles[m["profile"]]["kind"] in ADD_DIR_KINDS else []
+            # worker task는 구조상 cwd(worktree)·prompt(협업 안내)가 group task와 달라 digest를 다시 비교하지 않는다.
+            # 판단 입력 검사는 plan에서 끝났고, context·제약·가용성은 dispatch가 다시 검사한다.
+            sel = m.get("selection")
             res = herdr.dispatch(t, cfg, mapping, snap, snap_warnings, session, runner, which,
-                                 profile_id=m["profile"], extra_args=extra, kinds=kinds)
+                                 profile_id=m["profile"], extra_args=extra, kinds=kinds,
+                                 context=g["contexts"][m["index"]], selection=sel,
+                                 selection_mode="orchestrator_pinned" if sel else "parallel_pinned",
+                                 check_digest=False)
             rnd = {k: res.get(k) for k in ROUND_KEYS}
             rnd["round"] = t["round"]
             if res["status"] != "completed":
@@ -210,7 +249,7 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
 
     try:
         with locking.exclusive(gdir / "group.lock", herdr.Busy(f"group {g['group_id']} is already running")):
-            run_all([m for m in members if m["profile"]], 0, lambda m: "")
+            run_all([m for m in members if m["status"] == "planned"], 0, lambda m: "")
             if g["isolation"] == "deliberate":
                 done = [m for m in members if m["status"] == "completed"]
                 if len(done) < 2:
@@ -219,6 +258,9 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                     for m in done:
                         shutil.copyfile(m["rounds"][0]["result_path"], shared / f"{m['label']}.result.md")
                     names = [m["label"] for m in done]
+                    if any(g["contexts"]):  # ponytail: Router는 재견적하지 않는다. 정확한 비용 관리는 Orchestrator가 round 진행
+                        warnings.append(r.warn("estimate_round1_only", "context estimates were made for round 1; "
+                                                                       "the deliberation round has a longer prompt"))
                     run_all(done, 1, lambda m: deliberate_text(m, names, shared))
                     out["consensus"], vw = tally([m for m in done if m["status"] == "completed"], names, shared)
                     warnings += vw

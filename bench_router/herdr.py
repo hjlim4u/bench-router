@@ -364,7 +364,7 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
 
 def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
              profile_id=None, extra_args=(), kinds=False, context=None, selection_mode="parallel_pinned",
-             selection=None):
+             selection=None, check_digest=True):
     """live route. 선택 → receipt → herdr 실행. 같은 (task_id, round)는 재전송 없이 collect.
     profile_id: 제약·가용성을 통과한 후보 중 이 프로필로 고정(parallel fanout).
     extra_args: agent argv 뒤에 붙임(지문에는 포함하지 않음). kinds: 미리 읽은 herdr kind 집합.
@@ -379,7 +379,7 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
     res = (r.evaluate_v1(t, cfg, mapping, snap, snap_warnings, now, availability, context) if profile_id
            else r.route(t, cfg, mapping, snap, snap_warnings, now, availability, context))
     if profile_id:
-        res = r.apply_selection(res, cfg, profile_id, selection, selection_mode)
+        res = r.apply_selection(res, cfg, profile_id, selection, selection_mode, check_digest)
     try:
         with dispatch_lock(t["cwd"]):
             existing = [x for x in receipts(t["cwd"]) if x["task_id"] == t["task_id"] and x["round"] == t["round"]]

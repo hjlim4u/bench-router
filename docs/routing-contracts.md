@@ -347,7 +347,7 @@ CONSTRAINTS["latency"] = lambda p, t, f, ctx: None if "max_latency_p50_ms" not i
 
 각 단계는 독립 커밋, 단계마다 `python3 -m unittest test_p0 test_p1 test_p2 test_p3` 통과.
 
-진행: 1–4단계 완료 (2026-10-13, test_v36·v37·v38·v39).
+진행: 1–5단계 완료 (2026-10-13, test_v36–v40).
 
 3단계 구현에서 확정된 세부:
 - evaluate 2.0의 `assessment_digest`는 4단계에서 추가. 3단계 출력은 그 재료인 `inputs`만 포함.
@@ -360,6 +360,11 @@ CONSTRAINTS["latency"] = lambda p, t, f, ctx: None if "max_latency_p50_ms" not i
 - `selection.source`: `orchestrator`(선택 기록) | `unrecorded`(`--profile` 단독) | `router_legacy`(자동 route) | `parallel_pinned`(group legacy fanout).
 - `--selection`과 `--profile`은 함께 쓸 수 없다. `stale_assessment` 종료 코드는 14(conflict 계열).
 - `config_hash`가 프로필 정의 순서에 민감하므로 profiles.toml에서 순서만 바꿔도 digest가 바뀐다 (재평가 필요).
+
+5단계 구현에서 확정된 세부:
+- group 2.0의 digest는 group 수준 task(cwd=group.cwd, 원래 prompt) 기준으로 plan 시점에 한 번 검사. worker task는 worktree cwd·협업 안내로 구조상 달라 `check_digest=False`로 dispatch (context·제약·가용성은 재검사).
+- 선택 하나라도 stale이면 그룹 전체를 실행하지 않는다 (`stale_assessment`).
+- group 2.0에서 `fanout` 키는 금지 (선택 수가 곧 fanout). task당 선택 1–8개, 프로필 중복 금지.
 
 1. **assess 추출** (`routing.py`): `route()` 루프를 `assess` + `benchmark_evaluation` + `CONSTRAINTS`로 분리, `route`/`evaluate`(1.0 형식) 재구성. 기존 테스트 무수정 통과가 완료 조건.
 2. **context 2.0 + METRICS** (`routing.py`): 검증·freshness·1.0 변환·비용 결정 순서.
