@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -64,9 +65,10 @@ def tb_import(**kw):
     doc = {"schema_version": "1.0", "evidence_id": "terminal_exact", "source_url": "https://www.tbench.ai/",
            "attribution": "Terminal-Bench", "published_at": "2026-10-01",
            "benchmark": {"suite": "terminal-bench", "version": "4.0", "subset": "core", "metric": "resolved_rate",
-                         "direction": "higher"},
+                         "direction": "higher", "variant": "default", "dataset_revision": "v4.0.0",
+                         "evaluation_harness": "terminal-bench-official", "aggregation": "pass@1_mean_5"},
            "rows": [{"model_id": "model-a", "harness_id": "codex-cli", "reasoning_effort": "high", "raw": 0.6},
-                    {"model_id": "model-z", "harness_id": "other", "reasoning_effort": "high", "raw": 0.4}]}
+                    {"model_id": "model-z", "harness_id": "codex-cli", "reasoning_effort": "high", "raw": 0.4}]}
     doc.update(kw)
     return doc
 
@@ -104,6 +106,7 @@ class P1(unittest.TestCase):
         self.assertEqual(ev["aa_intelligence"]["normalized"], 1.0)  # 50 > 40(page2) > 30
         self.assertEqual(ev["aa_coding"]["normalized"], 0.0)        # 40 < 60(page2); null은 모집단 제외
         self.assertEqual(ev["aa_coding"]["cohort_id"], "aa:artificial_analysis_coding_index:v4.1")
+        self.assertIsNone(ev["aa_coding"]["conditions"]["agent_scaffold"])
         self.assertEqual(self.snap()["unmatched"]["aa"], ["m-b", "m-c"])
 
     def test_v11_arena_paging_and_schema(self):
@@ -114,6 +117,7 @@ class P1(unittest.TestCase):
         ev = self.snap()["profiles"]["a"]["evidence"]
         self.assertEqual(sorted(ev), sorted(d.ARENA_COHORTS))
         self.assertEqual((ev["arena_text_math"]["normalized"], ev["arena_text_math"]["published_at"]), (1.0, "2026-10-08"))
+        self.assertEqual(ev["arena_text_math"]["conditions"]["dataset_revision"], "rev1")
         self.assertEqual(self.snap()["sources"]["arena"]["source_revision"], "rev1")
         bad = {"revision": "x", "cohorts": {e: [{"model_name": "m", "rating": 1, "leaderboard_publish_date": "2026-01-01"},
                                                 {"model_name": "n", "rating": 2, "leaderboard_publish_date": "2026-10-08"}]
@@ -247,8 +251,7 @@ class P1(unittest.TestCase):
         self.refresh()
         self.assertNotIn("aa_intelligence", self.snap()["profiles"]["dflt"]["evidence"])  # alias 없음 → 미매칭
         with self.assertRaisesRegex(r.InputError, "4.0"):
-            d.validate_import(tb_import(benchmark={"suite": "terminal-bench", "version": "2.0", "subset": "core",
-                                                   "metric": "resolved_rate", "direction": "higher"}), "tb")
+            d.validate_import(tb_import(benchmark={**tb_import()["benchmark"], "version": "2.0"}), "tb")
         with self.assertRaises(r.InputError):
             d.validate_import(tb_import(published_at=None), "tb")  # 날짜 없는 수동 데이터 거부
         with self.assertRaises(r.InputError):
@@ -257,10 +260,47 @@ class P1(unittest.TestCase):
                   import_doc=d.validate_import(tb_import(), "tb"), env=ENV)
         ev = self.snap()["profiles"]["a"]["evidence"]["terminal_exact"]
         self.assertEqual((ev["scope"], ev["normalized"]), ("exact_profile", 1.0))
+        self.assertEqual((ev["conditions"]["agent_scaffold"], ev["conditions"]["aggregation"]),
+                         ("codex-cli", "pass@1_mean_5"))
         # effort unknown 프로필은 exact 매칭 안 됨
         self.cfg = config([profile("a", model_id="model-a"), profile("dflt")], default="dflt")
         self.refresh(force=True, now=NOW + timedelta(minutes=1))
         self.assertNotIn("terminal_exact", self.snap()["profiles"]["a"]["evidence"])
+
+    def test_v19_import_conditions_separate_cohorts(self):
+        doc = tb_import(rows=[{"model_id": "model-a", "harness_id": "codex-cli",
+                               "reasoning_effort": "high", "raw": 0.6},
+                              {"model_id": "model-z", "harness_id": "other",
+                               "reasoning_effort": "high", "raw": 0.4}])
+        obs = d.normalize(d.parse_import(d.validate_import(doc, "tb")))
+        self.assertNotEqual(obs[0]["cohort_id"], obs[1]["cohort_id"])
+        self.assertEqual([o["normalized"] for o in obs], [0.5, 0.5])
+        changed = tb_import(benchmark={**doc["benchmark"], "aggregation": "pass@1_mean_3"})
+        self.assertNotEqual(obs[0]["cohort_id"], d.parse_import(changed)[0]["cohort_id"])
+        with self.assertRaisesRegex(r.InputError, "aggregation"):
+            d.validate_import(tb_import(benchmark={k: v for k, v in doc["benchmark"].items()
+                                                   if k != "aggregation"}), "tb")
+
+    def test_v19_v1_cache_migrates_without_dropping_observations(self):
+        path = self.cache / "legacy.db"
+        legacy = sqlite3.connect(path)
+        try:
+            with legacy:
+                legacy.execute("CREATE TABLE observations(snapshot_id TEXT, evidence_id TEXT, cohort_id TEXT, "
+                               "source_model TEXT, harness_id TEXT, reasoning_effort TEXT, raw REAL, normalized REAL, "
+                               "scope TEXT, metric_version TEXT, published_at TEXT, evaluated_at TEXT)")
+                legacy.execute("INSERT INTO observations VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                               ("old", "terminal_exact", "old-cohort", "model-a", "codex-cli", "high", 0.6, 1.0,
+                                "exact_profile", "4.0", "2026-10-01", None))
+                legacy.execute("PRAGMA user_version = 1")
+        finally:
+            legacy.close()
+        db = d.open_db(path)
+        try:
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertEqual(tuple(db.execute("SELECT raw, conditions FROM observations").fetchone()), (0.6, None))
+        finally:
+            db.close()
 
     def test_end_to_end_refresh_then_route(self):
         self.refresh()
@@ -272,9 +312,20 @@ class P1(unittest.TestCase):
                                  "prompt": "p", "cwd": cwd, "categories": {"terminal_ops": 1},
                                  "category_confidence": 0.9})
             res = r.route(t, self.cfg, MAPPING, snap, warnings, NOW)
+            legacy = json.loads(json.dumps(snap))
+            legacy["profiles"]["a"]["evidence"]["terminal_exact"].pop("conditions")
+            legacy["snapshot_id"] = r.snapshot_hash(legacy)
+            old = r.route(t, self.cfg, MAPPING, legacy, [], NOW)
+            invalid = json.loads(json.dumps(snap))
+            invalid["profiles"]["a"]["evidence"]["terminal_exact"]["conditions"] = {"variant": "default"}
+            invalid["snapshot_id"] = r.snapshot_hash(invalid)
+            with self.assertRaisesRegex(r.InputError, "conditions.suite"):
+                r.validate_snapshot(invalid)
         self.assertEqual((res["selected"]["profile"], res["selection_mode"]), ("a", "benchmark_score"))
         a = res["candidates"][0]
         self.assertEqual((a["coverage"], a["exact_evidence_weight"]), (1.0, 0.7))
+        old_terminal = next(e for e in old["candidates"][0]["evidence"] if e["id"] == "terminal_exact")
+        self.assertEqual(old_terminal["missing_reason"], "missing_conditions")
         self.assertEqual(d.status(self.cache, NOW, r.config_hash(self.cfg, MAPPING))["snapshot"]["config_matches"], True)
 
 

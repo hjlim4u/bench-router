@@ -17,8 +17,8 @@ from pathlib import Path
 from . import locking
 from . import routing as r
 
-ADAPTER_VERSION = "1"
-DB_SCHEMA_VERSION = 1
+ADAPTER_VERSION = "2"
+DB_SCHEMA_VERSION = 2
 HTTP_TIMEOUT_S = 30
 HTTP_MAX_BYTES = 20 * 1024 * 1024
 HTTP_RETRIES = 2  # 일시 장애만, 최초 1회 + 2회
@@ -160,6 +160,10 @@ def parse_aa(payload):
                     raise SourceError(f"AA: {slug}.{field} not a finite number")
                 obs.append({"evidence_id": eid, "cohort_id": f"aa:{field}:v{version}", "source_model": slug,
                             "raw": v, "metric_version": f"v{version}", "scope": "model_proxy",
+                            "conditions": {"suite": "artificial-analysis", "version": f"v{version}", "subset": "all",
+                                           "metric": field, "direction": "higher", "variant": None,
+                                           "dataset_revision": None, "evaluation_harness": None,
+                                           "aggregation": None, "agent_scaffold": None, "reasoning_effort": None},
                             "harness_id": None, "reasoning_effort": None, "published_at": None, "evaluated_at": None})
     return obs
 
@@ -213,6 +217,10 @@ def parse_arena(payload):
                 names.append(name)
             obs.append({"evidence_id": eid, "cohort_id": f"arena:{subset}:{category}:{date}", "source_model": name,
                         "raw": rating, "metric_version": f"{subset}/{category}@{date}", "scope": "model_proxy",
+                        "conditions": {"suite": "lmarena", "version": date, "subset": subset,
+                                       "metric": "rating", "direction": "higher", "variant": category,
+                                       "dataset_revision": payload["revision"], "evaluation_harness": None,
+                                       "aggregation": None, "agent_scaffold": None, "reasoning_effort": None},
                         "harness_id": None, "reasoning_effort": None, "published_at": date, "evaluated_at": None})
     return obs
 
@@ -227,10 +235,15 @@ def validate_import(doc, source_id):
     need(pin is not None and pin["source_id"] == source_id,
          f"evidence_id must be one of {[e for e, p in EXACT_PINS.items() if p['source_id'] == source_id]}")
     b = doc.get("benchmark")
-    need(isinstance(b, dict) and all(isinstance(b.get(k), str) and b[k] for k in ("suite", "version", "subset", "metric"))
-         and b.get("direction") in ("higher", "lower"), "benchmark {suite, version, subset, metric, direction} required")
+    fields = ("suite", "version", "subset", "metric", "variant", "dataset_revision",
+              "evaluation_harness", "aggregation")
+    need(isinstance(b, dict) and all(isinstance(b.get(k), str) and b[k] for k in fields)
+         and b.get("direction") in ("higher", "lower"),
+         f"benchmark {{{', '.join(fields)}, direction}} required")
     need(b["suite"] == pin["suite"] and b["version"] == pin["version"],
          f"benchmark must be {pin['suite']} {pin['version']} (other versions are separate cohorts; change the pin)")
+    if "scoring_version" in b:
+        r._str(b["scoring_version"], "import.benchmark.scoring_version")
     for k in ("source_url", "attribution"):
         r._str(doc.get(k), f"import.{k}")
     need(doc.get("published_at") or doc.get("evaluated_at"), "published_at or evaluated_at required")
@@ -257,12 +270,19 @@ def validate_import(doc, source_id):
 
 def parse_import(doc):
     b = doc["benchmark"]
-    cohort = f"{doc['evidence_id']}:{b['suite']}:{b['version']}:{b['subset']}:{b['metric']}"
-    return [{"evidence_id": doc["evidence_id"], "cohort_id": cohort, "source_model": x["model_id"],
-             "raw": x["raw"], "metric_version": b.get("scoring_version", b["version"]), "scope": "exact_profile",
-             "harness_id": x["harness_id"], "reasoning_effort": x["reasoning_effort"],
-             "published_at": doc.get("published_at"), "evaluated_at": doc.get("evaluated_at"),
-             "_lower_is_better": b["direction"] == "lower"} for x in doc["rows"]]
+    obs = []
+    for x in doc["rows"]:
+        conditions = {k: b[k] for k in ("suite", "version", "subset", "metric", "direction", "variant",
+                                          "dataset_revision", "evaluation_harness", "aggregation")}
+        conditions.update(scoring_version=b.get("scoring_version", b["version"]),
+                          agent_scaffold=x["harness_id"], reasoning_effort=x["reasoning_effort"])
+        cohort = f"{doc['evidence_id']}:{r.canonical_hash(conditions)[:16]}"
+        obs.append({"evidence_id": doc["evidence_id"], "cohort_id": cohort, "source_model": x["model_id"],
+                    "raw": x["raw"], "metric_version": conditions["scoring_version"], "scope": "exact_profile",
+                    "harness_id": x["harness_id"], "reasoning_effort": x["reasoning_effort"], "conditions": conditions,
+                    "published_at": doc.get("published_at"), "evaluated_at": doc.get("evaluated_at"),
+                    "_lower_is_better": b["direction"] == "lower"})
+    return obs
 
 
 FETCH = {"aa": fetch_aa, "arena": fetch_arena}
@@ -300,10 +320,14 @@ def open_db(path):
               payload TEXT NOT NULL);
             CREATE TABLE observations(snapshot_id TEXT NOT NULL, evidence_id TEXT NOT NULL, cohort_id TEXT NOT NULL,
               source_model TEXT NOT NULL, harness_id TEXT, reasoning_effort TEXT, raw REAL, normalized REAL,
-              scope TEXT NOT NULL, metric_version TEXT, published_at TEXT, evaluated_at TEXT);
+              scope TEXT NOT NULL, metric_version TEXT, published_at TEXT, evaluated_at TEXT, conditions TEXT);
             CREATE INDEX obs_snapshot ON observations(snapshot_id);
-            PRAGMA user_version = 1;
+            PRAGMA user_version = 2;
             """)
+    elif v == 1:
+        with db:
+            db.execute("ALTER TABLE observations ADD COLUMN conditions TEXT")
+            db.execute("PRAGMA user_version = 2")
     elif v != DB_SCHEMA_VERSION:
         raise r.InputError(f"unsupported DB schema version {v}")
     return db
@@ -350,10 +374,11 @@ def refresh_source(db, sid, now, force=False, import_doc=None, get_json=None, en
         if not unchanged:
             db.execute("INSERT INTO snapshots VALUES (?,?,?,?,?,?,?,?)",
                        (snap_id, sid, _iso(now), payload_hash, revision, published, ADAPTER_VERSION, payload_text))
-            db.executemany("INSERT INTO observations VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            db.executemany("INSERT INTO observations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                            [(snap_id, o["evidence_id"], o["cohort_id"], o["source_model"], o["harness_id"],
                              o["reasoning_effort"], o["raw"], o["normalized"], o["scope"], o["metric_version"],
-                             o["published_at"], o["evaluated_at"]) for o in obs])
+                              o["published_at"], o["evaluated_at"],
+                              json.dumps(o["conditions"], sort_keys=True) if o.get("conditions") else None) for o in obs])
         db.execute("UPDATE sources SET last_success_at=?, last_error=NULL, failure_count=0, current_snapshot=?, "
                    "last_requests=? WHERE id=?", (_iso(now), snap_id, budget["used"], sid))
         old = [x["id"] for x in db.execute("SELECT id FROM snapshots WHERE source_id=? ORDER BY fetched_at DESC",
@@ -391,8 +416,10 @@ def build_snapshot(db, cfg, mapping, aliases, now):
         for o in db.execute("SELECT * FROM observations WHERE snapshot_id=? ORDER BY cohort_id, source_model",
                             (x["snap"],)):
             o = dict(o)
+            o["conditions"] = json.loads(o["conditions"]) if o["conditions"] else None
             c = cohorts.setdefault(o["cohort_id"], {"source_id": x["id"], "evidence_id": o["evidence_id"],
-                                                    "metric_version": o["metric_version"], "n": 0})
+                                                    "metric_version": o["metric_version"],
+                                                    "conditions": o["conditions"], "n": 0})
             c["n"] += o["raw"] is not None
             if o["scope"] == "exact_profile":
                 canonical = o["source_model"]  # 수동 import는 canonical ID로 작성
@@ -417,7 +444,7 @@ def build_snapshot(db, cfg, mapping, aliases, now):
                                   "source_models": sorted(o["source_model"] for o in found)})
             elif found:
                 o = found[0]
-                ev[eid] = {k: o[k] for k in ("raw", "normalized", "scope", "cohort_id", "metric_version", "source_id",
+                ev[eid] = {k: o[k] for k in ("raw", "normalized", "scope", "cohort_id", "metric_version", "conditions", "source_id",
                                              "source_revision", "fetched_at", "published_at", "evaluated_at")}
         profiles[p["id"]] = {"fingerprint": r.profile_fingerprint(p), "evidence": ev}
 

@@ -580,6 +580,14 @@ def validate_snapshot(s):
                 _num(ev["normalized"], f"{name}.normalized", 0, 1)
             if ev.get("scope") not in SCOPES:
                 raise InputError(f"{name}.scope: {SCOPES}")
+            conditions = ev.get("conditions")
+            if conditions is not None and not isinstance(conditions, dict):
+                raise InputError(f"{name}.conditions: object required")
+            if ev["scope"] == "exact_profile" and conditions is not None:
+                for key in ("suite", "version", "subset", "metric", "direction", "variant", "dataset_revision",
+                            "evaluation_harness", "aggregation", "scoring_version", "agent_scaffold",
+                            "reasoning_effort"):
+                    _str(conditions.get(key), f"{name}.conditions.{key}")
             if ev.get("source_id") not in s["sources"]:
                 raise InputError(f"{name}.source_id: unknown source")
     return s
@@ -770,7 +778,7 @@ CONSTRAINTS = {
 }
 
 
-EVIDENCE_FIELDS = ("raw", "normalized", "scope", "cohort_id", "metric_version", "source_id", "source_revision",
+EVIDENCE_FIELDS = ("raw", "normalized", "scope", "cohort_id", "metric_version", "conditions", "source_id", "source_revision",
                    "fetched_at", "published_at", "evaluated_at")
 
 
@@ -787,6 +795,7 @@ def benchmark_evaluation(p, fp, a, snap, sources, warnings, priority):
         reason = ("no_snapshot" if snap is None else "profile_not_in_snapshot" if sp is None
                   else "stale_config" if stale_cfg else "no_observation" if e is None
                   else "null_value" if e.get("normalized") is None
+                  else "missing_conditions" if e.get("scope") == "exact_profile" and not e.get("conditions")
                   else "max_stale_exceeded" if sources[e["source_id"]]["excluded"] else None)
         normalized[b] = None if reason else e["normalized"]
         row = {"id": b, "weight": round(w, 6), **{k: (e or {}).get(k) for k in EVIDENCE_FIELDS}}

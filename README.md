@@ -247,7 +247,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 | vision_doc | arena_document 0.5, arena_vision 0.5 |
 | general | aa_intelligence 1.0 |
 
-출력의 `candidates[]`에는 후보별 `score`, `quality`, `coverage`, `coverage_band`, `exact_evidence_weight`, `cost_proxy`가 들어 있고, evidence마다 원값·정규화값·scope·cohort·출처 revision·날짜·`missing_reason`이 함께 나옵니다. 근거 데이터가 일부만 있거나, 모델 수준 대리 지표뿐이거나, 오래된 경우에는 `warnings`에 표시합니다.
+출력의 `candidates[]`에는 후보별 `score`, `quality`, `coverage`, `coverage_band`, `exact_evidence_weight`, `cost_proxy`가 들어 있고, evidence마다 원값·정규화값·scope·cohort·평가 조건(`conditions`)·출처 revision·날짜·`missing_reason`이 함께 나옵니다. 근거 데이터가 일부만 있거나, 모델 수준 대리 지표뿐이거나, 오래된 경우에는 `warnings`에 표시합니다.
 
 ---
 
@@ -275,12 +275,14 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
  "source_url": "https://www.tbench.ai/", "attribution": "Terminal-Bench",
  "published_at": "2026-10-01",
  "benchmark": {"suite": "terminal-bench", "version": "4.0", "subset": "core",
-               "metric": "resolved_rate", "direction": "higher"},
+               "metric": "resolved_rate", "direction": "higher", "variant": "default",
+               "dataset_revision": "v4.0.0", "evaluation_harness": "terminal-bench-official",
+               "aggregation": "pass@1_mean_5"},
  "rows": [{"model_id": "claude-opus-5-5", "harness_id": "claude-code",
            "reasoning_effort": "high", "raw": 0.61}]}
 ```
 
-`model_id`, `harness_id`, `reasoning_effort`가 프로필과 모두 일치해야 exact evidence로 인정합니다. 버전이 다르거나 날짜가 없는 데이터는 거부합니다.
+`harness_id`는 모델을 실행하는 에이전트 스캐폴드(예: Claude Code)이며, `evaluation_harness`는 평가 실행·채점 시스템입니다. `model_id`에는 평가한 모델의 정확한 버전을 사용합니다. 벤치마크 버전·데이터셋 개정판·변형·평가 하네스·스캐폴드·추론 노력·집계 방식이 같은 점수끼리만 하나의 정규화 코호트에 넣습니다. `model_id`, `harness_id`, `reasoning_effort`가 프로필과 모두 일치해야 exact evidence로 인정합니다. 새 조건이 없는 기존 캐시의 exact 점수는 재import 전까지 `missing_conditions`로 제외합니다. 자동 수집 지표에서 확인할 수 없는 조건은 `null`로 남기며 모델 수준 대리 근거로만 사용합니다.
 
 ### 정기 실행 (예시, 설치하지 않음)
 
