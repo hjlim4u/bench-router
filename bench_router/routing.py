@@ -172,8 +172,129 @@ CONSTRAINT_DEFAULTS = {"max_cost_tier": "high", "min_context_tokens": 0, "local_
 TASK_MAX_BYTES = 1024 * 1024
 
 
+# ---------- context.json: Orchestrator 공급 지표 (docs/routing-contracts.md §2) ----------
+
+CONTEXT_SCHEMA_VERSION = "2.0"
+METRIC_REGISTRY_VERSION = "1"
+# 지표 정의표. 단위·대상·수명 검증이 필요한 새 지표는 여기에 한 줄 추가한다.
+# 선호 방향(클수록 좋다 등)은 정책이므로 두지 않는다. 의미·단위를 바꾸면 METRIC_REGISTRY_VERSION을 올린다.
+# id: (applies_to task|profile, kind int|number|bool|enum:a|b, unit|None, max_age_hours|None)
+METRICS = {
+    "tokens.estimated_input": ("profile", "int", "tokens", None),
+    "tokens.estimated_output": ("profile", "int", "tokens", None),
+    "tokens.required_context": ("profile", "int", "tokens", None),
+    "price.input_usd_per_mtok": ("profile", "number", "usd/mtok", 24 * 30),
+    "price.output_usd_per_mtok": ("profile", "number", "usd/mtok", 24 * 30),
+    "cost.estimated_usd": ("profile", "number", "usd", None),
+    "task.complexity": ("task", "enum:low|medium|high", None, None),
+}
+METRIC_KEYS = {"value", "unit", "source", "observed_at", "expires_at", "status", "reason"}
+COST_INPUTS = ("tokens.estimated_input", "tokens.estimated_output", "price.input_usd_per_mtok", "price.output_usd_per_mtok")
+V1_SOURCE = "context-1.0"
+
+
+def _metric(mid, raw, applies_to, path):
+    """관측값 1개 검증. 결측은 status=missing(+reason)으로 표현하며 value=null은 허용하지 않는다."""
+    if not isinstance(mid, str) or not re.fullmatch(r"[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*", mid):
+        raise InputError(f"{path}: namespaced metric id required")
+    name = f"{path}.{mid}"
+    if not isinstance(raw, dict) or set(raw) - METRIC_KEYS:
+        raise InputError(f"{name}: object with fields {sorted(METRIC_KEYS)} only")
+    m = {"source": _str(raw.get("source"), f"{name}.source", 500), "status": raw.get("status", "ok")}
+    if m["status"] not in ("ok", "missing"):
+        raise InputError(f"{name}.status: ok|missing")
+    for k in ("observed_at", "expires_at"):
+        if k in raw:
+            _parse_time(raw[k], f"{name}.{k}")
+            m[k] = raw[k]
+    if "reason" in raw:
+        m["reason"] = _str(raw["reason"], f"{name}.reason", 4000)
+    if "unit" in raw:
+        m["unit"] = _str(raw["unit"], f"{name}.unit", 100)
+    if m["status"] == "missing":
+        if "value" in raw or "reason" not in m:
+            raise InputError(f"{name}: status=missing takes reason and no value")
+    elif "value" not in raw:
+        raise InputError(f"{name}.value required (use status=missing for an absent value)")
+    v = raw.get("value")
+    spec = METRICS.get(mid)
+    if spec is None:  # 미등록 지표: 전달만 한다. 제약·평가에 쓰지 않는다.
+        if "value" in raw and (type(v) not in (int, float, bool, str) or (type(v) is float and not math.isfinite(v))):
+            raise InputError(f"{name}.value: finite number, boolean or string required")
+    else:
+        applies, kind, unit, max_age = spec
+        if applies != applies_to:
+            raise InputError(f"{name}: {applies}-level metric")
+        if m.get("unit") != unit:  # ponytail: 단위 변환 없음. ms/s 혼용이 실제로 생기면 지표별 배수 추가
+            raise InputError(f"{name}.unit must be {unit!r}" if unit else f"{name}: unit not allowed")
+        if max_age is not None and m["status"] == "ok" and "observed_at" not in m:
+            raise InputError(f"{name}.observed_at required (expires after {max_age}h)")
+        if "value" in raw:
+            if kind == "int":
+                _int(v, f"{name}.value", 0, 1_000_000_000_000)
+            elif kind == "number":  # ponytail: 등록 수치 지표는 모두 0 이상. 음수 지표가 생기면 범위를 정의표로
+                _num(v, f"{name}.value", 0, 1_000_000_000)
+            elif kind == "bool":
+                _bool(v, f"{name}.value")
+            elif v not in kind[len("enum:"):].split("|"):
+                raise InputError(f"{name}.value: one of {kind[len('enum:'):]}")
+    if "value" in raw:
+        m["value"] = v
+    return m
+
+
+def _metrics(raw, applies_to, path):
+    if not isinstance(raw, dict):
+        raise InputError(f"{path}: object required")
+    return {mid: _metric(mid, m, applies_to, path) for mid, m in raw.items()}
+
+
 def validate_context(raw, profile_ids):
-    """Validate Orchestrator-supplied estimates; prices are never fetched by the router."""
+    """Orchestrator 공급 지표 검증 → 2.0 정규형. 1.0은 변환해서 받는다. 가격은 Router가 가져오지 않는다.
+    출력은 다시 넣어도 그대로인 2.0 입력이다."""
+    if isinstance(raw, dict) and raw.get("schema_version") == SCHEMA_VERSION:
+        raw = _context_v1_to_v2(_validate_context_v1(raw, profile_ids))
+    if not isinstance(raw, dict) or set(raw) - {"schema_version", "task_metrics", "max_estimated_cost_usd", "profiles"}:
+        raise InputError("context: object with known fields required")
+    if raw.get("schema_version") != CONTEXT_SCHEMA_VERSION:
+        raise InputError(f"context.schema_version must be {SCHEMA_VERSION!r} or {CONTEXT_SCHEMA_VERSION!r}")
+    out = {"schema_version": CONTEXT_SCHEMA_VERSION,
+           "task_metrics": _metrics(raw.get("task_metrics", {}), "task", "context.task_metrics"), "profiles": {}}
+    if "max_estimated_cost_usd" in raw:
+        out["max_estimated_cost_usd"] = _num(raw["max_estimated_cost_usd"], "context.max_estimated_cost_usd", 0)
+    profiles = raw.get("profiles", {})
+    if not isinstance(profiles, dict) or set(profiles) - set(profile_ids):
+        raise InputError("context.profiles: object with configured profile ids required")
+    for pid, item in profiles.items():
+        if not isinstance(item, dict) or set(item) - {"metrics"}:
+            raise InputError(f"context.profiles.{pid}: only metrics allowed")
+        out["profiles"][pid] = {"metrics": _metrics(item.get("metrics", {}), "profile", f"context.profiles.{pid}.metrics")}
+    return out
+
+
+def _context_v1_to_v2(c):
+    out = {"schema_version": CONTEXT_SCHEMA_VERSION, "task_metrics": {}, "profiles": {}}
+    if "complexity" in c:
+        out["task_metrics"]["task.complexity"] = {"value": c["complexity"]["level"], "reason": c["complexity"]["reason"],
+                                                  "source": V1_SOURCE}
+    if "max_estimated_cost_usd" in c:
+        out["max_estimated_cost_usd"] = c["max_estimated_cost_usd"]
+    for pid, p in c["profiles"].items():
+        m = dict(p["signals"])  # 등록 id와 같은 이름의 signal은 등록 규칙으로 검증된다
+        for old, new in (("estimated_input_tokens", "tokens.estimated_input"),
+                         ("estimated_output_tokens", "tokens.estimated_output"),
+                         ("required_context_tokens", "tokens.required_context")):
+            if old in p:
+                m[new] = {"value": p[old], "unit": "tokens", "source": V1_SOURCE}
+        if "price" in p:
+            for d in ("input", "output"):
+                m[f"price.{d}_usd_per_mtok"] = {"value": p["price"][f"{d}_usd_per_million_tokens"], "unit": "usd/mtok",
+                                                "source": p["price"]["source"], "observed_at": p["price"]["as_of"]}
+        out["profiles"][pid] = {"metrics": m}
+    return out
+
+
+def _validate_context_v1(raw, profile_ids):
     if not isinstance(raw, dict) or set(raw) - {"schema_version", "complexity", "max_estimated_cost_usd", "profiles"}:
         raise InputError("context: object with known fields required")
     if raw.get("schema_version") != SCHEMA_VERSION:
@@ -222,22 +343,49 @@ def validate_context(raw, profile_ids):
     return out
 
 
-def context_facts(profile, context):
-    """(정확한 Decimal 비용 | None, 출력용 facts). 제약 판단은 CONSTRAINTS가 한다."""
-    item = context["profiles"].get(profile["id"], {})
-    price = item.get("price")
-    if price and "estimated_input_tokens" in item and "estimated_output_tokens" in item:
-        cost = (Decimal(item["estimated_input_tokens"]) * Decimal(str(price["input_usd_per_million_tokens"]))
-                + Decimal(item["estimated_output_tokens"]) * Decimal(str(price["output_usd_per_million_tokens"]))) / 1_000_000
-        missing = None
+def metric_facts(metrics, now):
+    """지표 + freshness(fresh|expired|missing). 수명은 지표마다 다르며, expires_at이 더 이르면 그쪽을 따른다."""
+    out = {}
+    for mid, m in metrics.items():
+        f = dict(m)
+        if m["status"] == "missing":
+            f["freshness"] = "missing"
+        else:
+            expired = "expires_at" in m and now >= _parse_time(m["expires_at"], mid)
+            if "observed_at" in m:
+                age = (now - _parse_time(m["observed_at"], mid)).total_seconds() / 3600
+                f["age_hours"] = round(age, 2)
+                max_age = METRICS[mid][3] if mid in METRICS else None
+                expired = expired or (max_age is not None and age > max_age)
+            f["freshness"] = "expired" if expired else "fresh"
+        out[mid] = f
+    return out
+
+
+def context_facts(profile, context, now):
+    """(정확한 Decimal 비용 | None, 1.0 출력용 facts, 지표+freshness). 제약 판단은 CONSTRAINTS가 한다.
+    결측·만료 값은 계산에 쓰지 않는다(0이 아니다)."""
+    raw = context["profiles"].get(profile["id"], {}).get("metrics", {})
+    metrics = metric_facts(raw, now)
+    usable = {k: m["value"] for k, m in metrics.items() if k in METRICS and m["freshness"] == "fresh"}
+    cost, missing = None, None
+    if "cost.estimated_usd" in usable:  # Orchestrator 견적(캐시·부가 비용 포함 가능)이 계산보다 우선
+        cost = Decimal(str(usable["cost.estimated_usd"]))
+    elif all(k in usable for k in COST_INPUTS):  # ponytail: 입출력 2요율 식 1개. 그 이상은 견적으로 받는다
+        cost = (Decimal(usable["tokens.estimated_input"]) * Decimal(str(usable["price.input_usd_per_mtok"]))
+                + Decimal(usable["tokens.estimated_output"]) * Decimal(str(usable["price.output_usd_per_mtok"]))) / 1_000_000
     else:
-        cost, missing = None, "estimate_or_price_missing"
+        missing = ("price_expired" if any(metrics.get(k, {}).get("freshness") == "expired" for k in COST_INPUTS)
+                   else "estimate_or_price_missing")
+    pin, pout = raw.get("price.input_usd_per_mtok", {}), raw.get("price.output_usd_per_mtok", {})
+    price = ({"input_usd_per_million_tokens": pin["value"], "output_usd_per_million_tokens": pout["value"],
+              "source": pin["source"], "as_of": pin.get("observed_at")} if "value" in pin and "value" in pout else None)
     facts = {"estimated_cost_usd": float(cost) if cost is not None else None,
-             "cost_missing_reason": missing, "required_context_tokens": item.get("required_context_tokens", 0),
-             "estimated_input_tokens": item.get("estimated_input_tokens"),
-             "estimated_output_tokens": item.get("estimated_output_tokens"),
-             "price": price, "signals": item.get("signals", {})}
-    return cost, facts
+             "cost_missing_reason": missing, "required_context_tokens": usable.get("tokens.required_context", 0),
+             "estimated_input_tokens": usable.get("tokens.estimated_input"),
+             "estimated_output_tokens": usable.get("tokens.estimated_output"),
+             "price": price, "signals": {k: m for k, m in raw.items() if k not in METRICS}}
+    return cost, facts, metrics
 
 
 def validate_task(raw):
@@ -573,7 +721,7 @@ def _cost_cap(p, t, x):
         if x["cost"] > Decimal(str(cap)) else []
 
 
-# 필수 제약. 이름 → (profile, task, x) -> 실패 결과 목록. x = {context, facts, cost, availability}.
+# 필수 제약. 이름 → (profile, task, x) -> 실패 결과 목록. x = {context, facts, cost, metrics, availability}.
 # 실패는 어떤 점수로도 상쇄되지 않는다. 새 지표로 거르려면 여기에 함수 하나를 추가한다.
 # dict 순서 = 탈락 사유 출력 순서(route 1.0 호환).
 CONSTRAINTS = {
@@ -643,12 +791,13 @@ def assess(t, cfg, mapping, snap, snap_warnings, now, availability=None, context
 
     cands = []
     for p in sorted(cfg["profile"], key=lambda p: p["id"]):
-        cost, facts = context_facts(p, context) if context is not None else (None, None)
-        x = {"context": context, "facts": facts, "cost": cost,
+        cost, facts, metrics = context_facts(p, context, now) if context is not None else (None, None, {})
+        x = {"context": context, "facts": facts, "cost": cost, "metrics": metrics,
              "availability": availability.get(p["id"]) if availability is not None else None}
         failures = [dict(f, constraint=name) for name, check in CONSTRAINTS.items() for f in check(p, t, x)]
         c = {"profile": p["id"], "profile_fingerprint": profile_fingerprint(p), "cost_tier": p["cost_tier"],
-             "eligible": not failures, "constraint_failures": failures, "context_facts": facts, "evaluations": {}}
+             "eligible": not failures, "constraint_failures": failures, "context_facts": facts,
+             "metrics": metrics, "evaluations": {}}
         if c["eligible"]:
             # ponytail: 평가기 1개라 직접 호출. 두 번째가 생기면 evaluations에 키 하나 추가.
             c["evaluations"]["benchmark"] = benchmark_evaluation(p, c["profile_fingerprint"], a, snap, sources, warnings)
@@ -656,7 +805,13 @@ def assess(t, cfg, mapping, snap, snap_warnings, now, availability=None, context
     return {"task": t, "classification": cls, "candidates": cands, "warnings": warnings, "sources": sources,
             "context": context, "availability_verified": availability is not None,
             "snapshot_id": snap["snapshot_id"] if snap else None, "config_hash": config_hash(cfg, mapping),
-            "task_hash": semantic_task_hash(t)}
+            "task_hash": semantic_task_hash(t),
+            "task_metrics": metric_facts(context["task_metrics"], now) if context is not None else {}}
+
+
+def _complexity_v1(context):
+    m = context["task_metrics"].get("task.complexity", {})
+    return {"level": m["value"], "reason": m.get("reason")} if "value" in m else None
 
 
 def _legacy_cands(asmt):
@@ -684,7 +839,7 @@ def _result_v1(asmt, cands, status, selected, mode, warnings):
             "snapshot_id": asmt["snapshot_id"], "policy_version": POLICY_VERSION,
             "config_hash": asmt["config_hash"], "task_hash": asmt["task_hash"],
             "warnings": warnings, "sources": asmt["sources"],
-            **({"decision_context": context, "context_hash": canonical_hash(context), "complexity": context.get("complexity"),
+            **({"decision_context": context, "context_hash": canonical_hash(context), "complexity": _complexity_v1(context),
                 "max_estimated_cost_usd": context.get("max_estimated_cost_usd")} if context is not None else {})}
 
 

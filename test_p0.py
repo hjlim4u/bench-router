@@ -98,6 +98,52 @@ class P0(unittest.TestCase):
         self.assertEqual([c["profile"] for c in r.evaluate(t, config(ps), MAPPING, None, [], NOW)["candidates"]],
                          ["a", "b"])
 
+    def test_v37_context_v2_metric_contract(self):
+        def m(v, unit="tokens", **kw):
+            return {"value": v, "unit": unit, "source": "orch@1", **kw}
+        fresh = "2026-10-11T00:00:00+00:00"
+        prices = {"price.input_usd_per_mtok": m(1, "usd/mtok", observed_at=fresh),
+                  "price.output_usd_per_mtok": m(2, "usd/mtok", observed_at=fresh)}
+        ctx = lambda metrics, **top: {"schema_version": "2.0", "profiles": {"a": {"metrics": metrics}}, **top}
+        ps = [profile("a")]
+        ev = lambda c: r.evaluate(self.task(), config(ps), MAPPING, None, [], NOW, context=c)
+        tokens = {"tokens.estimated_input": m(1000), "tokens.estimated_output": m(1000)}
+        # 같은 사실의 1.0 입력과 2.0 입력은 같은 결과
+        v1 = {"schema_version": "1.0", "max_estimated_cost_usd": 0.01, "profiles": {"a": {
+            "estimated_input_tokens": 1000, "estimated_output_tokens": 1000,
+            "price": {"input_usd_per_million_tokens": 1, "output_usd_per_million_tokens": 2,
+                      "source": "orch@1", "as_of": fresh}}}}
+        v2 = ctx({"tokens.estimated_input": {**m(1000), "source": "context-1.0"},
+                  "tokens.estimated_output": {**m(1000), "source": "context-1.0"}, **prices}, max_estimated_cost_usd=0.01)
+        self.assertEqual(ev(v1)["context_hash"], ev(v2)["context_hash"])
+        self.assertEqual(ev(v2)["candidates"][0]["context_facts"]["estimated_cost_usd"], 0.003)
+        # 미등록 지표는 전달만, 결측은 0이 아님
+        res = ev(ctx({**tokens, **prices, "acme.vibe": m("good", "label"),
+                      "latency.p50_ms": {"status": "missing", "reason": "not_measured", "source": "tel"}}))
+        self.assertEqual(set(res["candidates"][0]["context_facts"]["signals"]), {"acme.vibe", "latency.p50_ms"})
+        # 만료 가격: 상한 있으면 탈락(estimated_cost_unknown), 없으면 후보 유지
+        old = {k: {**v, "observed_at": "2026-01-01T00:00:00+00:00"} for k, v in prices.items()}
+        self.assertEqual(ev(ctx({**tokens, **old}, max_estimated_cost_usd=1))["excluded"][0]["reasons"],
+                         ["estimated_cost_unknown"])
+        kept = ev(ctx({**tokens, **old}))["candidates"][0]["context_facts"]
+        self.assertEqual((kept["estimated_cost_usd"], kept["cost_missing_reason"]), (None, "price_expired"))
+        asmt = r.assess(self.task(), config(ps), MAPPING, None, [], NOW, context=ctx({**tokens, **old}))
+        self.assertEqual(asmt["candidates"][0]["metrics"]["price.input_usd_per_mtok"]["freshness"], "expired")
+        # Orchestrator 견적이 계산보다 우선
+        quoted = ev(ctx({**tokens, **prices, "cost.estimated_usd": m(0.5, "usd")}))
+        self.assertEqual(quoted["candidates"][0]["context_facts"]["estimated_cost_usd"], 0.5)
+        for bad in (ctx({"tokens.estimated_input": m(1, "k")}),                         # 단위 불일치
+                    ctx({"tokens.estimated_input": m(None)}),                           # null 결측
+                    ctx({"tokens.estimated_input": {"status": "missing", "source": "x"}}),  # 사유 없는 결측
+                    ctx({"price.input_usd_per_mtok": m(1, "usd/mtok")}),                # observed_at 없는 가격
+                    ctx({"task.complexity": {"value": "high", "source": "x"}}),        # task 지표를 profile에
+                    ctx({"acme.vibe": m([1], "x")}),                                    # 스칼라 아님
+                    ctx({}, task_metrics={"task.complexity": {"value": "huge", "source": "x"}})):
+            with self.subTest(bad=bad), self.assertRaises(r.InputError):
+                r.validate_context(bad, ["a"])
+        norm = r.validate_context(v1, ["a"])
+        self.assertEqual(r.validate_context(norm, ["a"]), norm)  # 정규형은 다시 넣어도 그대로
+
     def test_v12_context_rejects_invalid_cost_facts(self):
         base = {"schema_version": "1.0", "max_estimated_cost_usd": 1, "profiles": {"a": {}}}
         for bad in ({**base, "max_estimated_cost_usd": float("nan")},
