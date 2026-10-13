@@ -347,7 +347,7 @@ CONSTRAINTS["latency"] = lambda p, t, f, ctx: None if "max_latency_p50_ms" not i
 
 각 단계는 독립 커밋, 단계마다 `python3 -m unittest test_p0 test_p1 test_p2 test_p3` 통과.
 
-진행: 1–5단계 완료 (2026-10-13, test_v36–v40).
+진행: 1–6단계 완료 (2026-10-13, test_v36–v40). 남은 일: 실환경 herdr smoke, `evaluate --format 1` 제거 시점 결정.
 
 3단계 구현에서 확정된 세부:
 - evaluate 2.0의 `assessment_digest`는 4단계에서 추가. 3단계 출력은 그 재료인 `inputs`만 포함.

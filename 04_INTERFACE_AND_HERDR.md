@@ -11,7 +11,11 @@
 | refresh [--source ID] [--force] | 소스 갱신 및 snapshot 게시 | 필수 |
 | refresh --source ID --import FILE | 승인된 수동 source observation import | TB/SWE 필요 시 |
 | status | 소스별 age·failures·unmatched·설정 상태 | 필수 |
-| explain --task FILE | dry-run의 전체 점수/제외 근거를 사람이 읽는 형태로 출력 | 필수 |
+| explain --task FILE [--context FILE] | dry-run의 전체 점수/제외 근거 + 제약 결과·지표를 사람이 읽는 형태로 출력 | 필수 |
+| evaluate --task FILE [--context FILE] [--format 1\|2] | 전 프로필의 facts·제약 결과·benchmark 평가와 assessment_digest. 선택 없음 (2.0, docs/routing-contracts.md §1.3) | 다중 기준 |
+| route --task FILE --selection FILE [--dry-run] | Orchestrator 선택 기록(profile, assessment_digest, policy, reason)으로 실행. digest 불일치면 stale_assessment | 다중 기준 |
+| route --task FILE --profile ID [--dry-run] | 선택 기록 없이 지정 프로필 실행(selection_unrecorded 경고) | 호환 |
+| parallel --group FILE [--dry-run] | task × fanout을 각자 worktree에서 병렬 위임. group 2.0은 task별 context·selections | 선택 |
 | collect --run-id ID --cwd ABS_PATH | 기존 receipt의 Agent/결과를 읽고 대기·회수; prompt 재전송 없음 | 필수 |
 | feedback --run-id ID --cwd ABS_PATH --outcome success\|partial\|fail | Orchestrator 평가 기록 | 필수 |
 | route --no-wait, --machine, plugin 액션 | 비동기/원격/플러그인 | 보류 |
@@ -28,7 +32,7 @@ route/collect/status/refresh는 stdout에 JSON 한 객체만 내보낸다. 로�
 | 11 | timed_out 또는 delivery_uncertain; 실행 중일 수 있음 |
 | 12 | execution_failed 또는 result_invalid |
 | 13 | no_eligible_profile; 위임 없음 |
-| 14 | task/round hash 충돌 또는 receipt lock 사용 중 |
+| 14 | task/round hash 충돌, receipt lock 사용 중, 또는 stale_assessment(평가 후 정적 입력 변경) |
 | 15 | 내부 저장소/출력 I/O 오류 |
 | 16 | refresh 대상 소스 일부/전체 실패; last-good 유지 여부를 JSON에 명시 |
 
@@ -87,7 +91,9 @@ classification: stage=L0|L1|fallback, categories, self_reported_confidence(nulla
 
 실행 출력 추가: result_path, manifest_path, task_outcome, herdr_state, delivery_state, receipt_path, deadline_at. completed에서는 result_path/manifest_path가 유효한 절대 경로다. 한 개의 data_as_of로 혼합 소스의 날짜를 요약하지 않는다. sources별 날짜를 반환한다.
 
-status enum: selected, dispatching, waiting, completed, blocked, timed_out, delivery_uncertain, execution_failed, result_invalid, no_eligible_profile, conflict, error. delivery_state enum: not_attempted, submission_attempted, write_acknowledged, activity_observed, uncertain.
+status enum: selected, dispatching, waiting, completed, blocked, timed_out, delivery_uncertain, execution_failed, result_invalid, no_eligible_profile, conflict, stale_assessment, ok(evaluate), error. delivery_state enum: not_attempted, submission_attempted, write_acknowledged, activity_observed, uncertain.
+
+추가 필드(2026-10-13, 추가만·기존 의미 불변): assessment_digest, selection{source: orchestrator|unrecorded|router_legacy|parallel_pinned, …}. context가 있으면 decision_context(2.0 정규형), context_hash, context_facts. evaluate 2.0 출력, context 2.0, selection, group 2.0 계약은 docs/routing-contracts.md와 docs/orchestrator.md가 규범이다. decision.json = route 출력 + selection + assessment(evaluate 2.0).
 
 부분 증거·proxy·stale는 warnings에 표시한다. 특정 모델이 더 좋다는 근거 없는 문장은 출력하지 않는다.
 

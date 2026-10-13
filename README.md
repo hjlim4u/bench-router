@@ -144,7 +144,9 @@ capabilities = ["filesystem_write"]
 | `refresh --source swe\|tb --import FILE` | 승인된 수동 벤치마크 결과 import |
 | `status` | source별 나이·실패 횟수·마지막 오류·미매칭 모델, snapshot/설정 일치 여부 |
 | `route --task FILE --dry-run` | 선택만 하고 부작용 없음(네트워크·herdr·파일 쓰기 없음) |
-| `explain --task FILE` | dry-run의 전체 후보·근거·제외 사유를 텍스트로 출력 |
+| `explain --task FILE [--context FILE]` | dry-run의 전체 후보·근거·제외 사유와 제약 결과·지표를 텍스트로 출력 |
+| `evaluate --task FILE [--context FILE]` | 선택 없이 전 프로필의 지표·제약 결과·benchmark 평가와 `assessment_digest` (Orchestrator용, [docs/orchestrator.md](docs/orchestrator.md)) |
+| `route --task FILE --selection FILE` | Orchestrator가 고른 프로필을 선택 근거와 함께 실행. 평가 후 입력이 바뀌었으면 `stale_assessment` |
 | `route --task FILE` | 선택 후 herdr로 위임하고, 유한한 시간 안에 대기·회수 |
 | `parallel --group FILE [--dry-run]` | 여러 agent를 각자 worktree에서 병렬 위임 ([병렬 위임](#병렬-위임과-협업-수준)) |
 | `collect --run-id ID --cwd DIR [--wait-ms N]` | 기존 run을 관찰·회수. **프롬프트를 다시 보내지 않음** |
@@ -176,7 +178,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 | 11 | `timed_out` / `delivery_uncertain` — 실행 중일 수 있음. `collect`로 확인 |
 | 12 | `execution_failed` / `result_invalid` |
 | 13 | `no_eligible_profile` — 위임하지 않음 |
-| 14 | `conflict` — 같은 task/round에 다른 내용, 미해결 run 존재, 또는 잠금 사용 중 |
+| 14 | `conflict` — 같은 task/round에 다른 내용, 미해결 run 존재, 또는 잠금 사용 중. `stale_assessment` — `evaluate` 이후 task·설정·snapshot·context가 바뀜 |
 | 15 | 내부 저장소·I/O 오류 |
 | 16 | refresh 대상 source 일부 또는 전체 실패(정상 데이터 last-good 유지) |
 
@@ -212,11 +214,13 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 
 ## 선택 방식
 
+아래는 `route`가 스스로 고르는 **legacy 자동 선택**입니다. 여러 지표(비용·지연 등)를 함께 따지는 선택은 Orchestrator가 `evaluate` 결과로 하고 `route --selection`으로 실행합니다. 계약은 [docs/routing-contracts.md](docs/routing-contracts.md), 사용법은 [docs/orchestrator.md](docs/orchestrator.md).
+
 1. **분류**
    - L0: Orchestrator가 준 `categories`를 `category_confidence ≥ 0.6`일 때 정규화해 사용합니다.
    - L1: 그 외에는 summary 키워드와 `context_files` 확장자 규칙을 씁니다. 한 카테고리에서만 서로 다른 규칙이 2개 이상 맞아야 채택합니다.
    - 나머지는 `general`로 분류하고 `fallback_reason`을 남깁니다.
-2. **하드 제약**: `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, `local_only`를 적용합니다. live에서는 herdr kind 지원 여부와 실행 파일 존재도 확인합니다. default 프로필에도 같은 제약을 적용합니다.
+2. **하드 제약**: `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, `local_only`를 적용합니다. context가 있으면 `tokens.required_context`와 `max_estimated_cost_usd`도 적용합니다(`routing.CONSTRAINTS`). live에서는 herdr kind 지원 여부와 실행 파일 존재도 확인합니다. default 프로필에도 같은 제약을 적용합니다.
 3. **근거와 점수**
    - 카테고리 가중치 `w`와 evidence 매핑 `v`로 evidence별 가중치 `a_b = Σ w_c·v_cb`를 구합니다.
    - 같은 cohort 전체를 모집단으로 percentile 정규화(`(평균 rank − 1)/(N − 1)`, N=1이면 0.5)를 합니다.

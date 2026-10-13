@@ -45,6 +45,8 @@
 | D10 | 선택·수집·실행을 별도 함수로 유지 | dry-run·fixture 검증 가능; 플러그인 프레임워크는 만들지 않음 | v1 기본값 |
 | D11 | 결과 최적성은 실제 작업으로 비교 검증 | 외부 순위는 개별 작업 성공확률이 아님 | 확정 원칙 |
 | D12 | API 응답/CLI 스키마를 버전 고정하여 기록 | 동적 데이터·문서와 설치 버전 차이를 통제 | 확정 원칙 |
+| D13 | 최종 선택·지표 간 trade-off·예산은 Orchestrator, Router는 사실 정리·필수 제약·선택 기록·실행 (2026-10-13) | 지표가 늘어도 Router 정책을 바꾸지 않고, USD와 percentile 같은 단위를 의미 없이 섞지 않음. 근거: docs/routing-extensibility-review.md | 확정 원칙 |
+| D14 | 새 지표 = `METRICS` 한 줄(+거를 때만 `CONSTRAINTS` 함수 하나), 미등록 지표는 전달만 (2026-10-13) | 플러그인 프레임워크·규칙 엔진 없이 확장. 계약: docs/routing-contracts.md | v1 기본값 |
 
 ## 타 AI 초안에서 유지하는 부분
 

@@ -23,6 +23,18 @@ offline fixture 통과, 실제 API 확인, 실제 herdr smoke, 작업군 효과 
 
 Q/S float 비교 tolerance는 1e-9로 두고 출력 반올림과 선택 계산을 분리한다. 음수/NaN이 score에 유입되지 않게 한다.
 
+## 다중 기준 계약 (2026-10-13, docs/routing-contracts.md)
+
+| ID | 시나리오 | 기대 결과 |
+| --- | --- | --- |
+| V36 | benchmark 없음, default/fallback 없음, 유효 후보 있음 | route는 no_eligible_profile, evaluate는 유효 후보 반환; 탈락 사유는 관측값·기준값 포함 |
+| V37 | context 2.0 지표: 1.0 동등성, 미등록 지표, 결측, 만료 가격, 공급자 견적, 단위·대상·null 오류 | 결측은 0 아님, 만료는 계산 제외(price_expired), 견적 우선, 잘못된 입력 exit2 |
+| V38 | evaluate 2.0 | 전 프로필 ID순, 통과 제약 기록, 등급·달러 상한 독립, legacy_score = route score, 미등록 지표 추가로 benchmark 불변 |
+| V39 | route --selection | 선택 기록 저장, 같은 round 회수(재전송 없음), 평가 후 설정 변경 시 stale_assessment |
+| V40 | group 2.0 | Orchestrator 순서로 fanout, decision에 context·선택 근거, stale이면 그룹 전체 미실행, deliberate 재견적 경고 |
+
+외부 정책의 순위 계산과 실제 성공률·비용 개선은 Orchestrator 쪽 실험으로 검증한다. 위 사례는 계약 검증이다.
+
 ## P1 수집·캐시
 
 | ID | 시나리오 | 기대 결과 |

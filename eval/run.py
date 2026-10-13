@@ -1,6 +1,8 @@
 """작업군 비교 하네스. (작업, 프로필) 쌍을 한 번씩 live 위임하고 hidden check로 채점한 뒤 정책별로 집계한다.
 
 정책: fixed-default(설정의 default_profile), low-cost-first(cost tier가 가장 낮은 프로필), bench-router(dry-run 선택).
+bench-router 행은 legacy 자동 route(benchmark + cost tier) 기준선이다. Orchestrator의 다중 기준 정책을 평가하지 않는다
+(docs/routing-contracts.md §6).
 세 정책은 같은 (작업, 프로필) 실행 결과 행렬에서 계산한다 — 같은 작업·환경·예산, 쌍당 표본 1개.
 
 사용: python3 eval/run.py --tag NAME [--only id,id] [--workers 2]   (WSL, herdr session 'breval')
@@ -99,6 +101,7 @@ def report(rows, pol, cfg, tag):
              f"생성: {datetime.now(timezone.utc).isoformat(timespec='seconds')} · 작업 {len(TASKS)}개 × 프로필 "
              f"{len({x['profile'] for x in rows})}개 · 쌍당 1회 실행 · priority balanced · hidden acceptance check로 채점", "",
              "성공 = 라우터 `completed` **그리고** hidden check 통과 (blocked 등은 Orchestrator가 결과를 받지 못하므로 실패).", "",
+             "bench-router = legacy 자동 route(benchmark + cost tier) 기준선. Orchestrator 다중 기준 정책의 결과가 아니다.", "",
              "| 정책 | 성공 | 성공률 | check만 통과 | 평균 시간(s) | 중앙값(s) | cost proxy 합 | 자기보고 success인데 check 실패 |",
              "|---|---|---|---|---|---|---|---|"]
     for name in ("fixed-default", "low-cost-first", "bench-router"):

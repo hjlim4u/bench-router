@@ -135,6 +135,8 @@ percentile은 점수 간 실제 크기 차이를 지운다는 한계가 있다. 
 
 ## 제약과 가용성
 
+> 2026-10-13: 제약은 `routing.CONSTRAINTS`의 이름 붙은 검사이며, 통과·실패 모두 관측값·기준값과 함께 기록된다. Orchestrator context의 비용 상한·필요 컨텍스트도 같은 제약이다. 다중 기준 계약은 `docs/routing-contracts.md` §3.
+
 먼저 enabled, 지원 kind, 실제 executable/인증 준비, exclude_profiles, cost_tier, context, modality/tools, local_only를 적용한다. 지원 capability가 unknown이면 해당 capability가 요구된 후보는 제외한다.
 
 cost tier 순서: low < medium < high. 이는 상대 정책이고 monetary budget 보장이 아니다. min_context_tokens는 작업·도구·예상 응답을 포함한 요구치이며 Free API 누락값을 무한대로 간주하지 않는다. live route에서 준비 안 된 프로필은 제외하고, offline dry-run은 availability_unverified를 표시한다.
@@ -142,6 +144,8 @@ cost tier 순서: low < medium < high. 이는 상대 정책이고 monetary budge
 local_only는 로컬 inference/처리를 뜻한다. herdr가 로컬에서 실행된다고 cloud 모델이 local_only를 충족하는 것은 아니다.
 
 ## 점수 계산
+
+> 2026-10-13부터 이 절과 아래 선택 규칙은 **legacy 자동 route 정책**이다(`route`를 `--selection` 없이 쓸 때). evaluate 2.0에서는 `evaluations.benchmark.legacy_score`로만 보이며 종합 순위가 아니다. 최종 선택은 Orchestrator 몫이다(`docs/routing-contracts.md` §1).
 
 카테고리 분포 w와 mapping 비중 v로 evidence별 총 가중치 a_b = Σ_c(w_c × v_cb)를 구한다. 유효 evidence 집합을 A_p라 할 때:
 

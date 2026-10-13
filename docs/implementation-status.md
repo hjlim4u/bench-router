@@ -1,6 +1,6 @@
 # bench-router 구현 상태
 
-갱신: 2026-10-12 · 런타임: WSL2 Ubuntu (Python 3.14.4), 커널 6.6.87.2-microsoft-standard-WSL2
+갱신: 2026-10-13 · 런타임: WSL2 Ubuntu (Python 3.14.4), 커널 6.6.87.2-microsoft-standard-WSL2
 
 ## 완료
 ### P0 — 오프라인 계약·합성 라우팅
@@ -19,10 +19,18 @@
 - CLI: `route`(live), `collect --run-id --cwd [--wait-ms]`, `feedback --run-id --cwd --outcome`, 전역 `--herdr-session`(또는 `BENCH_ROUTER_HERDR_SESSION`). herdr 경로 지정은 `BENCH_ROUTER_HERDR`.
 - 실행 디렉터리: `receipt.json`, `decision.json`(선택 근거), `result.md`/`result.json`(Agent 작성), `feedback.jsonl`.
 
+### 다중 기준 라우팅 계약 (2026-10-13, 브랜치 `routing-contracts`)
+- 근거: `docs/routing-extensibility-review.md` → 설계: `docs/routing-contracts.md` (1–6단계 완료).
+- `routing.assess()`: 후보 평가 공통 경계. 이름 붙은 `CONSTRAINTS`(통과·실패 결과에 관측값·기준값), `benchmark_evaluation()`. `route` = assess + legacy `select`, `evaluate` = assess(2.0 출력).
+- context 2.0: `METRICS` 정의표(대상·타입·단위·수명), `observed_at`/`expires_at`/`status: missing`, 미등록 지표는 전달만, 공급자 견적(`cost.estimated_usd`) 우선. context 1.0은 변환해서 받음.
+- `assessment_digest` + `route --selection` + `stale_assessment`(exit 14). `decision.json`에 선택 근거와 evaluate 2.0 전체.
+- group 2.0: task별 context·selections, plan 시점 digest 검사, stale이면 그룹 전체 미실행, deliberate `estimate_round1_only`.
+- 실환경 herdr로는 이 변경을 검증하지 않았다(fake herdr fixture만).
+
 ## 재현
 ```bash
 cd /mnt/d/Projects/bench-router-handoff
-python3 -m unittest test_p0 test_p1 test_p2   # 34 tests (fcntl → WSL/Linux)
+python3 -m unittest test_p0 test_p1 test_p2 test_p3   # 51 tests (2026-10-13)
 BR="python3 -m bench_router.cli --config-dir CFG --cache-dir CACHE"
 $BR refresh            # aa, arena (TTL 내면 skip; --force)
 $BR refresh --source tb --import tb.json
@@ -38,6 +46,7 @@ herdr는 `~/.local/bin/herdr`(0.9.3). 비로그인 셸에서는 PATH에 없으�
 
 ## 검증 결과
 - offline: P0+P1+P2 35/35 통과 (WSL). P0만 Windows Python 3.13에서도 통과.
+- offline (2026-10-13): P0–P3 51/51 통과 (Windows Python 3.13.7, 크로스플랫폼 lock 이후). WSL 재실행은 하지 않았다.
 - mutation: P0 정책값 3종 변경 시 P0 테스트 실패. P2에서 결과 검사 무력화(9개 실패), 기존 receipt 무시(3개 실패), timed_out을 settled로 취급(2개 실패)을 각각 잡아냄.
 - **Arena live (E2, 2026-10-12)**: 공개 API로 refresh 성공. 요청 17회, revision `e16f9023298691b4596eca61b4e31161dff31200`, cohort N = text_style_control/overall 414, text_style_control/math 400, webdev/overall 141, document_style_control/overall 44 (publish 2026-09-13), vision_style_control/overall 165. datasets-server read timeout 2회는 재시도로 복구됨. 두 번째 실행은 TTL skip(0.1s).
 - **Arena live 상한 확인 (2026-10-12 13:33)**: HF datasets-server가 500/502/read timeout을 내던 시점에 `refresh --source arena --force`가 정확히 180초에 실패로 종료(exit 16, 요청 14회). 상한 도입 전에는 같은 상황에서 4분 이상 응답 없이 실행됐다.
