@@ -1,0 +1,146 @@
+"""P3 병렬 위임 V30–V34: worktree 격리, fanout, shared scratchpad, deliberate 투표, 재실행 멱등.
+herdr는 workspace마다 test_p2.FakeHerdr를 하나씩 두는 멀티 agent fake. 실행: python3 -m unittest -v test_p3"""
+import json
+import os
+import re
+import shutil
+import subprocess
+import tempfile
+import threading
+import unittest
+from pathlib import Path
+
+from bench_router import parallel as pl
+from bench_router import routing as r
+from test_p0 import MAPPING, config, profile
+from test_p2 import FakeHerdr, which, write_result
+
+
+class MultiHerdr:
+    def __init__(self, on_prompt):
+        self.on_prompt, self.lock = on_prompt, threading.Lock()
+        self.by_pane, self.by_agent, self.starts, self.prompts, self.ws_cwds = {}, {}, [], [], []
+
+    def __call__(self, cmd, **kw):
+        argv = cmd[3:] if cmd[1] == "--session" else cmd[1:]
+        with self.lock:
+            if argv[-1] == "--help" or argv[:2] == ["workspace", "create"]:
+                pane = f"w{len(self.by_pane) + 1}:p1"
+                fake = FakeHerdr(on_prompt=self.on_prompt, pane=pane)
+                if argv[-1] == "--help":
+                    return fake(cmd, **kw)
+                self.by_pane[pane] = fake
+                self.ws_cwds.append(argv[3])
+                return fake(cmd, **kw)
+            if argv[:2] == ["agent", "start"]:
+                fake = self.by_pane[argv[argv.index("--pane") + 1]]
+                self.by_agent[argv[2]] = fake
+                self.starts.append(argv)
+            elif argv[:2] == ["pane", "read"]:
+                fake = self.by_pane[argv[2]]
+            else:
+                fake = self.by_agent.get(argv[2]) or FakeHerdr()
+            if argv[:2] == ["agent", "prompt"]:
+                self.prompts.append(argv[3])
+        return fake(cmd, **kw)
+
+
+def agent_act(vote="t1-1"):
+    result = write_result()
+
+    def act(fake, prompt):
+        result(fake, prompt)
+        m = re.search(r"(\S+\.vote\.json) 에", prompt)
+        if m:
+            Path(m.group(1)).write_text(json.dumps({"best": vote, "reason": "r"}), "utf-8")
+    return act
+
+
+@unittest.skipUnless(shutil.which("git"), "git required")
+class P3(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cwd = os.path.realpath(self.tmp.name)
+        git = ["git", "-C", self.cwd, "-c", "user.name=t", "-c", "user.email=t@t"]
+        subprocess.run(git[:3] + ["init", "-q"], check=True)
+        Path(self.cwd, "a.txt").write_text("a\n", "utf-8")
+        subprocess.run(git + ["add", "a.txt"], check=True)
+        subprocess.run(git + ["commit", "-qm", "init"], check=True)
+        self.cfg = config([profile("a", kind="claude", executable="claude"), profile("b")], default="a")
+
+    def tearDown(self):
+        subprocess.run(["git", "-C", self.cwd, "worktree", "prune"], capture_output=True)
+        self.tmp.cleanup()
+
+    def group(self, **kw):
+        task = {"schema_version": "1.0", "round": 1, "summary": "s", "prompt": "do it",
+                "categories": {"general": 1}, "category_confidence": 0.9}
+        raw = {"schema_version": "1.0", "group_id": "g1", "cwd": self.cwd,
+               "tasks": [{**task, "task_id": "t1"}, {**task, "task_id": "t2"}]}
+        raw.update(kw)
+        return pl.validate_group(raw)
+
+    def run_(self, g, fake):
+        return pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which)
+
+    def test_v30_isolated_worktrees(self):
+        fake = MultiHerdr(agent_act())
+        out = self.run_(self.group(), fake)
+        self.assertEqual(out["status"], "completed", out)
+        wts = sorted(m["worktree"] for m in out["members"])
+        self.assertEqual(sorted(fake.ws_cwds), wts)  # 각 agent cwd = 자기 worktree
+        self.assertTrue(all(Path(w, "a.txt").exists() for w in wts))
+        self.assertFalse(any("--add-dir" in s for s in fake.starts))
+        self.assertNotIn("공용 scratchpad", fake.prompts[0])
+        self.assertEqual(subprocess.run(["git", "-C", self.cwd, "status", "--porcelain"], capture_output=True,
+                                        text=True).stdout, "")  # .bench-router는 exclude
+
+    def test_v31_fanout_distinct_profiles(self):
+        one = [{"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "p"}]
+        out = self.run_(self.group(fanout=2, tasks=one), MultiHerdr(agent_act()))
+        self.assertEqual(out["status"], "completed", out)
+        self.assertEqual(sorted(m["profile"] for m in out["members"]), ["a", "b"])
+        g = self.group(fanout=3)
+        out = pl.run_group(g, self.cfg, MAPPING, None, [], dry_run=True)
+        self.assertEqual(len(out["members"]), 4)
+        self.assertIn("fanout_reduced", [w["code"] for w in out["warnings"]])
+
+    def test_v32_shared_scratchpad(self):
+        fake = MultiHerdr(agent_act())
+        out = self.run_(self.group(isolation="shared"), fake)
+        self.assertEqual(out["status"], "completed", out)
+        shared = out["shared_dir"]
+        self.assertTrue(all(s[s.index("--add-dir") + 1] == shared for s in fake.starts))
+        self.assertTrue(any(f"{shared}/t1-1.md" in p for p in fake.prompts))
+
+    def test_v33_deliberate_round_and_vote(self):
+        fake = MultiHerdr(agent_act(vote="t2-1"))
+        out = self.run_(self.group(isolation="deliberate"), fake)
+        self.assertEqual(out["status"], "completed", out)
+        self.assertEqual([len(m["rounds"]) for m in out["members"]], [2, 2])
+        self.assertEqual(out["members"][0]["rounds"][1]["round"], 2)
+        self.assertTrue(Path(out["shared_dir"], "t1-1.result.md").exists())
+        self.assertEqual(out["consensus"], {"votes": {"t1-1": 0, "t2-1": 2}, "winner": "t2-1"})
+
+    def test_v34_rerun_does_not_resend(self):
+        g = self.group(isolation="shared")
+        fake = MultiHerdr(agent_act())
+        self.run_(g, fake)
+        sent = len(fake.prompts)
+        out = self.run_(g, fake)
+        self.assertEqual(out["status"], "completed", out)
+        self.assertEqual(len(fake.prompts), sent)
+
+    def test_group_validation(self):
+        for bad in ({"isolation": "open"}, {"fanout": 0},
+                    {"tasks": [{"schema_version": "1.0", "task_id": "x", "round": 1, "summary": "s", "prompt": "p",
+                                "cwd": self.cwd}]}):
+            with self.assertRaises(r.InputError):
+                self.group(**bad)
+        t = {"schema_version": "1.0", "task_id": "x", "round": 1, "summary": "s", "prompt": "p"}
+        with self.assertRaises(r.InputError):
+            self.group(tasks=[t, t])
+
+
+if __name__ == "__main__":
+    unittest.main()

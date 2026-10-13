@@ -1,6 +1,6 @@
 ---
 name: bench-router
-description: Select and delegate a bounded task to a local coding agent through bench-router, then collect its result. Use when an orchestrator wants a benchmark-informed agent handoff; do not invoke from inside a bench-router delegated run.
+description: Select and delegate a bounded task to a local coding agent through bench-router, then collect its result, or fan out several subtasks or best-of-N attempts to agents in isolated git worktrees that can share a scratchpad or deliberate. Use when an orchestrator wants a benchmark-informed agent handoff; do not invoke from inside a bench-router delegated run.
 ---
 
 # Bench-router handoff
@@ -19,6 +19,17 @@ Use this skill only for a task the caller wants to hand off. The router owns pro
 2. Run `python scripts/cli.py route --task TASK_FILE`. Pass global options such as `--herdr-session` before `route` when needed. Read the JSON `status` even when the process exits nonzero, and retain `run_id` and `cwd` for recovery. `route --dry-run` selects without dispatch.
 3. For `blocked`, address the reported approval or question through the normal caller workflow. For `timed_out` or `delivery_uncertain`, run `collect --run-id RUN_ID --cwd CWD --wait-ms N`; never generate a fresh task ID or resend the prompt to resolve uncertainty. For `conflict`, inspect the warning and existing receipt before another dispatch. A completed result means the artifact contract passed, not that the task succeeded.
 4. Inspect the returned result and verify the requested work. Record the verified outcome with `feedback --run-id RUN_ID --cwd CWD --outcome success|partial|fail` when there is a run to assess.
+
+## Parallel handoff
+
+Default to `route`. Use `parallel` only when independent subtasks or a comparison of approaches is worth the cost: it starts tasks × fanout agents, and `deliberate` doubles that with a review round.
+
+For several subtasks or a best-of-N attempt, write a group file (`group_id`, git top-level `cwd`, `tasks` without `cwd`, optional `fanout`, `max_parallel`, `isolation`) and run `python scripts/cli.py parallel --group GROUP_FILE` (`--dry-run` to preview profiles). Each agent works in its own git worktree. Choose `isolation`: `isolated` (no sharing), `shared` (agents share notes and intermediate results in a scratchpad), or `deliberate` (shared plus a review round with votes; read `consensus.winner`). Rerun the same group file to recover; it never resends prompts. Compare and merge the returned worktree branches yourself, then remove the worktrees.
+
+- Worktrees start from `HEAD`; uncommitted changes in `cwd` are not included (`dirty_base` warning).
+- The main repository must already be trusted in each agent CLI; otherwise agents report `blocked` at startup. Worktrees under a trusted repository were not asked again.
+- A member that was `blocked` before its prompt is not resent by rerunning the same group. Resolve the cause, then use a new `group_id` or `round`.
+- With two members, votes often tie (`consensus.winner` is `null`); use three or more members when a majority matters.
 
 ## Shared data
 

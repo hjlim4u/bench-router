@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-`bench_router/` contains the CLI (`cli.py`), routing policy (`routing.py`), benchmark collection and snapshots (`data.py`), herdr dispatch (`herdr.py`), and bundled category weights (`categories.toml`). `eval/` holds comparison and cost scripts. `examples/` contains sample profiles, tasks, and synthetic results. Root-level `test_p0.py`, `test_p1.py`, and `test_p2.py` cover routing, data refresh, and dispatch respectively. Numbered root documents describe the design; `docs/evidence/` records external API evidence.
+`bench_router/` contains the CLI (`cli.py`), routing policy (`routing.py`), benchmark collection and snapshots (`data.py`), herdr dispatch (`herdr.py`), parallel worktree dispatch (`parallel.py`), and bundled category weights (`categories.toml`). `eval/` holds comparison and cost scripts. `examples/` contains sample profiles, tasks, and synthetic results. Root-level `test_p0.py`, `test_p1.py`, `test_p2.py`, and `test_p3.py` cover routing, data refresh, dispatch, and parallel dispatch respectively. Numbered root documents describe the design; `docs/evidence/` records external API evidence.
 
 ## Build, Test, and Development Commands
 
@@ -12,7 +12,7 @@ Use Python 3.11+ on Linux or WSL2. Run commands from the repository root; there 
 python3 -m bench_router.cli --help
 python3 -m bench_router.cli status
 python3 -m bench_router.cli route --task task.json --dry-run
-python3 -m unittest test_p0 test_p1 test_p2
+python3 -m unittest test_p0 test_p1 test_p2 test_p3
 ```
 
 `--help` lists CLI options. `status` inspects cached sources and snapshots. The dry run selects a profile without network access, herdr calls, or file writes; it needs a valid task and `profiles.toml`. The final command runs the offline test suite. Refresh and live dispatch require Linux or WSL2 because locking uses `fcntl`.

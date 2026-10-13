@@ -28,6 +28,7 @@ OS timer / 수동 ── bench-router refresh ──▶ AA API, Arena dataset, �
 | `bench_router/routing.py` | 입력·설정·snapshot 검증, 분류(L0/L1/general), 하드 제약, 점수와 선택. 네트워크·파일 쓰기 없음 |
 | `bench_router/data.py` | refresh: source 수집·정규화, SQLite 이력, routing snapshot 게시, `status` |
 | `bench_router/herdr.py` | live 위임: 가용성 확인, receipt, herdr 호출, 결과 계약 검사, `collect`/`feedback` |
+| `bench_router/parallel.py` | 병렬 위임: task × fanout agent를 각자 git worktree에서 동시 실행, 격리/협업 수준 |
 | `bench_router/cli.py` | 명령, 입력 검증, 종료 코드 |
 | `bench_router/categories.toml` | 카테고리별 evidence 가중치(기본값) |
 
@@ -145,6 +146,7 @@ capabilities = ["filesystem_write"]
 | `route --task FILE --dry-run` | 선택만 하고 부작용 없음(네트워크·herdr·파일 쓰기 없음) |
 | `explain --task FILE` | dry-run의 전체 후보·근거·제외 사유를 텍스트로 출력 |
 | `route --task FILE` | 선택 후 herdr로 위임하고, 유한한 시간 안에 대기·회수 |
+| `parallel --group FILE [--dry-run]` | 여러 agent를 각자 worktree에서 병렬 위임 ([병렬 위임](#병렬-위임과-협업-수준)) |
 | `collect --run-id ID --cwd DIR [--wait-ms N]` | 기존 run을 관찰·회수. **프롬프트를 다시 보내지 않음** |
 | `feedback --run-id ID --cwd DIR --outcome success\|partial\|fail [--evaluator X] [--note Y]` | Orchestrator의 검증 결과 기록 |
 
@@ -330,16 +332,43 @@ WantedBy=timers.target
 
 run 디렉터리에는 `receipt.json`, `decision.json`, `result.md`, `result.json`, `feedback.jsonl`이 남습니다. herdr workspace는 자동으로 닫지 않으므로 출력의 `workspace_id`로 정리하세요. 진행 중인 run의 workspace를 닫으면 Agent도 종료됩니다.
 
+## 병렬 위임과 협업 수준
+
+`parallel --group FILE`은 하위작업 여러 개(`tasks`)와 같은 작업을 상위 N개 프로필에 동시에 맡기기(`fanout`)를 한 번에 처리합니다. agent마다 `<cwd>/.bench-router/worktrees/<group_id>/<label>` git worktree(브랜치 `br/<group_id>/<label>`, HEAD 기준)를 만들어 그 안에서 실행합니다. 각 worktree가 그 agent의 `task.cwd`가 되므로 receipt·잠금·재전송 방지·결과 계약은 `route`와 같습니다. 같은 group 파일로 다시 실행하면 기존 receipt를 회수할 뿐 프롬프트를 다시 보내지 않습니다.
+
+```json
+{"schema_version": "1.0", "group_id": "fix-pager", "cwd": "/home/me/project",
+ "isolation": "shared", "fanout": 2, "max_parallel": 4,
+ "tasks": [{"schema_version": "1.0", "task_id": "pager", "round": 1,
+            "summary": "Fix paginate off-by-one", "prompt": "..."}]}
+```
+
+- `cwd`는 git 저장소 최상위여야 하며, task에는 `cwd`를 넣지 않습니다. `tasks × fanout ≤ 16`, `fanout` 1–8, `max_parallel` 1–16.
+- fanout 프로필은 `selected`, 그다음 후보 순위 순으로 서로 다르게 고릅니다. 부족하면 `fanout_reduced` 경고가 붙습니다. label은 `<task_id>-<k>`입니다.
+- **메인 repo를 각 Agent CLI에서 먼저 신뢰해야 합니다.** 상위 폴더가 신뢰돼 있어도 새 git repo는 다시 묻고, 그러면 agent start 단계에서 `blocked`가 됩니다(실측). 메인 repo를 한 번 신뢰하면 그 아래 worktree는 claude·codex 모두 다시 묻지 않았습니다.
+- 미커밋 변경은 worktree에 들어가지 않습니다(`dirty_base` 경고). Agent에게는 커밋하지 말고 작업 트리에 변경을 남기라고 지시합니다. 비교·병합과 `git worktree remove`·브랜치 정리는 Orchestrator가 맡습니다.
+
+| `isolation` | 동작 |
+|---|---|
+| `isolated` (기본) | worktree 격리만. 서로의 존재를 모름 |
+| `shared` | 공용 scratchpad `<cwd>/.bench-router/groups/<group_id>/shared/`. agent는 자기 `<label>.md`·`<label>/`에만 쓰고 동료 노트를 읽어, 실패한 접근·발견·중간 실험 결과를 공유합니다. 쓰기 권한은 `--add-dir <shared>`로 줍니다(claude·codex) |
+| `deliberate` | `shared` + 협의 라운드. 1차 `completed` member가 2명 이상이면 각 `result.md`를 `shared/<label>.result.md`로 복사하고, 같은 worktree·프로필로 `round+1`을 보냅니다. 각 agent는 동료 결과를 검토해 자기 안을 고치고 `shared/<label>.vote.json`(`{"best": label, "reason": ...}`)을 씁니다. 라우터는 다수결로 `consensus.winner`를 냅니다(동률이면 `null`) |
+
+출력은 member별 `profile`, `worktree`, `branch`, `rounds[]`(status, run_id, result_path, task_outcome, workspace_id)와 `consensus`이며, `groups/<group_id>/group.json`에도 남습니다. 전부 `completed`면 exit 0, 아니면 `partial_failure`(16), 같은 group이 이미 실행 중이면 `conflict`(14)입니다. 2차 라운드는 새 agent라서 1차 대화 맥락은 없습니다. 상태는 worktree와 scratchpad로 이어집니다.
+
+---
+
 ## 테스트
 
 ```bash
-python3 -m unittest test_p0 test_p1 test_p2     # Linux/WSL2/Windows
+python3 -m unittest test_p0 test_p1 test_p2 test_p3     # Linux/WSL2/Windows
 ```
 
 | 파일 | 범위 |
 |---|---|
 | `test_p0.py` | 선택·입력 계약(V01–V10): 합성 기대값, 결측과 측정된 0, percentile, 결정성, 제약, near-tie 경계 |
 | `test_p1.py` | 수집·캐시(V11–V18): 페이지 순회, 부분 실패 시 last-good, 해시 동일 시 no-op, HTTP 오류와 시간 상한, 잠금과 원자 게시, alias와 버전 cohort |
+| `test_p3.py` | 병렬 위임(V30–V34): worktree 격리, fanout, shared `--add-dir`, deliberate 투표, 재실행 시 재전송 없음 (git 필요) |
 | `test_p2.py` | 위임(V19–V29): argv 전달, 반환 ID 사용, 시작 실패, 전송 직전 상태, 결과 계약·경로 공격, timeout 후 재전송 없음, crash 복구, 충돌·잠금 |
 
 herdr는 0.9.3에서 실측한 응답 형식을 따르는 fake로 대체합니다. 실측 근거는 `docs/evidence/`에 있습니다(herdr help·API schema·skill, claude/codex `--help`).
@@ -355,6 +384,7 @@ herdr는 0.9.3에서 실측한 응답 형식을 따르는 fake로 대체합니�
 | Arena 실호출 | 성공 (revision `e16f9023…`). HF 장애 중에는 180초 상한에서 실패 처리되고 last-good 유지됨 |
 | herdr + Claude Code / Codex live 위임 | 성공. 미해결 run 차단, 재전송 없음, 결과 해시 일치, 정리 뒤 collect 확인 |
 | 두 후보를 점수로 비교한 live 선택 | general/balanced 작업에서 codex 선택 후 completed |
+| `parallel` live (2026-10-13, deliberate, fanout 2: claude + codex) | 두 worktree에서 동시 실행, 2라운드 모두 completed, scratchpad 노트 공유·투표 확인(서로에게 1표씩 → `winner=null`), 메인 작업 트리 깨끗. 약 2분 |
 | 작업군 비교 v1 (20 과제 × 2 프로필) | [eval/results/v1.md](eval/results/v1.md), 비용: [v1-cost.md](eval/results/v1-cost.md) |
 
 작업군 비교 v1의 요약은 다음과 같습니다. 과제당 1회 실행이므로 통계적 결론은 아닙니다.

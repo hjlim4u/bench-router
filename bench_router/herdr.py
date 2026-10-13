@@ -277,7 +277,8 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run):
     if start_ms < START_TIMEOUT_MIN_MS:
         return fail("timed_out", None, "not enough budget to start an agent")
     st, err = h(["agent", "start", rc["agent_name"], "--kind", profile["kind"], "--pane", rc["pane_id"],
-                 "--timeout", str(start_ms), "--", *profile["args"]], start_ms / 1000 + CALL_GRACE_S)
+                 "--timeout", str(start_ms), "--", *profile["args"], *rc.get("extra_args", [])],
+                start_ms / 1000 + CALL_GRACE_S)
     if err:
         return fail("blocked" if err["code"] == "agent_not_ready" else "execution_failed", err, "agent start failed")
     agent = (st or {}).get("agent") or {}
@@ -361,12 +362,23 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
 
 # ---------- 진입점 ----------
 
-def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which):
-    """live route. 선택 → receipt → herdr 실행. 같은 (task_id, round)는 재전송 없이 collect."""
+def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
+             profile_id=None, extra_args=(), kinds=False):
+    """live route. 선택 → receipt → herdr 실행. 같은 (task_id, round)는 재전송 없이 collect.
+    profile_id: 제약·가용성을 통과한 후보 중 이 프로필로 고정(parallel fanout).
+    extra_args: agent argv 뒤에 붙임(지문에는 포함하지 않음). kinds: 미리 읽은 herdr kind 집합."""
     now = _now()
-    kinds = herdr_kinds(session, runner)
+    if kinds is False:
+        kinds = herdr_kinds(session, runner)
     availability = {p["id"]: probe(p, which, kinds) for p in cfg["profile"]}
     res = r.route(t, cfg, mapping, snap, snap_warnings, now, availability)
+    if profile_id:
+        p = next((p for p in cfg["profile"] if p["id"] == profile_id), None)
+        if p is None or profile_id not in {c["profile"] for c in res["candidates"]}:
+            return {**res, "status": "no_eligible_profile", "selected": None}
+        res = {**res, "status": "selected", "selection_mode": "parallel_pinned",
+               "selected": {"profile": profile_id, "profile_fingerprint": r.profile_fingerprint(p),
+                            "agent_name": None, "pane_id": None}}
     if res["status"] != "selected":
         return res
     profile = next(p for p in cfg["profile"] if p["id"] == res["selected"]["profile"])
@@ -395,7 +407,7 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
                   "timeout_ms": t["constraints"]["timeout_ms"], "created_at": _iso(now),
                   "deadline_at": _iso(now + timedelta(milliseconds=t["constraints"]["timeout_ms"])),
                   "result_path": None, "manifest_path": None, "task_outcome": None, "herdr_state": None,
-                  "settled_contract": False, "last_observation": None}
+                  "settled_contract": False, "last_observation": None, "extra_args": list(extra_args)}
             prompt = t["prompt"] + contract_text(rc)
             if len(prompt.encode("utf-8")) > MAX_PROMPT_ARG_BYTES:
                 raise r.InputError(f"prompt + contract exceeds {MAX_PROMPT_ARG_BYTES} bytes (herdr takes it as argv)")

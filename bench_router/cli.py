@@ -35,6 +35,14 @@ def _load(args):
     return r.route(task, cfg, mapping, snap, snap_warnings, datetime.now(timezone.utc))
 
 
+def _parallel(args):
+    from . import parallel
+    g = parallel.validate_group(r.load_json_strict(args.group, r.TASK_MAX_BYTES * 16))
+    cfg, mapping = _config(args)
+    snap, snap_warnings = r.load_snapshot(args.cache_dir)
+    return parallel.run_group(g, cfg, mapping, snap, snap_warnings, args.herdr_session, dry_run=args.dry_run)
+
+
 def _collect(args):
     from . import herdr
     return herdr.collect_run(args.cwd, args.run_id, args.wait_ms, args.herdr_session)
@@ -116,6 +124,9 @@ def main(argv=None):
     fp.add_argument("--force", action="store_true", help="ignore TTL")
     fp.add_argument("--import", dest="import_file", help="approved manual observations (swe/tb)")
     sub.add_parser("status", help="source age, failures, unmatched models, snapshot/config state")
+    pp = sub.add_parser("parallel", help="dispatch tasks × fanout agents concurrently, each in its own git worktree")
+    pp.add_argument("--group", required=True)
+    pp.add_argument("--dry-run", action="store_true")
     cp = sub.add_parser("collect", help="observe/collect an existing run; never re-sends the prompt")
     cp.add_argument("--run-id", required=True)
     cp.add_argument("--cwd", required=True)
@@ -129,7 +140,8 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     try:
-        res = {"refresh": _refresh, "status": _status, "collect": _collect, "feedback": _feedback}.get(
+        res = {"refresh": _refresh, "status": _status, "collect": _collect, "feedback": _feedback,
+                "parallel": _parallel}.get(
             args.cmd, _load)(args)
     except r.InputError as e:
         print(json.dumps({"schema_version": r.SCHEMA_VERSION, "status": "error",
