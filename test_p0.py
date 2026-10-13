@@ -250,7 +250,8 @@ class P0(unittest.TestCase):
         t = self.task()
         one = self.run_route(t, ps, ev)
         two = self.run_route(t, list(reversed(ps)), ev)
-        one.pop("config_hash"), two.pop("config_hash")  # 설정 파일 순서만 다름
+        for k in ("config_hash", "assessment_digest"):  # 설정 파일 순서만 다름(digest는 config_hash에서 파생)
+            one.pop(k), two.pop(k)
         self.assertEqual(json.dumps(one), json.dumps(two))
         self.assertEqual(one["selected"]["profile"], "b")  # 최고 score
 

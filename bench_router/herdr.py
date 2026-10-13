@@ -363,18 +363,23 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
 # ---------- 진입점 ----------
 
 def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
-             profile_id=None, extra_args=(), kinds=False, context=None, selection_mode="parallel_pinned"):
+             profile_id=None, extra_args=(), kinds=False, context=None, selection_mode="parallel_pinned",
+             selection=None):
     """live route. 선택 → receipt → herdr 실행. 같은 (task_id, round)는 재전송 없이 collect.
     profile_id: 제약·가용성을 통과한 후보 중 이 프로필로 고정(parallel fanout).
-    extra_args: agent argv 뒤에 붙임(지문에는 포함하지 않음). kinds: 미리 읽은 herdr kind 집합."""
+    extra_args: agent argv 뒤에 붙임(지문에는 포함하지 않음). kinds: 미리 읽은 herdr kind 집합.
+    selection: Orchestrator 선택 기록(validate_selection). digest가 지금 입력과 다르면 실행하지 않는다(stale_assessment).
+    같은 round 회수가 digest 검사보다 우선한다: 새 판단으로 다시 실행하려면 새 round."""
     now = _now()
     if kinds is False:
         kinds = herdr_kinds(session, runner)
     availability = {p["id"]: probe(p, which, kinds) for p in cfg["profile"]}
+    if selection is not None:
+        profile_id = selection["profile"]
     res = (r.evaluate_v1(t, cfg, mapping, snap, snap_warnings, now, availability, context) if profile_id
            else r.route(t, cfg, mapping, snap, snap_warnings, now, availability, context))
     if profile_id:
-        res = r.pin_selection(res, cfg, profile_id, selection_mode)
+        res = r.apply_selection(res, cfg, profile_id, selection, selection_mode)
     try:
         with dispatch_lock(t["cwd"]):
             existing = [x for x in receipts(t["cwd"]) if x["task_id"] == t["task_id"] and x["round"] == t["round"]]
@@ -390,7 +395,11 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
                                                                   "same task_id/round already uses another profile")]}
                 rc = collect(rc, t["constraints"]["timeout_ms"], session, runner)
                 prior = r.load_json_strict(Path(rc["run_dir"]) / "decision.json", r.SNAPSHOT_MAX_BYTES)
-                return output(prior, rc, reused=True)
+                out = output(prior, rc, reused=True)
+                if selection is not None and prior.get("selection") != res["selection"]:
+                    out["warnings"] = out.get("warnings", []) + [r.warn(
+                        "selection_differs_from_recorded", "returning the recorded run; use a new round to act on a new selection")]
+                return out
             if res["status"] != "selected":
                 return res
             profile = next(p for p in cfg["profile"] if p["id"] == res["selected"]["profile"])
@@ -413,7 +422,11 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
             if len(prompt.encode("utf-8")) > MAX_PROMPT_ARG_BYTES:
                 raise r.InputError(f"prompt + contract exceeds {MAX_PROMPT_ARG_BYTES} bytes (herdr takes it as argv)")
             Path(rc["run_dir"]).mkdir(parents=True)
-            r.atomic_write(Path(rc["run_dir"]) / "decision.json", json.dumps(res, ensure_ascii=False).encode("utf-8"))
+            # 판단 기록 = 출력 + 같은 입력의 evaluate 2.0(통과·탈락 제약의 관측값·기준값, facts).
+            # ponytail: assess를 한 번 더 돈다(결정적, 입력 동일). 느려지면 route가 assessment를 넘기게
+            assessment = r.evaluate(t, cfg, mapping, snap, snap_warnings, now, availability, context)
+            r.atomic_write(Path(rc["run_dir"]) / "decision.json",
+                           json.dumps({**res, "assessment": assessment}, ensure_ascii=False).encode("utf-8"))
             save(rc)  # receipt 저장 실패 시 예외 → 전송하지 않음
             return output(res, execute(rc, prompt, profile, session, runner))
     except Busy as e:
@@ -446,6 +459,7 @@ def feedback(cwd, run_id, outcome, evaluator=None, note=None):
 
 def output(res, rc, reused=False):
     out = dict(res) if res else {"schema_version": r.SCHEMA_VERSION, "task_id": rc["task_id"], "round": rc["round"]}
+    out.pop("assessment", None)  # decision.json에만 둔다
     out.update({"status": rc["status"], "run_id": rc["run_id"], "result_path": rc["result_path"],
                 "manifest_path": rc["manifest_path"], "task_outcome": rc["task_outcome"],
                 "herdr_state": rc["herdr_state"], "delivery_state": rc["delivery_state"],

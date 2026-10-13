@@ -843,6 +843,15 @@ def assess(t, cfg, mapping, snap, snap_warnings, now, availability=None, context
             "task_metrics": metric_facts(context["task_metrics"], now) if context is not None else {}}
 
 
+def _inputs(asmt):
+    """판단의 정적 입력. now·availability·freshness처럼 시간·환경에 따라 변하는 값은 넣지 않는다
+    (그건 실행 직전 재검사 대상이지 동일성 비교 대상이 아니다)."""
+    context = asmt["context"]
+    return {"task_hash": asmt["task_hash"], "config_hash": asmt["config_hash"], "snapshot_id": asmt["snapshot_id"],
+            "context_hash": canonical_hash(context) if context is not None else None,
+            "router_policy_version": POLICY_VERSION, "metric_registry_version": METRIC_REGISTRY_VERSION}
+
+
 def _complexity_v1(context):
     m = context["task_metrics"].get("task.complexity", {})
     return {"level": m["value"], "reason": m.get("reason")} if "value" in m else None
@@ -873,6 +882,7 @@ def _result_v1(asmt, cands, status, selected, mode, warnings):
             "snapshot_id": asmt["snapshot_id"], "policy_version": POLICY_VERSION,
             "config_hash": asmt["config_hash"], "task_hash": asmt["task_hash"],
             "warnings": warnings, "sources": asmt["sources"],
+            "assessment_digest": canonical_hash(_inputs(asmt)),
             **({"decision_context": context, "context_hash": canonical_hash(context), "complexity": _complexity_v1(context),
                 "max_estimated_cost_usd": context.get("max_estimated_cost_usd")} if context is not None else {})}
 
@@ -898,7 +908,8 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
             warnings.append(warn("partial_evidence", f"{pick}: coverage {chosen['coverage']:.2f}"))
         if chosen["coverage"] > 0 and chosen["exact_evidence_weight"] <= EPS:
             warnings.append(warn("proxy_only", f"{pick}: model-proxy evidence only, no exact profile evaluation"))
-    return _result_v1(asmt, cands, "selected" if pick else "no_eligible_profile", selected, mode, warnings)
+    return {**_result_v1(asmt, cands, "selected" if pick else "no_eligible_profile", selected, mode, warnings),
+            "selection": {"source": "router_legacy"}}
 
 
 def evaluate_v1(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
@@ -927,10 +938,7 @@ def evaluate(t, cfg, mapping, snap, snap_warnings, now, availability=None, conte
                           "legacy_score": _r(ev["score"])}}})
     t = asmt["task"]
     return {"schema_version": EVALUATE_SCHEMA_VERSION, "status": "ok", "task_id": t["task_id"], "round": t["round"],
-            "inputs": {"task_hash": asmt["task_hash"], "config_hash": asmt["config_hash"],
-                       "snapshot_id": asmt["snapshot_id"],
-                       "context_hash": canonical_hash(context) if context is not None else None,
-                       "router_policy_version": POLICY_VERSION, "metric_registry_version": METRIC_REGISTRY_VERSION},
+            "assessment_digest": canonical_hash(_inputs(asmt)), "inputs": _inputs(asmt),
             "task_facts": asmt["task_metrics"], "max_estimated_cost_usd": (context or {}).get("max_estimated_cost_usd"),
             "candidates": cands, "availability_verified": asmt["availability_verified"],
             "classification": asmt["classification"], "sources": asmt["sources"], "warnings": asmt["warnings"]}
@@ -943,6 +951,45 @@ def pin_selection(res, cfg, profile_id, mode="orchestrator_pinned"):
     return {**res, "status": "selected", "selection_mode": mode,
             "selected": {"profile": profile_id, "profile_fingerprint": profile_fingerprint(p),
                          "agent_name": None, "pane_id": None}}
+
+
+SELECTION_KEYS = {"schema_version", "profile", "assessment_digest", "policy", "reason"}
+
+
+def validate_selection(raw):
+    """Orchestrator의 선택 기록: 무엇을(profile) 어떤 평가(assessment_digest)를 근거로 왜(policy, reason) 골랐나."""
+    if not isinstance(raw, dict) or set(raw) != SELECTION_KEYS:
+        raise InputError(f"selection: exactly {sorted(SELECTION_KEYS)} required")
+    if raw["schema_version"] != EVALUATE_SCHEMA_VERSION:
+        raise InputError(f"selection.schema_version must be {EVALUATE_SCHEMA_VERSION!r}")
+    if not isinstance(raw["assessment_digest"], str) or not re.fullmatch(r"[0-9a-f]{64}", raw["assessment_digest"]):
+        raise InputError("selection.assessment_digest: digest from evaluate required")
+    pol = raw["policy"]
+    if not isinstance(pol, dict) or set(pol) != {"id", "version"}:
+        raise InputError("selection.policy: id and version required")
+    return {"schema_version": raw["schema_version"], "profile": _str(raw["profile"], "selection.profile", 200),
+            "assessment_digest": raw["assessment_digest"],
+            "policy": {"id": _str(pol["id"], "selection.policy.id", 200),
+                       "version": _str(pol["version"], "selection.policy.version", 100)},
+            "reason": _str(raw["reason"], "selection.reason", 4000)}
+
+
+def apply_selection(res, cfg, profile_id, selection=None, mode="orchestrator_pinned"):
+    """evaluate_v1 결과에 외부 선택을 적용한다. selection이 있으면 평가 당시 정적 입력과 지금이 같아야 한다.
+    profile_id만 오면(기록 없는 고정) 실행은 하되 selection_unrecorded로 알린다."""
+    if selection is not None:
+        if selection["assessment_digest"] != res["assessment_digest"]:
+            return {**res, "status": "stale_assessment", "selected": None,
+                    "selection": {"source": "orchestrator", **selection},
+                    "warnings": res["warnings"] + [warn("stale_assessment",
+                        "task/config/snapshot/context changed since evaluate; re-evaluate and select again")]}
+        out = pin_selection(res, cfg, selection["profile"], mode)
+        return {**out, "selection": {"source": "orchestrator", **selection}}
+    out = pin_selection(res, cfg, profile_id, mode)
+    if mode == "orchestrator_pinned":
+        out["warnings"] = out["warnings"] + [warn("selection_unrecorded",
+                                                  "--profile without --selection: no policy/reason/digest recorded")]
+    return {**out, "selection": {"source": "unrecorded" if mode == "orchestrator_pinned" else mode}}
 
 
 def _r(x):

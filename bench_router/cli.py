@@ -11,7 +11,7 @@ from . import routing as r
 
 EXIT = {"selected": 0, "completed": 0, "ok": 0, "recorded": 0, "blocked": 10, "timed_out": 11, "waiting": 11,
         "delivery_uncertain": 11, "execution_failed": 12, "result_invalid": 12, "no_eligible_profile": 13,
-        "conflict": 14, "partial_failure": 16, "failed": 16}
+        "conflict": 14, "stale_assessment": 14, "partial_failure": 16, "failed": 16}
 BUNDLED_CATEGORIES = Path(__file__).with_name("categories.toml")
 
 
@@ -30,18 +30,21 @@ def _load(args):
     cfg, mapping = _config(args)
     context = (r.validate_context(r.load_json_strict(args.context, r.TASK_MAX_BYTES),
                                   [p["id"] for p in cfg["profile"]]) if args.context else None)
+    selection = (r.validate_selection(r.load_json_strict(args.selection, r.TASK_MAX_BYTES))
+                 if getattr(args, "selection", None) else None)
     snap, snap_warnings = r.load_snapshot(args.cache_dir)
     if args.cmd == "route" and not args.dry_run:
         from . import herdr  # live 경로에서만
         return herdr.dispatch(task, cfg, mapping, snap, snap_warnings, args.herdr_session,
-                              profile_id=args.profile, context=context, selection_mode="orchestrator_pinned")
+                              profile_id=args.profile, context=context, selection_mode="orchestrator_pinned",
+                              selection=selection)
     now = datetime.now(timezone.utc)
     if args.cmd == "evaluate":
         return (r.evaluate_v1 if args.format == "1" else r.evaluate)(task, cfg, mapping, snap, snap_warnings, now,
                                                                      context=context)
-    if args.cmd == "route" and args.profile:
+    if args.cmd == "route" and (args.profile or selection):
         res = r.evaluate_v1(task, cfg, mapping, snap, snap_warnings, now, context=context)
-        return r.pin_selection(res, cfg, args.profile)
+        return r.apply_selection(res, cfg, args.profile, selection)
     res = r.route(task, cfg, mapping, snap, snap_warnings, now, context=context)
     if args.cmd == "explain":  # 선택은 route, 사실·제약 근거는 evaluate 2.0에서
         res["assessment"] = r.evaluate(task, cfg, mapping, snap, snap_warnings, now, context=context)
@@ -154,7 +157,9 @@ def main(argv=None):
     rp = sub.add_parser("route", help="select a profile and delegate via herdr (--dry-run: select only)")
     rp.add_argument("--task", required=True)
     rp.add_argument("--context", help="Orchestrator metrics: estimates, prices, signals (context JSON 1.0|2.0)")
-    rp.add_argument("--profile", help="execute this eligible profile selected by the Orchestrator")
+    pin = rp.add_mutually_exclusive_group()
+    pin.add_argument("--selection", help="Orchestrator selection record (JSON: profile, assessment_digest, policy, reason)")
+    pin.add_argument("--profile", help="execute this eligible profile without a selection record (warns)")
     rp.add_argument("--dry-run", action="store_true")
     vp = sub.add_parser("evaluate", help="report facts, constraint results and evaluations for every profile; no selection")
     vp.add_argument("--task", required=True)

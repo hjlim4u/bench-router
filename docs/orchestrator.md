@@ -57,4 +57,25 @@ python3 -m bench_router.cli route --task task.json --context context.json --prof
 
 `evaluate` does not probe live executable availability; live `route` probes again before dispatch. The Orchestrator chooses a profile from the eligible entries. The normal `route` command without `--profile` continues to make the router's benchmark-based selection. `explain` prints that selection plus the same constraint results and facts.
 
+To record why a profile was chosen, pass a selection instead of `--profile`:
+
+```json
+{"schema_version": "2.0", "profile": "my-codex",
+ "assessment_digest": "<assessment_digest from evaluate>",
+ "policy": {"id": "orch-cost-latency", "version": "4"},
+ "reason": "lowest estimated cost among candidates with benchmark coverage >= 0.5"}
+```
+
+```bash
+python3 -m bench_router.cli route --task task.json --context context.json --selection selection.json
+```
+
+`assessment_digest` is a hash of the static inputs: task, profile config, snapshot, context, router policy and metric registry versions. Time-dependent facts are not part of it; freshness and live availability are re-checked at dispatch.
+
+If any of those inputs changed since `evaluate` (for example a refresh, a config edit, or a new context), the router does not execute. It returns `status: "stale_assessment"` (exit 14) with the current digest. Re-run `evaluate` and select again.
+
+A recorded run is written to `decision.json` together with the selection and the full `evaluate` 2.0 assessment, including constraint values and limits. `route --profile` alone still works, but warns `selection_unrecorded`.
+
+A repeated task ID and round returns the recorded run even if the selection differs, with warning `selection_differs_from_recorded`. Use a new round to act on a new decision.
+
 The run response includes `delivery_state` and `reassignment`. `safe_to_retry` means the prompt was not submitted. `collect_first` means delivery or completion remains uncertain; use `collect --run-id ID --cwd DIR` before deciding whether to reassign. `review_result` means the agent acted; inspect its result and workspace before sending the task elsewhere. A fallback execution uses a **new round** and normally excludes the previous profile in its new task. Reusing a task ID and round collects the existing receipt; choosing another profile for that same round returns `conflict`. These markers do not reserve a budget or guarantee that actual charges stay below estimated cost.

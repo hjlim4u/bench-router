@@ -347,13 +347,19 @@ CONSTRAINTS["latency"] = lambda p, t, f, ctx: None if "max_latency_p50_ms" not i
 
 각 단계는 독립 커밋, 단계마다 `python3 -m unittest test_p0 test_p1 test_p2 test_p3` 통과.
 
-진행: 1–3단계 완료 (2026-10-13, test_v36·v37·v38).
+진행: 1–4단계 완료 (2026-10-13, test_v36·v37·v38·v39).
 
 3단계 구현에서 확정된 세부:
 - evaluate 2.0의 `assessment_digest`는 4단계에서 추가. 3단계 출력은 그 재료인 `inputs`만 포함.
 - `evaluations`는 제약 통과 후보에만 채운다 (탈락 후보는 `{}`). 탈락 후보 벤치마크까지 계산하면 stale_config 경고가 달라져 route 1.0 호환이 깨진다.
 - `min_context`와 `required_context`를 `context_capacity` 하나로 합침 (더 큰 요구치 기준). 두 조건이 동시에 실패할 때 route 1.0 `excluded.reasons`의 중복 코드가 하나로 줄었다.
 - Python API: `evaluate()` = 2.0, `evaluate_v1()` = 1.0 (`route --profile`과 `evaluate --format 1`이 사용).
+
+4단계 구현에서 확정된 세부:
+- `decision.json` = route 1.0 출력 + `selection` + `assessment`(같은 입력의 evaluate 2.0 전체). 별도 decision 2.0 래퍼는 만들지 않음 — 재사용 응답이 기존 형태를 유지하고, 근거는 `assessment`에 모두 있음. 응답에서는 `assessment`를 뺀다.
+- `selection.source`: `orchestrator`(선택 기록) | `unrecorded`(`--profile` 단독) | `router_legacy`(자동 route) | `parallel_pinned`(group legacy fanout).
+- `--selection`과 `--profile`은 함께 쓸 수 없다. `stale_assessment` 종료 코드는 14(conflict 계열).
+- `config_hash`가 프로필 정의 순서에 민감하므로 profiles.toml에서 순서만 바꿔도 digest가 바뀐다 (재평가 필요).
 
 1. **assess 추출** (`routing.py`): `route()` 루프를 `assess` + `benchmark_evaluation` + `CONSTRAINTS`로 분리, `route`/`evaluate`(1.0 형식) 재구성. 기존 테스트 무수정 통과가 완료 조건.
 2. **context 2.0 + METRICS** (`routing.py`): 검증·freshness·1.0 변환·비용 결정 순서.

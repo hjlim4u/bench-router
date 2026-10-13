@@ -125,6 +125,8 @@ class P2(unittest.TestCase):
                             profile_id="a", context=context, selection_mode="orchestrator_pinned")
         self.assertEqual((first["status"], first["selection_mode"], first["reassignment"]),
                          ("completed", "orchestrator_pinned", "review_result"))
+        self.assertEqual((first["selection"], first["warnings"][-1]["code"]),
+                         ({"source": "unrecorded"}, "selection_unrecorded"))
         repriced = {**context, "profiles": {"a": {**context["profiles"]["a"],
                     "price": {**context["profiles"]["a"]["price"], "output_usd_per_million_tokens": 4}}}}
         replay = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], runner=fake, which=which,
@@ -135,6 +137,35 @@ class P2(unittest.TestCase):
                                profile_id="b", selection_mode="orchestrator_pinned")
         self.assertEqual((conflict["status"], len(fake.prompts)), ("conflict", 1))
         self.assertEqual(conflict["warnings"][-1]["code"], "profile_round_conflict")
+
+    def test_v39_selection_record_digest_and_round_reuse(self):
+        fake = FakeHerdr(on_prompt=write_result())
+        context = {"schema_version": "2.0", "profiles": {"a": {"metrics": {
+            "cost.estimated_usd": {"value": 0.01, "unit": "usd", "source": "quote@1"}}}}}
+        digest = r.evaluate(self.task(), self.cfg, MAPPING, None, [], hd._now(), context=context)["assessment_digest"]
+        sel = r.validate_selection({"schema_version": "2.0", "profile": "a", "assessment_digest": digest,
+                                    "policy": {"id": "orch-cheapest", "version": "4"}, "reason": "lowest quote"})
+        go = lambda t, s, cfg=None: hd.dispatch(t, cfg or self.cfg, MAPPING, None, [], runner=fake, which=which,
+                                                context=context, selection=s, selection_mode="orchestrator_pinned")
+        first = go(self.task(), sel)
+        self.assertEqual((first["status"], first["selection"]["policy"]["id"]), ("completed", "orch-cheapest"))
+        self.assertNotIn("assessment", first)
+        decision = json.loads((Path(first["receipt_path"]).parent / "decision.json").read_text("utf-8"))
+        self.assertEqual((decision["selection"], decision["assessment"]["assessment_digest"]),
+                         (first["selection"], digest))
+        self.assertTrue(all(x["passed"] for x in decision["assessment"]["candidates"][0]["constraints"]))
+        # 같은 round: 다른 선택 근거여도 최초 실행 회수, 재전송 없음
+        again = go(self.task(), {**sel, "reason": "changed my mind"})
+        self.assertEqual((again["reused_receipt"], len(fake.prompts)), (True, 1))
+        self.assertEqual(again["warnings"][-1]["code"], "selection_differs_from_recorded")
+        # 평가 후 설정 변경: 새 round라도 옛 digest로는 실행 안 함
+        changed = config([*self.cfg["profile"], profile("b", kind="claude", executable="claude")], default="a")
+        stale = go(self.task(round=2), sel, changed)
+        self.assertEqual((stale["status"], stale["selected"], len(fake.prompts)), ("stale_assessment", None, 1))
+        self.assertNotEqual(stale["assessment_digest"], digest)
+        for bad in ({**sel, "assessment_digest": "x"}, {**sel, "policy": {"id": "p"}}, {k: sel[k] for k in sel if k != "reason"}):
+            with self.subTest(bad=bad), self.assertRaises(r.InputError):
+                r.validate_selection(bad)
 
     def test_v19_prompt_is_argv_not_shell(self):
         evil = "x $(touch /tmp/pwned) `id`; rm -rf ~\n\"quoted\" 'single' \\ & | > <"
