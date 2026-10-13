@@ -82,6 +82,22 @@ class P0(unittest.TestCase):
         self.assertEqual((unknown["context_facts"]["estimated_cost_usd"],
                           unknown["context_facts"]["cost_missing_reason"]), (None, "estimate_or_price_missing"))
 
+    def test_v36_assess_separates_constraints_from_selection(self):
+        ps = [profile("c", context_tokens=1000), profile("b"), profile("a")]
+        t = self.task(constraints={"min_context_tokens": 4000})
+        ps[1]["context_tokens"] = ps[2]["context_tokens"] = 8000
+        asmt = r.assess(t, config(ps), MAPPING, None, [], NOW)
+        self.assertEqual([c["profile"] for c in asmt["candidates"]], ["a", "b", "c"])
+        self.assertEqual(asmt["candidates"][2]["constraint_failures"],
+                         [{"code": "context_insufficient", "metric": "min_context_tokens", "observed": 1000,
+                           "limit": 4000, "constraint": "min_context"}])
+        self.assertIsNone(asmt["candidates"][0]["evaluations"]["benchmark"]["quality"])
+        self.assertEqual(asmt["candidates"][2]["evaluations"], {})
+        # benchmark 없음 + default/fallback 없음: 자동 선택은 실패해도 평가는 유효 후보를 돌려준다
+        self.assertEqual(r.route(t, config(ps), MAPPING, None, [], NOW)["status"], "no_eligible_profile")
+        self.assertEqual([c["profile"] for c in r.evaluate(t, config(ps), MAPPING, None, [], NOW)["candidates"]],
+                         ["a", "b"])
+
     def test_v12_context_rejects_invalid_cost_facts(self):
         base = {"schema_version": "1.0", "max_estimated_cost_usd": 1, "profiles": {"a": {}}}
         for bad in ({**base, "max_estimated_cost_usd": float("nan")},

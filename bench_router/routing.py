@@ -223,11 +223,8 @@ def validate_context(raw, profile_ids):
 
 
 def context_facts(profile, context):
+    """(정확한 Decimal 비용 | None, 출력용 facts). 제약 판단은 CONSTRAINTS가 한다."""
     item = context["profiles"].get(profile["id"], {})
-    required = item.get("required_context_tokens", 0)
-    reasons = []
-    if required and profile["context_tokens"] < required:
-        reasons.append("context_unknown" if profile["context_tokens"] == 0 else "context_insufficient")
     price = item.get("price")
     if price and "estimated_input_tokens" in item and "estimated_output_tokens" in item:
         cost = (Decimal(item["estimated_input_tokens"]) * Decimal(str(price["input_usd_per_million_tokens"]))
@@ -235,18 +232,12 @@ def context_facts(profile, context):
         missing = None
     else:
         cost, missing = None, "estimate_or_price_missing"
-    cap = context.get("max_estimated_cost_usd")
-    if cap is not None:
-        if cost is None:
-            reasons.append("estimated_cost_unknown")
-        elif cost > Decimal(str(cap)):
-            reasons.append("estimated_cost_exceeds_max")
     facts = {"estimated_cost_usd": float(cost) if cost is not None else None,
-             "cost_missing_reason": missing, "required_context_tokens": required,
+             "cost_missing_reason": missing, "required_context_tokens": item.get("required_context_tokens", 0),
              "estimated_input_tokens": item.get("estimated_input_tokens"),
              "estimated_output_tokens": item.get("estimated_output_tokens"),
              "price": price, "signals": item.get("signals", {})}
-    return reasons, facts
+    return cost, facts
 
 
 def validate_task(raw):
@@ -561,29 +552,80 @@ def select(cands, priority, default, fallback_order):
     return None, "none"
 
 
-def hard_filter(p, t):
-    c, r = t["constraints"], []
-    if not p["enabled"]:
-        r.append("disabled")
-    if p["id"] in t["exclude_profiles"]:
-        r.append("excluded_by_task")
-    if TIERS[p["cost_tier"]] > TIERS[c["max_cost_tier"]]:
-        r.append("cost_tier_exceeds_max")
-    if c["min_context_tokens"] > 0 and p["context_tokens"] < c["min_context_tokens"]:
-        r.append("context_unknown" if p["context_tokens"] == 0 else "context_insufficient")
-    r += [f"missing_capability:{x}" for x in sorted(set(c["required_capabilities"]) - set(p["capabilities"]))]
-    if c["local_only"] and not p["inference_local"]:
-        r.append("not_local_inference")
-    return r
+def _fail(code, metric=None, observed=None, limit=None):
+    return [{"code": code, "metric": metric, "observed": observed, "limit": limit}]
+
+
+def _capacity(p, required, metric):
+    if not required or p["context_tokens"] >= required:
+        return []
+    return _fail("context_unknown" if p["context_tokens"] == 0 else "context_insufficient",
+                 metric, p["context_tokens"], required)
+
+
+def _cost_cap(p, t, x):
+    cap = x["context"].get("max_estimated_cost_usd") if x["context"] else None
+    if cap is None:
+        return []
+    if x["cost"] is None:  # 결측은 0이 아니다: 상한이 있으면 제외
+        return _fail("estimated_cost_unknown", "estimated_cost_usd", None, cap)
+    return _fail("estimated_cost_exceeds_max", "estimated_cost_usd", float(x["cost"]), cap) \
+        if x["cost"] > Decimal(str(cap)) else []
+
+
+# 필수 제약. 이름 → (profile, task, x) -> 실패 결과 목록. x = {context, facts, cost, availability}.
+# 실패는 어떤 점수로도 상쇄되지 않는다. 새 지표로 거르려면 여기에 함수 하나를 추가한다.
+# dict 순서 = 탈락 사유 출력 순서(route 1.0 호환).
+CONSTRAINTS = {
+    "enabled": lambda p, t, x: [] if p["enabled"] else _fail("disabled"),
+    "task_exclusion": lambda p, t, x: _fail("excluded_by_task") if p["id"] in t["exclude_profiles"] else [],
+    "cost_tier": lambda p, t, x: _fail("cost_tier_exceeds_max", "cost_tier", p["cost_tier"],
+                                       t["constraints"]["max_cost_tier"])
+    if TIERS[p["cost_tier"]] > TIERS[t["constraints"]["max_cost_tier"]] else [],
+    "min_context": lambda p, t, x: _capacity(p, t["constraints"]["min_context_tokens"], "min_context_tokens"),
+    "capabilities": lambda p, t, x: [r for c in sorted(set(t["constraints"]["required_capabilities"])
+                                                       - set(p["capabilities"]))
+                                     for r in _fail(f"missing_capability:{c}", "capabilities", None, c)],
+    "local_only": lambda p, t, x: _fail("not_local_inference")
+    if t["constraints"]["local_only"] and not p["inference_local"] else [],
+    "required_context": lambda p, t, x: _capacity(p, x["facts"]["required_context_tokens"] if x["facts"] else 0,
+                                                  "required_context_tokens"),
+    "estimated_cost": _cost_cap,
+    "availability": lambda p, t, x: _fail(x["availability"]) if x["availability"] else [],
+}
 
 
 EVIDENCE_FIELDS = ("raw", "normalized", "scope", "cohort_id", "metric_version", "source_id", "source_revision",
                    "fetched_at", "published_at", "evaluated_at")
 
 
-def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
-    """프로필 선택. availability=None이면 dry-run(미확인), live면 {profile_id: 제외 사유 또는 None}.
-    같은 task/config/snapshot/availability/now면 결과가 동일하다."""
+def benchmark_evaluation(p, fp, a, snap, sources, warnings):
+    """benchmark 평가기. coverage는 benchmark 근거 충족도일 뿐, 전체 판단 정보의 충족도가 아니다."""
+    sp = snap["profiles"].get(p["id"]) if snap else None
+    stale_cfg = sp is not None and sp["fingerprint"] != fp
+    if stale_cfg:
+        warnings.append(warn("stale_config", f"{p['id']}: profile config changed since snapshot; evidence ignored"))
+    rows, normalized = [], {}
+    for b, w in a.items():
+        e = sp.get("evidence", {}).get(b) if sp and not stale_cfg else None
+        reason = ("no_snapshot" if snap is None else "profile_not_in_snapshot" if sp is None
+                  else "stale_config" if stale_cfg else "no_observation" if e is None
+                  else "null_value" if e.get("normalized") is None
+                  else "max_stale_exceeded" if sources[e["source_id"]]["excluded"] else None)
+        normalized[b] = None if reason else e["normalized"]
+        row = {"id": b, "weight": round(w, 6), **{k: (e or {}).get(k) for k in EVIDENCE_FIELDS}}
+        row["stale"] = bool(e and sources[e["source_id"]]["stale"])
+        row["missing_reason"] = reason
+        rows.append(row)
+    cov, q = coverage_quality(a, normalized)
+    exact = sum(a[b] for b in a if normalized[b] is not None and sp["evidence"][b]["scope"] == "exact_profile")
+    return {"coverage": cov, "quality": q, "exact_evidence_weight": exact, "evidence": rows}
+
+
+def assess(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
+    """후보 평가 공통 경계: 사실 수집 → 필수 제약 → 평가기. 선택하지 않는다.
+    candidates는 전 프로필(profile ID순). 평가기는 제약을 통과한 후보에만 돈다.
+    availability=None이면 dry-run(미확인), live면 {profile_id: 제외 사유 또는 None}."""
     if context is not None:
         context = validate_context(context, [p["id"] for p in cfg["profile"]])
     warnings = list(snap_warnings)
@@ -599,53 +641,59 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
         elif s["stale"]:
             warnings.append(warn("source_stale", "older than TTL; using last-good", sid))
 
-    cands, excluded = [], []
+    cands = []
     for p in sorted(cfg["profile"], key=lambda p: p["id"]):
-        reasons = hard_filter(p, t)
-        facts = None
-        if context is not None:
-            context_reasons, facts = context_facts(p, context)
-            reasons.extend(context_reasons)
-        if availability is not None and availability.get(p["id"]):
-            reasons.append(availability[p["id"]])
-        if reasons:
-            excluded.append({"profile": p["id"], "reasons": reasons})
-            continue
-        fp = profile_fingerprint(p)
-        sp = snap["profiles"].get(p["id"]) if snap else None
-        stale_cfg = sp is not None and sp["fingerprint"] != fp
-        if stale_cfg:
-            warnings.append(warn("stale_config", f"{p['id']}: profile config changed since snapshot; evidence ignored"))
-        rows, normalized = [], {}
-        for b, w in a.items():
-            e = sp.get("evidence", {}).get(b) if sp and not stale_cfg else None
-            reason = ("no_snapshot" if snap is None else "profile_not_in_snapshot" if sp is None
-                      else "stale_config" if stale_cfg else "no_observation" if e is None
-                      else "null_value" if e.get("normalized") is None
-                      else "max_stale_exceeded" if sources[e["source_id"]]["excluded"] else None)
-            normalized[b] = None if reason else e["normalized"]
-            row = {"id": b, "weight": round(w, 6), **{k: (e or {}).get(k) for k in EVIDENCE_FIELDS}}
-            row["stale"] = bool(e and sources[e["source_id"]]["stale"])
-            row["missing_reason"] = reason
-            rows.append(row)
-        cov, q = coverage_quality(a, normalized)
-        exact = sum(a[b] for b in a if normalized[b] is not None
-                    and sp["evidence"][b]["scope"] == "exact_profile")
-        cands.append({"profile": p["id"], "profile_fingerprint": fp, "cost_tier": p["cost_tier"],
-                      "coverage": cov, "quality": q, "exact_evidence_weight": exact, "evidence": rows,
-                      "context_facts": facts})
+        cost, facts = context_facts(p, context) if context is not None else (None, None)
+        x = {"context": context, "facts": facts, "cost": cost,
+             "availability": availability.get(p["id"]) if availability is not None else None}
+        failures = [dict(f, constraint=name) for name, check in CONSTRAINTS.items() for f in check(p, t, x)]
+        c = {"profile": p["id"], "profile_fingerprint": profile_fingerprint(p), "cost_tier": p["cost_tier"],
+             "eligible": not failures, "constraint_failures": failures, "context_facts": facts, "evaluations": {}}
+        if c["eligible"]:
+            # ponytail: 평가기 1개라 직접 호출. 두 번째가 생기면 evaluations에 키 하나 추가.
+            c["evaluations"]["benchmark"] = benchmark_evaluation(p, c["profile_fingerprint"], a, snap, sources, warnings)
+        cands.append(c)
+    return {"task": t, "classification": cls, "candidates": cands, "warnings": warnings, "sources": sources,
+            "context": context, "availability_verified": availability is not None,
+            "snapshot_id": snap["snapshot_id"] if snap else None, "config_hash": config_hash(cfg, mapping),
+            "task_hash": semantic_task_hash(t)}
 
+
+def _legacy_cands(asmt):
+    """select()가 읽는 1.0 후보 형태. benchmark 결과를 그대로 펼친다."""
+    return [{"profile": c["profile"], "profile_fingerprint": c["profile_fingerprint"], "cost_tier": c["cost_tier"],
+             "context_facts": c["context_facts"], **c["evaluations"]["benchmark"]}
+            for c in asmt["candidates"] if c["eligible"]]
+
+
+def _result_v1(asmt, cands, status, selected, mode, warnings):
+    """route/evaluate 1.0 출력. score는 legacy 정책(select) 점수이며 종합 순위가 아니다."""
+    context = asmt["context"]
+    cands = sorted(cands, key=lambda c: (c["score"] is None, -(c["score"] or 0), c["profile"]))
+    out_cands = [{"profile": c["profile"], "score": _r(c["score"]), "quality": _r(c["quality"]),
+                  "coverage": _r(c["coverage"]), "coverage_band": coverage_band(c["coverage"]),
+                  "exact_evidence_weight": _r(c["exact_evidence_weight"]), "cost_proxy": c["cost_proxy"],
+                  "evidence": c["evidence"], "availability_verified": asmt["availability_verified"],
+                  **({"context_facts": c["context_facts"]} if context is not None else {})} for c in cands]
+    t = asmt["task"]
+    return {"schema_version": SCHEMA_VERSION, "status": status,
+            "task_id": t["task_id"], "round": t["round"], "run_id": None, "selected": selected,
+            "selection_mode": mode, "classification": asmt["classification"], "candidates": out_cands,
+            "excluded": [{"profile": c["profile"], "reasons": [f["code"] for f in c["constraint_failures"]]}
+                         for c in asmt["candidates"] if not c["eligible"]],
+            "snapshot_id": asmt["snapshot_id"], "policy_version": POLICY_VERSION,
+            "config_hash": asmt["config_hash"], "task_hash": asmt["task_hash"],
+            "warnings": warnings, "sources": asmt["sources"],
+            **({"decision_context": context, "context_hash": canonical_hash(context), "complexity": context.get("complexity"),
+                "max_estimated_cost_usd": context.get("max_estimated_cost_usd")} if context is not None else {})}
+
+
+def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
+    """legacy 자동 선택 = assess + select. 같은 task/config/snapshot/availability/now면 결과가 동일하다."""
+    asmt = assess(t, cfg, mapping, snap, snap_warnings, now, availability, context)
+    cands = _legacy_cands(asmt)
     pick, mode = select(cands, t["priority"], cfg["default_profile"], cfg["fallback_order"])
-    cands.sort(key=lambda c: (c["score"] is None, -(c["score"] or 0), c["profile"]))
-    out_cands = []
-    for c in cands:
-        out_cands.append({"profile": c["profile"], "score": _r(c["score"]), "quality": _r(c["quality"]),
-                          "coverage": _r(c["coverage"]), "coverage_band": coverage_band(c["coverage"]),
-                          "exact_evidence_weight": _r(c["exact_evidence_weight"]), "cost_proxy": c["cost_proxy"],
-                          "evidence": c["evidence"], "availability_verified": availability is not None,
-                          **({"context_facts": c["context_facts"]} if context is not None else {})})
-
-    selected = None
+    warnings, selected = list(asmt["warnings"]), None
     if pick:
         chosen = next(c for c in cands if c["profile"] == pick)
         selected = {"profile": pick, "profile_fingerprint": chosen["profile_fingerprint"],
@@ -661,22 +709,17 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
             warnings.append(warn("partial_evidence", f"{pick}: coverage {chosen['coverage']:.2f}"))
         if chosen["coverage"] > 0 and chosen["exact_evidence_weight"] <= EPS:
             warnings.append(warn("proxy_only", f"{pick}: model-proxy evidence only, no exact profile evaluation"))
-
-    return {"schema_version": SCHEMA_VERSION, "status": "selected" if pick else "no_eligible_profile",
-            "task_id": t["task_id"], "round": t["round"], "run_id": None, "selected": selected,
-            "selection_mode": mode, "classification": cls, "candidates": out_cands, "excluded": excluded,
-            "snapshot_id": snap["snapshot_id"] if snap else None, "policy_version": POLICY_VERSION,
-            "config_hash": config_hash(cfg, mapping),
-            "task_hash": semantic_task_hash(t), "warnings": warnings, "sources": sources,
-            **({"decision_context": context, "context_hash": canonical_hash(context), "complexity": context.get("complexity"),
-                "max_estimated_cost_usd": context.get("max_estimated_cost_usd")} if context is not None else {})}
+    return _result_v1(asmt, cands, "selected" if pick else "no_eligible_profile", selected, mode, warnings)
 
 
 def evaluate(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
-    res = route(t, cfg, mapping, snap, snap_warnings, now, availability, context)
-    selection_warnings = {"availability_unverified", "auth_unverified", "insufficient_evidence", "partial_evidence", "proxy_only"}
-    return {**res, "status": "ok", "selected": None, "selection_mode": "orchestrator_choice",
-            "warnings": [w for w in res["warnings"] if w["code"] not in selection_warnings]}
+    """선택 없이 후보 반환. 최종 선택은 Orchestrator."""
+    asmt = assess(t, cfg, mapping, snap, snap_warnings, now, availability, context)
+    cands = _legacy_cands(asmt)
+    # ponytail: 1.0 출력의 score/cost_proxy를 채우려고 legacy 점수식만 빌린다(선택 결과는 버림).
+    # evaluate 2.0에서 evaluations.benchmark.legacy_score로 옮기면 이 호출은 사라진다.
+    select(cands, t["priority"], None, [])
+    return _result_v1(asmt, cands, "ok", None, "orchestrator_choice", asmt["warnings"])
 
 
 def pin_selection(res, cfg, profile_id, mode="orchestrator_pinned"):
