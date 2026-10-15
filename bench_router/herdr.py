@@ -365,6 +365,34 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
 def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
              profile_id=None, extra_args=(), kinds=False, context=None, selection_mode="parallel_pinned",
              selection=None, check_digest=True):
+    from . import coordination as co
+    key = co.key_for(t)
+    try:
+        with co.operation(key):
+            existing = [x for x in receipts(t["cwd"]) if x["task_id"] == t["task_id"] and x["round"] == t["round"]]
+            if existing and existing[0]["herdr_session"] != session:
+                raise co.Conflict("dispatch session differs from the recorded native run; use collect")
+            if existing and list(extra_args) != existing[0].get("extra_args", []):
+                raise co.Conflict("execution arguments differ from the recorded native run")
+            if existing:
+                co.native_observed(existing[0])
+            rec, fresh = co.reserve(t, "herdr", {"session": session})
+            if not fresh and not existing:
+                raise co.Conflict("recorded native submission has no receipt; inspect effects before resolving, never resend")
+            result = _dispatch(t, cfg, mapping, snap, snap_warnings, session, runner, which,
+                               profile_id, extra_args, kinds, context, selection_mode, selection, check_digest)
+            if result.get("run_id"):
+                co.native_observed(load_receipt(t["cwd"], result["run_id"]))
+            elif fresh:
+                co.discard(key)  # No native receipt means dispatch never reached execution.
+            return {**result, "coordination_key": key}
+    except co.Conflict as e:
+        return co.conflict(t, e)
+
+
+def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
+             profile_id=None, extra_args=(), kinds=False, context=None, selection_mode="parallel_pinned",
+             selection=None, check_digest=True):
     """live route. 선택 → receipt → herdr 실행. 같은 (task_id, round)는 재전송 없이 collect.
     profile_id: 제약·가용성을 통과한 후보 중 이 프로필로 고정(parallel fanout).
     extra_args: agent argv 뒤에 붙임(지문에는 포함하지 않음). kinds: 미리 읽은 herdr kind 집합.
@@ -434,14 +462,20 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
 
 
 def collect_run(cwd, run_id, wait_ms, session=None, runner=subprocess.run):
+    from . import coordination as co
     cwd = os.path.realpath(cwd)
     try:
         with dispatch_lock(cwd):
-            rc = collect(load_receipt(cwd, run_id), wait_ms, session or None, runner)
-    except Busy as e:
+            rc = load_receipt(cwd, run_id)
+            if session is not None and session != rc["herdr_session"]:
+                raise r.InputError("collect session differs from the recorded run")
+            co.native_observed(rc)
+            rc = collect(rc, wait_ms, rc["herdr_session"], runner)
+            co.native_observed(rc)
+    except (Busy, co.Conflict) as e:
         return {"schema_version": r.SCHEMA_VERSION, "status": "conflict", "run_id": run_id,
                 "warnings": [r.warn("dispatch_lock", str(e))]}
-    return output(None, rc)
+    return {**output(None, rc), "coordination_key": co.key_for(rc)}
 
 
 def feedback(cwd, run_id, outcome, evaluator=None, note=None):
