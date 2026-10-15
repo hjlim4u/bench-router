@@ -122,7 +122,7 @@ class P2(unittest.TestCase):
 
     def test_v35_pinned_profile_replay_and_retry_guidance(self):
         self.cfg = config([*self.cfg["profile"], profile("b", kind="claude", executable="claude")], default="a")
-        fake = FakeHerdr(on_prompt=write_result())
+        fake = FakeProjects(on_prompt=write_result())
         context = {"schema_version": "1.0", "profiles": {"a": {
             "estimated_input_tokens": 1000, "estimated_output_tokens": 1000,
             "price": {"input_usd_per_million_tokens": 1, "output_usd_per_million_tokens": 2,
@@ -145,7 +145,7 @@ class P2(unittest.TestCase):
         self.assertEqual(conflict["warnings"][-1]["code"], "profile_round_conflict")
 
     def test_v39_selection_record_digest_and_round_reuse(self):
-        fake = FakeHerdr(on_prompt=write_result())
+        fake = FakeProjects(on_prompt=write_result())
         context = {"schema_version": "2.0", "profiles": {"a": {"metrics": {
             "cost.estimated_usd": {"value": 0.01, "unit": "usd", "source": "quote@1"}}}}}
         digest = r.evaluate(self.task(), self.cfg, MAPPING, None, [], hd._now(), context=context)["assessment_digest"]
@@ -175,7 +175,7 @@ class P2(unittest.TestCase):
 
     def test_v19_prompt_is_argv_not_shell(self):
         evil = "x $(touch /tmp/pwned) `id`; rm -rf ~\n\"quoted\" 'single' \\ & | > <"
-        fake = FakeHerdr(on_prompt=write_result())
+        fake = FakeProjects(on_prompt=write_result())
         out = self.run_(fake, self.task(prompt=evil))
         self.assertEqual(out["status"], "completed")
         self.assertTrue(fake.prompts[0].startswith(evil))
@@ -183,44 +183,37 @@ class P2(unittest.TestCase):
         self.assertTrue(all(k["shell"] is False for k in fake.kwargs))
 
     def test_v20_uses_returned_ids(self):
-        fake = FakeHerdr(on_prompt=write_result(), pane="w42:p9")
+        fake = FakeProjects(on_prompt=write_result(), pane="w42:p9")
         out = self.run_(fake)
-        self.assertEqual((out["selected"]["pane_id"], out["workspace_id"]), ("w42:p9", "w7"))
-        self.assertTrue(re.fullmatch(r"br-[0-9a-f]{12}", out["selected"]["agent_name"]))
+        self.assertEqual((out["workspace_id"], out["thread_id"]), ("w7", "t-0001"))
+        self.assertEqual(self.receipt(out)["pane_id"], "w42:p9")
+        self.assertNotIn(["agent", "start"], fake.calls)
 
     def test_v21_start_failures_send_nothing(self):
-        for code, status in (("timeout", "execution_failed"), ("agent_not_ready", "blocked")):
-            with self.subTest(code=code):
-                fake = FakeHerdr(start_error=code)
-                out = self.run_(fake, self.task(task_id=f"t-{code.replace('_', '-')}"))
-                self.assertEqual((out["status"], out["delivery_state"], fake.prompts), (status, "not_attempted", []))
-                self.assertIn("command not found", out["diagnostic_tail"])
-                self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "execution_failed")
-                rc = hd.load_receipt(self.cwd, out["run_id"])  # 원래 실패 원인 보존
-                obs = rc["pre_prompt_failure"]["observation"] if status == "blocked" else rc["last_observation"]
-                self.assertEqual(obs["error"]["code"], code)
-        out = self.run_(FakeHerdr(), self.task(task_id="t-missing"), w=lambda _: None)
-        self.assertEqual(out["status"], "no_eligible_profile")
-        self.assertEqual(out["excluded"], [{"profile": "a", "reasons": ["executable_not_found"]}])
+        fake = FakeProjects(start_error="profile unavailable")
+        out = self.run_(fake)
+        self.assertEqual((out["status"], out["delivery_state"], fake.prompts), ("execution_failed", "not_attempted", []))
+        missing = self.run_(FakeProjects(), self.task(task_id="missing"), w=lambda _: None)
+        self.assertEqual(missing["excluded"], [{"profile": "a", "reasons": ["executable_not_found"]}])
 
-    def test_kinds_from_herdr_help(self):
-        self.assertEqual(hd.herdr_kinds(runner=FakeHerdr()), {"pi", "claude", "codex"})
-        no_help = lambda *a, **k: subprocess.CompletedProcess([], 2, "", "unknown flag")
-        self.assertIsNone(hd.herdr_kinds(runner=no_help))
-        p = {"kind": "aider", "executable": "aider"}
-        self.assertEqual(hd.probe(p, which, {"claude"}), "herdr_kind_unsupported")
-        self.assertIsNone(hd.probe(p, which, None))  # help를 못 읽으면 kind 검사 생략
+    def test_projects_profile_identity_must_match(self):
+        fake = FakeProjects(on_prompt=write_result())
+        fake.profiles["a"] = profile("a")
+        out = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], runner=fake, which=which)
+        self.assertEqual((out["status"], fake.prompts), ("execution_failed", []))
 
     def test_v22_not_idle_before_prompt(self):
-        for st in ("working", "blocked", "unknown"):
-            fake = FakeHerdr(pre_prompt_status=st)
-            out = self.run_(fake, self.task(task_id=f"t-{st}"))
-            self.assertEqual((fake.prompts, out["delivery_state"]), ([], "not_attempted"))
-            self.assertIn(out["status"], ("blocked", "execution_failed"))
-            hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)  # 다음 dispatch를 위해 정리
+        fake = FakeProjects(pre_prompt_status="starting")
+        fake.updates = {"status": "starting", "note": "no agent"}
+        out = self.run_(fake)
+        self.assertEqual((out["status"], out["delivery_state"]), ("timed_out", "submission_attempted"))
+        self.assertIsNone(out["result_path"])
+        fake.pre_prompt_status, fake.updates = "idle", {}
+        write_result()(fake, fake.prompts[0])
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "completed")
 
     def test_v23_completed_with_contract(self):
-        out = self.run_(FakeHerdr(on_prompt=write_result(status="partial")))
+        out = self.run_(FakeProjects(on_prompt=write_result(status="partial")))
         self.assertEqual((out["status"], out["task_outcome"], out["delivery_state"]),
                          ("completed", "partial", "activity_observed"))
         self.assertTrue(os.path.isabs(out["result_path"]) and Path(out["manifest_path"]).is_file())
@@ -231,54 +224,48 @@ class P2(unittest.TestCase):
                  "nonce": write_result(nonce="f" * 32), "hash": write_result(sha="0" * 64)}
         for i, (name, act) in enumerate(cases.items()):
             with self.subTest(name):
-                out = self.run_(FakeHerdr(on_prompt=act), self.task(task_id=f"t{i}"))
+                out = self.run_(FakeProjects(on_prompt=act), self.task(task_id=f"t{i}"))
                 self.assertEqual(out["status"], "result_invalid")
                 self.assertIsNone(out["result_path"])
 
     def test_v25_path_and_size_attacks(self):
+        def huge(fake, prompt):
+            write_result()(fake, prompt)
+            rd = Path(re.search(r"결과 디렉터리\(절대 경로\): (.+)", prompt).group(1))
+            (rd / "result.json").write_bytes(b" " * (hd.RESULT_JSON_MAX + 1))
+        for i, act in enumerate((huge, write_result(body="  \n"))):
+            self.assertEqual(self.run_(FakeProjects(on_prompt=act), self.task(task_id=f"p{i}"))["status"], "result_invalid")
         outside = Path(self.cwd) / "secret.md"
         outside.write_text("secret", "utf-8")
-
         def symlinked(fake, prompt):
             write_result()(fake, prompt)
             rd = Path(re.search(r"결과 디렉터리\(절대 경로\): (.+)", prompt).group(1))
             (rd / "result.md").unlink()
             (rd / "result.md").symlink_to(outside)
-
-        def huge(fake, prompt):
-            write_result()(fake, prompt)
-            rd = Path(re.search(r"결과 디렉터리\(절대 경로\): (.+)", prompt).group(1))
-            (rd / "result.json").write_bytes(b" " * (hd.RESULT_JSON_MAX + 1))
-
-        for i, act in enumerate((symlinked, huge, write_result(body="  \n"))):
-            out = self.run_(FakeHerdr(on_prompt=act), self.task(task_id=f"p{i}"))
-            self.assertEqual(out["status"], "result_invalid", i)
+        if os.name == "nt":
+            original = Path.is_symlink
+            with patch.object(Path, "is_symlink", lambda p: p.name == "result.md" or original(p)):
+                out = self.run_(FakeProjects(on_prompt=write_result()), self.task(task_id="link"))
+        else:
+            out = self.run_(FakeProjects(on_prompt=symlinked), self.task(task_id="link"))
+        self.assertEqual(out["status"], "result_invalid")
 
     def test_v26_timeout_no_resend_then_collect(self):
-        fake = FakeHerdr(prompt_error="timeout", after_status="working")
+        fake = FakeProjects(after_status="working")
         out = self.run_(fake)
-        self.assertEqual((out["status"], out["delivery_state"]), ("timed_out", "uncertain"))
-        again = self.run_(fake)  # 같은 task/round → collect, 재전송 없음
+        self.assertEqual(out["status"], "timed_out")
+        self.assertTrue(all(0 < kw["timeout"] <= 5 for kw in fake.kwargs))
+        again = self.run_(fake)
         self.assertEqual((len(fake.prompts), again["reused_receipt"], again["run_id"]), (1, True, out["run_id"]))
-        write_result()(fake, fake.prompts[0])  # Agent가 뒤늦게 결과 작성
+        write_result()(fake, fake.prompts[0])
         fake.status = "idle"
-        done = hd.collect_run(self.cwd, out["run_id"], 1000, runner=fake)
-        self.assertEqual((done["status"], len(fake.prompts)), ("completed", 1))
-        for code in ("agent_prompt_stalled", "weird_error"):
-            f = FakeHerdr(prompt_error=code)
-            o = self.run_(f, self.task(task_id=f"s-{code.replace('_', '-')}"))
-            self.assertEqual((o["status"], o["delivery_state"]), ("delivery_uncertain", "uncertain"))
-            f.status = "idle"
-            self.assertEqual(hd.collect_run(self.cwd, o["run_id"], 0, runner=f)["status"], "delivery_uncertain")
-            Path(o["receipt_path"]).unlink()  # 테스트 정리: 미해결 receipt 제거
-            from bench_router import coordination
-            coordination.resolve(o["coordination_key"], "fake worker stopped; test effects inspected")
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "completed")
 
     def test_v27_crash_after_submission_attempted(self):
         class Crash(Exception):
             pass
 
-        fake = FakeHerdr()
+        fake = FakeProjects()
 
         def crash(f, prompt):
             raise Crash()
@@ -292,7 +279,7 @@ class P2(unittest.TestCase):
         self.assertEqual((len(fake.prompts), out["status"], out["reused_receipt"]), (1, "delivery_uncertain", True))
 
     def test_v28_conflicts_and_locks(self):
-        fake = FakeHerdr(on_prompt=write_result())
+        fake = FakeProjects(on_prompt=write_result())
         first = self.run_(fake)
         self.assertEqual(self.run_(fake)["status"], "completed")  # 같은 hash: 기록 재사용
         self.assertEqual(len(fake.prompts), 1)
@@ -305,7 +292,7 @@ class P2(unittest.TestCase):
                                     "except h.Busy: print('busy')",
                                     self.cwd], capture_output=True, text=True, check=True)
             self.assertEqual(child.stdout.strip(), "busy")
-        stuck = FakeHerdr(prompt_error="timeout", after_status="working")
+        stuck = FakeProjects(after_status="working")
         self.run_(stuck, self.task(task_id="t3"))
         blocked = self.run_(fake, self.task(task_id="t4"))
         self.assertEqual(blocked["status"], "conflict")
@@ -313,25 +300,33 @@ class P2(unittest.TestCase):
         self.assertEqual(first["status"], "completed")
 
     def test_v29_agent_gone_or_partial(self):
-        fake = FakeHerdr(prompt_error="timeout", after_status="working")
+        fake = FakeProjects(after_status="working")
         out = self.run_(fake)
         write_result()(fake, fake.prompts[0])
         fake.gone = True  # Agent 종료: 파일만으로 성공 선언 금지
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "execution_failed")
         fb = hd.feedback(self.cwd, out["run_id"], "fail", "orchestrator", "agent exited")
         self.assertEqual((fb["status"], fb["receipt_status"]), ("recorded", "execution_failed"))
-        out = self.run_(FakeHerdr(on_prompt=write_result(status="fail")), self.task(task_id="t9"))
+        from bench_router import coordination
+        coordination.resolve(out["coordination_key"], "worker gone; partial effects inspected")
+        out = self.run_(FakeProjects(on_prompt=write_result(status="fail")), self.task(task_id="t9"))
         self.assertEqual((out["status"], out["task_outcome"]), ("completed", "fail"))  # 수신 성공 ≠ 작업 성공
 
     def test_blocked_after_prompt_returns_screen(self):
-        out = self.run_(FakeHerdr(after_status="blocked"))  # live smoke: mv 권한 승인 대기
+        out = self.run_(FakeProjects(after_status="blocked"))  # live smoke: mv 권한 승인 대기
         self.assertEqual((out["status"], out["delivery_state"]), ("blocked", "activity_observed"))
         self.assertIn("command not found", out["diagnostic_tail"])
         self.assertNotIn("원자적", hd.contract_text(hd.load_receipt(self.cwd, out["run_id"])))
 
+    def test_v60_version_drift_blocks_submission(self):
+        fake = FakeProjects(on_prompt=write_result())
+        fake.version = "herdr-projects 0.2.35+new"
+        out = self.run_(fake)
+        self.assertEqual((out["status"], out["delivery_state"], fake.prompts), ("execution_failed", "not_attempted", []))
+
     def test_prompt_size_limit(self):
         with self.assertRaises(r.InputError):
-            self.run_(FakeHerdr(), self.task(prompt="x" * hd.MAX_PROMPT_ARG_BYTES))
+            self.run_(FakeProjects(), self.task(prompt="x" * hd.MAX_PROMPT_ARG_BYTES))
 
 
 if __name__ == "__main__":

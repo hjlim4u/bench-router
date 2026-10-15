@@ -101,7 +101,7 @@ class P3(unittest.TestCase):
                            "policy": {"id": "orch-diverse", "version": "1"}, "reason": f"{pid} for diversity"}
         raw = {"schema_version": "2.0", "group_id": "g2", "cwd": self.cwd, "isolation": "deliberate",
                "tasks": [{"task": task, "context": context, "selections": [sel("b"), sel("a")]}]}
-        fake = MultiHerdr(agent_act())
+        fake = MultiProjects(agent_act())
         out = self.run_(pl.validate_group(raw), fake)
         self.assertEqual((out["status"], out["schema_version"], out["fanout"]), ("completed", "2.0", 2), out)
         self.assertEqual([m["profile"] for m in out["members"]], ["b", "a"])  # router 순위가 아닌 Orchestrator 선택
@@ -112,7 +112,7 @@ class P3(unittest.TestCase):
                           ["cost.estimated_usd"]["value"]), ("b for diversity", 0.01))
         # 평가 후 설정 변경 → 그룹 전체 실행 안 함
         self.cfg = config([*self.cfg["profile"], profile("c")], default="a")
-        stale_fake = MultiHerdr(agent_act())
+        stale_fake = MultiProjects(agent_act())
         stale = self.run_(pl.validate_group({**raw, "group_id": "g3"}), stale_fake)
         self.assertEqual((stale["status"], stale_fake.prompts), ("stale_assessment", []))
         for bad in ({**raw, "fanout": 2},
@@ -122,7 +122,7 @@ class P3(unittest.TestCase):
                 pl.validate_group(bad)
 
     def test_v30_isolated_worktrees(self):
-        fake = MultiHerdr(agent_act())
+        fake = MultiProjects(agent_act())
         out = self.run_(self.group(), fake)
         self.assertEqual(out["status"], "completed", out)
         wts = sorted(m["worktree"] for m in out["members"])
@@ -135,7 +135,7 @@ class P3(unittest.TestCase):
 
     def test_v31_fanout_distinct_profiles(self):
         one = [{"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "p"}]
-        out = self.run_(self.group(fanout=2, tasks=one), MultiHerdr(agent_act()))
+        out = self.run_(self.group(fanout=2, tasks=one), MultiProjects(agent_act()))
         self.assertEqual(out["status"], "completed", out)
         self.assertEqual(sorted(m["profile"] for m in out["members"]), ["a", "b"])
         g = self.group(fanout=3)
@@ -144,15 +144,16 @@ class P3(unittest.TestCase):
         self.assertIn("fanout_reduced", [w["code"] for w in out["warnings"]])
 
     def test_v32_shared_scratchpad(self):
-        fake = MultiHerdr(agent_act())
+        fake = MultiProjects(agent_act())
         out = self.run_(self.group(isolation="shared"), fake)
         self.assertEqual(out["status"], "completed", out)
         shared = out["shared_dir"]
-        self.assertTrue(all(s[s.index("--add-dir") + 1] == shared for s in fake.starts))
+        self.assertTrue(all("--add-dir" not in s for s in fake.starts))
+        self.assertTrue(all(Path(shared).is_relative_to(Path(p["args"][-1])) for p in self.cfg["profile"]))
         self.assertTrue(any(f"{shared}/t1-1.md" in p for p in fake.prompts))
 
     def test_v33_deliberate_round_and_vote(self):
-        fake = MultiHerdr(agent_act(vote="t2-1"))
+        fake = MultiProjects(agent_act(vote="t2-1"))
         out = self.run_(self.group(isolation="deliberate"), fake)
         self.assertEqual(out["status"], "completed", out)
         self.assertEqual([len(m["rounds"]) for m in out["members"]], [2, 2])
@@ -162,12 +163,20 @@ class P3(unittest.TestCase):
 
     def test_v34_rerun_does_not_resend(self):
         g = self.group(isolation="shared")
-        fake = MultiHerdr(agent_act())
+        fake = MultiProjects(agent_act())
         self.run_(g, fake)
         sent = len(fake.prompts)
         out = self.run_(g, fake)
         self.assertEqual(out["status"], "completed", out)
         self.assertEqual(len(fake.prompts), sent)
+
+    def test_v61_shared_access_must_be_preconfigured(self):
+        for p in self.cfg["profile"]:
+            p["args"] = []
+        fake = MultiProjects(agent_act())
+        with self.assertRaises(r.InputError):
+            self.run_(self.group(isolation="shared"), fake)
+        self.assertEqual(fake.starts, [])
 
     def test_group_validation(self):
         for bad in ({"isolation": "open"}, {"fanout": 0},
