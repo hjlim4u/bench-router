@@ -69,6 +69,49 @@ def _feedback(args):
     return herdr.feedback(args.cwd, args.run_id, args.outcome, args.evaluator, args.note)
 
 
+def _a2a(args):
+    from . import a2a, coordination as co
+    try:
+        if args.cmd == "a2a":
+            answer = None
+            if args.answer_file:
+                path = Path(args.answer_file)
+                if path.stat().st_size > r.TASK_MAX_BYTES:
+                    raise r.InputError("answer file exceeds task input size limit")
+                try:
+                    answer = path.read_text("utf-8")
+                except UnicodeError as e:
+                    raise r.InputError("answer file must be UTF-8") from e
+            return a2a.control(args.key, args.action, answer)
+        task = r.validate_task(r.load_json_strict(args.task, r.TASK_MAX_BYTES))
+        cfg, mapping = _config(args)
+        snap, warnings = r.load_snapshot(args.cache_dir)
+        context = r.validate_context(r.load_json_strict(args.context, r.TASK_MAX_BYTES),
+                                     [p["id"] for p in cfg["profile"]]) if args.context else None
+        return a2a.delegate(task, cfg, mapping, snap, warnings, args.profile,
+                            args.config_dir / "a2a-bindings.json", context)
+    except co.Conflict as e:
+        return {"schema_version": "1.0", "status": "conflict", "error": {"code": "coordination", "message": str(e)}}
+
+
+def _coordination(args):
+    from . import coordination as co
+    try:
+        if args.action == "status":
+            return co.inspect()
+        if not args.key or not args.note:
+            raise r.InputError("coordination mutation requires --key and --note")
+        if args.action == "release":
+            if not args.confirmed_stopped:
+                raise r.InputError("release requires --confirmed-stopped after inspecting worker and effects")
+            rec = co.resolve(args.key, args.note)
+        else:
+            rec = co.feedback(args.key, args.input_hash, args.decision, args.note)
+        return {"schema_version": "1.0", "status": "recorded", "record": rec}
+    except co.Conflict as e:
+        return {"schema_version": "1.0", "status": "conflict", "error": {"code": "coordination", "message": str(e)}}
+
+
 def _refresh(args):
     from . import data  # refresh 경로에서만 import (route cold start에 영향 없음)
     cfg, mapping = _config(args)
@@ -187,11 +230,26 @@ def main(argv=None):
     bp.add_argument("--outcome", required=True, choices=["success", "partial", "fail"])
     bp.add_argument("--evaluator")
     bp.add_argument("--note")
+    ar = sub.add_parser("review", help="delegate an explicit-content review through coordinated stock A2A")
+    ar.add_argument("--task", required=True)
+    ar.add_argument("--profile", required=True)
+    ar.add_argument("--context")
+    ac = sub.add_parser("a2a", help="observe or control an existing coordinated A2A task")
+    ac.add_argument("action", choices=["get", "continue", "cancel", "close"])
+    ac.add_argument("--key", required=True, help="coordination key returned by review")
+    ac.add_argument("--answer-file", help="UTF-8 answer for input-required continuation")
+    cc = sub.add_parser("coordination", help="shared admission records and explicit post-inspection resolution")
+    cc.add_argument("action", choices=["status", "release", "feedback"])
+    cc.add_argument("--key")
+    cc.add_argument("--confirmed-stopped", action="store_true")
+    cc.add_argument("--note")
+    cc.add_argument("--input-hash")
+    cc.add_argument("--decision", choices=["accepted", "withheld", "rejected"])
     args = ap.parse_args(argv)
 
     try:
         res = {"refresh": _refresh, "status": _status, "collect": _collect, "feedback": _feedback,
-                "parallel": _parallel}.get(
+                "parallel": _parallel, "review": _a2a, "a2a": _a2a, "coordination": _coordination}.get(
             args.cmd, _load)(args)
     except r.InputError as e:
         print(json.dumps({"schema_version": r.SCHEMA_VERSION, "status": "error",
