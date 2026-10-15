@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from bench_router import herdr as hd
@@ -95,6 +96,11 @@ def write_result(status="success", nonce=None, body="# 결과\n작업 완료\n",
 class P2(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+        state = tempfile.TemporaryDirectory()
+        self.addCleanup(state.cleanup)
+        env = patch.dict(os.environ, {"BENCH_ROUTER_COORDINATION_DIR": state.name})
+        env.start()
+        self.addCleanup(env.stop)
         self.cwd = os.path.realpath(self.tmp.name)
         self.cfg = config([profile("a", kind="claude", executable="claude", args=["--model", "m", "--effort", "high"])],
                           default="a")
@@ -265,6 +271,8 @@ class P2(unittest.TestCase):
             f.status = "idle"
             self.assertEqual(hd.collect_run(self.cwd, o["run_id"], 0, runner=f)["status"], "delivery_uncertain")
             Path(o["receipt_path"]).unlink()  # 테스트 정리: 미해결 receipt 제거
+            from bench_router import coordination
+            coordination.resolve(o["coordination_key"], "fake worker stopped; test effects inspected")
 
     def test_v27_crash_after_submission_attempted(self):
         class Crash(Exception):
@@ -301,7 +309,7 @@ class P2(unittest.TestCase):
         self.run_(stuck, self.task(task_id="t3"))
         blocked = self.run_(fake, self.task(task_id="t4"))
         self.assertEqual(blocked["status"], "conflict")
-        self.assertEqual(blocked["warnings"][-1]["code"], "unresolved_run")
+        self.assertEqual(blocked["warnings"][-1]["code"], "coordination")
         self.assertEqual(first["status"], "completed")
 
     def test_v29_agent_gone_or_partial(self):

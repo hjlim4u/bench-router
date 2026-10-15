@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from bench_router import parallel as pl
@@ -60,6 +61,11 @@ def agent_act(vote="t1-1"):
 class P3(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+        state = tempfile.TemporaryDirectory()
+        self.addCleanup(state.cleanup)
+        env = patch.dict(os.environ, {"BENCH_ROUTER_COORDINATION_DIR": state.name})
+        env.start()
+        self.addCleanup(env.stop)
         self.cwd = os.path.realpath(self.tmp.name)
         git = ["git", "-C", self.cwd, "-c", "user.name=t", "-c", "user.email=t@t"]
         subprocess.run(git[:3] + ["init", "-q"], check=True)
