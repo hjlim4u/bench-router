@@ -39,7 +39,7 @@
 | D04 | SQLite 이력 + 작은 JSON snapshot | 표준 라이브러리, 읽기 경로 단순화, 근거 재현 | v1 기본값 |
 | D05 | L0 Orchestrator 카테고리 → L1 규칙 → general | 기존 분석을 재사용하고 추가 모델 호출 최소화 | MVP 기본값 |
 | D06 | 임베딩/Jev는 로그가 보여주는 분류 문제 이후 도입 | 초기 의존성·콜드 스타트·원격 호출 감소 | 보류 |
-| D07 | herdr subprocess argv 호출 | 기존 실행 계층 재사용, 소켓 클라이언트 불필요 | 확정 원칙 |
+| D07 | herdr-projects 공개 CLI를 subprocess argv로 호출 (2026-10-15) | 프로젝트 실행 계층 재사용. 결과 계약·admission은 Router 유지 | 확정 원칙 |
 | D08 | idle/done + 실행별 결과 계약으로 완료 확인 | 터미널 상태는 작업 성공이나 turn ID가 아님 | 확정 원칙 |
 | D09 | MVP는 단일 머신, 새 Agent 사용, 동기 route | 원격 파일 회수·세션 오염·재사용 경쟁을 먼저 피함 | v1 기본값 |
 | D10 | 선택·수집·실행을 별도 함수로 유지 | dry-run·fixture 검증 가능; 플러그인 프레임워크는 만들지 않음 | v1 기본값 |

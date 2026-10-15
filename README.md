@@ -9,14 +9,14 @@ Orchestrator가 위임하기로 결정한 작업을 받아, **외부 벤치마�
 
 설계 근거와 원래 명세는 [00_START_HERE.md](00_START_HERE.md)부터 [06_VALIDATION_AND_OPEN_ITEMS.md](06_VALIDATION_AND_OPEN_ITEMS.md)까지의 handoff 문서에 있습니다. 구현 중 명세와 달라진 점은 [명세와 다른 점](#명세와-다른-점)에, 진행 기록은 [docs/implementation-status.md](docs/implementation-status.md)에 정리했습니다.
 
-기존 실행 경로와 선택적으로 A2A 검토·질의응답을 조합하려면 [협업 규약](docs/hybrid-collaboration.md)을 사용하세요. `review`/`a2a` Adapter와 기존 `route`/`parallel`이 공통 조정 기록으로 중복·작업 소유권·합산 실행 수를 검사합니다. [A2A 설정 예제](examples/a2a-bindings.example.json)는 사용자 설정 디렉터리에 배치하며, `coordination status`로 진행 작업을 확인합니다. A2A는 선택 사항이며 실제 품질·성능 이점은 아직 검증되지 않았습니다.
+실행은 herdr-projects 공개 CLI로 통합했습니다. [Projects 설정·이전 안내](docs/projects.md)에 따라 프로젝트와 프로필을 준비하세요. `route`/`parallel`의 결과 계약·중복 실행 방지·합산 4개 제한을 유지합니다.
 
 ---
 
 ## 구성
 
 ```text
-Orchestrator ── task.json ──▶ bench-router route ──argv──▶ herdr ──▶ Agent CLI (claude, codex, …)
+Orchestrator ── task.json ──▶ bench-router route ──▶ Projects CLI ──▶ herdr ──▶ Agent CLI (claude, codex, …)
      ▲                         │  분류 → 제약 필터 → 점수 → 선택          │
      │                         │  receipt 기록 → 1회 전송 → 결과 계약 검사 │
      └──── JSON 결과 ◀─────────┘◀──────── result.md / result.json ◀────────┘
@@ -38,9 +38,9 @@ OS timer / 수동 ── bench-router refresh ──▶ AA API, Arena dataset, �
 
 ## 요구 사항
 
-- Linux, WSL2 또는 네이티브 Windows. refresh·dispatch는 운영체제의 프로세스 간 파일 잠금을 사용합니다.
+- 오프라인 평가·refresh는 Linux/WSL2/Windows에서 동작합니다. Projects live 실행은 Linux/WSL2에서 준비하세요.
 - Python 3.11 이상.
-- live 위임에는 [herdr](https://herdr.dev/docs/install/)와, 프로필에 쓸 Agent CLI 설치·로그인이 필요합니다. 검증 환경은 herdr 0.9.3, Claude Code 2.1.296, codex-cli 0.162.1입니다.
+- live 위임에는 Herdr, herdr-projects **0.2.34**, Agent CLI 설치·로그인, 열려 있는 Projects 프로젝트가 필요합니다. `BENCH_ROUTER_PROJECT_DIR`에 프로젝트의 절대 경로를 지정합니다.
 - AA 데이터를 쓰려면 Artificial Analysis API 키(Free tier로 충분)가 필요합니다.
 
 별도 설치 단계는 없습니다. 저장소 루트에서 모듈로 실행합니다.
@@ -138,7 +138,7 @@ capabilities = ["filesystem_write"]
 
 ## 명령
 
-모든 명령은 stdout에 **JSON 한 객체**만 출력합니다(`explain`은 예외로 사람이 읽는 텍스트). 로그는 stderr로 나갑니다. 전역 옵션: `--config-dir`, `--cache-dir`, `--herdr-session NAME`(또는 환경변수 `BENCH_ROUTER_HERDR_SESSION`). herdr 실행 파일 경로는 `BENCH_ROUTER_HERDR`(기본 `herdr`)로 지정합니다.
+모든 명령은 stdout에 **JSON 한 객체**만 출력합니다(`explain`은 예외로 사람이 읽는 텍스트). 로그는 stderr로 나갑니다. 전역 옵션: `--config-dir`, `--cache-dir`, `--herdr-session NAME`(또는 환경변수 `BENCH_ROUTER_HERDR_SESSION`). Projects 실행 파일 경로는 `BENCH_ROUTER_PROJECTS`(기본 `herdr-projects`)로 지정합니다. `--herdr-session`은 프로젝트가 속한 세션과 일치해야 합니다.
 
 | 명령 | 동작 |
 |---|---|
@@ -310,12 +310,12 @@ WantedBy=timers.target
 
 `route`(dry-run 없이)는 다음 순서로 동작합니다.
 
-1. 가용성을 확인합니다(herdr kind 지원 — 설치된 herdr의 `agent start --help`에서 읽음, PATH의 실행 파일). 로그인과 모델 접근은 확인하지 않고 `auth_unverified` 경고만 남깁니다. 이어서 프로필을 선택합니다.
+1. PATH 가용성과 제약을 검사해 프로필을 선택합니다. Projects의 동일 이름 프로필 `agent/args`를 대조하고 설정·session을 고정합니다. 로그인·모델 접근은 실제 Agent에서 확인합니다.
 2. `<cwd>/.bench-router/dispatch.lock`을 잡습니다. cwd당 동시에 하나만 위임합니다.
 3. 같은 `(task_id, round)`의 receipt가 있으면 처리 방식이 갈립니다. 내용 hash가 같으면 **재전송 없이 collect**로 회수하고, 다르면 `conflict`입니다. 아직 정리되지 않은 다른 run이 있으면 새 위임을 막습니다(`unresolved_run`).
 4. `run_id`(UUID)와 128-bit nonce를 만들고 receipt를 원자적으로 기록합니다. 선택 근거는 `decision.json`에 남깁니다.
-5. 새 workspace를 만들고 agent를 시작합니다(`br-<12 hex>` 이름). 이어서 `agent get`으로 idle/done인지 확인합니다.
-6. 프롬프트를 보내기 **전에** receipt에 `submission_attempted`를 fsync합니다. 그다음 `agent prompt --wait`을 **한 번만** 호출합니다.
+5. Projects 버전과 이름 있는 프로필의 `agent/args`를 대조하고 `input.txt`를 원자 저장합니다.
+6. 제출 **전에** receipt에 `submission_attempted`를 fsync합니다. 그다음 `thread start --kind checkout --repo CWD --task-file FILE`을 **한 번만** 호출하고 반환된 thread ID를 기록합니다.
 7. Agent가 idle/done이 되면 결과 계약을 검사합니다. blocked면 화면(`diagnostic_tail`)을 반환합니다. timeout이나 stalled는 재전송하지 않고 `timed_out`/`delivery_uncertain`으로 남깁니다.
 
 프롬프트 끝에는 실행 계약이 붙습니다. Agent는 `<cwd>/.bench-router/runs/<run_id>/`에 다음 두 파일을 써야 합니다.
@@ -338,7 +338,7 @@ WantedBy=timers.target
 
 `completed`는 "계약대로 결과를 받았다"는 뜻일 뿐, 작업 성공을 뜻하지 않습니다. 작업 결과는 `task_outcome`(Agent 자기보고)으로 따로 표시합니다. 실제 성공 여부는 Orchestrator가 검증한 뒤 `feedback`으로 기록하세요. 평가 중에 Agent가 `success`라고 보고했지만 실제로는 틀린 사례가 있었습니다.
 
-run 디렉터리에는 `receipt.json`, `decision.json`, `result.md`, `result.json`, `feedback.jsonl`이 남습니다. herdr workspace는 자동으로 닫지 않으므로 출력의 `workspace_id`로 정리하세요. 진행 중인 run의 workspace를 닫으면 Agent도 종료됩니다.
+run 디렉터리에는 `receipt.json`, `decision.json`, `input.txt`, `result.md`, `result.json`, `feedback.jsonl`이 남습니다. 출력의 `project`와 `thread_id`로 Projects에서 상태를 확인합니다. 진행 중인 thread를 정리하면 Agent도 종료될 수 있으므로 효과를 먼저 확인하세요.
 
 ## 병렬 위임과 협업 수준
 
@@ -359,7 +359,7 @@ run 디렉터리에는 `receipt.json`, `decision.json`, `result.md`, `result.jso
 | `isolation` | 동작 |
 |---|---|
 | `isolated` (기본) | worktree 격리만. 서로의 존재를 모름 |
-| `shared` | 공용 scratchpad `<cwd>/.bench-router/groups/<group_id>/shared/`. agent는 자기 `<label>.md`·`<label>/`에만 쓰고 동료 노트를 읽어, 실패한 접근·발견·중간 실험 결과를 공유합니다. 쓰기 권한은 `--add-dir <shared>`로 줍니다(claude·codex) |
+| `shared` | 공용 scratchpad `<cwd>/.bench-router/groups/<group_id>/shared/`. agent는 자기 `<label>.md`·`<label>/`에만 쓰고 동료 노트를 읽어, 실패한 접근·발견·중간 실험 결과를 공유합니다. 두 설정의 프로필 args에 `--add-dir <repo>/.bench-router/groups`를 미리 설정합니다 |
 | `deliberate` | `shared` + 협의 라운드. 1차 `completed` member가 2명 이상이면 각 `result.md`를 `shared/<label>.result.md`로 복사하고, 같은 worktree·프로필로 `round+1`을 보냅니다. 각 agent는 동료 결과를 검토해 자기 안을 고치고 `shared/<label>.vote.json`(`{"best": label, "reason": ...}`)을 씁니다. 라우터는 다수결로 `consensus.winner`를 냅니다(동률이면 `null`) |
 
 출력은 member별 `profile`, `worktree`, `branch`, `rounds[]`(status, run_id, result_path, task_outcome, workspace_id)와 `consensus`이며, `groups/<group_id>/group.json`에도 남습니다. 전부 `completed`면 exit 0, 아니면 `partial_failure`(16), 같은 group이 이미 실행 중이면 `conflict`(14)입니다. 2차 라운드는 새 agent라서 1차 대화 맥락은 없습니다. 상태는 worktree와 scratchpad로 이어집니다.
@@ -379,7 +379,7 @@ python3 -m unittest test_p0 test_p1 test_p2 test_p3     # Linux/WSL2/Windows
 | `test_p3.py` | 병렬 위임(V30–V34): worktree 격리, fanout, shared `--add-dir`, deliberate 투표, 재실행 시 재전송 없음 (git 필요) |
 | `test_p2.py` | 위임(V19–V29): argv 전달, 반환 ID 사용, 시작 실패, 전송 직전 상태, 결과 계약·경로 공격, timeout 후 재전송 없음, crash 복구, 충돌·잠금 |
 
-herdr는 0.9.3에서 실측한 응답 형식을 따르는 fake로 대체합니다. 실측 근거는 `docs/evidence/`에 있습니다(herdr help·API schema·skill, claude/codex `--help`).
+현재 실행 테스트는 Projects 0.2.34 공개 CLI의 JSON 형태를 따르는 fake를 사용합니다. 아래의 직접 Herdr smoke 결과는 이전 실행 경로의 기록이며 Projects live 검증을 의미하지 않습니다. 실측 근거는 `docs/evidence/`에 있습니다(herdr help·API schema·skill, claude/codex `--help`).
 
 ---
 

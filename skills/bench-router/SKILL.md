@@ -11,7 +11,7 @@ Use this skill only for a task the caller wants to hand off. The router owns pro
 
 - Run `scripts/cli.py` with Python 3.11+ from this skill's installed path. The script resolves the linked repository and forwards arguments to the existing CLI; it works from any current directory.
 - Use the same runtime user's default config (`~/.config/bench-router`) and cache (`~/.cache/bench-router`) across agents, unless the operator has deliberately set shared `XDG_CONFIG_HOME` and `XDG_CACHE_HOME`. Keep all agents sharing a cache on one OS runtime; native Windows and WSL use different lock implementations and must not concurrently point at the same physical cache. Do not create agent-specific caches or copy snapshots.
-- `profiles.toml`, herdr, and the target agent CLI must already be configured for live dispatch. Run `python scripts/cli.py status` to inspect snapshot health. See the repository [README](../../README.md) for setup and command contracts.
+- `profiles.toml`, Herdr, herdr-projects 0.2.34 and the target agent CLI must already be configured for live dispatch on Linux/WSL2. Set `BENCH_ROUTER_PROJECT_DIR` to an opened project. Named Projects profiles must match Router `id/kind/args` exactly; disable yolo and legacy thread_agent_args. See [Projects setup](../../docs/projects.md). Run `python scripts/cli.py status` to inspect snapshot health. See the repository [README](../../README.md) for setup and command contracts.
 
 ## Delegate and recover
 
@@ -31,9 +31,9 @@ For several subtasks or a best-of-N attempt, write a group file (`group_id`, git
 - A member that was `blocked` before its prompt is not resent by rerunning the same group. Resolve the cause, then use a new `group_id` or `round`.
 - With two members, votes often tie (`consensus.winner` is `null`); use three or more members when a majority matters.
 
-## Optional A2A collaboration
+## Projects collaboration
 
-For explicit implementation → review → revision, parallel specialist reviews, or question/answer workflows, follow the repository's [hybrid collaboration protocol](../../docs/hybrid-collaboration.md). Use `review --task TASK_FILE --profile PROFILE` with operator-configured `a2a-bindings.json`; it calls the stock herdr-a2a CLI through shared admission. Use `a2a get --key KEY` to observe and `a2a continue --key KEY --answer-file FILE` for confirmed input-required answers. Keep exact-cwd/code-writing work on `route`/`parallel` and pass review content explicitly. Both paths share a durable backend binding, four-active-task limit and overlapping-workspace guard. Do not bypass admission with direct plugin submissions or change the shared coordination directory between agents. Do not switch backends to resolve uncertain delivery. The orchestrator verifies results, records `coordination feedback` separately, and limits revision rounds to two. Do not delegate recursively. A2A is opt-in; prompts do not enforce read-only permissions, and live performance gains remain unmeasured.
+Use ordinary `route` tasks for implementation, review and revision. Pass earlier artifacts explicitly in each new round. For blocked work use the returned project/thread ID with Projects `thread read` and `thread keys`; follow the caller's normal approval workflow. Never start or restart a thread directly to recover a Router submission. All Router executions share durable task binding, the four-active limit and the overlapping-workspace guard. Verify results and record `coordination feedback` separately; do not delegate recursively. Shared/deliberate profiles must already grant `--add-dir <repo>/.bench-router/groups` in both configurations.
 
 ## Shared data
 

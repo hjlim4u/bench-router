@@ -1,5 +1,10 @@
 # bench-router 구현 상태
 
+## 2026-10-15 Projects 전환
+
+현재 실행은 [Projects 공개 CLI](projects.md)로 통합했다. route/parallel 인터페이스, 결과 계약·중복 제출 방지·합산 4개 admission을 유지한다. 아래 직접 Herdr smoke 수치는 이전 구현의 기록이다. 현재 Projects 검증 결과는 Projects 안내를 참조한다.
+
+
 갱신: 2026-10-13 · 런타임: WSL2 Ubuntu (Python 3.14.4), 커널 6.6.87.2-microsoft-standard-WSL2
 
 ## 완료
