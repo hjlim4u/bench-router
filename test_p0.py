@@ -210,9 +210,9 @@ class P0(unittest.TestCase):
             return code, json.loads(out.getvalue())
         code, res = run()
         self.assertEqual((code, res["schema_version"], res["status"]), (0, "2.0", "ok"))
-        self.assertEqual(sum(c["eligible"] for c in res["candidates"]), 1)
+        self.assertEqual(sum(c["eligible"] for c in res["candidates"]), 2)
         code, res = run("--format", "1")
-        self.assertEqual((code, res["status"], res["selected"], len(res["candidates"])), (0, "ok", None, 1))
+        self.assertEqual((code, res["status"], res["selected"], len(res["candidates"])), (0, "ok", None, 2))
 
     def test_v01_synthetic_fixture(self):
         fx = json.loads((EX / "scoring.synthetic.json").read_text("utf-8"))
@@ -269,7 +269,8 @@ class P0(unittest.TestCase):
                              "route", "--task", str(task_file), "--dry-run"])
         res = json.loads(out.getvalue())
         self.assertEqual((code, res["status"], res["selected"]), (13, "no_eligible_profile", None))
-        self.assertEqual(res["excluded"], [{"profile": "local-codex-example", "reasons": ["disabled"]}])
+        self.assertEqual(res["excluded"], [{"profile": p, "reasons": ["disabled"]}
+                                           for p in ("local-agy-example", "local-codex-example")])
         self.assertIn("snapshot_unusable", [w["code"] for w in res["warnings"]])
 
     def test_v06_default_obeys_constraints(self):
