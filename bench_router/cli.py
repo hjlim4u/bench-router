@@ -196,8 +196,8 @@ def main(argv=None):
     ap.add_argument("--cache-dir", type=Path, default=_xdg("XDG_CACHE_HOME", ".cache"))
     sub = ap.add_subparsers(dest="cmd", required=True)
     ap.add_argument("--herdr-session", default=os.environ.get("BENCH_ROUTER_HERDR_SESSION") or None,
-                    help="named herdr session (default: herdr's default session)")
-    rp = sub.add_parser("route", help="select a profile and delegate via herdr (--dry-run: select only)")
+                    help="require the Projects project's recorded Herdr session")
+    rp = sub.add_parser("route", help="select a profile and delegate via Projects (--dry-run: select only)")
     rp.add_argument("--task", required=True)
     rp.add_argument("--context", help="Orchestrator metrics: estimates, prices, signals (context JSON 1.0|2.0)")
     pin = rp.add_mutually_exclusive_group()

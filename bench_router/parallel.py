@@ -22,7 +22,6 @@ ISOLATION = ("isolated", "shared", "deliberate")
 GROUP_KEYS = ("schema_version", "group_id", "cwd", "isolation", "fanout", "max_parallel", "tasks")
 GROUP_SCHEMA_VERSION = "2.0"  # tasks[i] = {task, context?, selections[]}: Orchestrator가 고른 프로필로 fanout
 MAX_AGENTS = 16
-ADD_DIR_KINDS = {"claude", "codex"}  # 둘 다 --add-dir 지원 (docs/evidence/claude_help.txt, codex_help.txt)
 VOTE_MAX = 64 * 1024
 ROUND_KEYS = ("status", "round", "run_id", "result_path", "task_outcome", "workspace_id", "receipt_path")
 
@@ -142,7 +141,7 @@ def prepare_repo(cwd):
 
 
 def worktree(cwd, gid, label):
-    """재실행 멱등: 이미 있으면 그대로 쓴다. cwd 하위에 둬서 agent의 폴더 신뢰를 상속한다."""
+    """Projects starts immediately: prepare the cwd before durable task submission."""
     wt = Path(cwd) / ".bench-router" / "worktrees" / gid / label
     if not wt.exists():
         _git(cwd, "worktree", "add", "-b", f"br/{gid}/{label}", str(wt), "HEAD")
@@ -192,8 +191,7 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
               dry_run=False):
     gdir = herdr.bench_dir(g["cwd"]) / "groups" / g["group_id"]
     shared = gdir / "shared"
-    kinds = None if dry_run else herdr.herdr_kinds(session, runner)
-    availability = None if dry_run else {p["id"]: herdr.probe(p, which, kinds) for p in cfg["profile"]}
+    availability = None if dry_run else {p["id"]: herdr.probe(p, which) for p in cfg["profile"]}
     members, warnings = plan(g, cfg, mapping, snap, snap_warnings, availability)
     out = {"schema_version": g["schema_version"], "group_id": g["group_id"], "isolation": g["isolation"],
            "fanout": g["fanout"], "shared_dir": None if g["isolation"] == "isolated" else str(shared),
@@ -215,9 +213,11 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
     profiles = {p["id"]: p for p in cfg["profile"]}
     collab = g["isolation"] != "isolated"
     for pid in {m["profile"] for m in members if m["status"] == "planned"}:
-        if collab and profiles[pid]["kind"] not in ADD_DIR_KINDS:
-            warnings.append(r.warn("shared_dir_not_granted", f"{pid}: no known --add-dir for kind "
-                                   f"{profiles[pid]['kind']}; it may not write to the shared dir"))
+        args = profiles[pid]["args"]
+        if collab and not any(args[i] == "--add-dir" and Path(args[i + 1]).is_absolute()
+                              and Path(shared).is_relative_to(Path(args[i + 1]).resolve())
+                              for i in range(len(args) - 1)):
+            raise r.InputError(f"{pid}: configure --add-dir for {shared.parent} in the named Projects/router profile")
 
     def run(m, round_add, extra_prompt):
         rt = g["raw_tasks"][m["index"]]
@@ -225,12 +225,11 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
             wt = worktree(g["cwd"], g["group_id"], m["label"])
             t = r.validate_task({**rt, "cwd": str(wt), "round": rt["round"] + round_add,
                                  "prompt": rt["prompt"] + collab_text(g, m, labels, shared) + extra_prompt})
-            extra = ["--add-dir", str(shared)] if collab and profiles[m["profile"]]["kind"] in ADD_DIR_KINDS else []
             # worker task는 구조상 cwd(worktree)·prompt(협업 안내)가 group task와 달라 digest를 다시 비교하지 않는다.
             # 판단 입력 검사는 plan에서 끝났고, context·제약·가용성은 dispatch가 다시 검사한다.
             sel = m.get("selection")
             res = herdr.dispatch(t, cfg, mapping, snap, snap_warnings, session, runner, which,
-                                 profile_id=m["profile"], extra_args=extra, kinds=kinds,
+                                 profile_id=m["profile"],
                                  context=g["contexts"][m["index"]], selection=sel,
                                  selection_mode="orchestrator_pinned" if sel else "parallel_pinned",
                                  check_digest=False)
