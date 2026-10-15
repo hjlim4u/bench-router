@@ -20,63 +20,91 @@ def which(name):
     return f"/usr/bin/{name}"
 
 
-class FakeHerdr:
-    """herdr CLI 흉내. on_prompt(fake, rc_text)로 Agent 동작(결과 파일 작성 등)을 주입한다."""
+REAL_SLEEP = __import__("time").sleep
+
+
+def cleanup_temp(tmp):
+    for attempt in range(5):
+        try:
+            tmp.cleanup()
+            return
+        except OSError as e:
+            if getattr(e, "winerror", None) != 145 or attempt == 4:
+                raise
+            REAL_SLEEP(0.05)
+
+
+def projects_environment(case, base):
+    home = Path(base) / "home"
+    project = home / "projects/test"
+    (project / ".state").mkdir(parents=True)
+    (project / "PROJECT.md").write_text("+++\nname = 'test'\n+++\n", "utf-8")
+    (project / ".state/coordinator.json").write_text(json.dumps({"socket": "/test.sock", "session": "brtest"}), "utf-8")
+    cfg = home / ".config/herdr-projects"
+    cfg.mkdir(parents=True)
+    (cfg / "config.toml").write_text("[safety.default]\nyolo = false\nthread_agent_args = []\n", "utf-8")
+    case.enterContext(patch.dict(os.environ, {"HOME": str(home), "BENCH_ROUTER_PROJECT_DIR": str(project),
+                                            "BENCH_ROUTER_HERDR_SESSION": "brtest",
+                                            "BENCH_ROUTER_COORDINATION_DIR": str(Path(base) / "admission")}))
+    # No real waiting in offline state-transition tests.
+    import itertools
+    from types import SimpleNamespace
+    ticks = itertools.count()
+    case.enterContext(patch.object(hd, "time", SimpleNamespace(monotonic=lambda: next(ticks), sleep=lambda _: None)))
+    return project
+
+
+class FakeProjects:
+    """Stock Projects JSON shapes; no invented server endpoints."""
 
     def __init__(self, start_error=None, pre_prompt_status="idle", prompt_error=None, after_status="idle",
-                 on_prompt=None, pane="w7:p3"):
+                 on_prompt=None, pane="w7:p3", profiles=None):
         self.calls, self.prompts, self.kwargs = [], [], []
         self.start_error, self.pre_prompt_status = start_error, pre_prompt_status
         self.prompt_error, self.after_status, self.on_prompt = prompt_error, after_status, on_prompt
-        self.pane, self.agent, self.status, self.gone = pane, None, None, False
+        self.pane, self.status, self.gone = pane, after_status, False
+        self.profiles = profiles or {"a": profile("a", kind="claude", executable="claude",
+                                               args=["--model", "m", "--effort", "high"]), "b": profile("b")}
+        self.cwd, self.selected, self.updates, self.show_error = None, None, {}, False
 
-    def _ok(self, result):
-        return subprocess.CompletedProcess([], 0, json.dumps({"id": "cli", "result": result}), "")
-
-    def _err(self, code):
-        return subprocess.CompletedProcess([], 1, "", json.dumps({"error": {"code": code, "message": code}, "id": "cli"}))
-
-    def info(self):
-        return {"agent": {"name": self.agent, "pane_id": self.pane, "agent_status": self.status,
-                          "workspace_id": "w7", "tab_id": "w7:t1", "terminal_id": "t", "focused": False, "revision": 1}}
+    def _ok(self, obj):
+        return subprocess.CompletedProcess([], 0, json.dumps(obj), "")
 
     def __call__(self, cmd, **kw):
-        assert cmd[0] == hd.HERDR_BIN and kw.get("shell") is False and isinstance(cmd, list)
+        assert cmd[0] == hd.PROJECTS_BIN and kw["shell"] is False and cmd[1] == "--root"
         self.kwargs.append(kw)
-        argv = cmd[1:]
-        if argv[0] == "--session":
-            argv = argv[2:]
-        if argv[-1] == "--help":  # 0.9.3 help 형식(docs/evidence/herdr-0.9.3/help_agent_start.txt)
-            return subprocess.CompletedProcess([], 0, "  --kind <KIND>\n    [possible values: pi, claude, codex]\n", "")
+        argv = cmd[3:]
         self.calls.append(argv[:2])
-        group, verb = argv[0], argv[1]
-        if (group, verb) == ("workspace", "create"):
-            return self._ok({"type": "workspace_created", "workspace": {"workspace_id": "w7"},
-                             "tab": {"tab_id": "w7:t1"}, "root_pane": {"pane_id": self.pane, "cwd": argv[3]}})
-        if (group, verb) == ("pane", "read"):  # 0.9.3 실측: JSON이 아닌 터미널 텍스트
-            return subprocess.CompletedProcess([], 0, "$ claude\nclaude: command not found\n", "")
-        if group != "agent":
-            raise AssertionError(argv)
-        if verb == "start":
+        if argv == ["--version"]:
+            return subprocess.CompletedProcess(cmd, 0, getattr(self, "version", "herdr-projects 0.2.34+test"), "")
+        if argv[:2] == ["profile", "resolve"]:
             if self.start_error:
-                return self._err(self.start_error)
-            self.agent, self.status = argv[2], self.pre_prompt_status
-            return self._ok({"type": "agent_started", "argv": argv[argv.index("--") + 1:], **self.info()})
-        if self.agent is None or self.gone or argv[2] != self.agent:
-            return self._err("agent_not_found")
-        if verb == "get":
-            return self._ok({"type": "agent_info", **self.info()})
-        if verb == "prompt":
-            self.prompts.append(argv[3])
+                return subprocess.CompletedProcess(cmd, 1, "", self.start_error)
+            p = self.profiles[argv[2]]
+            return self._ok({"name": p["id"], "agent": p["kind"], "args": p["args"]})
+        if argv[:2] == ["thread", "start"]:
+            self.selected = argv[argv.index("--profile") + 1]
+            self.cwd = argv[argv.index("--repo") + 1]
+            prompt = Path(argv[argv.index("--task-file") + 1]).read_text("utf-8")
+            self.prompts.append(prompt)
+            if self.on_prompt and self.pre_prompt_status == "idle":
+                self.on_prompt(self, prompt)
             if self.prompt_error:
-                return self._err(self.prompt_error)
-            if self.on_prompt:
-                self.on_prompt(self, argv[3])
-            self.status = self.after_status
-            return self._ok({"type": "agent_prompted", **self.info()})
-        if verb == "wait":
-            self.status = self.after_status
-            return self._ok({"type": "agent_info", **self.info()})
+                raise subprocess.TimeoutExpired(cmd, 15)
+            return self._ok({"id": "t-0001", "kind": "checkout", "profile": self.selected,
+                             "agent": self.profiles[self.selected]["kind"], "branch": "", "pane_id": self.pane})
+        if argv[:2] == ["thread", "read"]:
+            return subprocess.CompletedProcess(cmd, 0, "approval or question: command not found", "")
+        if argv[:2] == ["thread", "show"]:
+            if self.show_error:
+                raise subprocess.TimeoutExpired(cmd, 15)
+            return self._ok({"id": "t-0001", "kind": "checkout", "profile": self.selected,
+                             "agent": self.profiles[self.selected]["kind"], "cwd": self.cwd, "machine": "",
+                             "workspace_id": "w7", "pane_id": self.pane,
+                             "status": "failed" if self.gone else "open",
+                             "note": "no agent" if self.gone else self.status,
+                             "group_token": "waiting-on-you" if self.status == "blocked" else "idle",
+                             "prompt_pending": self.pre_prompt_status != "idle", **self.updates})
         raise AssertionError(argv)
 
 
@@ -97,24 +125,27 @@ class P2(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         state = tempfile.TemporaryDirectory()
-        self.addCleanup(state.cleanup)
+        self.addCleanup(cleanup_temp, state)
         env = patch.dict(os.environ, {"BENCH_ROUTER_COORDINATION_DIR": state.name})
         env.start()
         self.addCleanup(env.stop)
+        projects_environment(self, state.name)
         self.cwd = os.path.realpath(self.tmp.name)
         self.cfg = config([profile("a", kind="claude", executable="claude", args=["--model", "m", "--effort", "high"])],
                           default="a")
 
     def tearDown(self):
-        self.tmp.cleanup()
+        cleanup_temp(self.tmp)
 
     def task(self, **kw):
         raw = {"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "do the thing",
-               "cwd": self.cwd, "categories": {"general": 1}, "category_confidence": 0.9}
+               "cwd": self.cwd, "categories": {"general": 1}, "category_confidence": 0.9,
+               "constraints": {"timeout_ms": 5000}}
         raw.update(kw)
         return r.validate_task(raw)
 
     def run_(self, fake, t=None, w=which):
+        fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
         return hd.dispatch(t or self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=w)
 
     def receipt(self, out):

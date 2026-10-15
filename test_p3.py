@@ -1,5 +1,5 @@
 """P3 병렬 위임 V30–V34: worktree 격리, fanout, shared scratchpad, deliberate 투표, 재실행 멱등.
-herdr는 workspace마다 test_p2.FakeHerdr를 하나씩 두는 멀티 agent fake. 실행: python3 -m unittest -v test_p3"""
+herdr는 workspace마다 test_p2.FakeProjects를 하나씩 두는 멀티 agent fake. 실행: python3 -m unittest -v test_p3"""
 import json
 import os
 import re
@@ -14,36 +14,40 @@ from pathlib import Path
 from bench_router import parallel as pl
 from bench_router import routing as r
 from test_p0 import MAPPING, config, profile
-from test_p2 import FakeHerdr, which, write_result
+from test_p2 import FakeProjects, which, write_result, projects_environment, cleanup_temp
 
 
-class MultiHerdr:
+class MultiProjects:
     def __init__(self, on_prompt):
         self.on_prompt, self.lock = on_prompt, threading.Lock()
-        self.by_pane, self.by_agent, self.starts, self.prompts, self.ws_cwds = {}, {}, [], [], []
+        self.threads, self.starts, self.prompts, self.ws_cwds = {}, [], [], []
+        self.profiles = {}
 
     def __call__(self, cmd, **kw):
-        argv = cmd[3:] if cmd[1] == "--session" else cmd[1:]
+        argv = cmd[3:]
+        if argv == ["--version"]:
+            return subprocess.CompletedProcess(cmd, 0, "herdr-projects 0.2.34+test", "")
+        if argv[:2] == ["profile", "resolve"]:
+            p = self.profiles[argv[2]]
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"name": p["id"], "agent": p["kind"], "args": p["args"]}), "")
         with self.lock:
-            if argv[-1] == "--help" or argv[:2] == ["workspace", "create"]:
-                pane = f"w{len(self.by_pane) + 1}:p1"
-                fake = FakeHerdr(on_prompt=self.on_prompt, pane=pane)
-                if argv[-1] == "--help":
-                    return fake(cmd, **kw)
-                self.by_pane[pane] = fake
-                self.ws_cwds.append(argv[3])
-                return fake(cmd, **kw)
-            if argv[:2] == ["agent", "start"]:
-                fake = self.by_pane[argv[argv.index("--pane") + 1]]
-                self.by_agent[argv[2]] = fake
+            if argv[:2] == ["thread", "start"]:
+                tid = f"t-{len(self.threads) + 1:04}"
+                fake = FakeProjects(on_prompt=self.on_prompt, profiles=self.profiles, pane=f"w{len(self.threads) + 1}:p1")
+                self.threads[tid] = fake
+                fake.updates["id"] = tid
                 self.starts.append(argv)
-            elif argv[:2] == ["pane", "read"]:
-                fake = self.by_pane[argv[2]]
+                self.ws_cwds.append(argv[argv.index("--repo") + 1])
             else:
-                fake = self.by_agent.get(argv[2]) or FakeHerdr()
-            if argv[:2] == ["agent", "prompt"]:
-                self.prompts.append(argv[3])
-        return fake(cmd, **kw)
+                fake = self.threads[argv[3]]
+                tid = argv[3]
+        out = fake(cmd, **kw)
+        if argv[:2] == ["thread", "start"]:
+            self.prompts.extend(fake.prompts)
+            obj = json.loads(out.stdout)
+            obj["id"] = tid
+            out.stdout = json.dumps(obj)
+        return out
 
 
 def agent_act(vote="t1-1"):
@@ -66,17 +70,20 @@ class P3(unittest.TestCase):
         env = patch.dict(os.environ, {"BENCH_ROUTER_COORDINATION_DIR": state.name})
         env.start()
         self.addCleanup(env.stop)
+        projects_environment(self, state.name)
         self.cwd = os.path.realpath(self.tmp.name)
         git = ["git", "-C", self.cwd, "-c", "user.name=t", "-c", "user.email=t@t"]
         subprocess.run(git[:3] + ["init", "-q"], check=True)
         Path(self.cwd, "a.txt").write_text("a\n", "utf-8")
         subprocess.run(git + ["add", "a.txt"], check=True)
         subprocess.run(git + ["commit", "-qm", "init"], check=True)
-        self.cfg = config([profile("a", kind="claude", executable="claude"), profile("b")], default="a")
+        grant = ["--add-dir", str(Path(self.cwd) / ".bench-router/groups")]
+        self.cfg = config([profile("a", kind="claude", executable="claude", args=["-m", "a", *grant]),
+                           profile("b", args=["-m", "b", *grant])], default="a")
 
     def tearDown(self):
         subprocess.run(["git", "-C", self.cwd, "worktree", "prune"], capture_output=True)
-        self.tmp.cleanup()
+        cleanup_temp(self.tmp)
 
     def group(self, **kw):
         task = {"schema_version": "1.0", "round": 1, "summary": "s", "prompt": "do it",
@@ -87,6 +94,7 @@ class P3(unittest.TestCase):
         return pl.validate_group(raw)
 
     def run_(self, g, fake):
+        fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
         return pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which)
 
     def test_v40_group_v2_orchestrator_selections(self):
