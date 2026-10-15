@@ -18,3 +18,19 @@ inference_local = false
 context_tokens = 0
 capabilities = ["filesystem_write"]
 
+# Antigravity CLI. herdr kind는 "agy"이고 executable도 kind와 같아야 한다.
+[[profile]]
+id = "local-agy-example"
+enabled = false
+kind = "agy"
+executable = "agy"
+args = []
+model_id = "REPLACE_WITH_CANONICAL_MODEL_ID"
+harness_id = "antigravity-cli"
+reasoning_effort = "unknown"
+config_revision = "replace-after-verification"
+cost_tier = "high"
+inference_local = false
+context_tokens = 0
+capabilities = ["filesystem_write"]
+
