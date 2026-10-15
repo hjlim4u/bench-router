@@ -369,7 +369,7 @@ run 디렉터리에는 `receipt.json`, `decision.json`, `input.txt`, `result.md`
 ## 테스트
 
 ```bash
-python3 -m unittest test_p0 test_p1 test_p2 test_p3     # Linux/WSL2/Windows
+python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination
 ```
 
 | 파일 | 범위 |
