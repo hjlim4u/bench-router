@@ -1,0 +1,71 @@
+{
+  "description": "Illustrative orchestrator records, not bench-router CLI input or an executable workflow. Replace all example identifiers and payloads before use.",
+  "defaults": { "max_parallel": 4, "max_revision_rounds": 2, "nested_delegation": false },
+  "handoff_template": {
+    "purpose": "Review the supplied change for correctness and security.",
+    "acceptance": "Give reproducible findings with affected locations, evidence, severity and a minimal proposed correction. State missing evidence and uncovered scope. Do not delegate further.",
+    "target": { "content": "REPLACE_WITH_EXACT_DIFF_AND_REQUIRED_CONTEXT", "sha256": "RECOMPUTE_AFTER_REPLACEMENT" },
+    "test_evidence": [ { "command": "REPLACE_WITH_ACTUAL_COMMAND", "result": "REPLACE_WITH_OBSERVED_RESULT" } ],
+    "previous_results": [],
+    "adopted_findings": [],
+    "open_questions": []
+  },
+  "input": {
+    "content": "hello",
+    "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+    "description": "Synthetic review target: exact UTF-8 bytes, no trailing newline. Real requests include the actual diff/source and test evidence."
+  },
+  "patterns": [
+    {
+      "name": "implement_review_revise",
+      "steps": [
+        { "id": "implement", "backend": "herdr", "depends_on": [], "input_sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" },
+        { "id": "review", "backend": "a2a", "depends_on": ["implement"], "input_sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" },
+        { "id": "revise", "backend": "herdr", "depends_on": ["review"], "input_sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" }
+      ]
+    },
+    {
+      "name": "parallel_reviews",
+      "steps": [
+        { "id": "correctness", "backend": "a2a", "depends_on": [], "input_sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" },
+        { "id": "security", "backend": "a2a", "depends_on": [], "input_sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" }
+      ]
+    },
+    {
+      "name": "question_and_followup",
+      "steps": [
+        { "id": "question", "backend": "a2a", "depends_on": [], "input_sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" },
+        { "id": "followup", "backend": "a2a", "depends_on": ["question"], "input_sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" }
+      ]
+    }
+  ],
+  "record": {
+    "collaboration_id": "example-only",
+    "step": "review",
+    "depends_on": ["implement"],
+    "input_sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+    "backend": "a2a",
+    "profile": "operator-configured-reviewer",
+    "model": "operator-verified-model-id",
+    "configuration_evidence": "local operator profile snapshot; redact credentials",
+    "gateway": "http://127.0.0.1:EXAMPLE_PORT",
+    "task_id": "example-task-id",
+    "submitted_at": "2026-10-15T00:00:00Z",
+    "observed_status": "completed",
+    "raw_result": "review-response.json",
+    "acceptance": { "decision": "withheld", "reason": "Orchestrator has not reproduced or assessed findings yet." }
+  },
+  "recovery": {
+    "stale_review": {
+      "reviewed_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "decision": "withheld",
+      "action": "review_changed_target_before_acceptance"
+    },
+    "lost_response": {
+      "status": "delivery_uncertain",
+      "task_id": null,
+      "action": "inspect_without_resubmit",
+      "resubmissions": 0
+    }
+  }
+}

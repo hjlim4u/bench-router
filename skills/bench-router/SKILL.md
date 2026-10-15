@@ -31,6 +31,10 @@ For several subtasks or a best-of-N attempt, write a group file (`group_id`, git
 - A member that was `blocked` before its prompt is not resent by rerunning the same group. Resolve the cause, then use a new `group_id` or `round`.
 - With two members, votes often tie (`consensus.winner` is `null`); use three or more members when a majority matters.
 
+## Optional A2A collaboration
+
+For explicit implementation → review → revision, parallel specialist reviews, or question/answer workflows, follow the repository's [hybrid collaboration protocol](../../docs/hybrid-collaboration.md). Use `review --task TASK_FILE --profile PROFILE` with operator-configured `a2a-bindings.json`; it calls the stock herdr-a2a CLI through shared admission. Use `a2a get --key KEY` to observe and `a2a continue --key KEY --answer-file FILE` for confirmed input-required answers. Keep exact-cwd/code-writing work on `route`/`parallel` and pass review content explicitly. Both paths share a durable backend binding, four-active-task limit and overlapping-workspace guard. Do not bypass admission with direct plugin submissions or change the shared coordination directory between agents. Do not switch backends to resolve uncertain delivery. The orchestrator verifies results, records `coordination feedback` separately, and limits revision rounds to two. Do not delegate recursively. A2A is opt-in; prompts do not enforce read-only permissions, and live performance gains remain unmeasured.
+
 ## Shared data
 
 Routing reads the shared snapshot; it does not refresh it. One user-level scheduled `refresh` can keep data current. Run `python scripts/cli.py refresh` manually only when explicitly requested or operating the shared schedule. Concurrent refreshes and dispatches to the same `cwd` return a busy/conflict result; do not work around their locks. See `status` and the JSON warnings for stale or missing evidence.

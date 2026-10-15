@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "bindings": [
+    {
+      "profile": "reviewer",
+      "profile_fingerprint": "REPLACE_WITH_EVALUATE_PROFILE_FINGERPRINT",
+      "agent": "reviewer-REPLACE_WITH_FIRST_12_FINGERPRINT_CHARACTERS",
+      "gateway": "http://127.0.0.1:4100",
+      "model": "REPLACE_WITH_PROFILE_MODEL_ID",
+      "config_file": "/absolute/path/to/herdr-a2a/config.yaml",
+      "config_sha256": "REPLACE_WITH_SHA256_OF_OPERATOR_VERIFIED_CONFIG_FILE",
+      "review_only": true,
+      "command": ["/absolute/path/to/herdr-a2a"]
+    }
+  ]
+}

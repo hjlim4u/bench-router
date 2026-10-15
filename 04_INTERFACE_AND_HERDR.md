@@ -1,6 +1,6 @@
 # CLI·JSON·herdr 실행 계약 v1
 
-문서와 examples는 계약 설명이다. 아직 bench-router 명령이 구현되어 있지 않다. JSON Schema draft 2020-12를 구현 저장소에 작성하되, MVP 런타임 validation은 작은 표준 라이브러리 함수로 충분하다.
+문서와 examples는 원래 계약 설명이다. 현재 구현과 추가된 선택적 A2A 협업 명령은 [README](README.md)와 [협업 규약](docs/hybrid-collaboration.md)을 함께 참조한다. 런타임 validation은 표준 라이브러리로 수행한다.
 
 ## CLI
 
@@ -18,9 +18,14 @@
 | parallel --group FILE [--dry-run] | task × fanout을 각자 worktree에서 병렬 위임. group 2.0은 task별 context·selections | 선택 |
 | collect --run-id ID --cwd ABS_PATH | 기존 receipt의 Agent/결과를 읽고 대기·회수; prompt 재전송 없음 | 필수 |
 | feedback --run-id ID --cwd ABS_PATH --outcome success\|partial\|fail | Orchestrator 평가 기록 | 필수 |
+| review --task FILE --profile ID | 명시적 내용 검토를 설정된 A2A agent에 제출. 기존 경로와 공통 admission 사용 | 선택 |
+| a2a get\|continue\|cancel\|close --key KEY | 고정된 gateway/task 관측·질문 응답·정리. continue는 --answer-file 사용 | 선택 |
+| coordination status\|release\|feedback | 합산 활성 작업·소유권 기록 조회, 정지 확인 후 슬롯 해제, 별도 결과 채택 기록 | 선택 |
 | route --no-wait, --machine, plugin 액션 | 비동기/원격/플러그인 | 보류 |
 
 route/collect/status/refresh는 stdout에 JSON 한 객체만 내보낸다. 로그·진행 정보는 stderr로 보내며 secret은 제거한다. explain의 사람용 출력만 예외다. --dry-run은 네트워크, herdr 호출, 파일/DB mutation 없이 동작하고 온라인 가용성 미확인을 명시한다.
+
+review/a2a/coordination도 stdout JSON 한 객체를 출력한다. native route/collect에는 coordination_key가 추가된다. review/a2a는 coordination_key, input_hash, reference(gateway/task_id), backend_status, active, response_path, acceptance를 반환한다. submitted/working은 waiting(11), input-required/auth-required는 blocked(10), failed/canceled/rejected는 execution_failed(12)로 정규화한다. 완료는 채택을 의미하지 않는다. 공통 admission 거절은 status=conflict(14), warning code=coordination이며 실행을 제출하지 않는다. 조정 경로는 기존 실행 코어의 결과 파일 계약을 대체하지 않는다.
 
 종료 코드는 **라우터의 코드**이며 herdr의 exit code를 그대로 노출하지 않는다.
 

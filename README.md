@@ -9,6 +9,8 @@ Orchestrator가 위임하기로 결정한 작업을 받아, **외부 벤치마�
 
 설계 근거와 원래 명세는 [00_START_HERE.md](00_START_HERE.md)부터 [06_VALIDATION_AND_OPEN_ITEMS.md](06_VALIDATION_AND_OPEN_ITEMS.md)까지의 handoff 문서에 있습니다. 구현 중 명세와 달라진 점은 [명세와 다른 점](#명세와-다른-점)에, 진행 기록은 [docs/implementation-status.md](docs/implementation-status.md)에 정리했습니다.
 
+기존 실행 경로와 선택적으로 A2A 검토·질의응답을 조합하려면 [협업 규약](docs/hybrid-collaboration.md)을 사용하세요. `review`/`a2a` Adapter와 기존 `route`/`parallel`이 공통 조정 기록으로 중복·작업 소유권·합산 실행 수를 검사합니다. [A2A 설정 예제](examples/a2a-bindings.example.json)는 사용자 설정 디렉터리에 배치하며, `coordination status`로 진행 작업을 확인합니다. A2A는 선택 사항이며 실제 품질·성능 이점은 아직 검증되지 않았습니다.
+
 ---
 
 ## 구성
