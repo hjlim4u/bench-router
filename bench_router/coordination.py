@@ -1,4 +1,4 @@
-"""Shared admission for native dispatch and opt-in A2A reviews; no workflow scheduler."""
+"""Durable task admission and acceptance; Projects owns agent execution."""
 import contextlib
 import json
 import os
@@ -92,7 +92,7 @@ def reserve(t, backend, binding):
         active = [x for x in _records() if x["active"]]
         if len(active) >= MAX_ACTIVE:
             raise Conflict(f"combined active task limit ({MAX_ACTIVE}) reached; collect or inspect existing tasks")
-        if any(_overlap(t["cwd"], x["cwd"]) and (backend == "herdr" or x["backend"] == "herdr") for x in active):
+        if any(_overlap(t["cwd"], x["cwd"]) for x in active):
             raise Conflict("workspace overlaps an active writer or review; use isolated worktrees or collect first")
         rec = {"schema_version": "1.0", "key": key, "backend": backend, "cwd": t["cwd"],
                "task_id": t["task_id"], "round": t["round"], "request_hash": digest, "binding": binding,
@@ -115,18 +115,19 @@ def discard(key):
         _path(key).unlink()
 
 
-def native_observed(rc):
+def observe_receipt(rc):
     key = key_for(rc)
     with gate():
         rec = load(key) if _path(key).exists() else {
-            "schema_version": "1.0", "key": key, "backend": "herdr", "cwd": rc["cwd"],
+            "schema_version": "1.0", "key": key, "backend": rc.get("backend", "herdr"), "cwd": rc["cwd"],
             "task_id": rc["task_id"], "round": rc["round"], "request_hash": rc["semantic_task_hash"],
-            "binding": {"session": rc["herdr_session"]}, "acceptance": {"decision": "withheld", "reason": "not assessed"}}
-        if rec["backend"] != "herdr":
-            raise Conflict("native receipt conflicts with the recorded backend")
+            "binding": rc.get("project_binding", {"session": rc["herdr_session"]}), "acceptance": {"decision": "withheld", "reason": "not assessed"}}
+        if rec["backend"] != rc.get("backend", "herdr"):
+            raise Conflict("receipt conflicts with the recorded backend")
         rec.update(status=rc["status"], reference={"cwd": rc["cwd"], "run_id": rc["run_id"]},
                    profile=rc["profile"], profile_fingerprint=rc["profile_fingerprint"],
-                   active=not rec.get("released", False) and rc["status"] not in {"completed", "result_invalid", "execution_failed"})
+                   active=not rec.get("released", False) and (rc["status"] not in {"completed", "result_invalid", "execution_failed"}
+                           or (rc["status"] == "execution_failed" and rc["delivery_state"] != "not_attempted")))
         _save(rec)
 
 
