@@ -16,8 +16,20 @@ from . import locking
 from . import routing as r
 
 PROJECTS_BIN = os.environ.get("BENCH_ROUTER_PROJECTS", "herdr-projects")
+HERDR_BIN = os.environ.get("BENCH_ROUTER_HERDR", "herdr")
+BACKEND = "projects-1.2"
+PROJECTS_VERSION_RE = re.compile(r"herdr-projects 1\.2\.1(?:[ +].*)?")
 SHORT_CALL_S = 15
-MAX_PROMPT_ARG_BYTES = r.TASK_MAX_BYTES
+START_CALL_S = 60  # add --delegate starts the agent before it answers
+MAX_PROMPT_ARG_BYTES = 120 * 1024  # the prompt is one argv entry (--desc); Linux caps one at 128 KiB
+RESULT_REL = Path(".bench-router") / "runs"  # agent writes results here, relative to its board worktree
+# One agent run per receipt: no review rounds, attempts, plan gate or merge. worker.access stays the board's setting.
+WORK_SETTINGS = ["--workspace.from", "here", "--workspace.cleanup", "false", "--review.when", "never",
+                 "--review.rounds", "0", "--merge.by", "you", "--merge.pr", "false", "--attempts.by", "1",
+                 "--plan.approve", "none", "--no-research"]
+AT_REST_STAGES = {"approval", "done"}
+PENDING_STAGES = {"after", "queued", "starting"}
+FAILED_STAGES = {"failed", "nosummary", "stopped", "todo"}  # todo: added, but no agent was put on it
 RESULT_MD_MAX = 10 * 1024 * 1024
 RESULT_JSON_MAX = 64 * 1024
 SETTLED_STATUSES = {"completed", "result_invalid", "execution_failed"}  # 이 외의 receipt는 새 live dispatch를 막는다
@@ -38,8 +50,8 @@ def _iso(t):
 
 # ---------- Projects public CLI ----------
 
-def project_call(project, argv, runner=subprocess.run, raw=False, timeout_s=SHORT_CALL_S):
-    cmd = [PROJECTS_BIN, "--root", str(Path(project).parent), *argv]
+def project_call(argv, runner=subprocess.run, raw=False, timeout_s=SHORT_CALL_S, exe=None):
+    cmd = [exe or PROJECTS_BIN, *argv]
     try:
         p = runner(cmd, capture_output=True, text=True, encoding="utf-8", errors="strict",
                    timeout=timeout_s, shell=False)
@@ -52,26 +64,33 @@ def project_call(project, argv, runner=subprocess.run, raw=False, timeout_s=SHOR
         return None, {"code": "projects_error", "message": str(e)[:300]}
 
 
-def project_binding(session=None, project=None):
-    path = Path(project or os.environ.get("BENCH_ROUTER_PROJECT_DIR", ""))
-    if not path.is_absolute() or not (path / "PROJECT.md").is_file():
-        raise r.InputError("BENCH_ROUTER_PROJECT_DIR must name an opened Projects project directory")
-    path = path.resolve()
-    cfg_path = Path(os.environ.get("HOME") or Path.home()) / ".config/herdr-projects/config.toml"
-    cfg = r._load_toml(cfg_path)
-    layers = cfg.get("safety", {})
-    if not isinstance(layers, dict) or any(not isinstance(v, dict) for v in layers.values()):
-        raise r.InputError("Projects safety settings must be TOML tables")
-    safety = {**layers.get("default", {}), **layers.get(str(path), {})}
-    if safety.get("yolo", False) or safety.get("thread_agent_args", []):
-        raise r.InputError("Projects yolo and legacy thread_agent_args must be disabled; use named profiles")
-    coordinator = r.load_json_strict(path / ".state/coordinator.json", r.TASK_MAX_BYTES)
-    if not isinstance(coordinator, dict) or not isinstance(coordinator.get("socket"), str) or not coordinator["socket"]:
-        raise r.InputError("Projects project has no recorded session socket")
-    if session is not None and coordinator.get("session") != session:
-        raise r.InputError("Projects project belongs to another Herdr session")
-    return {"project": str(path), "socket": coordinator["socket"],
-            "config_file": str(cfg_path), "config_sha256": hashlib.sha256(cfg_path.read_bytes()).hexdigest()}
+def project_binding(session=None, runner=subprocess.run):
+    """The board this run belongs to: the Projects build and the caller's Herdr session."""
+    version, err = project_call(["version"], runner, raw=True)
+    version = (version or "").strip()
+    if err or not PROJECTS_VERSION_RE.fullmatch(version):
+        raise r.InputError(f"herdr-projects 1.2.1 is required (found {version or (err or {}).get('message')!r})")
+    return {"projects_version": version.split(" (")[0], "session": session}
+
+
+def worker_settings(profile):
+    """Router profile args → Projects work settings. Only a model and an effort can be expressed; else None."""
+    args, model, effort, i = profile["args"], None, None, 0
+    while i < len(args) - 1:
+        flag, value = args[i], args[i + 1]
+        if flag in ("--model", "-m"):
+            model = value
+        elif flag == "--effort":
+            effort = value
+        elif flag == "-c" and (m := re.fullmatch(r'model_reasoning_effort="?(\w+)"?', value)):
+            effort = m.group(1)
+        else:
+            return None
+        i += 2
+    if i != len(args):
+        return None
+    return (["--worker.agent", profile["kind"] + (f"/{model}" if model else "")]
+            + (["--worker.effort", effort] if effort else []))
 
 
 def probe(p, which=shutil.which):
@@ -126,7 +145,7 @@ def contract_text(rc):
     rd = rc["run_dir"]
     return (f"\n\n---\n[bench-router 실행 계약 — 위 작업의 범위나 권한을 넓히지 않습니다]\n"
             f"실행 식별자: {rc['run_id']}\n검증 토큰: {rc['nonce']}\n프로필 지문: {rc['profile_fingerprint']}\n"
-            f"결과 디렉터리(절대 경로): {rd}\n\n"
+            f"결과 디렉터리({'절대 경로' if os.path.isabs(rd) else '현재 worktree 기준 상대 경로'}): {rd}\n\n"
             "요청된 작업을 수행하고, result.md에 결과/변경/검증/미완료 사항을 기록하세요.\n"
             "result.md를 완성한 뒤 result.json을 마지막에 한 번에 작성하세요.\n"
             # 라우터는 settled(idle/done) 이후에만 검사하므로 원자적 쓰기는 불필요. mv/검증 스크립트는
@@ -200,8 +219,11 @@ def settle(rc, state):
     """관찰된 herdr 상태 + 결과 파일로 receipt 상태를 결정한다. idle/done만으로는 성공이 아니다."""
     _observe(rc, state)
     if state in ("idle", "done"):
-        manifest, why = check_result(rc)
+        src = Path(rc["worktree"]) / RESULT_REL / rc["run_id"]
+        manifest, why = check_result({**rc, "run_dir": str(src)})
         if manifest:
+            for name in ("result.json", "result.md"):  # checked regular files inside src; keep a copy with the receipt
+                shutil.copyfile(src / name, Path(rc["run_dir"]) / name)
             rc.update(status="completed", task_outcome=manifest["status"], settled_contract=True,
                       result_path=str(Path(rc["run_dir"]) / "result.md"),
                       manifest_path=str(Path(rc["run_dir"]) / "result.json"))
@@ -223,44 +245,31 @@ def settle(rc, state):
 
 
 def execute(rc, prompt, profile, session=None, runner=subprocess.run):
-    project = rc["project_binding"]["project"]
-    remaining = (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds()
-    version, err = project_call(project, ["--version"], runner, raw=True, timeout_s=min(SHORT_CALL_S, max(0.001, remaining)))
-    if err or not re.fullmatch(r"herdr-projects 0\.2\.34(?:\+[^\s]+)?", (version or "").strip()):
+    settings = worker_settings(profile)
+    if settings is None:
         rc["status"] = "execution_failed"
-        _observe(rc, error=err, note="Projects 0.2.34 is required; nothing submitted")
+        _observe(rc, note="profile args other than a model/effort cannot be expressed as Projects settings; nothing submitted")
         save(rc)
         return rc
-    rc["projects_version"] = version.strip()
-    remaining = (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds()
-    resolved, err = project_call(project, ["profile", "resolve", profile["id"]], runner,
-                                 timeout_s=min(SHORT_CALL_S, max(0.001, remaining)))
-    if err or resolved != {"name": profile["id"], "agent": profile["kind"], "args": profile["args"]}:
-        rc["status"] = "execution_failed"
-        _observe(rc, error=err, note="Projects profile differs from the selected launch setup; nothing submitted")
-        save(rc)
-        return rc
-    if project_binding(session, project) != rc["project_binding"]:
-        raise r.InputError("Projects configuration changed before submission")
-    task_file = Path(rc["run_dir"]) / "input.txt"
-    r.atomic_write(task_file, prompt.encode("utf-8"))
+    if project_binding(session, runner) != rc["project_binding"]:
+        raise r.InputError("Projects version changed before submission")
+    r.atomic_write(Path(rc["run_dir"]) / "input.txt", prompt.encode("utf-8"))
     remaining = (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds()
     if remaining <= 0:
         rc["status"] = "execution_failed"
-        _observe(rc, note="deadline elapsed before thread submission")
+        _observe(rc, note="deadline elapsed before task submission")
         save(rc)
         return rc
     rc["delivery_state"] = "submission_attempted"
-    save(rc)  # Persist before thread start: a lost response must never create a second thread.
-    obj, err = project_call(project, ["thread", "start", Path(project).name, "--title", "br-" + rc["run_id"],
-                                     "--repo", rc["cwd"], "--kind", "checkout", "--profile", profile["id"],
-                                     "--task-file", str(task_file)], runner, timeout_s=min(SHORT_CALL_S, remaining))
-    if err or not isinstance(obj, dict) or not re.fullmatch(r"t-[0-9]{4,}", str(obj.get("id", ""))):
+    save(rc)  # Persist before add: a lost response must never create a second task.
+    obj, err = project_call(["add", "br-" + rc["run_id"], "--desc", prompt, "--repo", rc["cwd"], "--delegate",
+                             *settings, *WORK_SETTINGS, "--json"], runner, timeout_s=min(START_CALL_S, remaining))
+    if err or not isinstance(obj, dict) or not re.fullmatch(r"[^/\s]+/[0-9]+", str(obj.get("id", ""))):
         rc.update(status="delivery_uncertain", delivery_state="uncertain")
-        _observe(rc, error=err, note="thread start unconfirmed; inspect Projects, never resubmit")
+        _observe(rc, error=err, note=f"task add unconfirmed; find br-{rc['run_id']} on the board, never resubmit")
         save(rc)
         return rc
-    rc["thread_id"] = obj["id"]
+    rc["thread_id"] = obj["id"]  # the board task id (repo/N)
     save(rc)
     remaining = max(0, (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds() * 1000)
     if remaining <= 0:
@@ -271,10 +280,13 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run):
 
 
 def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
-    """Observe the recorded thread only; never start, restart or re-prompt it."""
-    if rc.get("backend") != "projects":
+    """Observe the recorded board task only; never delegate, retry or re-prompt it."""
+    if rc.get("backend") != BACKEND:
         raise r.InputError("legacy receipt: inspect the original worker; automatic backend migration is refused")
     if rc["status"] == "completed" and rc.get("settled_contract"):
+        if rc.get("release") is None:  # completed before releasing existed, or the last close failed
+            release(rc, runner)
+            save(rc)
         return rc
     if rc["delivery_state"] == "not_attempted":
         return rc
@@ -282,48 +294,44 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
         rc.update(status="delivery_uncertain", delivery_state="uncertain")
         save(rc)
         return rc
-    project = rc["project_binding"]["project"]
     deadline = time.monotonic() + wait_ms / 1000
+    timeout = lambda: min(SHORT_CALL_S, max(0.001, deadline - time.monotonic())) if wait_ms > 0 else SHORT_CALL_S
     while True:
         try:
-            if project_binding(session, project) != rc["project_binding"]:
-                raise r.InputError("Projects configuration or session changed; inspect the recorded worker")
-            timeout = min(SHORT_CALL_S, max(0.001, deadline - time.monotonic())) if wait_ms > 0 else SHORT_CALL_S
-            version, err = project_call(project, ["--version"], runner, raw=True, timeout_s=timeout)
-            if err or version.strip() != rc["projects_version"]:
-                raise r.InputError("Projects executable version changed; inspect the recorded worker")
-            timeout = min(SHORT_CALL_S, max(0.001, deadline - time.monotonic())) if wait_ms > 0 else SHORT_CALL_S
-            obj, err = project_call(project, ["thread", "show", Path(project).name, rc["thread_id"], "--json"], runner,
-                                    timeout_s=timeout)
+            if project_binding(session, runner) != rc["project_binding"]:
+                raise r.InputError("Projects version or session changed; inspect the recorded worker")
+            rows, err = project_call(["list", "--all", "--json"], runner, timeout_s=timeout())
             if err:
                 raise r.InputError(err["message"])
-            if (not isinstance(obj, dict) or obj.get("id") != rc["thread_id"]
-                    or obj.get("profile") != rc["profile"] or obj.get("agent") != rc["kind"]
-                    or obj.get("kind") != "checkout" or os.path.realpath(obj.get("cwd") or "") != rc["cwd"]
-                    or obj.get("machine") or not obj.get("pane_id") or not obj.get("workspace_id")
-                    or (rc["pane_id"] and obj["pane_id"] != rc["pane_id"])
-                    or (rc["workspace_id"] and obj["workspace_id"] != rc["workspace_id"])
-                    or obj.get("status") not in {"open", "starting", "failed"}):
-                raise r.InputError("Projects thread identity or working directory differs from the receipt")
-            rc.update(pane_id=obj["pane_id"], workspace_id=obj["workspace_id"], agent_name=obj.get("agent_name"))
-            state = obj.get("note")
-            if obj.get("status") == "failed":
+            row = next((x for x in rows if isinstance(x, dict) and x.get("id") == rc["thread_id"]), None) \
+                if isinstance(rows, list) else None
+            if not row or row.get("title") != "br-" + rc["run_id"]:
+                raise r.InputError("Projects task is missing or its title differs from the receipt")
+            stage, state = row.get("stage"), row.get("state")
+            if stage in AT_REST_STAGES:  # the board took the agent's finish; its work is in the task worktree
+                det, err = project_call(["details", rc["thread_id"], "--json"], runner, timeout_s=timeout())
+                if err or not isinstance(det, dict) or (det.get("task") or {}).get("id") != rc["thread_id"] \
+                        or not det.get("worktree") or not str(det.get("agent", "")).startswith(rc["kind"]):
+                    raise r.InputError("Projects task details differ from the receipt")
+                rc.update(worktree=det["worktree"], branch=det.get("branch"), delivery_state="activity_observed")
+                settle(rc, "done")
+                if rc["status"] == "completed":
+                    release(rc, runner)
+            elif state == "blocked":
+                rc["status"] = "blocked"
+                rc["diagnostic_tail"] = row.get("msg")
+                if stage not in PENDING_STAGES:
+                    rc["delivery_state"] = "activity_observed"
+                _observe(rc, state, note=f"Projects stage {stage}: {row.get('msg') or ''}")
+            elif state == "error" or stage in FAILED_STAGES:
                 rc["status"] = "execution_failed"
-                _observe(rc, state, note=obj.get("error") or "thread has no live agent")
-            elif obj.get("prompt_pending") is True or obj.get("status") == "starting":
-                rc["status"] = "blocked" if obj.get("group_token") == "waiting-on-you" else "timed_out"
-                _observe(rc, state, note="Projects has not confirmed initial brief delivery")
-            elif state in {"no agent", "pane closed"}:
-                rc["status"] = "execution_failed"
-                _observe(rc, state, note="thread has no live agent after brief delivery")
-            elif obj.get("prompt_pending") is not False or state not in {"working", "blocked", "idle", "done"}:
-                raise r.InputError("Projects has no confirmed live state; recorded/stale state is insufficient")
+                _observe(rc, state, note=f"Projects stage {stage}: {row.get('msg') or ''}")
+            elif stage in PENDING_STAGES:
+                rc["status"] = "timed_out"
+                _observe(rc, state, note="Projects has not started the agent yet")
             else:
-                rc["delivery_state"] = "activity_observed"
-                settle(rc, state)
-            if rc["status"] == "blocked":
-                tail, _ = project_call(project, ["thread", "read", Path(project).name, rc["thread_id"]], runner, raw=True)
-                rc["diagnostic_tail"] = (tail or "")[-4000:]
+                rc.update(status="timed_out", delivery_state="activity_observed")
+                _observe(rc, state, note=f"Projects stage {stage}")
         except (r.InputError, OSError) as e:
             rc.update(status="delivery_uncertain", delivery_state="uncertain")
             _observe(rc, note=str(e))
@@ -345,8 +353,8 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
                 raise co.Conflict("dispatch session differs from the recorded native run; use collect")
             if existing:
                 co.observe_receipt(existing[0])
-            binding = existing[0].get("project_binding") if existing else project_binding(session)
-            rec, fresh = co.reserve(t, "projects", binding)
+            binding = existing[0].get("project_binding") if existing else project_binding(session, runner)
+            rec, fresh = co.reserve(t, BACKEND, binding)
             if not fresh and not existing:
                 raise co.Conflict("recorded native submission has no receipt; inspect effects before resolving, never resend")
             result = _dispatch(t, cfg, mapping, snap, snap_warnings, session, runner, which,
@@ -405,19 +413,23 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
             run_id = str(uuid.uuid4())
             rc = {"schema_version": r.SCHEMA_VERSION, "task_id": t["task_id"], "round": t["round"],
                   "semantic_task_hash": res["task_hash"], "run_id": run_id, "nonce": secrets.token_hex(16),
-                  "backend": "projects", "project_binding": project_binding(session),
+                  "backend": BACKEND, "project_binding": project_binding(session, runner),
                   "kind": profile["kind"], "thread_id": None,
                   "profile": profile["id"], "profile_fingerprint": res["selected"]["profile_fingerprint"],
                   "cwd": t["cwd"], "run_dir": str(run_dir(t["cwd"], run_id)),
-                  "agent_name": None, "workspace_id": None, "pane_id": None,
+                  "worktree": None, "branch": None,
                   "herdr_session": session, "status": "dispatching", "delivery_state": "not_attempted",
                   "timeout_ms": t["constraints"]["timeout_ms"], "created_at": _iso(now),
                   "deadline_at": _iso(now + timedelta(milliseconds=t["constraints"]["timeout_ms"])),
                   "result_path": None, "manifest_path": None, "task_outcome": None, "herdr_state": None,
                   "settled_contract": False, "last_observation": None}
-            prompt = t["prompt"] + contract_text(rc)
+            prompt = t["prompt"] + contract_text({**rc, "run_dir": (RESULT_REL / run_id).as_posix()})
             if len(prompt.encode("utf-8")) > MAX_PROMPT_ARG_BYTES:
-                raise r.InputError(f"prompt + contract exceeds {MAX_PROMPT_ARG_BYTES} bytes (task file limit)")
+                raise r.InputError(f"prompt + contract exceeds {MAX_PROMPT_ARG_BYTES} bytes (argument limit)")
+            from . import parallel  # keeps .bench-router/ out of the board's commit of the agent's work
+            if parallel.prepare_repo(t["cwd"]):
+                res["warnings"] = res["warnings"] + [r.warn(
+                    "dirty_base", "uncommitted changes in cwd are not in the board worktree (based on HEAD)")]
             Path(rc["run_dir"]).mkdir(parents=True)
             # 판단 기록 = 출력 + 같은 입력의 evaluate 2.0(통과·탈락 제약의 관측값·기준값, facts).
             # ponytail: assess를 한 번 더 돈다(결정적, 입력 동일). 느려지면 route가 assessment를 넘기게
@@ -428,6 +440,52 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
             return output(res, execute(rc, prompt, profile, session, runner))
     except Busy as e:
         return {**res, "status": "conflict", "warnings": res["warnings"] + [r.warn("dispatch_lock", str(e))]}
+
+
+def release(rc, runner=subprocess.run):
+    """Close a completed run's agent panes so it stops holding resources. The board keeps the agent's
+    conversation; `resume` reopens it. Runs once: a resumed session is never closed again by the router."""
+    obj, err = project_call(["pane", "list"], runner, exe=HERDR_BIN)
+    panes = (obj or {}).get("result", {}).get("panes") if isinstance(obj, dict) else None
+    if err or not isinstance(panes, list):
+        rc["release"] = None
+        _observe(rc, rc.get("herdr_state"), error=err, note="completed; could not list herdr panes, agent left open")
+        return
+    wt = os.path.realpath(rc["worktree"])
+    mine = [p for p in panes if isinstance(p, dict) and isinstance(p.get("cwd"), str)
+            and os.path.commonpath([wt, os.path.realpath(p["cwd"])]) == wt]
+    busy = [p["pane_id"] for p in mine if p.get("agent_status") in ("working", "blocked")]
+    if busy:  # someone is still talking to it on the board: leave it, try again on the next collect
+        rc["release"] = None
+        _observe(rc, rc.get("herdr_state"), note=f"completed; agent pane {busy[0]} is still active, left open")
+        return
+    closed = []
+    for p in mine:
+        _, err = project_call(["pane", "close", p["pane_id"]], runner, exe=HERDR_BIN)
+        if err:
+            rc["release"] = None
+            _observe(rc, rc.get("herdr_state"), error=err, note=f"completed; closing pane {p['pane_id']} failed")
+            return
+        closed.append({"pane_id": p["pane_id"], "agent": p.get("agent"),
+                       "session": (p.get("agent_session") or {}).get("value")})
+    rc["release"] = {"at": _iso(_now()), "panes": closed}
+
+
+def resume_run(cwd, run_id, runner=subprocess.run):
+    """Reopen a released run's board task and restart its agent in the same conversation (nothing is sent)."""
+    cwd = os.path.realpath(cwd)
+    with dispatch_lock(cwd):
+        rc = load_receipt(cwd, run_id)
+        if rc.get("backend") != BACKEND or not rc.get("thread_id"):
+            raise r.InputError("only a Projects 1.2.1 run with a board task can be resumed")
+        if project_binding(rc["herdr_session"], runner) != rc["project_binding"]:
+            raise r.InputError("Projects version or session changed; inspect the recorded worker")
+        obj, err = project_call(["reopen", rc["thread_id"], "--json"], runner, timeout_s=START_CALL_S)
+        if err or not isinstance(obj, dict):
+            raise r.InputError(f"reopen failed: {(err or {}).get('message')}")
+        rc["resumed"] = {"at": _iso(_now()), "pane_id": obj.get("pane"), "has_agent": obj.get("hasAgent") is True}
+        save(rc)
+    return {**output(None, rc), "resumed": rc["resumed"]}
 
 
 def collect_run(cwd, run_id, wait_ms, session=None, runner=subprocess.run):
@@ -467,12 +525,11 @@ def output(res, rc, reused=False):
                 "manifest_path": rc["manifest_path"], "task_outcome": rc["task_outcome"],
                 "herdr_state": rc["herdr_state"], "delivery_state": rc["delivery_state"],
                 "receipt_path": str(Path(rc["run_dir"]) / "receipt.json"), "deadline_at": rc["deadline_at"],
-                "workspace_id": rc["workspace_id"], "thread_id": rc.get("thread_id"),
-                "project": rc.get("project_binding", {}).get("project"), "last_observation": rc["last_observation"],
-                "diagnostic_tail": rc.get("diagnostic_tail"), "reused_receipt": reused})
+                "thread_id": rc.get("thread_id"), "worktree": rc.get("worktree"), "branch": rc.get("branch"),
+                "last_observation": rc["last_observation"],
+                "diagnostic_tail": rc.get("diagnostic_tail"), "release": rc.get("release"), "reused_receipt": reused})
     out["selected"] = {**(out.get("selected") or {}), "profile": rc["profile"],
-                       "profile_fingerprint": rc["profile_fingerprint"], "agent_name": rc["agent_name"],
-                       "pane_id": rc["pane_id"]}
+                       "profile_fingerprint": rc["profile_fingerprint"]}
     out["reassignment"] = ("collect_first" if rc["delivery_state"] in ("submission_attempted", "uncertain")
                             or rc["status"] in ("timed_out", "waiting", "delivery_uncertain") else
                             "safe_to_retry" if rc["delivery_state"] == "not_attempted" else "review_result")

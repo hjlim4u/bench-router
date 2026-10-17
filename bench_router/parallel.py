@@ -23,7 +23,7 @@ GROUP_KEYS = ("schema_version", "group_id", "cwd", "isolation", "fanout", "max_p
 GROUP_SCHEMA_VERSION = "2.0"  # tasks[i] = {task, context?, selections[]}: Orchestrator가 고른 프로필로 fanout
 MAX_AGENTS = 16
 VOTE_MAX = 64 * 1024
-ROUND_KEYS = ("status", "round", "run_id", "result_path", "task_outcome", "workspace_id", "receipt_path")
+ROUND_KEYS = ("status", "round", "run_id", "result_path", "task_outcome", "worktree", "branch", "receipt_path")
 
 
 def validate_group(raw):
@@ -131,7 +131,7 @@ def _same(a, b):
 def prepare_repo(cwd):
     """cwd는 git 최상위여야 한다. run/worktree 디렉터리가 diff에 섞이지 않게 info/exclude에 등록."""
     if not _same(_git(cwd, "rev-parse", "--show-toplevel"), cwd):
-        raise r.InputError("group.cwd: must be the top level of a git repository")
+        raise r.InputError("cwd: must be the top level of a git repository")
     exclude = Path(cwd) / _git(cwd, "rev-parse", "--git-common-dir") / "info" / "exclude"
     text = exclude.read_text("utf-8") if exclude.exists() else ""
     if ".bench-router/" not in text.split():
@@ -210,19 +210,13 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
     if prepare_repo(g["cwd"]):
         warnings.append(r.warn("dirty_base", "uncommitted changes in cwd are not in the worktrees (based on HEAD)"))
     shared.mkdir(parents=True, exist_ok=True)
-    profiles = {p["id"]: p for p in cfg["profile"]}
-    collab = g["isolation"] != "isolated"
-    for pid in {m["profile"] for m in members if m["status"] == "planned"}:
-        args = profiles[pid]["args"]
-        if collab and not any(args[i] == "--add-dir" and Path(args[i + 1]).is_absolute()
-                              and Path(shared).is_relative_to(Path(args[i + 1]).resolve())
-                              for i in range(len(args) - 1)):
-            raise r.InputError(f"{pid}: configure --add-dir for {shared.parent} in the named Projects/router profile")
 
     def run(m, round_add, extra_prompt):
         rt = g["raw_tasks"][m["index"]]
         try:
             wt = worktree(g["cwd"], g["group_id"], m["label"])
+            if m["rounds"] and m["rounds"][-1].get("branch"):  # the board committed the last round on its own branch
+                _git(wt, "merge", "--ff-only", m["rounds"][-1]["branch"])
             t = r.validate_task({**rt, "cwd": str(wt), "round": rt["round"] + round_add,
                                  "prompt": rt["prompt"] + collab_text(g, m, labels, shared) + extra_prompt})
             # worker task는 구조상 cwd(worktree)·prompt(협업 안내)가 group task와 달라 digest를 다시 비교하지 않는다.
@@ -241,6 +235,7 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
             rnd = {"status": "error", "round": rt["round"] + round_add, "error": str(e)}
         m["rounds"].append(rnd)
         m["status"] = rnd["status"]
+        m.update({k: rnd[k] for k in ("worktree", "branch") if rnd.get(k)})  # the agent's work lives in the board's
 
     def run_all(ms, round_add, text_for):
         with ThreadPoolExecutor(g["max_parallel"]) as ex:

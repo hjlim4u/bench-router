@@ -34,83 +34,118 @@ def cleanup_temp(tmp):
             REAL_SLEEP(0.05)
 
 
+def git_repo(path):
+    """Projects 1.2.1 works on git repositories: a top-level repo with one commit."""
+    git = ["git", "-C", str(path), "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run(git[:3] + ["init", "-q"], check=True)
+    subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "init"], check=True)
+
+
 def projects_environment(case, base):
-    home = Path(base) / "home"
-    project = home / "projects/test"
-    (project / ".state").mkdir(parents=True)
-    (project / "PROJECT.md").write_text("+++\nname = 'test'\n+++\n", "utf-8")
-    (project / ".state/coordinator.json").write_text(json.dumps({"socket": "/test.sock", "session": "brtest"}), "utf-8")
-    cfg = home / ".config/herdr-projects"
-    cfg.mkdir(parents=True)
-    (cfg / "config.toml").write_text("[safety.default]\nyolo = false\nthread_agent_args = []\n", "utf-8")
-    case.enterContext(patch.dict(os.environ, {"HOME": str(home), "BENCH_ROUTER_PROJECT_DIR": str(project),
-                                            "BENCH_ROUTER_HERDR_SESSION": "brtest",
+    case.enterContext(patch.dict(os.environ, {"BENCH_ROUTER_HERDR_SESSION": "brtest",
                                             "BENCH_ROUTER_COORDINATION_DIR": str(Path(base) / "admission")}))
     # No real waiting in offline state-transition tests.
     import itertools
     from types import SimpleNamespace
     ticks = itertools.count()
     case.enterContext(patch.object(hd, "time", SimpleNamespace(monotonic=lambda: next(ticks), sleep=lambda _: None)))
-    return project
 
 
 class FakeProjects:
-    """Stock Projects JSON shapes; no invented server endpoints."""
+    """Projects 1.2.1 CLI JSON shapes (src/cli/tasks.rs brief/details); every task gets a real git worktree."""
 
-    def __init__(self, start_error=None, pre_prompt_status="idle", prompt_error=None, after_status="idle",
-                 on_prompt=None, pane="w7:p3", profiles=None):
-        self.calls, self.prompts, self.kwargs = [], [], []
-        self.start_error, self.pre_prompt_status = start_error, pre_prompt_status
-        self.prompt_error, self.after_status, self.on_prompt = prompt_error, after_status, on_prompt
-        self.pane, self.status, self.gone = pane, after_status, False
-        self.profiles = profiles or {"a": profile("a", kind="claude", executable="claude",
-                                               args=["--model", "m", "--effort", "high"]), "b": profile("b")}
-        self.cwd, self.selected, self.updates, self.show_error = None, None, {}, False
+    def __init__(self, prompt_error=None, after_status="idle", on_prompt=None, profiles=None):
+        self.calls, self.prompts, self.kwargs, self.adds, self.ws_cwds = [], [], [], [], []
+        self.prompt_error, self.on_prompt, self.status = prompt_error, on_prompt, after_status
+        self.profiles = profiles or {}
+        self.version = "herdr-projects 1.2.1 (/fake/bin/herdr-projects)"
+        self.tasks, self.gone, self.pending, self.updates, self.detail_updates = {}, False, False, {}, {}
+        self.panes, self.closed, self.pane_error = {}, [], None
+        self.lock = __import__("threading").Lock()
 
     def _ok(self, obj):
         return subprocess.CompletedProcess([], 0, json.dumps(obj), "")
 
+    def worktree_of(self, prompt):
+        return next(t["worktree"] for t in self.tasks.values() if t["prompt"] == prompt)
+
+    def _row(self, t):
+        stage, state, msg = {"idle": ("approval", "blocked", "Approve to merge?"), "working": ("working", "working", ""),
+                             "blocked": ("asks", "blocked", "approval or question: command not found")}[self.status]
+        if self.pending:
+            stage, state, msg = "starting", "working", "Starting"
+        if self.gone:
+            stage, state, msg = "failed", "error", "The agent has exited"
+        return {"id": t["id"], "state": state, "app": t["agent"], "title": t["title"], "msg": msg, "stage": stage,
+                **self.updates}
+
+    def _pane(self, t):
+        self.panes[t["id"]] = {"pane_id": f"w{t['id'].split('/')[1]}:p1", "cwd": t["worktree"], "agent": t["agent"],
+                               "agent_session": {"value": f"sess-{t['id']}"}}
+
+    def _herdr(self, argv):
+        """herdr 0.9.x `pane list` / `pane close` shapes; each task's agent pane sits in its worktree."""
+        self.calls.append(["herdr", *argv[:2]])
+        if self.pane_error:
+            return subprocess.CompletedProcess([], 1, "", self.pane_error)
+        if argv == ["pane", "list"]:
+            status = {"idle": "idle", "working": "working", "blocked": "blocked"}[self.status]
+            return self._ok({"result": {"panes": [{**p, "agent_status": status} for p in self.panes.values()]}})
+        if argv[:2] == ["pane", "close"]:
+            self.closed.append(argv[2])
+            self.panes = {k: p for k, p in self.panes.items() if p["pane_id"] != argv[2]}
+            return self._ok({"result": {"type": "ok"}})
+        raise AssertionError(argv)
+
     def __call__(self, cmd, **kw):
-        assert cmd[0] == hd.PROJECTS_BIN and kw["shell"] is False and cmd[1] == "--root"
-        self.kwargs.append(kw)
-        argv = cmd[3:]
+        assert kw["shell"] is False
+        if cmd[0] == hd.HERDR_BIN:
+            return self._herdr(cmd[1:])
+        assert cmd[0] == hd.PROJECTS_BIN
+        argv = cmd[1:]
+        self.kwargs.append((argv[0], kw))
         self.calls.append(argv[:2])
-        if argv == ["--version"]:
-            return subprocess.CompletedProcess(cmd, 0, getattr(self, "version", "herdr-projects 0.2.34+test"), "")
-        if argv[:2] == ["profile", "resolve"]:
-            if self.start_error:
-                return subprocess.CompletedProcess(cmd, 1, "", self.start_error)
-            p = self.profiles[argv[2]]
-            return self._ok({"name": p["id"], "agent": p["kind"], "args": p["args"]})
-        if argv[:2] == ["thread", "start"]:
-            self.selected = argv[argv.index("--profile") + 1]
-            self.cwd = argv[argv.index("--repo") + 1]
-            prompt = Path(argv[argv.index("--task-file") + 1]).read_text("utf-8")
-            self.prompts.append(prompt)
-            if self.on_prompt and self.pre_prompt_status == "idle":
+        if argv == ["version"]:
+            return subprocess.CompletedProcess(cmd, 0, self.version + "\n", "")
+        if argv[0] == "add":
+            title, prompt, repo = argv[1], argv[argv.index("--desc") + 1], argv[argv.index("--repo") + 1]
+            wt = Path(repo) / ".bench-router" / "wt" / title
+            subprocess.run(["git", "-C", repo, "worktree", "add", "-q", "-b", f"work/{title}", str(wt), "HEAD"],
+                           check=True, capture_output=True)
+            with self.lock:
+                tid = f"repo/{len(self.tasks) + 1}"
+                self.tasks[tid] = {"id": tid, "title": title, "prompt": prompt, "worktree": str(wt),
+                                   "branch": f"work/{title}", "agent": argv[argv.index("--worker.agent") + 1].split("/")[0]}
+                self._pane(self.tasks[tid])
+                self.prompts.append(prompt)
+                self.adds.append(argv)
+                self.ws_cwds.append(repo)
+            if self.on_prompt:
                 self.on_prompt(self, prompt)
             if self.prompt_error:
                 raise subprocess.TimeoutExpired(cmd, 15)
-            return self._ok({"id": "t-0001", "kind": "checkout", "profile": self.selected,
-                             "agent": self.profiles[self.selected]["kind"], "branch": "", "pane_id": self.pane})
-        if argv[:2] == ["thread", "read"]:
-            return subprocess.CompletedProcess(cmd, 0, "approval or question: command not found", "")
-        if argv[:2] == ["thread", "show"]:
-            if self.show_error:
-                raise subprocess.TimeoutExpired(cmd, 15)
-            return self._ok({"id": "t-0001", "kind": "checkout", "profile": self.selected,
-                             "agent": self.profiles[self.selected]["kind"], "cwd": self.cwd, "machine": "",
-                             "workspace_id": "w7", "pane_id": self.pane,
-                             "status": "failed" if self.gone else "open",
-                             "note": "no agent" if self.gone else self.status,
-                             "group_token": "waiting-on-you" if self.status == "blocked" else "idle",
-                             "prompt_pending": self.pre_prompt_status != "idle", **self.updates})
+            return self._ok({"id": tid, "state": "working", "title": title, "stage": "starting"})
+        if argv[:1] == ["list"]:
+            return self._ok([self._row(t) for t in self.tasks.values()])
+        if argv[0] == "reopen":
+            self._pane(self.tasks[argv[1]])
+            return self._ok({"pane": self.panes[argv[1]]["pane_id"], "hasAgent": True})
+        if argv[0] == "details":
+            t = self.tasks[argv[1]]
+            return self._ok({"task": {"id": t["id"], "title": t["title"], "stage": self._row(t)["stage"]},
+                             "agent": t["agent"], "worktree": t["worktree"], "branch": t["branch"], **self.detail_updates})
         raise AssertionError(argv)
+
+
+def result_dir(fake, prompt):
+    rel = re.search(r"결과 디렉터리\(현재 worktree 기준 상대 경로\): (.+)", prompt).group(1)
+    return Path(fake.worktree_of(prompt)) / rel
 
 
 def write_result(status="success", nonce=None, body="# 결과\n작업 완료\n", sha=None, run_id=None):
     def act(fake, prompt):
-        rd = Path(re.search(r"결과 디렉터리\(절대 경로\): (.+)", prompt).group(1))
+        rd = result_dir(fake, prompt)
+        rd.mkdir(parents=True, exist_ok=True)
         m = {"schema_version": "1.0", "run_id": run_id or re.search(r"실행 식별자: (\S+)", prompt).group(1),
              "nonce": nonce or re.search(r"검증 토큰: (\S+)", prompt).group(1),
              "profile_fingerprint": re.search(r"프로필 지문: (\S+)", prompt).group(1), "status": status,
@@ -131,6 +166,7 @@ class P2(unittest.TestCase):
         self.addCleanup(env.stop)
         projects_environment(self, state.name)
         self.cwd = os.path.realpath(self.tmp.name)
+        git_repo(self.cwd)
         self.cfg = config([profile("a", kind="claude", executable="claude", args=["--model", "m", "--effort", "high"])],
                           default="a")
 
@@ -211,36 +247,76 @@ class P2(unittest.TestCase):
         self.assertEqual(out["status"], "completed")
         self.assertTrue(fake.prompts[0].startswith(evil))
         self.assertFalse(Path("/tmp/pwned").exists())
-        self.assertTrue(all(k["shell"] is False for k in fake.kwargs))
+        self.assertTrue(all(k["shell"] is False for _, k in fake.kwargs))
 
-    def test_v20_uses_returned_ids(self):
-        fake = FakeProjects(on_prompt=write_result(), pane="w42:p9")
+    def test_v20_uses_returned_ids_and_one_run_settings(self):
+        fake = FakeProjects(on_prompt=write_result())
         out = self.run_(fake)
-        self.assertEqual((out["workspace_id"], out["thread_id"]), ("w7", "t-0001"))
-        self.assertEqual(self.receipt(out)["pane_id"], "w42:p9")
-        self.assertNotIn(["agent", "start"], fake.calls)
+        t = fake.tasks["repo/1"]
+        self.assertEqual((out["thread_id"], out["worktree"], out["branch"]), ("repo/1", t["worktree"], t["branch"]))
+        add = fake.adds[0]
+        self.assertEqual(add[1], "br-" + out["run_id"])
+        self.assertEqual(add[add.index("--worker.agent") + 1:add.index("--worker.agent") + 4],
+                         ["claude/m", "--worker.effort", "high"])
+        self.assertIn("--delegate", add)
+        self.assertEqual(add[add.index("--review.when") + 1], "never")
+        self.assertNotIn("--worker.access", add)  # the board's own access setting applies
+        self.assertTrue(Path(out["result_path"]).is_relative_to(self.cwd))  # copied next to the receipt
 
-    def test_v21_start_failures_send_nothing(self):
-        fake = FakeProjects(start_error="profile unavailable")
+    def test_completed_agent_is_released_then_resumed(self):
+        fake = FakeProjects(on_prompt=write_result())
+        out = self.run_(fake)
+        self.assertEqual((out["status"], fake.closed), ("completed", ["w1:p1"]))
+        self.assertEqual(out["release"]["panes"], [{"pane_id": "w1:p1", "agent": "claude", "session": "sess-repo/1"}])
+        res = hd.resume_run(self.cwd, out["run_id"], runner=fake)
+        self.assertEqual((res["resumed"]["pane_id"], res["resumed"]["has_agent"]), ("w1:p1", True))
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "completed")
+        self.assertEqual(fake.closed, ["w1:p1"])  # a resumed session is never closed again by the router
+        self.assertEqual(len(fake.prompts), 1)  # resume sends nothing
+
+    def test_only_settled_completed_agents_are_released(self):
+        for i, (status, kw) in enumerate((("working", {}), ("blocked", {}), ("idle", {"on_prompt": None}))):
+            fake = FakeProjects(after_status=status, **kw)
+            out = self.run_(fake, self.task(task_id=f"r{i}"))
+            self.assertNotEqual(out["status"], "completed")
+            self.assertEqual(fake.closed, [], status)
+            from bench_router import coordination
+            coordination.resolve(out["coordination_key"], "inspected")
+            for rc in hd.receipts(self.cwd):  # settle the cwd for the next case
+                rc["status"] = "execution_failed"
+                hd.save(rc)
+
+    def test_release_failure_keeps_result_and_retries(self):
+        fake = FakeProjects(on_prompt=write_result())
+        fake.pane_error = "herdr server not running"
+        out = self.run_(fake)
+        self.assertEqual((out["status"], out["release"], fake.closed), ("completed", None, []))
+        fake.pane_error = None
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["release"]["panes"][0]["pane_id"], "w1:p1")
+
+    def test_v21_inexpressible_profile_sends_nothing(self):
+        self.cfg = config([profile("a", kind="claude", executable="claude", args=["--add-dir", "/x"])], default="a")
+        fake = FakeProjects()
         out = self.run_(fake)
         self.assertEqual((out["status"], out["delivery_state"], fake.prompts), ("execution_failed", "not_attempted", []))
         missing = self.run_(FakeProjects(), self.task(task_id="missing"), w=lambda _: None)
         self.assertEqual(missing["excluded"], [{"profile": "a", "reasons": ["executable_not_found"]}])
 
-    def test_projects_profile_identity_must_match(self):
-        fake = FakeProjects(on_prompt=write_result())
-        fake.profiles["a"] = profile("a")
-        out = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], runner=fake, which=which)
-        self.assertEqual((out["status"], fake.prompts), ("execution_failed", []))
+    def test_worker_settings(self):
+        p = lambda kind, args: {"kind": kind, "args": args}
+        self.assertEqual(hd.worker_settings(p("claude", [])), ["--worker.agent", "claude"])
+        self.assertEqual(hd.worker_settings(p("codex", ["-m", "x", "-c", 'model_reasoning_effort="high"'])),
+                         ["--worker.agent", "codex/x", "--worker.effort", "high"])
+        for bad in (["--add-dir", "/x"], ["-m"], ["-c", "sandbox=x"]):
+            self.assertIsNone(hd.worker_settings(p("codex", bad)), bad)
 
-    def test_v22_not_idle_before_prompt(self):
-        fake = FakeProjects(pre_prompt_status="starting")
-        fake.updates = {"status": "starting", "note": "no agent"}
+    def test_v22_not_started_cannot_complete(self):
+        fake = FakeProjects(on_prompt=write_result())
+        fake.pending = True
         out = self.run_(fake)
         self.assertEqual((out["status"], out["delivery_state"]), ("timed_out", "submission_attempted"))
         self.assertIsNone(out["result_path"])
-        fake.pre_prompt_status, fake.updates = "idle", {}
-        write_result()(fake, fake.prompts[0])
+        fake.pending = False
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "completed")
 
     def test_v23_completed_with_contract(self):
@@ -262,15 +338,14 @@ class P2(unittest.TestCase):
     def test_v25_path_and_size_attacks(self):
         def huge(fake, prompt):
             write_result()(fake, prompt)
-            rd = Path(re.search(r"결과 디렉터리\(절대 경로\): (.+)", prompt).group(1))
-            (rd / "result.json").write_bytes(b" " * (hd.RESULT_JSON_MAX + 1))
+            (result_dir(fake, prompt) / "result.json").write_bytes(b" " * (hd.RESULT_JSON_MAX + 1))
         for i, act in enumerate((huge, write_result(body="  \n"))):
             self.assertEqual(self.run_(FakeProjects(on_prompt=act), self.task(task_id=f"p{i}"))["status"], "result_invalid")
         outside = Path(self.cwd) / "secret.md"
         outside.write_text("secret", "utf-8")
         def symlinked(fake, prompt):
             write_result()(fake, prompt)
-            rd = Path(re.search(r"결과 디렉터리\(절대 경로\): (.+)", prompt).group(1))
+            rd = result_dir(fake, prompt)
             (rd / "result.md").unlink()
             (rd / "result.md").symlink_to(outside)
         if os.name == "nt":
@@ -285,7 +360,7 @@ class P2(unittest.TestCase):
         fake = FakeProjects(after_status="working")
         out = self.run_(fake)
         self.assertEqual(out["status"], "timed_out")
-        self.assertTrue(all(0 < kw["timeout"] <= 5 for kw in fake.kwargs))
+        self.assertTrue(all(0 < kw["timeout"] <= 5 for cmd, kw in fake.kwargs if cmd != "version"))
         again = self.run_(fake)
         self.assertEqual((len(fake.prompts), again["reused_receipt"], again["run_id"]), (1, True, out["run_id"]))
         write_result()(fake, fake.prompts[0])
@@ -351,9 +426,10 @@ class P2(unittest.TestCase):
 
     def test_v60_version_drift_blocks_submission(self):
         fake = FakeProjects(on_prompt=write_result())
-        fake.version = "herdr-projects 0.2.35+new"
-        out = self.run_(fake)
-        self.assertEqual((out["status"], out["delivery_state"], fake.prompts), ("execution_failed", "not_attempted", []))
+        fake.version = "herdr-projects 1.3.0 (/fake)"
+        with self.assertRaises(r.InputError):
+            self.run_(fake)
+        self.assertEqual((fake.prompts, hd.receipts(self.cwd)), ([], []))
 
     def test_prompt_size_limit(self):
         with self.assertRaises(r.InputError):

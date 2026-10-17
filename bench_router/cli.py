@@ -64,6 +64,15 @@ def _collect(args):
     return herdr.collect_run(args.cwd, args.run_id, args.wait_ms, args.herdr_session)
 
 
+def _resume(args):
+    from . import herdr
+    try:
+        return {**herdr.resume_run(args.cwd, args.run_id), "status": "ok"}
+    except herdr.Busy as e:
+        return {"schema_version": r.SCHEMA_VERSION, "status": "conflict", "run_id": args.run_id,
+                "warnings": [r.warn("dispatch_lock", str(e))]}
+
+
 def _feedback(args):
     from . import herdr
     return herdr.feedback(args.cwd, args.run_id, args.outcome, args.evaluator, args.note)
@@ -171,7 +180,7 @@ def main(argv=None):
     ap.add_argument("--cache-dir", type=Path, default=_xdg("XDG_CACHE_HOME", ".cache"))
     sub = ap.add_subparsers(dest="cmd", required=True)
     ap.add_argument("--herdr-session", default=os.environ.get("BENCH_ROUTER_HERDR_SESSION") or None,
-                    help="require the Projects project's recorded Herdr session")
+                    help="record this Herdr session with each run and require it on collect")
     rp = sub.add_parser("route", help="select a profile and delegate via Projects (--dry-run: select only)")
     rp.add_argument("--task", required=True)
     rp.add_argument("--context", help="Orchestrator metrics: estimates, prices, signals (context JSON 1.0|2.0)")
@@ -199,6 +208,9 @@ def main(argv=None):
     cp.add_argument("--run-id", required=True)
     cp.add_argument("--cwd", required=True)
     cp.add_argument("--wait-ms", type=int, default=0, help="wait while the agent is still working")
+    sp = sub.add_parser("resume", help="reopen a completed run's agent in the same conversation; sends nothing")
+    sp.add_argument("--run-id", required=True)
+    sp.add_argument("--cwd", required=True)
     bp = sub.add_parser("feedback", help="record the orchestrator's verified outcome")
     bp.add_argument("--run-id", required=True)
     bp.add_argument("--cwd", required=True)
@@ -215,7 +227,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     try:
-        res = {"refresh": _refresh, "status": _status, "collect": _collect, "feedback": _feedback,
+        res = {"refresh": _refresh, "status": _status, "collect": _collect, "resume": _resume, "feedback": _feedback,
                 "parallel": _parallel, "coordination": _coordination}.get(
             args.cmd, _load)(args)
     except r.InputError as e:

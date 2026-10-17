@@ -40,7 +40,7 @@ OS timer / 수동 ── bench-router refresh ──▶ AA API, Arena dataset, �
 
 - 오프라인 평가·refresh는 Linux/WSL2/Windows에서 동작합니다. Projects live 실행은 Linux/WSL2에서 준비하세요.
 - Python 3.11 이상.
-- live 위임에는 Herdr, herdr-projects **0.2.34**, Agent CLI 설치·로그인, 열려 있는 Projects 프로젝트가 필요합니다. `BENCH_ROUTER_PROJECT_DIR`에 프로젝트의 절대 경로를 지정합니다.
+- live 위임에는 Herdr, herdr-projects **1.2.1**(board), Agent CLI 설치·로그인이 필요합니다. task `cwd`는 커밋이 있는 git 저장소의 최상위여야 합니다. 자세한 내용은 [docs/projects.md](docs/projects.md)를 보세요.
 - AA 데이터를 쓰려면 Artificial Analysis API 키(Free tier로 충분)가 필요합니다.
 
 별도 설치 단계는 없습니다. 저장소 루트에서 모듈로 실행합니다.
@@ -310,15 +310,17 @@ WantedBy=timers.target
 
 `route`(dry-run 없이)는 다음 순서로 동작합니다.
 
-1. PATH 가용성과 제약을 검사해 프로필을 선택합니다. Projects의 동일 이름 프로필 `agent/args`를 대조하고 설정·session을 고정합니다. 로그인·모델 접근은 실제 Agent에서 확인합니다.
+1. PATH 가용성과 제약을 검사해 프로필을 선택합니다. Projects 버전과 session을 receipt에 고정합니다. 로그인·모델 접근은 실제 Agent에서 확인합니다.
 2. `<cwd>/.bench-router/dispatch.lock`을 잡습니다. cwd당 동시에 하나만 위임합니다.
 3. 같은 `(task_id, round)`의 receipt가 있으면 처리 방식이 갈립니다. 내용 hash가 같으면 **재전송 없이 collect**로 회수하고, 다르면 `conflict`입니다. 아직 정리되지 않은 다른 run이 있으면 새 위임을 막습니다(`unresolved_run`).
 4. `run_id`(UUID)와 128-bit nonce를 만들고 receipt를 원자적으로 기록합니다. 선택 근거는 `decision.json`에 남깁니다.
-5. Projects 버전과 이름 있는 프로필의 `agent/args`를 대조하고 `input.txt`를 원자 저장합니다.
-6. 제출 **전에** receipt에 `submission_attempted`를 fsync합니다. 그다음 `thread start --kind checkout --repo CWD --task-file FILE`을 **한 번만** 호출하고 반환된 thread ID를 기록합니다.
-7. Agent가 idle/done이 되면 결과 계약을 검사합니다. blocked면 화면(`diagnostic_tail`)을 반환합니다. timeout이나 stalled는 재전송하지 않고 `timed_out`/`delivery_uncertain`으로 남깁니다.
+5. 프로필 `kind/args`를 board 설정(`--worker.agent kind/model`, `--worker.effort`)으로 바꿉니다. 모델·effort 외의 args는 표현할 수 없어 제출하지 않습니다(`execution_failed`). `input.txt`를 원자 저장합니다.
+6. 제출 **전에** receipt에 `submission_attempted`를 fsync합니다. 그다음 `add br-<run_id> --desc PROMPT --repo CWD --delegate`를 **한 번만** 호출하고 반환된 board task ID(`thread_id`, 예: `repo/12`)를 기록합니다. review·attempts·plan·merge는 끄고(`--review.when never`, `--merge.by you` 등) `worker.access`는 board 설정을 따릅니다.
+7. board stage가 `approval`/`done`이 되면 task worktree의 결과 계약을 검사합니다. blocked면 board의 한 줄 상태(`diagnostic_tail`)를 반환합니다. timeout이나 stalled는 재전송하지 않고 `timed_out`/`delivery_uncertain`으로 남깁니다.
 
-프롬프트 끝에는 실행 계약이 붙습니다. Agent는 `<cwd>/.bench-router/runs/<run_id>/`에 다음 두 파일을 써야 합니다.
+`completed`가 되면 그 task의 agent pane을 닫아 자원을 반환합니다(`release`). 작업 중·질문 대기 agent는 닫지 않습니다. 같은 대화를 이어가려면 `python3 -m bench_router.cli resume --cwd CWD --run-id RUN`으로 board task를 다시 열고 agent를 같은 session으로 재시작합니다.
+
+프롬프트 끝에는 실행 계약이 붙습니다. Agent는 board가 만든 자기 worktree의 `.bench-router/runs/<run_id>/`에 다음 두 파일을 써야 합니다. 검증을 통과하면 라우터가 `<cwd>/.bench-router/runs/<run_id>/`로 복사합니다. `.bench-router/`는 `info/exclude`에 등록되어 board의 커밋에 섞이지 않습니다.
 
 - `result.md`: 결과·변경·검증·미완료 사항(최대 10 MiB, 비어 있으면 안 됨).
 - `result.json`: 마지막에 한 번에 작성(최대 64 KiB).
@@ -354,15 +356,15 @@ run 디렉터리에는 `receipt.json`, `decision.json`, `input.txt`, `result.md`
 - `cwd`는 git 저장소 최상위여야 하며, task에는 `cwd`를 넣지 않습니다. `tasks × fanout ≤ 16`, `fanout` 1–8, `max_parallel` 1–16.
 - fanout 프로필은 `selected`, 그다음 후보 순위 순으로 서로 다르게 고릅니다. 부족하면 `fanout_reduced` 경고가 붙습니다. label은 `<task_id>-<k>`입니다.
 - **메인 repo를 각 Agent CLI에서 먼저 신뢰해야 합니다.** 상위 폴더가 신뢰돼 있어도 새 git repo는 다시 묻고, 그러면 agent start 단계에서 `blocked`가 됩니다(실측). 메인 repo를 한 번 신뢰하면 그 아래 worktree는 claude·codex 모두 다시 묻지 않았습니다.
-- 미커밋 변경은 worktree에 들어가지 않습니다(`dirty_base` 경고). Agent에게는 커밋하지 말고 작업 트리에 변경을 남기라고 지시합니다. 비교·병합과 `git worktree remove`·브랜치 정리는 Orchestrator가 맡습니다.
+- 미커밋 변경은 worktree에 들어가지 않습니다(`dirty_base` 경고). router worktree는 member별 receipt 공간이고, 실제 작업은 board가 그 HEAD에서 만든 worktree·브랜치(`work/br-<run_id>`)에 커밋됩니다. member의 `worktree`/`branch`는 그 board 위치입니다. 비교·병합과 worktree·브랜치 정리는 Orchestrator가 맡습니다.
 
 | `isolation` | 동작 |
 |---|---|
 | `isolated` (기본) | worktree 격리만. 서로의 존재를 모름 |
-| `shared` | 공용 scratchpad `<cwd>/.bench-router/groups/<group_id>/shared/`. agent는 자기 `<label>.md`·`<label>/`에만 쓰고 동료 노트를 읽어, 실패한 접근·발견·중간 실험 결과를 공유합니다. 두 설정의 프로필 args에 `--add-dir <repo>/.bench-router/groups`를 미리 설정합니다 |
-| `deliberate` | `shared` + 협의 라운드. 1차 `completed` member가 2명 이상이면 각 `result.md`를 `shared/<label>.result.md`로 복사하고, 같은 worktree·프로필로 `round+1`을 보냅니다. 각 agent는 동료 결과를 검토해 자기 안을 고치고 `shared/<label>.vote.json`(`{"best": label, "reason": ...}`)을 씁니다. 라우터는 다수결로 `consensus.winner`를 냅니다(동률이면 `null`) |
+| `shared` | 공용 scratchpad `<cwd>/.bench-router/groups/<group_id>/shared/`. agent는 자기 `<label>.md`·`<label>/`에만 쓰고 동료 노트를 읽어, 실패한 접근·발견·중간 실험 결과를 공유합니다. scratchpad는 agent worktree 밖이므로 board의 `worker.access`가 `ask`이면 쓰기마다 승인(`blocked`)이 필요합니다 |
+| `deliberate` | `shared` + 협의 라운드. 1차 `completed` member가 2명 이상이면 각 `result.md`를 `shared/<label>.result.md`로 복사하고, 1차 board 브랜치를 router worktree에 fast-forward한 뒤 같은 프로필로 `round+1`을 보냅니다. 각 agent는 동료 결과를 검토해 자기 안을 고치고 `shared/<label>.vote.json`(`{"best": label, "reason": ...}`)을 씁니다. 라우터는 다수결로 `consensus.winner`를 냅니다(동률이면 `null`) |
 
-출력은 member별 `profile`, `worktree`, `branch`, `rounds[]`(status, run_id, result_path, task_outcome, workspace_id)와 `consensus`이며, `groups/<group_id>/group.json`에도 남습니다. 전부 `completed`면 exit 0, 아니면 `partial_failure`(16), 같은 group이 이미 실행 중이면 `conflict`(14)입니다. 2차 라운드는 새 agent라서 1차 대화 맥락은 없습니다. 상태는 worktree와 scratchpad로 이어집니다.
+출력은 member별 `profile`, `worktree`, `branch`, `rounds[]`(status, run_id, result_path, task_outcome, worktree, branch)와 `consensus`이며, `groups/<group_id>/group.json`에도 남습니다. 전부 `completed`면 exit 0, 아니면 `partial_failure`(16), 같은 group이 이미 실행 중이면 `conflict`(14)입니다. 2차 라운드는 새 agent라서 1차 대화 맥락은 없습니다. 상태는 worktree와 scratchpad로 이어집니다.
 
 ---
 
@@ -376,10 +378,10 @@ python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination
 |---|---|
 | `test_p0.py` | 선택·입력 계약(V01–V10): 합성 기대값, 결측과 측정된 0, percentile, 결정성, 제약, near-tie 경계 |
 | `test_p1.py` | 수집·캐시(V11–V18): 페이지 순회, 부분 실패 시 last-good, 해시 동일 시 no-op, HTTP 오류와 시간 상한, 잠금과 원자 게시, alias와 버전 cohort |
-| `test_p3.py` | 병렬 위임(V30–V34): worktree 격리, fanout, shared `--add-dir`, deliberate 투표, 재실행 시 재전송 없음 (git 필요) |
+| `test_p3.py` | 병렬 위임(V30–V34): worktree 격리, fanout, shared scratchpad, deliberate 투표, 재실행 시 재전송 없음 (git 필요) |
 | `test_p2.py` | 위임(V19–V29): argv 전달, 반환 ID 사용, 시작 실패, 전송 직전 상태, 결과 계약·경로 공격, timeout 후 재전송 없음, crash 복구, 충돌·잠금 |
 
-현재 실행 테스트는 Projects 0.2.34 공개 CLI의 JSON 형태를 따르는 fake를 사용합니다. 아래의 직접 Herdr smoke 결과는 이전 실행 경로의 기록이며 Projects live 검증을 의미하지 않습니다. 실측 근거는 `docs/evidence/`에 있습니다(herdr help·API schema·skill, claude/codex `--help`).
+현재 실행 테스트는 Projects 1.2.1 CLI(`src/cli/tasks.rs`)의 JSON 형태를 따르는 fake를 사용하며, task마다 실제 `git worktree`를 만듭니다. 아래의 직접 Herdr smoke 결과는 이전 실행 경로의 기록이며 Projects live 검증을 의미하지 않습니다. 실측 근거는 `docs/evidence/`에 있습니다(herdr help·API schema·skill, claude/codex `--help`).
 
 ---
 
