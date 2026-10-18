@@ -108,6 +108,27 @@ def _reject_const(name):
     raise InputError(f"non-finite number not allowed: {name}")
 
 
+# .env에서 읽는 키. 프로젝트 .env에 다른 비밀이 섞여 있어도 이 목록 밖의 값은 읽지도 넘기지도 않는다.
+DOTENV_KEYS = ("JEV_API_KEY", "TYPESAFE_API_KEY", "JEV_MODEL", "BENCH_ROUTER_DECISION_MODEL", "ARTIFICIAL_ANALYSIS_API_KEY")
+
+
+def env_with_dotenv(config_dir=None, cwd=None):
+    """우선순위: 프로세스 환경 > <cwd>/.env > <config_dir>/env. 파일이 없거나 깨져도 조용히 건너뛴다.
+    shortcut: KEY=VALUE 한 줄 형식만(보간·여러 줄 값 없음), 필요해지면 python-dotenv로 교체."""
+    out = {}
+    for path in (Path(config_dir or Path.home() / ".config/bench-router") / "env", Path(cwd or ".") / ".env"):
+        try:
+            text = path.read_text("utf-8") if path.stat().st_size <= 64 * 1024 else ""
+        except OSError:
+            continue
+        for line in text.splitlines():
+            k, sep, v = line.strip().removeprefix("export ").partition("=")
+            k, v = k.strip(), v.strip()
+            if sep and k in DOTENV_KEYS:
+                out[k] = v[1:-1] if len(v) > 1 and v[0] == v[-1] and v[0] in "\"'" else v
+    return {**out, **os.environ}
+
+
 def load_json_strict(path, max_bytes):
     try:
         data = Path(path).read_bytes()

@@ -65,7 +65,7 @@ def validate_response(request, response):
 
 def decide(request, env=None, response=None, host=None):
     request = validate_request(request)
-    env = os.environ if env is None else env
+    env = r.env_with_dotenv() if env is None else env
     if host is not None and host not in NATIVE_MODELS:
         raise r.InputError(f"decision host: one of {sorted(NATIVE_MODELS)} required")
     cheap_model = env.get("BENCH_ROUTER_DECISION_MODEL") or NATIVE_MODELS.get(host, "cheapest_available")

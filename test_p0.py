@@ -2,6 +2,7 @@
 import contextlib
 import io
 import json
+import os
 import re
 import tempfile
 import unittest
@@ -588,6 +589,22 @@ class P0Evidence(unittest.TestCase):
         self.assertIn({"axis": "task", "value": "webdev_react", "origin": "orchestrator"}, res["facets"])
 
 
+class P0Dotenv(unittest.TestCase):
+    def test_v65_project_dotenv_precedence_allowlist_and_quotes(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg, proj = Path(tmp) / "cfg", Path(tmp) / "proj"
+            cfg.mkdir(), proj.mkdir()
+            (cfg / "env").write_text("JEV_API_KEY=from-config\nJEV_MODEL=cfg-model\n")
+            (proj / ".env").write_text("# c\nexport JEV_API_KEY='from-project'\nUNRELATED_SECRET=x\nTYPESAFE_API_KEY=\"t\"\nbroken\n")
+            with patch.dict(os.environ, {"JEV_MODEL": "from-process"}):
+                env = r.env_with_dotenv(cfg, proj)
+            self.assertEqual((env["JEV_API_KEY"], env["TYPESAFE_API_KEY"], env["JEV_MODEL"]), ("from-project", "t", "from-process"))
+            self.assertNotIn("UNRELATED_SECRET", env)
+            with patch.dict(os.environ, {}, clear=True):  # 파일이 없으면 프로세스 환경만
+                self.assertEqual(r.env_with_dotenv(Path(tmp) / "none", Path(tmp) / "none"), {})
+
+
 class P0Decision(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -665,7 +682,8 @@ class P0Decision(unittest.TestCase):
 
     def test_v65_host_specific_native_handoff_and_reply_validation(self):
         from unittest.mock import patch
-        with tempfile.TemporaryDirectory() as tmp, patch.dict("os.environ", {}, clear=True), patch("urllib.request.urlopen") as post:
+        with tempfile.TemporaryDirectory() as tmp, patch.dict("os.environ", {}, clear=True), patch("urllib.request.urlopen") as post, \
+                patch("bench_router.routing.env_with_dotenv", side_effect=lambda *a, **k: dict(os.environ)):  # 개발 머신의 실제 .env 차단
             req, reply = Path(tmp) / "request.json", Path(tmp) / "reply.json"
             req.write_text(json.dumps(self.req))
             reply.write_text(json.dumps(self.reply))

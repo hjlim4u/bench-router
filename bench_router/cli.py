@@ -117,7 +117,8 @@ def _refresh(args):
         idx, wiki_status = wiki.load_index(args.cache_dir), {"status": "error", "error": {"code": "validation", "message": str(e)}}
     try:
         res = data.refresh(args.cache_dir, cfg, mapping, aliases, datetime.now(timezone.utc),
-                           only=args.source, force=args.force, import_doc=import_doc, index=idx)
+                           only=args.source, force=args.force, import_doc=import_doc, index=idx,
+                           env=r.env_with_dotenv(args.config_dir))
     except data.LockBusy as e:
         return {"schema_version": r.SCHEMA_VERSION, "status": "conflict", "error": {"code": "lock", "message": str(e)}}
     if wiki_status["status"] == "ok":
