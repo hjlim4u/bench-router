@@ -192,7 +192,7 @@ $BR --herdr-session work route --task task.json  # work는 실제 Herdr 세션 �
 ## 그 밖에 할 수 있는 일
 
 - **Orchestrator가 직접 고르기**: `evaluate`로 모든 프로필의 점수와 제약 결과만 받고, 최종 선택은 Orchestrator가 해서 `route --selection`으로 실행합니다. → [docs/orchestrator.md](docs/orchestrator.md)
-- **작업에 맞는 벤치마크 증거 보기**: `evidence --task task.json --format table`이 작업에서 판정한 facet(언어·작업 유형·에이전트 신호 등)에 맞는 벤치마크 결과를 프로필별로 한 표로 보여줍니다. 점수를 합산하거나 순위를 매기지 않고, 측정된 effort가 프로필의 effort와 다르면 `max≠high`처럼 표시합니다. benchmark wiki(`wiki/`)를 검토(`lifecycle: reviewed`)한 뒤 `wiki compile`/`refresh`로 `index.json`을 만들어야 내용이 나옵니다. 네트워크·파일 쓰기가 없습니다.
+- **작업에 맞는 벤치마크 증거 보기**: `evidence --task task.json --format table`이 작업에서 판정한 facet(언어·작업 유형·에이전트 신호 등)에 맞는 벤치마크 결과를 프로필별로 한 표로 보여줍니다. 점수를 합산하거나 순위를 매기지 않고, 측정된 effort가 프로필의 effort와 다르면 `max≠high`처럼 표시합니다. benchmark wiki(`wiki/`)를 검토(`lifecycle: reviewed`)한 뒤 `wiki compile`/`refresh`로 `index.json`을 만들어야 내용이 나옵니다. 수학·창작·검색처럼 규칙으로 판정하지 않는 작업 성격은 Orchestrator가 `wiki facets`로 나오는 값 중에서 골라 task의 `facets`에 태그합니다(목록 밖의 값은 오류로 거절). 네트워크·파일 쓰기가 없습니다.
 - **병렬 위임**: `parallel`로 여러 하위 작업을 동시에 맡기거나, 같은 작업을 여러 Agent에게 맡겨 결과를 비교합니다. Agent끼리 메모를 공유하거나 서로의 결과에 투표하게 할 수도 있습니다. → [상세 레퍼런스](docs/reference.md#병렬-위임과-협업-수준)
 - **여러 Agent에서 Skill로 사용**: [`skills/bench-router`](skills/bench-router/SKILL.md)를 각 Agent의 Skill 디렉터리에 링크합니다. → [설정 방법](docs/reference.md#여러-agent에서-skill-사용)
 
