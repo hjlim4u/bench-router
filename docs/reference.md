@@ -112,8 +112,11 @@ capabilities = ["filesystem_write"]
 
 | 명령 | 동작 |
 |---|---|
-| `refresh [--source aa\|arena] [--force]` | 자동 source 수집 → snapshot 게시. TTL 안이면 건너뜀 |
+| `refresh [--source aa\|arena\|mg] [--force] [--vault DIR]` | 자동 source 수집 및 검토된 wiki 컴파일(`index.json`) → snapshot 게시. TTL 안이면 건너뜀 |
 | `refresh --source swe\|tb --import FILE` | 승인된 수동 벤치마크 결과 import |
+| `wiki compile [--vault DIR] [--check]` | 검토된 benchmark wiki 페이지를 `index.json`으로 컴파일(`--check`는 검증만) |
+| `wiki facets` | Orchestrator가 `task.facets`에 태그할 수 있는 어휘와 설명·판정 규칙 출력 |
+| `evidence --task FILE [--format json\|table] [--max-units N]` | 작업 facet에 맞는 벤치마크 증거를 프로필별로 출력(합산·순위 없음, 읽기 전용) |
 | `status` | source별 나이·실패 횟수·마지막 오류·미매칭 모델, snapshot/설정 일치 여부 |
 | `route --task FILE --dry-run` | 선택만 하고 부작용 없음(네트워크·herdr·파일 쓰기 없음) |
 | `explain --task FILE [--context FILE]` | dry-run의 전체 후보·근거·제외 사유와 제약 결과·지표를 텍스트로 출력 |
@@ -122,7 +125,9 @@ capabilities = ["filesystem_write"]
 | `route --task FILE` | 선택 후 herdr로 위임하고, 유한한 시간 안에 대기·회수 |
 | `parallel --group FILE [--dry-run]` | 여러 agent를 각자 worktree에서 병렬 위임 ([병렬 위임](#병렬-위임과-협업-수준)) |
 | `collect --run-id ID --cwd DIR [--wait-ms N]` | 기존 run을 관찰·회수. **프롬프트를 다시 보내지 않음** |
+| `resume --run-id ID --cwd DIR` | 완료되어 닫힌 run의 board task와 agent 대화를 같은 세션으로 재개(프롬프트 전송 없음) |
 | `feedback --run-id ID --cwd DIR --outcome success\|partial\|fail [--evaluator X] [--note Y]` | Orchestrator의 검증 결과 기록 |
+| `coordination status\|release\|feedback` | 합산 활성 실행(최대 4개) 조회, worker 정지 확인 후 슬롯 해제(`release`), 채택 결과 기록 |
 
 ### 사용 예
 
@@ -131,10 +136,11 @@ export PATH="$HOME/.local/bin:$PATH"                 # herdr, claude, codex
 set -a; . ~/.config/bench-router/env; set +a          # AA 키
 BR="python3 -m bench_router.cli"
 
-$BR refresh                       # aa, arena (소스별 최대 180초)
+$BR refresh                       # aa, arena, mg + wiki index
 $BR status
 $BR route --task task.json --dry-run
 $BR explain --task task.json
+$BR evidence --task task.json --format table
 $BR --herdr-session work route --task task.json      # live 위임
 $BR collect --run-id <RUN_ID> --cwd /abs/project --wait-ms 60000
 $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator orchestrator
@@ -178,6 +184,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 
 - 필수: `schema_version`, `task_id`(`[A-Za-z0-9][A-Za-z0-9_-]{0,63}`), `round`(≥1), `summary`(≤4000자), `prompt`(≤256 KiB), `cwd`(존재하는 절대 경로).
 - `categories`가 있으면 `category_confidence`도 있어야 합니다. 카테고리 값: `coding_repo`, `terminal_ops`, `code_gen`, `webdev`, `math_reasoning`, `analysis`, `writing`, `vision_doc`, `general`.
+- 선택: `facets`(`{axis: [value]}`). `wiki facets`에 등록된 작업 성격을 Orchestrator가 직접 태그할 때 사용하며, `evidence` 표 조회에 반영됩니다.
 - 모르는 필드, NaN/Infinity, 중복 JSON 키, 잘못된 UTF-8, cwd 밖을 가리키는 `context_files`는 모두 오류(exit 2)입니다.
 - live 위임 시 프롬프트와 실행 계약 문구를 합쳐 120 KiB를 넘으면 거부합니다. herdr가 프롬프트를 argv 인자로만 받기 때문입니다.
 - **`cwd`는 Agent가 이미 신뢰한 폴더여야 합니다.** 처음 보는 폴더에서는 Claude Code 등이 신뢰 확인 창을 띄워 `blocked`가 됩니다. 라우터는 이 보안 확인에 자동으로 응답하지 않습니다.
@@ -186,7 +193,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 
 ## 선택 방식
 
-아래는 `route`가 스스로 고르는 **legacy 자동 선택**입니다. 여러 지표(비용·지연 등)를 함께 따지는 선택은 Orchestrator가 `evaluate` 결과로 하고 `route --selection`으로 실행합니다. 계약은 [docs/routing-contracts.md](routing-contracts.md), 사용법은 [docs/orchestrator.md](orchestrator.md).
+아래는 `route`가 스스로 고르는 **legacy 자동 선택**입니다. 여러 지표(비용·지연 등)나 세부 벤치마크 증거 표(`evidence`)를 함께 따지는 선택은 Orchestrator가 `evaluate` 결과로 하고 `route --selection`으로 실행합니다. 계약은 [docs/routing-contracts.md](routing-contracts.md), 사용법은 [docs/orchestrator.md](orchestrator.md).
 
 1. **분류**
    - L0: Orchestrator가 준 `categories`를 `category_confidence ≥ 0.6`일 때 정규화해 사용합니다.
@@ -227,13 +234,14 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 
 | source | 방식 | evidence | TTL / 최대 허용 경과 |
 |---|---|---|---|
-| `aa` | Artificial Analysis Free API, 전체 페이지 순회 | `aa_intelligence`, `aa_coding` | 24h / 7d |
-| `arena` | LMArena `leaderboard-dataset`(CC BY 4.0), HF datasets-server `/filter` JSON | `arena_text`, `arena_text_math`(text_style_control), `arena_webdev`, `arena_document`, `arena_vision` | 24h / 7d |
+| `aa` | Artificial Analysis Free API, 전체 페이지 순회 | `aa_intelligence`, `aa_coding` 및 활성 wiki unit(`aa:*`) | 24h / 7d |
+| `arena` | LMArena `leaderboard-dataset`(CC BY 4.0), HF datasets-server `/filter` JSON | `arena_text`, `arena_text_math`, `arena_webdev`, `arena_document`, `arena_vision` 및 활성 wiki unit(`arena:*`) | 24h / 7d |
+| `mg` | The Model Gap(`themodelgap.com/data`, CC BY 4.0) JSON | 활성 wiki unit(`mg:*`) | 24h / 7d |
 | `swe` | `--import` 수동 결과, SWE-bench Verified로 고정 | `swe_verified_exact` | 168h / 30d |
 | `tb` | `--import` 수동 결과, Terminal-Bench 4.0으로 고정 | `terminal_exact` | 168h / 30d |
 
-- **응답 처리**: 응답 크기 상한 20 MiB, 요청 수 상한(aa 50, arena 60)을 둡니다. 401/403/429는 재시도하지 않고, 5xx와 네트워크 오류는 최대 2회 재시도합니다.
-- **시간 상한**: source마다 전체 **180초** 상한이 있습니다. 요청별 timeout과 재시도 대기도 남은 시간에 맞춰 줄어듭니다.
+- **응답 처리**: 응답 크기 상한 20 MiB, 요청 수 상한(aa 50, arena 300, mg 4)을 둡니다. 401/403/429는 재시도하지 않고, 5xx와 네트워크 오류는 최대 2회 재시도합니다.
+- **시간 상한**: source마다 전체 **180초**(arena는 **600초**) 상한이 있습니다. 요청별 timeout과 재시도 대기도 남은 시간에 맞춰 줄어듭니다.
 - **실패 시**: 페이지 하나라도 실패하거나 스키마가 다르면 그 source의 새 데이터를 게시하지 않고 last-good을 유지합니다. 원본이 같으면 `unchanged`로 확인 시각만 갱신합니다.
 - **저장**: SQLite(`bench-router.db`: sources / snapshots / observations)에 source별 원본을 최근 3개까지 보관합니다. 동시 refresh는 운영체제 파일 잠금으로 막습니다.
 - **게시**: `snapshot.json`은 임시 파일에 쓰고 fsync한 뒤 `os.replace`로 교체합니다. 직전 유효본은 `snapshot.last-good.json`으로 옮기고, 재현용 사본은 `snapshots/`에 30일간 보관합니다.
@@ -412,5 +420,6 @@ python3 eval/cost.py --tag T       # 실행별 토큰·API 환산 비용
 ## 라이선스와 출처
 
 - Arena 데이터: LMArena `leaderboard-dataset`, CC BY 4.0. 출처는 snapshot의 `sources.*.attribution`에 남습니다.
+- The Model Gap 데이터: `themodelgap.com`, CC BY 4.0.
 - AA 데이터: Artificial Analysis. 공유하거나 표시할 때 출처를 밝혀야 합니다.
 - API 키는 설정 파일(`env`, 권한 600)에만 두고, 저장소·로그·출력에는 남기지 않습니다.
