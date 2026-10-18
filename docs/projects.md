@@ -14,9 +14,12 @@ bench-router는 벤치마크 평가, 필수 제약, 실행 기록과 결과 검�
 - 0.2.34 시절의 receipt(`backend: "projects"`)는 자동 이관하지 않는다. 그 worker를 직접 점검하고 정리한다.
 
 ```bash
-herdr-projects version            # herdr-projects 1.2.1 (...)
+export PATH="$HOME/.local/bin:$PATH"
+herdr --version                                   # herdr 0.9.3+ (https://herdr.dev)
+herdr plugin install eliasstravik/herdr-projects  # Projects 플러그인 설치
+herdr-projects version                            # herdr-projects 1.2.1 (...)
 # 선택: export BENCH_ROUTER_PROJECTS=/absolute/path/to/herdr-projects
-python -m bench_router.cli route --task task.json
+python3 -m bench_router.cli route --task task.json
 ```
 
 ## 프로필과 권한

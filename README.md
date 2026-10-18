@@ -103,19 +103,32 @@ flowchart LR
 
 ---
 
-## 처음 가져와 사용할 때: 설정 및 설치 가이드
+## 처음 가져와 사용할 때: 사전 조건 및 설치 가이드
 
-이 저장소를 처음 클론(`git clone`)한 뒤 바로 사용하기 위해 필요한 설정은 **필수 설정**과 **선택 설정(API 키·실행 환경)**으로 나뉩니다. Python 3.11 이상만 있으면 별도의 패키지 설치(`pip install`)는 필요 없습니다.
+이 저장소를 처음 클론(`git clone`)하거나 Skill로 설치해 사용할 때 필요한 사전 조건과 설정은 다음과 같습니다. Python 3.11 이상만 있으면 `bench-router` 자체의 별도 패키지 설치(`pip install`)는 필요 없습니다.
 
-### 1) 한눈에 보는 설정 체크리스트 (`~/.config/bench-router/`)
+### 1) 사전 조건 및 설정 체크리스트
 
-| 항목 | 필수 여부 | 역할 및 설정 방법 |
-|---|---|---|
-| **`profiles.toml`** | **필수** | 라우팅 후보 Agent 프로필 목록(모델·effort·비용 등급). 아래 2단계 예시대로 생성·편집 |
-| **`aliases.toml`** | 권장 | 외부 벤치마크의 모델명(예: `claude-opus-5.5-high`)을 프로필의 `model_id`와 매칭 ([작성법](docs/reference.md#aliasestoml)) |
-| **`ARTIFICIAL_ANALYSIS_API_KEY`** | 선택 (`refresh` 시) | Artificial Analysis 점수 수집용([무료 발급](https://artificialanalysis.ai)). **없어도 LMArena·The Model Gap 공개 데이터와 위키 인덱스는 정상 수집됨** |
-| **`TYPESAFE_API_KEY` (또는 `JEV_API_KEY`)** | 선택 (Skill 의사결정 시) | Skill의 경량 의사결정(`decide.py`)에서 Jev API를 쓸 때만 사용. **없으면 자동으로 호스트의 경량 서브에이전트(`bench-decider`: Haiku / Luna / Flash)로 동작함** |
-| **Herdr & `herdr-projects 1.2.1`** | 선택 (실제 위임 시) | `--dry-run`, `explain`, `evaluate`, `evidence`만 쓸 때는 불필요. 실제로 Agent를 띄워 작업을 맡길 때(Linux/WSL2)만 필요 ([설치 안내](docs/projects.md)) |
+| 구분 | 항목 | 필수 여부 | 요구 버전 및 설치·설정 방법 |
+|---|---|---|---|
+| **기본 런타임** | **Python 3.11+** | **필수** | 외부 패키지 불필요(표준 라이브러리만 사용). 오프라인 평가·데이터 갱신은 Linux / WSL2 / Windows 모두 지원 |
+| **라우터 설정** | **`profiles.toml`** | **필수** | `~/.config/bench-router/profiles.toml` — 라우팅 후보 Agent 프로필 목록. 아래 3단계 예시대로 생성·편집 |
+| **라우터 설정** | **`aliases.toml`** | 권장 | `~/.config/bench-router/aliases.toml` — 외부 벤치마크 모델명을 프로필 `model_id`와 매칭 ([작성법](docs/reference.md#aliasestoml)) |
+| **실제 위임 (Live)** | **[Herdr](https://herdr.dev)** | 실제 위임 시 필수 | **Linux / WSL2**, 버전 **0.9.3 이상** (`herdr --version`, 기본 `~/.local/bin/herdr`) |
+| **실제 위임 (Live)** | **`herdr-projects` 플러그인** | 실제 위임 시 필수 | 버전 **1.2.1** 고정 (`herdr plugin install eliasstravik/herdr-projects` → `herdr-projects version` 확인) |
+| **실제 위임 (Live)** | **대상 Agent CLI** | 실제 위임 시 필수 | 프로필에 등록한 CLI(`claude`, `codex`, `agy` 등) 설치·로그인 및 작업 대상 Git 저장소 폴더 신뢰(trust) 승인 완료 |
+| **선택 API 키** | **`ARTIFICIAL_ANALYSIS_API_KEY`** | 선택 (`refresh` 시) | Artificial Analysis 점수 수집용([무료 발급](https://artificialanalysis.ai)). **없어도 LMArena·The Model Gap 공개 데이터는 정상 수집됨** |
+| **선택 API 키** | **`TYPESAFE_API_KEY` (`JEV_API_KEY`)** | 선택 (Skill 결정 시) | Skill의 경량 의사결정(`decide.py`)에서 Jev API를 쓸 때만 사용. **없으면 호스트의 경량 서브에이전트(`bench-decider`)로 자동 폴백** |
+
+> [!NOTE]
+> **실제 위임(Live Dispatch) 환경 한 줄 준비 (Linux / WSL2)**
+> `--dry-run`, `explain`, `evaluate`, `evidence`만 사용할 때는 Herdr가 필요 없습니다. 실제로 Agent를 띄워 작업을 맡기려면(`route`, `parallel`) 아래 사전 조건이 준비되어 있어야 합니다([상세 안내](docs/projects.md)):
+> ```bash
+> export PATH="$HOME/.local/bin:$PATH"
+> herdr --version                                      # 0.9.3 이상 확인 (https://herdr.dev)
+> herdr plugin install eliasstravik/herdr-projects     # herdr-projects 플러그인 설치
+> herdr-projects version                               # herdr-projects 1.2.1 확인
+> ```
 
 > [!TIP]
 > **API 키 안전하게 보관하기**: 키를 발급받았다면 `~/.config/bench-router/env` 파일에 적어 두고 권한을 `600`으로 잠그세요.
