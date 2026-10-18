@@ -1,11 +1,14 @@
-"""Run the repository CLI from a linked skill directory or any working directory."""
+"""Run the CLI from a copied or linked skill directory, or from the repository."""
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+_SKILL = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_SKILL if (_SKILL / "bench_router").is_dir() else _SKILL.parents[1]))
 
-from bench_router.cli import main
+from bench_router.cli import main  # noqa: E402
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+

@@ -6,6 +6,7 @@ from pathlib import Path
 from . import routing as r
 
 INDEX_SCHEMA_VERSION = "1.0"
+BUNDLED_INDEX = Path(__file__).with_name("index.json")
 CODE_EXTS = (".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".c", ".cc", ".cpp", ".h", ".rb", ".php",
              ".cs", ".kt", ".swift", ".sh", ".sql")
 # script → (유니코드 범위, 알파벳 문자 중 최소 비율)
@@ -46,9 +47,10 @@ def _validate_index(idx):
 
 
 def load_index(cache_dir):
-    """wiki compile이 게시한 index.json. 없거나 손상되면 None."""
+    """캐시의 index.json(없으면 내장 index.json). 손상되면 None."""
+    p = Path(cache_dir) / "index.json"
     try:
-        idx = r.load_json_strict(Path(cache_dir) / "index.json", 16 * 1024 * 1024)
+        idx = r.load_json_strict(p if p.exists() else BUNDLED_INDEX, 16 * 1024 * 1024)
         _validate_index(idx)
     except r.InputError:
         return None

@@ -18,19 +18,23 @@ cd /path/to/bench-router-handoff
 python3 -m bench_router.cli --help
 ```
 
-### 여러 Agent에서 Skill 사용
+### 여러 Agent에서 Skill 사용 (글로벌 또는 프로젝트별 설치)
 
-[`skills/bench-router/SKILL.md`](../skills/bench-router/SKILL.md)가 유일한 Skill 원본입니다. 각 Agent의 Skill 검색 디렉터리에 이 폴더의 심볼릭 링크(Windows에서는 junction)를 만드세요. 복사본을 배포하면 업데이트가 갈라집니다. 예를 들어 `REPO`와 `AGENT_SKILLS`를 실제 절대 경로로 지정한 뒤 실행합니다.
+`skills/bench-router/` 안에 `bench_router` 패키지(컴파일된 `index.json` 내장)가 심볼릭 링크로 포함되어 있어, [`npx skills`](https://skills.sh/)가 스킬 폴더를 복사(`dereference`)해 설치하더라도 원본 저장소나 `wiki/` 폴더 없이 **복사된 스킬 자체(약 250KB)만으로 단독 동작**합니다.
 
 ```bash
+# 1. 글로벌 설치 (-g): 감지된 모든 Agent(Claude Code, Codex, Cursor, Gemini CLI 등)에 일괄 연결
+npx skills add hjlim4u/bench-router -g
+# (로컬 저장소에서 설치할 때: npx skills add /abs/path/to/bench-router -g)
+
+# 2. 특정 프로젝트 경로에만 설치
+cd /abs/path/to/my-project && npx skills add hjlim4u/bench-router
+
+# 3. Node.js 없이 수동 심볼릭 링크로 설치할 때
 ln -s "$REPO/skills/bench-router" "$AGENT_SKILLS/bench-router"
 ```
 
-```powershell
-New-Item -ItemType Junction -Path "$AgentSkills\bench-router" -Target "$Repo\skills\bench-router"
-```
-
-Skill의 `scripts/cli.py`는 링크의 실제 저장소 경로를 찾아 어떤 작업 디렉터리에서도 기존 CLI를 실행합니다. 같은 OS 실행 환경의 Agent는 동일 사용자 설정·캐시를 공유합니다. 네이티브 Windows와 WSL은 잠금 구현이 다르므로 둘이 같은 물리 캐시를 동시에 쓰지 마세요. 한 환경으로 실행을 통일하면 사본 없이 공유할 수 있습니다. `route`는 캐시를 갱신하지 않으며, 정기 `refresh`는 사용자당 한 곳에서만 예약하세요. 수동 `refresh`도 동일 잠금과 캐시를 사용합니다. Windows에서는 작업 스케줄러에 이 스크립트의 `refresh` 명령을 한 번 등록할 수 있습니다.
+Skill의 `scripts/cli.py`와 `scripts/decide.py`는 복사된 스킬 폴더(또는 심볼릭 링크된 원본 저장소)의 `bench_router`를 바로 실행합니다. 같은 OS 실행 환경의 Agent는 동일 사용자 설정(`~/.config/bench-router`)·캐시(`~/.cache/bench-router`)를 공유합니다. 네이티브 Windows와 WSL은 잠금 구현이 다르므로 둘이 같은 물리 캐시를 동시에 쓰지 마세요. 한 환경으로 실행을 통일하면 사본 없이 공유할 수 있습니다. `route`는 캐시를 갱신하지 않으며, 정기 `refresh`는 사용자당 한 곳에서만 예약하세요. 수동 `refresh`도 동일 잠금과 캐시를 사용합니다. Windows에서는 작업 스케줄러에 이 스크립트의 `refresh` 명령을 한 번 등록할 수 있습니다.
 
 ---
 
@@ -38,12 +42,14 @@ Skill의 `scripts/cli.py`는 링크의 실제 저장소 경로를 찾아 어떤 
 
 설정 디렉터리 기본값은 `$XDG_CONFIG_HOME/bench-router`(없으면 `~/.config/bench-router`)이고, `--config-dir`로 바꿀 수 있습니다. 캐시 디렉터리 기본값은 `$XDG_CACHE_HOME/bench-router`(없으면 `~/.cache/bench-router`)이고, `--cache-dir`로 바꿀 수 있습니다.
 
-| 파일 | 필수 | 내용 |
+| 파일 / 환경변수 | 필수 | 내용 |
 |---|---|---|
-| `profiles.toml` | 예 | 라우팅 대상 Agent 프로필 |
-| `aliases.toml` | 아니오 | 출처별 모델 문자열 → 프로필 `model_id` 매핑 |
+| `profiles.toml` | **예** | 라우팅 대상 Agent 프로필 목록 |
+| `aliases.toml` | 아니오 (권장) | 출처별 모델 문자열 → 프로필 `model_id` 매핑 (`status`의 `unmatched_sample` 참고) |
 | `categories.toml` | 아니오 | 없으면 내장 `bench_router/categories.toml` 사용 |
-| `env` | 아니오 | `ARTIFICIAL_ANALYSIS_API_KEY=...` (권한 600 권장, refresh 시 환경변수로 읽음) |
+| `env` | 아니오 | API 키 보관용 파일(권한 600 권장). 실행 전 `set -a; . ~/.config/bench-router/env; set +a`로 로드 |
+| `ARTIFICIAL_ANALYSIS_API_KEY` | 아니오 (`aa` 수집 시) | Artificial Analysis Free API 키. 없어도 `arena`·`mg` 공개 데이터와 `wiki compile`은 동작함 |
+| `TYPESAFE_API_KEY` (또는 `JEV_API_KEY`) | 아니오 (Skill 결정 시) | `scripts/decide.py`에서 Jev API를 호출할 때만 사용. 없으면 호스트의 `bench-decider` 서브에이전트로 자동 폴백 |
 
 ### profiles.toml
 

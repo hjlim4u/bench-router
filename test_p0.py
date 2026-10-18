@@ -547,8 +547,10 @@ class P0Evidence(unittest.TestCase):
         cache = Path(self.tmp.name) / "cache"
         cache.mkdir()
         run = lambda: cli.main(["--cache-dir", str(cache), "wiki", "facets"])
-        with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(run(), 2)  # index.json 없음
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(run(), 0)  # 캐시에 없으면 내장 index.json 사용
+        self.assertIn("task", json.loads(out.getvalue())["facets"])
         (cache / "index.json").write_text(json.dumps(index_fixture()))
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
@@ -678,6 +680,20 @@ class P0Decision(unittest.TestCase):
             with self.assertRaises(r.InputError):
                 self.helper["decide"](self.req, env={}, host="unknown")
             post.assert_not_called()
+
+    def test_v66_copied_skill_runs_standalone(self):
+        import shutil
+        import subprocess
+        import sys
+        with tempfile.TemporaryDirectory() as tmp:
+            copied = Path(tmp) / "bench-router"
+            shutil.copytree(Path(__file__).parent / "skills/bench-router", copied, symlinks=False)
+            self.assertTrue((copied / "bench_router/cli.py").is_file())
+            self.assertTrue((copied / "bench_router/index.json").is_file())
+            self.assertFalse((copied / "wiki").exists())
+            p = subprocess.run([sys.executable, str(copied / "scripts/cli.py"), "--cache-dir", tmp, "wiki", "facets"],
+                               cwd=tmp, capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(p.stdout)["status"], "ok")
 
 
 if __name__ == "__main__":

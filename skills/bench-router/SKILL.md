@@ -9,7 +9,8 @@ Use this skill only for a task the caller wants to hand off. The router validate
 
 ## Setup
 
-- Run `scripts/cli.py` with Python 3.11+ from this skill's installed path. The script resolves the linked repository and forwards arguments to the existing CLI; it works from any current directory.
+- Install globally or into any project with `npx skills add hjlim4u/bench-router -g` (or `npx skills add /path/to/bench-router`).
+- Run `scripts/cli.py` with Python 3.11+ from this skill's installed path. It works standalone from a copied or linked skill directory in any working directory.
 - Use the same runtime user's default config (`~/.config/bench-router`) and cache (`~/.cache/bench-router`) across agents, unless the operator has deliberately set shared `XDG_CONFIG_HOME` and `XDG_CACHE_HOME`. Keep all agents sharing a cache on one OS runtime; native Windows and WSL use different lock implementations and must not concurrently point at the same physical cache. Do not create agent-specific caches or copy snapshots.
 - `profiles.toml`, Herdr, herdr-projects 1.2.1 and the target agent CLI must already be configured for live dispatch on Linux/WSL2. The task `cwd` must be the top level of a git repository with a commit. Profile `args` may only carry a model (`--model`/`-m`) and an effort; agent permissions follow the board's `worker.access` setting. See [Projects setup](../../docs/projects.md). Run `python scripts/cli.py status` to inspect snapshot health. See the [reference](../../docs/reference.md) for setup and command contracts.
 

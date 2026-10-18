@@ -103,9 +103,51 @@ flowchart LR
 
 ---
 
-## 빠르게 시작하기
+## 처음 가져와 사용할 때: 설정 및 설치 가이드
 
-Python 3.11 이상이 필요하며, bench-router 자체의 설치 단계는 없습니다. 저장소 루트에서 모듈로 실행합니다. 아래 예시는 Bash 기준입니다. 오프라인 평가와 데이터 갱신은 Linux/WSL2/Windows에서 사용할 수 있고, 실제 위임은 Linux/WSL2에서 준비하세요.
+이 저장소를 처음 클론(`git clone`)한 뒤 바로 사용하기 위해 필요한 설정은 **필수 설정**과 **선택 설정(API 키·실행 환경)**으로 나뉩니다. Python 3.11 이상만 있으면 별도의 패키지 설치(`pip install`)는 필요 없습니다.
+
+### 1) 한눈에 보는 설정 체크리스트 (`~/.config/bench-router/`)
+
+| 항목 | 필수 여부 | 역할 및 설정 방법 |
+|---|---|---|
+| **`profiles.toml`** | **필수** | 라우팅 후보 Agent 프로필 목록(모델·effort·비용 등급). 아래 2단계 예시대로 생성·편집 |
+| **`aliases.toml`** | 권장 | 외부 벤치마크의 모델명(예: `claude-opus-5.5-high`)을 프로필의 `model_id`와 매칭 ([작성법](docs/reference.md#aliasestoml)) |
+| **`ARTIFICIAL_ANALYSIS_API_KEY`** | 선택 (`refresh` 시) | Artificial Analysis 점수 수집용([무료 발급](https://artificialanalysis.ai)). **없어도 LMArena·The Model Gap 공개 데이터와 위키 인덱스는 정상 수집됨** |
+| **`TYPESAFE_API_KEY` (또는 `JEV_API_KEY`)** | 선택 (Skill 의사결정 시) | Skill의 경량 의사결정(`decide.py`)에서 Jev API를 쓸 때만 사용. **없으면 자동으로 호스트의 경량 서브에이전트(`bench-decider`: Haiku / Luna / Flash)로 동작함** |
+| **Herdr & `herdr-projects 1.2.1`** | 선택 (실제 위임 시) | `--dry-run`, `explain`, `evaluate`, `evidence`만 쓸 때는 불필요. 실제로 Agent를 띄워 작업을 맡길 때(Linux/WSL2)만 필요 ([설치 안내](docs/projects.md)) |
+
+> [!TIP]
+> **API 키 안전하게 보관하기**: 키를 발급받았다면 `~/.config/bench-router/env` 파일에 적어 두고 권한을 `600`으로 잠그세요.
+> ```bash
+> mkdir -p ~/.config/bench-router && chmod 700 ~/.config/bench-router
+> cat << 'EOF' > ~/.config/bench-router/env
+> ARTIFICIAL_ANALYSIS_API_KEY="your-aa-api-key"
+> # TYPESAFE_API_KEY="your-optional-jev-key"
+> EOF
+> chmod 600 ~/.config/bench-router/env
+> ```
+
+---
+
+### 2) 어디서든 Skill로 사용하도록 설치하기 (`npx skills`)
+
+[`npx skills`](https://skills.sh/) 한 줄이면 내 컴퓨터의 모든 코딩 에이전트(Claude Code, Codex, Cursor, Gemini CLI, Windsurf, Cline, Copilot, Antigravity 등 40+ 에이전트)나 다른 프로젝트 경로에 바로 설치됩니다. `skills/bench-router/` 안에 라우터 본체(`bench_router/`, 컴파일된 벤치마크 인덱스 `index.json` 포함)가 번들되어 있어 **원본 저장소를 클론해 두지 않아도 복사된 스킬 폴더(약 250KB)만으로 단독 동작**합니다.
+
+```bash
+# A. 내 컴퓨터의 모든 프로젝트에서 쓰기 (글로벌 설치 — 권장)
+npx skills add hjlim4u/bench-router -g
+# (로컬 클론에서 설치할 때: npx skills add . -g)
+
+# B. 특정 다른 프로젝트(/path/to/my-app)에만 설치하기
+cd /path/to/my-app && npx skills add hjlim4u/bench-router
+```
+
+---
+
+### 3) CLI로 빠르게 시작하기 (단계별 실습)
+
+저장소 루트(또는 설치된 Skill의 `scripts/cli.py`)에서 바로 실행해 볼 수 있습니다.
 
 ```bash
 BR="python3 -m bench_router.cli"
@@ -167,18 +209,24 @@ capabilities = ["filesystem_write"]
 </details>
 
 ```bash
-# 2. 벤치마크 점수 받기 (AA는 Artificial Analysis Free API 키 필요, Arena·The Model Gap은 공개 수집)
-export ARTIFICIAL_ANALYSIS_API_KEY=...
-$BR refresh
+# 2. 벤치마크 점수 받기
+# - API 키가 없어도 공개 소스(mg, arena)는 바로 수집할 수 있습니다.
+$BR refresh --source mg                      # The Model Gap 공개 점수 수집 (API 키 불필요)
+$BR refresh --source arena                   # LMArena 공개 점수 수집 (API 키 불필요)
+
+# - Artificial Analysis API 키가 있다면 전체 소스를 한 번에 갱신합니다.
+set -a; [ -f ~/.config/bench-router/env ] && . ~/.config/bench-router/env; set +a
+$BR refresh                                  # aa, arena, mg 전체 갱신
 $BR status                                   # 데이터 상태 및 미매칭 모델 확인
 
 # 3. 실행 없이 어떤 Agent가 선택되는지만 보기 (cwd를 현재 저장소 절대 경로로 치환)
 sed "s|/ABSOLUTE/PATH/TO/SMOKE_PROJECT|$PWD|" examples/task.synthetic.json > task.json
 $BR route --task task.json --dry-run
 $BR explain --task task.json                 # 선택 이유를 사람이 읽는 글로
+$BR evidence --task task.json --format table # 작업 성격(facet)에 맞는 프로필별 벤치마크 증거 표 보기
 ```
 
-`--dry-run`과 `explain`은 네트워크·herdr·파일 쓰기 없이 동작하므로 처음 살펴볼 때 쓰기 좋습니다. snapshot이 없어도 제약을 통과한 기본 프로필을 선택할 수 있어, API 키 없이 살펴보려면 2단계를 건너뛸 수 있습니다.
+`--dry-run`, `explain`, `evidence`는 네트워크·herdr·파일 쓰기 없이 동작하므로 처음 살펴볼 때 쓰기 좋습니다. snapshot이 없어도 제약을 통과한 기본 프로필을 선택할 수 있어, 데이터 수집 전에 동작부터 확인하려면 2단계를 건너뛸 수 있습니다.
 
 <details>
 <summary><b>🔍 입력(<code>task.json</code>), <code>explain</code>, 증거 표(<code>evidence</code>), 결과 계약(<code>result.json</code>) 실제 입출력 예시 보기</b></summary>
@@ -281,9 +329,9 @@ $BR feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success       # Orchestrat
 
 - **Orchestrator가 직접 고르기 (`evaluate` → `route --selection`)**:
   - `evaluate --task task.json [--context context.json]`으로 모든 프로필의 하드 제약 통과 여부·예상 비용·벤치마크 평가를 받고, 최종 선택은 Orchestrator가 해서 `route --selection selection.json`으로 실행합니다. → [docs/orchestrator.md](docs/orchestrator.md)
-- **작업 성격(facet)별 벤치마크 증거 표 보기 (`wiki` & `evidence`)**:
+- **작업 성격(facet)별 벤치마크 증거 표 보기 (`evidence` & `wiki facets`)**:
   - `evidence --task task.json --format table`은 점수를 합산하거나 순위를 매기지 않고, 작업에서 감지·태그된 facet(언어·작업 유형·에이전트 신호 등)에 맞는 벤치마크 결과를 프로필별 표로 보여줍니다(측정된 effort가 프로필과 다르면 `max≠high`처럼 표시).
-  - 벤치마크 위키(`wiki/`)에서 검토된(`lifecycle: reviewed`) 페이지를 `wiki compile`(또는 `refresh`)로 컴파일해 `index.json`을 생성해야 동작합니다.
+  - 컴파일된 벤치마크 인덱스(`bench_router/index.json`)가 기본 내장되어 있어 별도 위키 설정 없이 바로 동작합니다(`wiki/` 문서를 직접 수정한 경우에만 `wiki compile` 실행).
   - 파일 확장자·언어 규칙으로 자동 감지되지 않는 작업 성격(수학, 창작, 웹 검색 등)은 `wiki facets`로 허용 어휘를 확인한 뒤 `task.json`의 `facets` 필드에 직접 태그할 수 있습니다.
 - **실행 후 세션 재개 및 슬롯 관리 (`resume` & `coordination`)**:
   - `completed`된 작업의 Agent 터미널 pane은 자원 반환을 위해 자동으로 닫힙니다. 같은 대화 맥락을 이어서 작업하려면 `resume --run-id <RUN_ID> --cwd <DIR>`로 세션을 다시 엽니다.
@@ -291,7 +339,7 @@ $BR feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success       # Orchestrat
 - **병렬 위임 (`parallel`)**:
   - 여러 하위 작업을 동시에 맡기거나, 같은 작업을 상위 N개 Agent에게 각자 격리된 worktree로 맡겨 결과를 비교합니다(`isolated` / `shared` 스크래치패드 공유 / `deliberate` 상호 검토 및 투표). → [상세 레퍼런스](docs/reference.md#병렬-위임과-협업-수준)
 - **여러 Agent에서 Skill로 사용**:
-  - [`skills/bench-router`](skills/bench-router/SKILL.md)를 각 Agent(Claude Code, Codex, Antigravity)의 Skill 디렉터리에 심볼릭 링크로 연결하면, 호스트의 경량 서브에이전트(`bench-decider`)나 Jev API를 활용한 의사결정 워크플로우([`decision.md`](skills/bench-router/references/decision.md))까지 바로 사용할 수 있습니다. → [설정 방법](docs/reference.md#여러-agent에서-skill-사용)
+  - `npx skills add hjlim4u/bench-router -g` 한 줄로 [`skills/bench-router`](skills/bench-router/SKILL.md)를 모든 에이전트에 설치하면, 어떤 프로젝트 경로에서든 호스트의 경량 서브에이전트(`bench-decider`)나 Jev API를 활용한 의사결정 워크플로우([`decision.md`](skills/bench-router/references/decision.md))까지 바로 사용할 수 있습니다. → [설정 방법](docs/reference.md#여러-agent에서-skill-사용-글로벌-또는-프로젝트별-설치)
 
 ---
 

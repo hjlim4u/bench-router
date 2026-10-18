@@ -7,8 +7,9 @@ import sys
 import urllib.request
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-from bench_router import routing as r
+_SKILL = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_SKILL if (_SKILL / "bench_router").is_dir() else _SKILL.parents[1]))
+from bench_router import routing as r  # noqa: E402
 
 JEV_URL = "https://api.typesafe.ai/v1/systemone"
 MAX_BYTES = 1024 * 1024
