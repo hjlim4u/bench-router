@@ -137,6 +137,14 @@ def _evidence(args):
 
 def _wiki(args):
     from . import wiki
+    if args.action == "facets":  # Orchestrator가 task.facets에 고를 어휘: self facet 중 active unit이 있는 것만
+        from . import evidence
+        idx = evidence.load_index(args.cache_dir)
+        if idx is None:
+            raise r.InputError("no index.json; run `wiki compile`")
+        return {"schema_version": r.SCHEMA_VERSION, "status": "ok", "wiki_hash": idx["wiki_hash"],
+                "facets": {a: {v: f["desc"] for v, f in vs.items() if f["detect"] == "self" and f"{a}:{v}" in idx["postings"]}
+                           for a, vs in idx["facets"].items()}}
     idx = wiki.compile_wiki(args.vault)
     path = None if args.check else str(wiki.write_index(args.cache_dir, idx))
     return {"schema_version": r.SCHEMA_VERSION, "status": "ok", "written": path, **wiki.summary(idx)}
@@ -232,8 +240,8 @@ def main(argv=None):
     fp.add_argument("--force", action="store_true", help="ignore TTL")
     fp.add_argument("--import", dest="import_file", help="approved manual observations (swe/tb)")
     fp.add_argument("--vault", type=Path, default=WIKI_VAULT, help="benchmark wiki compiled into index.json")
-    wp = sub.add_parser("wiki", help="compile reviewed benchmark wiki pages into index.json")
-    wp.add_argument("action", choices=["compile"])
+    wp = sub.add_parser("wiki", help="compile reviewed benchmark wiki pages into index.json, or list taggable facets")
+    wp.add_argument("action", choices=["compile", "facets"])
     wp.add_argument("--vault", type=Path, default=WIKI_VAULT)
     wp.add_argument("--check", action="store_true", help="validate only; do not write index.json")
     sub.add_parser("status", help="source age, failures, unmatched models, snapshot/config state")

@@ -485,6 +485,18 @@ class P0Evidence(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(cli.main(["--config-dir", str(home), "--cache-dir", str(cache), "evidence", "--task", str(tf), "--max-units", "0"]), 2)
 
+    def test_v62_wiki_facets_lists_taggable_vocabulary(self):
+        cache = Path(self.tmp.name) / "cache"
+        cache.mkdir()
+        run = lambda: cli.main(["--cache-dir", str(cache), "wiki", "facets"])
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(run(), 2)  # index.json 없음
+        (cache / "index.json").write_text(json.dumps(index_fixture()))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(run(), 0)
+        self.assertEqual(json.loads(out.getvalue())["facets"], {"task": {"repo_coding": "d"}, "lang": {}, "shape": {}})
+
 
 if __name__ == "__main__":
     unittest.main()
