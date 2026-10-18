@@ -16,8 +16,8 @@
 | route --task FILE --selection FILE [--dry-run] | Orchestrator 선택 기록(profile, assessment_digest, policy, reason)으로 실행. digest 불일치면 stale_assessment | 다중 기준 |
 | route --task FILE --profile ID [--dry-run] | 선택 기록 없이 지정 프로필 실행(selection_unrecorded 경고) | 호환 |
 | wiki compile [--check] | 검토된 benchmark wiki 페이지를 index.json으로 컴파일·게시(--check는 검증만) | 선택 |
-| wiki facets | Orchestrator가 task.facets에 고를 수 있는 self facet 어휘(active unit이 있는 값만)와 설명 | 선택 |
-| evidence --task FILE [--format json\|table] | 작업 facet에 맞는 benchmark 결과를 프로필별로 출력; 합산·순위 없음, 네트워크·쓰기 없음 | 선택 |
+| wiki facets | Orchestrator가 task.facets에 고를 수 있는 전체 어휘(active unit이 있는 값만). facets에 설명, detection에 판정 규칙; 자동 판정 값도 직접 지정 가능 | 선택 |
+| evidence --task FILE [--format json\|table] | 작업 facet에 맞는 benchmark 결과를 프로필별로 출력; 작업 유형 일치 우선, 합산·모델 순위 없음, 네트워크·쓰기 없음 | 선택 |
 | parallel --group FILE [--dry-run] | task × fanout을 각자 worktree에서 병렬 위임. group 2.0은 task별 context·selections | 선택 |
 | collect --run-id ID --cwd ABS_PATH | 기존 receipt의 Agent/결과를 읽고 대기·회수; prompt 재전송 없음 | 필수 |
 | feedback --run-id ID --cwd ABS_PATH --outcome success\|partial\|fail | Orchestrator 평가 기록 | 필수 |

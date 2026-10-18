@@ -13,13 +13,46 @@ SCRIPTS = {"hangul": ((0xAC00, 0xD7A3), 0.2), "kana": ((0x3040, 0x30FF), 0.05), 
            "han": ((0x4E00, 0x9FFF), 0.2)}
 
 
+def _validate_index(idx):
+    if not isinstance(idx, dict) or idx.get("schema_version") != INDEX_SCHEMA_VERSION:
+        raise r.InputError("wiki index: unsupported schema")
+    r._str(idx.get("wiki_hash"), "wiki index.wiki_hash")
+    for key in ("facets", "units", "postings"):
+        if not isinstance(idx.get(key), dict):
+            raise r.InputError(f"wiki index.{key}: object required")
+    for axis, values in idx["facets"].items():
+        if not isinstance(values, dict):
+            raise r.InputError(f"wiki index.facets.{axis}: object required")
+        for value, f in values.items():
+            if not isinstance(f, dict):
+                raise r.InputError(f"wiki index facet {axis}:{value}: object required")
+            for key in ("desc", "detect", "evidence"):
+                r._str(f.get(key), f"wiki index facet {axis}:{value}.{key}")
+    expected = {}
+    for uid, u in idx["units"].items():
+        if not isinstance(u, dict) or not isinstance(u.get("facets"), dict):
+            raise r.InputError(f"wiki index unit {uid}: object with facets required")
+        for key in ("desc", "metric", "status", "adoption", "page"):
+            r._str(u.get(key), f"wiki index unit {uid}.{key}")
+        for axis, values in u["facets"].items():
+            for value in r._str_list(values, f"wiki index unit {uid}.facets.{axis}"):
+                if value not in idx["facets"].get(axis, {}):
+                    raise r.InputError(f"wiki index unit {uid}: unknown facet {axis}:{value}")
+                if u["adoption"] == "active":
+                    expected.setdefault(f"{axis}:{value}", set()).add(uid)
+    actual = {key: set(r._str_list(ids, f"wiki index.postings.{key}")) for key, ids in idx["postings"].items()}
+    if actual != expected:
+        raise r.InputError("wiki index: postings disagree with active units")
+
+
 def load_index(cache_dir):
     """wiki compile이 게시한 index.json. 없거나 손상되면 None."""
     try:
         idx = r.load_json_strict(Path(cache_dir) / "index.json", 16 * 1024 * 1024)
+        _validate_index(idx)
     except r.InputError:
         return None
-    return idx if isinstance(idx, dict) and idx.get("schema_version") == INDEX_SCHEMA_VERSION else None
+    return idx
 
 
 def _share(text, script):
@@ -37,7 +70,7 @@ def _kw(k, text):
 
 def rule_hit(rule, t):
     """wiki facet의 detect = 'rule:<rule>'. 참/거짓, 모르는 규칙은 None. 토큰 0, 결정적."""
-    text = t["summary"] + "\n" + t["prompt"][:2000]
+    text = t["summary"] + "\n" + t["prompt"]
     files = [f.lower() for f in t["context_files"]]
     if rule == "always":
         return True
@@ -52,6 +85,7 @@ def rule_hit(rule, t):
     if (m := re.fullmatch(r"kw\((.+)\)", rule)):
         return any(_kw(k, text) for k in m.group(1).split(","))
     if (m := re.fullmatch(r"script\((hangul|kana|cyrillic|han_only)\)", rule)):
+        text = re.sub(r"(?s)(`{3,}|~{3,}).*?(?:\1|$)", "\n", text)
         s = m.group(1)
         if s == "han_only":
             return _share(text, "han") >= SCRIPTS["han"][1] and not _share(text, "kana") and not _share(text, "hangul")
@@ -127,16 +161,22 @@ def build(t, cfg, snap, snap_warnings, index, now, max_units=12):
         for uid in index["postings"].get(f"{f['axis']}:{f['value']}", []):
             matched.setdefault(uid, []).append(f"{f['axis']}:{f['value']}")
     warned, rows = set(), []
+    tasks = {f["value"] for f in res["facets"] if f["axis"] == "task"}
     for uid, facets in matched.items():
         u = index["units"][uid]
+        # 언어·난이도만 같다고 다른 작업 유형의 unit을 선택하지 않는다. 공통 agent 신호는 유지한다.
+        if (u["facets"].get("task") and not tasks.intersection(u["facets"]["task"])
+                and not any(f.startswith("agent_signal:") for f in facets)):
+            continue
         cells = {p["id"]: _cell(p, uid, snap, sources, warned) for p in profiles}
         rows.append({"id": uid, "desc": u["desc"], "metric": u["metric"], "status": u["status"], "page": u["page"],
                      "matched_facets": facets, "profiles": cells,
                      **{k: u[k] for k in ("meaningful_gap", "trust_grade") if k in u}})
-    # 표시 순서(순위가 아니다): 작업에 따라 달라지는 facet이 많이 맞는 것 → 전체 일치 수 → 점수가 있는 프로필 수 → id.
+    # 표시 순서(순위가 아니다): 작업 유형 일치 → 보조 facet 일치 → 전체 일치 → 점수가 있는 프로필 수 → id.
     # rule:always facet(agent_signal 등)은 모든 작업에 켜지므로 작업 특화 unit을 밀어내지 않게 뒤로 둔다.
     always = {f"{a}:{v}" for a, vs in index["facets"].items() for v, f in vs.items() if f["detect"] == "rule:always"}
-    rows.sort(key=lambda x: (-len([f for f in x["matched_facets"] if f not in always]), -len(x["matched_facets"]),
+    rows.sort(key=lambda x: (-sum(f.startswith("task:") and f not in always for f in x["matched_facets"]),
+                             -len([f for f in x["matched_facets"] if f not in always]), -len(x["matched_facets"]),
                              -sum(c["normalized"] is not None for c in x["profiles"].values()), x["id"]))
     res["omitted_units"], res["units"] = max(0, len(rows) - max_units), rows[:max_units]
     for pid in sorted(warned):
@@ -157,7 +197,7 @@ def table(res):
     """Orchestrator에 넘기는 압축 표. unit 설명은 한 번만, 프로필별 값은 한 줄씩."""
     lines = [f"task {res['task_id']} r{res['round']} · snapshot {(res['snapshot_id'] or '-')[:8]} · wiki {(res['wiki_hash'] or '-')[:8]}",
              "facets: " + (", ".join(f"{f['axis']}:{f['value']}({f['origin']})" for f in res["facets"]) or "-"),
-             "units (order = task-specific facets matched, then profiles with a score; not a ranking):"]
+             "units (order = task type matches, then other facet matches, then profiles with a score; not a ranking):"]
     for i, u in enumerate(res["units"], 1):
         extra = "".join(f" {k}={u[k]}" for k in ("meaningful_gap", "trust_grade") if k in u)
         lines.append(f" {i} {u['id']} [{u['metric']}, {u['status']}{extra}] {u['desc']} · {','.join(u['matched_facets'])} · {u['page']}")

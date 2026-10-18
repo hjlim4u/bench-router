@@ -137,14 +137,16 @@ def _evidence(args):
 
 def _wiki(args):
     from . import wiki
-    if args.action == "facets":  # Orchestrator가 task.facets에 고를 어휘: self facet 중 active unit이 있는 것만
+    if args.action == "facets":  # 자동 판정 규칙이 있어도 Orchestrator가 직접 지정할 수 있다.
         from . import evidence
         idx = evidence.load_index(args.cache_dir)
         if idx is None:
             raise r.InputError("no index.json; run `wiki compile`")
+        facets = {a: {v: f for v, f in vs.items() if f"{a}:{v}" in idx["postings"]}
+                  for a, vs in idx["facets"].items()}
         return {"schema_version": r.SCHEMA_VERSION, "status": "ok", "wiki_hash": idx["wiki_hash"],
-                "facets": {a: {v: f["desc"] for v, f in vs.items() if f["detect"] == "self" and f"{a}:{v}" in idx["postings"]}
-                           for a, vs in idx["facets"].items()}}
+                "facets": {a: {v: f["desc"] for v, f in vs.items()} for a, vs in facets.items()},
+                "detection": {a: {v: f["detect"] for v, f in vs.items()} for a, vs in facets.items()}}
     idx = wiki.compile_wiki(args.vault)
     path = None if args.check else str(wiki.write_index(args.cache_dir, idx))
     return {"schema_version": r.SCHEMA_VERSION, "status": "ok", "written": path, **wiki.summary(idx)}

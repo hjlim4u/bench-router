@@ -373,8 +373,10 @@ def index_fixture():
                        "lang": {"ko": f("rule:script(hangul)")}, "shape": {"multi_turn": f("rule:round>1")}},
             "postings": {"task:coding": ["u/coding", "u/both"], "task:repo_coding": ["u/both", "u/repo"],
                          "task:general": ["u/general"], "lang:ko": ["u/ko"]},
-            "units": {"u/coding": unit("coding prefs", {}), "u/both": unit("both", {}), "u/repo": unit("repo", {}),
-                      "u/general": unit("general", {}), "u/ko": unit("korean", {})}}
+            "units": {"u/coding": unit("coding prefs", {"task": ["coding"]}),
+                      "u/both": unit("both", {"task": ["coding", "repo_coding"]}),
+                      "u/repo": unit("repo", {"task": ["repo_coding"]}),
+                      "u/general": unit("general", {"task": ["general"]}), "u/ko": unit("korean", {"lang": ["ko"]})}}
 
 
 class P0Evidence(unittest.TestCase):
@@ -417,6 +419,16 @@ class P0Evidence(unittest.TestCase):
         hit = lambda **kw: ev.rule_hit(rule, self.t(**kw))
         self.assertFalse(hit(summary="Build React dashboard component", prompt="Build a responsive dashboard page in React."))
         self.assertTrue(hit(summary="Fix flaky CI", prompt="docker compose up fails in the pipeline"))
+
+    def test_v63_rules_scan_tail_and_language_ignores_code(self):
+        from bench_router import evidence as ev
+        self.assertTrue(ev.rule_hit("kw(docker)", self.t(prompt="context " * 400 + "fix docker pipeline")))
+        for fence in ("```", "~~~"):
+            with self.subTest(fence=fence):
+                t = self.t(prompt=fence + "python\n" + "variable = 1\n" * 300 + fence + "\n한국어로 오류를 수정해주세요")
+                self.assertTrue(ev.rule_hit("script(hangul)", t))
+        t = self.t(summary="Fix the bug", prompt="```\n" + "한국어 주석\n" * 300 + "```\nFix this function")
+        self.assertFalse(ev.rule_hit("script(hangul)", t))
 
     def test_v62_facets_from_rules_and_orchestrator(self):
         from bench_router import evidence as ev
@@ -463,6 +475,52 @@ class P0Evidence(unittest.TestCase):
         self.assertEqual(res["units"][0]["profiles"]["a"]["missing_reason"], "stale_config")
         self.assertIn("stale_config", [w["code"] for w in res["warnings"]])
 
+    def test_v63_task_match_precedes_auxiliary_facets_and_requires_matching_type(self):
+        from bench_router import evidence as ev
+        idx = index_fixture()
+        idx["facets"]["lang"]["en"] = {"desc": "English", "detect": "self", "evidence": "official"}
+        for value, detect in (("math", "self"), ("vision", "rule:ext(.png)")):
+            idx["facets"]["task"][value] = {"desc": value, "detect": detect, "evidence": "official"}
+        for uid, facets in {"u/math": {"task": ["math"]}, "u/vision-en": {"task": ["vision"], "lang": ["en"]},
+                            "u/english": {"lang": ["en"], "shape": ["multi_turn"]}}.items():
+            idx["units"][uid] = dict(idx["units"]["u/coding"], facets=facets)
+            for axis, values in facets.items():
+                for value in values:
+                    idx["postings"].setdefault(f"{axis}:{value}", []).append(uid)
+        task = self.t(round=2, facets={"task": ["math"], "lang": ["en"]})
+        build = lambda t, cap: ev.build(t, config([profile("a")]), None, [], idx, NOW, max_units=cap)
+        res = build(task, 100)
+        ids = [u["id"] for u in res["units"]]
+        self.assertEqual(ids[0], "u/math")  # English + multi-turn cannot displace the actual task type.
+        self.assertIn("u/english", ids)
+        self.assertNotIn("u/vision-en", ids)
+        self.assertEqual(build(task, 1)["units"][0]["id"], "u/math")
+        self.assertEqual(build(task, 1)["omitted_units"], len(ids) - 1)
+        with_image = self.t(round=2, facets=task["facets"], context_files=["image.png"])
+        self.assertIn("u/vision-en", [u["id"] for u in build(with_image, 100)["units"]])
+
+    def test_v63_load_index_rejects_structural_corruption(self):
+        from bench_router import evidence as ev
+        path = Path(self.tmp.name) / "index.json"
+        good = index_fixture()
+        path.write_text(json.dumps(good))
+        self.assertEqual(ev.load_index(self.tmp.name), good)
+        bad = [{"schema_version": "1.0"}, dict(good, wiki_hash=None), dict(good, facets=[]),
+               dict(good, facets={"task": {"coding": None}}), dict(good, units={"u/coding": None}),
+               dict(good, units={"u/coding": {"facets": {}}}),
+               dict(good, units={"u/coding": dict(good["units"]["u/coding"], facets={"task": ["unknown"]})}),
+               dict(good, postings={"task:coding": ["u/missing"]}), dict(good, postings={"task:coding": None}),
+               dict(good, postings={})]
+        for idx in bad:
+            with self.subTest(index=idx):
+                path.write_text(json.dumps(idx))
+                loaded = ev.load_index(self.tmp.name)
+                self.assertIsNone(loaded)
+                res = ev.build(self.t(), config([profile("a")]), None, [], loaded, NOW)
+                self.assertEqual([w["code"] for w in res["warnings"]], ["wiki_index_missing"])
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(cli.main(["--cache-dir", self.tmp.name, "wiki", "facets"]), 2)
+
     def test_v62_evidence_cli_is_read_only(self):
         ps = [profile("a", reasoning_effort="high")]
         home, cache = Path(self.tmp.name) / "cfg", Path(self.tmp.name) / "cache"
@@ -495,7 +553,131 @@ class P0Evidence(unittest.TestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.assertEqual(run(), 0)
-        self.assertEqual(json.loads(out.getvalue())["facets"], {"task": {"repo_coding": "d"}, "lang": {}, "shape": {}})
+        res = json.loads(out.getvalue())
+        self.assertEqual(res["facets"], {"task": {"coding": "d", "repo_coding": "d", "general": "d"},
+                                         "lang": {"ko": "d"}, "shape": {}})
+        self.assertEqual(res["detection"]["task"]["coding"], "rule:code_block_or_code_ext")
+        self.assertEqual(res["detection"]["task"]["repo_coding"], "self")
+
+    def test_v63_explicit_webdev_facet_without_context_files(self):
+        from bench_router import evidence as ev
+        idx = index_fixture()
+        idx["facets"]["task"]["webdev_react"] = {"desc": "React", "detect": "rule:ext(.jsx,.tsx)", "evidence": "official"}
+        idx["units"]["u/react"] = dict(idx["units"]["u/coding"], facets={"task": ["webdev_react"]})
+        idx["postings"]["task:webdev_react"] = ["u/react"]
+        Path(self.tmp.name, "index.json").write_text(json.dumps(idx))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(cli.main(["--cache-dir", self.tmp.name, "wiki", "facets"]), 0)
+        self.assertIn("webdev_react", json.loads(out.getvalue())["facets"]["task"])
+        task = self.t(prompt="Build a React dashboard", facets={"task": ["webdev_react"]})
+        res = ev.build(task, config([profile("a")]), None, [], idx, NOW, max_units=1)
+        self.assertEqual(res["units"][0]["id"], "u/react")
+        self.assertIn({"axis": "task", "value": "webdev_react", "origin": "orchestrator"}, res["facets"])
+
+
+class P0Decision(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import runpy
+        cls.helper = runpy.run_path(str(Path(__file__).parent / "skills/bench-router/scripts/decide.py"))
+
+    def setUp(self):
+        self.req = {"state": "Fix a bug", "questions": {
+            "profile": {"type": "choice", "instructions": "Choose an eligible profile or abstain",
+                        "criteria": {"cheap": "Small tasks", "abstain": "Insufficient evidence"}},
+            "coding": {"type": "noul", "instructions": "Does this task require code changes?"}}}
+        self.reply = {"model": "jev-1.13.0", "answers": {
+            "profile": {"type": "choice", "choice": "cheap", "confidence": 0.8},
+            "coding": {"type": "noul", "noul": 0.9}}, "usage": {"input_tokens": 100, "output_tokens": 20}}
+
+    def test_v64_without_key_requests_a_cheap_native_subagent(self):
+        from unittest.mock import patch
+        with patch("urllib.request.urlopen") as post:
+            res = self.helper["decide"](self.req, env={})
+            self.assertEqual((res["status"], res["model"], res["request"]),
+                             ("subagent_required", "cheapest_available", self.req))
+            explicit = self.helper["decide"](self.req, env={"BENCH_ROUTER_DECISION_MODEL": "my-cheap-model"})
+            self.assertEqual(explicit["model"], "my-cheap-model")
+            post.assert_not_called()
+
+    def test_v64_key_calls_jev_and_retains_usage_without_credentials(self):
+        from unittest.mock import patch
+        for key_name in ("TYPESAFE_API_KEY", "JEV_API_KEY"):
+            with self.subTest(key_name=key_name), patch("urllib.request.urlopen") as post:
+                post.return_value.__enter__.return_value.read.return_value = json.dumps(self.reply).encode()
+                res = self.helper["decide"](self.req, env={key_name: "synthetic-secret", "JEV_MODEL": "jev-1.13.0"}, host="codex")
+                req = post.call_args.args[0]
+                self.assertEqual(req.full_url, "https://api.typesafe.ai/v1/systemone")
+                self.assertEqual(req.get_header("Authorization"), "Bearer synthetic-secret")
+                self.assertEqual(json.loads(req.data), {**self.req, "model": "jev-1.13.0"})
+                self.assertEqual((res["provider"], res["answers"]["profile"]["choice"], res["usage"]["input_tokens"]),
+                                 ("jev", "cheap", 100))
+                self.assertNotIn("synthetic-secret", json.dumps(res))
+
+    def test_v64_jev_failure_or_bad_answer_falls_back_without_error_body(self):
+        from unittest.mock import patch
+        for payload in (None, b'not json', b'{"answers": {}}'):
+            with self.subTest(payload=payload), patch("urllib.request.urlopen") as post:
+                if payload is None:
+                    post.side_effect = TimeoutError("synthetic-secret")
+                else:
+                    post.return_value.__enter__.return_value.read.return_value = payload
+                res = self.helper["decide"](self.req, env={"TYPESAFE_API_KEY": "synthetic-secret"})
+                self.assertEqual((res["status"], res["reason"]), ("subagent_required", "jev_unavailable"))
+                self.assertNotIn("synthetic-secret", json.dumps(res))
+                post.assert_called_once()
+
+    def test_v64_subagent_reply_is_validated_offline(self):
+        from unittest.mock import patch
+        decide = self.helper["decide"]
+        with patch("urllib.request.urlopen") as post:
+            res = decide(self.req, env={}, response=self.reply)
+            self.assertEqual((res["provider"], res["confidence_kind"]), ("subagent", "self_reported"))
+            for bad in ({"answers": {}},
+                        {**self.reply, "answers": {**self.reply["answers"], "profile": {"type": "choice", "choice": "ineligible"}}},
+                        {**self.reply, "answers": {**self.reply["answers"], "coding": {"type": "noul", "noul": float("nan")}}}):
+                with self.subTest(response=bad), self.assertRaises(r.InputError):
+                    decide(self.req, env={}, response=bad)
+            post.assert_not_called()
+
+    def test_v64_null_reply_cannot_trigger_an_api_call(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            req, reply = Path(tmp) / "request.json", Path(tmp) / "reply.json"
+            req.write_text(json.dumps(self.req))
+            reply.write_text("null")
+            with patch("urllib.request.urlopen") as post, contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(self.helper["main"](["--request", str(req), "--response", str(reply)]), 2)
+            post.assert_not_called()
+
+    def test_v65_host_specific_native_handoff_and_reply_validation(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp, patch.dict("os.environ", {}, clear=True), patch("urllib.request.urlopen") as post:
+            req, reply = Path(tmp) / "request.json", Path(tmp) / "reply.json"
+            req.write_text(json.dumps(self.req))
+            reply.write_text(json.dumps(self.reply))
+            for host, model in (("antigravity", "flash"), ("codex", "gpt-6-luna"), ("claude", "haiku")):
+                with self.subTest(host=host):
+                    args = ["--host", host, "--request", str(req)]
+                    out = io.StringIO()
+                    with contextlib.redirect_stdout(out):
+                        self.assertEqual(self.helper["main"](args), 0)
+                    packet = json.loads(out.getvalue())
+                    self.assertEqual((packet["status"], packet["agent"], packet["host"], packet["model"]),
+                                     ("subagent_required", "bench-decider", host, model))
+                    self.assertEqual(packet["request"], self.req)
+                    out = io.StringIO()
+                    with contextlib.redirect_stdout(out):
+                        self.assertEqual(self.helper["main"](args + ["--response", str(reply)]), 0)
+                    result = json.loads(out.getvalue())
+                    self.assertEqual((result["status"], result["model"], result["answers"]["profile"]["choice"]),
+                                     ("ok", model, "cheap"))
+            explicit = self.helper["decide"](self.req, env={"BENCH_ROUTER_DECISION_MODEL": "my-cheap-model"}, host="codex")
+            self.assertEqual(explicit["model"], "my-cheap-model")
+            with self.assertRaises(r.InputError):
+                self.helper["decide"](self.req, env={}, host="unknown")
+            post.assert_not_called()
 
 
 if __name__ == "__main__":
