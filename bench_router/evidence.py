@@ -142,7 +142,7 @@ def build(t, cfg, snap, snap_warnings, index, now, max_units=12):
     profiles = sorted((p for p in cfg["profile"] if p["enabled"]), key=lambda p: p["id"])
     res = {"schema_version": r.SCHEMA_VERSION, "status": "ok", "task_id": t["task_id"], "round": t["round"],
            "snapshot_id": snap["snapshot_id"] if snap else None, "wiki_hash": (index or {}).get("wiki_hash"),
-           "facets": [], "units": [], "omitted_units": 0, "profiles": {p["id"]: {"reasoning_effort": p["reasoning_effort"]}
+           "facets": [], "units": [], "omitted_units": 0, "withheld_units": [], "profiles": {p["id"]: {"reasoning_effort": p["reasoning_effort"]}
                                                                           for p in profiles}, "warnings": warnings}
     if index is None:
         warnings.append(r.warn("wiki_index_missing", "no index.json; run `wiki compile` (needs reviewed wiki pages)"))
@@ -177,6 +177,12 @@ def build(t, cfg, snap, snap_warnings, index, now, max_units=12):
     # 표시 순서(순위가 아니다): 작업 유형 일치 → 보조 facet 일치 → 전체 일치 → 점수가 있는 프로필 수 → id.
     # rule:always facet(agent_signal 등)은 모든 작업에 켜지므로 작업 특화 unit을 밀어내지 않게 뒤로 둔다.
     always = {f"{a}:{v}" for a, vs in index["facets"].items() for v, f in vs.items() if f["detect"] == "rule:always"}
+    # 범용 unit(task:general 같은 always facet으로만 걸림, agent 신호 제외)은 더 구체적인 facet(작업·언어 등)으로 걸린 unit이 없을 때만 보여 준다.
+    # eval/retrieval.py 측정: 상위 12개 무관 unit의 대부분이 범용 unit이었다(nDCG 변화 없음, 정확도 +0.2).
+    general = {x["id"] for x in rows if all(f in always and not f.startswith("agent_signal:") for f in x["matched_facets"])}
+    if any(not set(x["matched_facets"]) <= always for x in rows):
+        res["withheld_units"] = sorted(general)
+        rows = [x for x in rows if x["id"] not in general]
     rows.sort(key=lambda x: (-sum(f.startswith("task:") and f not in always for f in x["matched_facets"]),
                              -len([f for f in x["matched_facets"] if f not in always]), -len(x["matched_facets"]),
                              -sum(c["normalized"] is not None for c in x["profiles"].values()), x["id"]))
@@ -205,6 +211,8 @@ def table(res):
         lines.append(f" {i} {u['id']} [{u['metric']}, {u['status']}{extra}] {u['desc']} · {','.join(u['matched_facets'])} · {u['page']}")
     if res["omitted_units"]:
         lines.append(f" … {res['omitted_units']} more matching units omitted (--max-units)")
+    if res["withheld_units"]:
+        lines.append(f" … general-purpose units withheld because more specific units matched: {', '.join(res['withheld_units'])}")
     lines.append("profiles (raw pPERCENTILE effort; effort≠profile effort means a different effort was measured; — none; * stale source):")
     for pid, meta in res["profiles"].items():
         cells = " · ".join(f"{i}={_cell_text(u['profiles'][pid], meta['reasoning_effort'])}" for i, u in enumerate(res["units"], 1))

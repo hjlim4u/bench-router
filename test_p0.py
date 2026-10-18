@@ -460,7 +460,7 @@ class P0Evidence(unittest.TestCase):
         self.assertIn("a (high): 1=1500 p98 high · 2=1400 p50 max≠high", text)
         self.assertIn("b (high): 1=1300 p20 max≠high · 2=—", text)
         capped = ev.build(self.t(prompt="```x```", facets={"task": ["repo_coding"]}), config(ps), snap, [], index_fixture(), NOW, max_units=2)
-        self.assertEqual((len(capped["units"]), capped["omitted_units"]), (2, 2))
+        self.assertEqual((len(capped["units"]), capped["omitted_units"], capped["withheld_units"]), (2, 1, ["u/general"]))
 
     def test_v62_evidence_without_index_or_with_stale_config(self):
         from bench_router import evidence as ev
@@ -498,6 +498,16 @@ class P0Evidence(unittest.TestCase):
         self.assertEqual(build(task, 1)["omitted_units"], len(ids) - 1)
         with_image = self.t(round=2, facets=task["facets"], context_files=["image.png"])
         self.assertIn("u/vision-en", [u["id"] for u in build(with_image, 100)["units"]])
+
+    def test_v64_general_units_only_without_task_specific_match(self):
+        from bench_router import evidence as ev
+        build = lambda t: ev.build(t, config([profile("a")]), None, [], index_fixture(), NOW)
+        plain = build(self.t())  # task:general만 켜짐 → 범용 unit이 유일한 증거
+        self.assertEqual(([u["id"] for u in plain["units"]], plain["withheld_units"]), (["u/general"], []))
+        coding = build(self.t(prompt="```x```"))
+        self.assertNotIn("u/general", [u["id"] for u in coding["units"]])
+        self.assertEqual(coding["withheld_units"], ["u/general"])
+        self.assertIn("withheld because more specific units matched: u/general", ev.table(coding))
 
     def test_v63_load_index_rejects_structural_corruption(self):
         from bench_router import evidence as ev
