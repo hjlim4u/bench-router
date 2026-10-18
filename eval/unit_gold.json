@@ -1,0 +1,973 @@
+{
+ "_note": "Claude 초안(2026-10-18, 사람 검토 전). unit 설명/출처 기준이며 현재 unit.facets와 독립이 아니다(작성자가 index를 이미 봤다). labeled=true인 항목만 채점·gold 인덱스에 쓰인다.",
+ "units": {
+  "aa_coding": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "coding"
+    ]
+   }
+  },
+  "aa_intelligence": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "general"
+    ]
+   }
+  },
+  "arena-web:agent_alignment/deceptive_completion": {
+   "labeled": true,
+   "facets": {
+    "agent_signal": [
+     "alignment"
+    ]
+   }
+  },
+  "arena-web:agent_alignment/false_attribution": {
+   "labeled": true,
+   "facets": {
+    "agent_signal": [
+     "alignment"
+    ]
+   }
+  },
+  "arena-web:agent_alignment/overall": {
+   "labeled": true,
+   "facets": {
+    "agent_signal": [
+     "alignment"
+    ]
+   }
+  },
+  "arena-web:agent_alignment/unauthorized_action": {
+   "labeled": true,
+   "facets": {
+    "agent_signal": [
+     "alignment"
+    ]
+   }
+  },
+  "arena:agent/overall": {
+   "labeled": true,
+   "facets": {
+    "agent_signal": [
+     "overall"
+    ]
+   }
+  },
+  "arena:agent_bash_reliability/overall": {
+   "labeled": true,
+   "facets": {
+    "agent_signal": [
+     "bash_reliability"
+    ]
+   }
+  },
+  "arena:agent_praise_complaint/overall": {
+   "labeled": true,
+   "facets": {
+    "agent_signal": [
+     "praise_complaint"
+    ]
+   }
+  },
+  "arena:agent_steerability/overall": {
+   "labeled": true,
+   "facets": {
+    "agent_signal": [
+     "steerability"
+    ]
+   }
+  },
+  "arena:agent_task_outcome_explicit/overall": {
+   "labeled": true,
+   "facets": {
+    "agent_signal": [
+     "task_outcome"
+    ]
+   }
+  },
+  "arena:agent_tool_hallucination/overall": {
+   "labeled": true,
+   "facets": {
+    "agent_signal": [
+     "tool_hallucination"
+    ]
+   }
+  },
+  "arena:document_style_control/overall": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "document"
+    ]
+   }
+  },
+  "arena:search_factuality/overall": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "search"
+    ]
+   }
+  },
+  "arena:search_style_control/overall": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "search"
+    ]
+   }
+  },
+  "arena:text_factuality/overall": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "general"
+    ]
+   }
+  },
+  "arena:text_style_control/chinese": {
+   "labeled": true,
+   "facets": {
+    "lang": [
+     "zh"
+    ]
+   }
+  },
+  "arena:text_style_control/coding": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "coding"
+    ]
+   }
+  },
+  "arena:text_style_control/creative_writing": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "creative_writing"
+    ]
+   }
+  },
+  "arena:text_style_control/english": {
+   "labeled": true,
+   "facets": {
+    "lang": [
+     "en"
+    ]
+   }
+  },
+  "arena:text_style_control/exclude_ties": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "general"
+    ]
+   }
+  },
+  "arena:text_style_control/expert": {
+   "labeled": true,
+   "facets": {
+    "difficulty": [
+     "expert"
+    ]
+   }
+  },
+  "arena:text_style_control/french": {
+   "labeled": true,
+   "facets": {
+    "lang": [
+     "fr"
+    ]
+   }
+  },
+  "arena:text_style_control/german": {
+   "labeled": true,
+   "facets": {
+    "lang": [
+     "de"
+    ]
+   }
+  },
+  "arena:text_style_control/hard_prompts": {
+   "labeled": true,
+   "facets": {
+    "difficulty": [
+     "hard_prompts"
+    ]
+   }
+  },
+  "arena:text_style_control/hard_prompts_english": {
+   "labeled": true,
+   "facets": {
+    "difficulty": [
+     "hard_prompts"
+    ],
+    "lang": [
+     "en"
+    ]
+   }
+  },
+  "arena:text_style_control/industry_business_and_management_and_financial_operations": {
+   "labeled": true,
+   "facets": {
+    "domain": [
+     "business_finance"
+    ]
+   }
+  },
+  "arena:text_style_control/industry_entertainment_and_sports_and_media": {
+   "labeled": true,
+   "facets": {
+    "domain": [
+     "entertainment_media"
+    ]
+   }
+  },
+  "arena:text_style_control/industry_legal_and_government": {
+   "labeled": true,
+   "facets": {
+    "domain": [
+     "legal_government"
+    ]
+   }
+  },
+  "arena:text_style_control/industry_life_and_physical_and_social_science": {
+   "labeled": true,
+   "facets": {
+    "domain": [
+     "science"
+    ]
+   }
+  },
+  "arena:text_style_control/industry_mathematical": {
+   "labeled": true,
+   "facets": {
+    "domain": [
+     "mathematical"
+    ]
+   }
+  },
+  "arena:text_style_control/industry_medicine_and_healthcare": {
+   "labeled": true,
+   "facets": {
+    "domain": [
+     "medicine_healthcare"
+    ]
+   }
+  },
+  "arena:text_style_control/industry_software_and_it_services": {
+   "labeled": true,
+   "facets": {
+    "domain": [
+     "software_it"
+    ]
+   }
+  },
+  "arena:text_style_control/industry_writing_and_literature_and_language": {
+   "labeled": true,
+   "facets": {
+    "domain": [
+     "writing_language"
+    ]
+   }
+  },
+  "arena:text_style_control/instruction_following": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "instruction_following"
+    ]
+   }
+  },
+  "arena:text_style_control/japanese": {
+   "labeled": true,
+   "facets": {
+    "lang": [
+     "ja"
+    ]
+   }
+  },
+  "arena:text_style_control/korean": {
+   "labeled": true,
+   "facets": {
+    "lang": [
+     "ko"
+    ]
+   }
+  },
+  "arena:text_style_control/longer_query": {
+   "labeled": true,
+   "facets": {
+    "shape": [
+     "longer_query"
+    ]
+   }
+  },
+  "arena:text_style_control/math": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "math"
+    ]
+   }
+  },
+  "arena:text_style_control/multi_turn": {
+   "labeled": true,
+   "facets": {
+    "shape": [
+     "multi_turn"
+    ]
+   }
+  },
+  "arena:text_style_control/non_english": {
+   "labeled": true,
+   "facets": {
+    "lang": [
+     "de",
+     "es",
+     "fr",
+     "ja",
+     "ko",
+     "pl",
+     "ru",
+     "zh"
+    ]
+   }
+  },
+  "arena:text_style_control/overall": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "general"
+    ]
+   }
+  },
+  "arena:text_style_control/polish": {
+   "labeled": true,
+   "facets": {
+    "lang": [
+     "pl"
+    ]
+   }
+  },
+  "arena:text_style_control/russian": {
+   "labeled": true,
+   "facets": {
+    "lang": [
+     "ru"
+    ]
+   }
+  },
+  "arena:text_style_control/spanish": {
+   "labeled": true,
+   "facets": {
+    "lang": [
+     "es"
+    ]
+   }
+  },
+  "arena:vision_style_control/captioning": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "vision"
+    ]
+   }
+  },
+  "arena:vision_style_control/chinese": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "vision"
+    ],
+    "lang": [
+     "zh"
+    ]
+   }
+  },
+  "arena:vision_style_control/creative_writing_vision": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "vision",
+     "creative_writing"
+    ]
+   }
+  },
+  "arena:vision_style_control/diagram": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "vision_diagram"
+    ]
+   }
+  },
+  "arena:vision_style_control/english": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "vision"
+    ],
+    "lang": [
+     "en"
+    ]
+   }
+  },
+  "arena:vision_style_control/entity_recognition": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "vision"
+    ]
+   }
+  },
+  "arena:vision_style_control/homework": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "vision_homework"
+    ]
+   }
+  },
+  "arena:vision_style_control/humor": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "vision"
+    ]
+   }
+  },
+  "arena:vision_style_control/ocr": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "vision_ocr"
+    ]
+   }
+  },
+  "arena:vision_style_control/overall": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "vision"
+    ]
+   }
+  },
+  "arena:webdev/image_to_webdev": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "image_to_webdev"
+    ]
+   }
+  },
+  "arena:webdev/overall": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "webdev_html",
+     "webdev_react"
+    ]
+   }
+  },
+  "arena:webdev/webdev-html": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "webdev_html"
+    ]
+   }
+  },
+  "arena:webdev/webdev-react": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "webdev_react"
+    ]
+   }
+  },
+  "hf:Delores-Lin/MDPBench": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "ocr_parse"
+    ]
+   }
+  },
+  "hf:FutureMa/EvasionBench": {
+   "labeled": true,
+   "facets": {
+    "domain": [
+     "business_finance"
+    ]
+   }
+  },
+  "hf:IntelligenceLab/Long-Horizon-Terminal-Bench": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "terminal_ops"
+    ],
+    "shape": [
+     "long_horizon"
+    ]
+   }
+  },
+  "hf:InternScience/ResearchClawBench": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "science_reasoning"
+    ],
+    "domain": [
+     "science"
+    ],
+    "shape": [
+     "long_horizon"
+    ]
+   }
+  },
+  "hf:LEXam-Benchmark/LEXam": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "legal"
+    ],
+    "domain": [
+     "legal_government"
+    ]
+   }
+  },
+  "hf:LiquidAI/ifstruct-v1.0": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "instruction_following"
+    ]
+   }
+  },
+  "hf:LocalLLaMA/typed-decisions": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "general"
+    ]
+   }
+  },
+  "hf:MMMU/MMMU_Pro": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "vision",
+     "science_reasoning"
+    ]
+   }
+  },
+  "hf:MathArena/aime_2026": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "math"
+    ],
+    "domain": [
+     "mathematical"
+    ]
+   }
+  },
+  "hf:PaddlePaddle/Real5-OmniDocBench": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "ocr_parse"
+    ]
+   }
+  },
+  "hf:SWE-bench/SWE-bench_Multilingual": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "repo_coding",
+     "coding"
+    ]
+   }
+  },
+  "hf:SWE-bench/SWE-bench_Multimodal": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "repo_coding",
+     "vision"
+    ]
+   }
+  },
+  "hf:ScaleAI/SWE-bench_Pro": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "repo_coding"
+    ],
+    "shape": [
+     "long_horizon"
+    ]
+   }
+  },
+  "hf:TIGER-Lab/MMLU-Pro": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "science_reasoning"
+    ]
+   }
+  },
+  "hf:actava/chi-bench": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "professional_work"
+    ],
+    "domain": [
+     "medicine_healthcare"
+    ]
+   }
+  },
+  "hf:allenai/olmOCR-bench": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "ocr_parse"
+    ]
+   }
+  },
+  "hf:benchflow/skillsbench": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "multi_tool"
+    ]
+   }
+  },
+  "hf:claw-eval/Claw-Eval": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "multi_tool"
+    ]
+   }
+  },
+  "hf:collinear-ai/yc-bench": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "multi_tool"
+    ],
+    "shape": [
+     "long_horizon"
+    ],
+    "domain": [
+     "business_finance"
+    ]
+   }
+  },
+  "hf:crosbylegal/RedlineBench": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "legal"
+    ],
+    "shape": [
+     "multi_turn"
+    ]
+   }
+  },
+  "hf:harborframework/terminal-bench-science": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "terminal_ops"
+    ],
+    "domain": [
+     "science"
+    ]
+   }
+  },
+  "hf:internlm/WildClawBench": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "multi_tool"
+    ]
+   }
+  },
+  "hf:joelniklaus/LEXam-hard": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "legal"
+    ],
+    "domain": [
+     "legal_government"
+    ]
+   }
+  },
+  "hf:likaixin/ScreenSpot-Pro": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "gui_grounding"
+    ]
+   }
+  },
+  "hf:llamaindex/ExtractBench": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "ocr_parse"
+    ]
+   }
+  },
+  "hf:llamaindex/ParseBench": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "ocr_parse"
+    ]
+   }
+  },
+  "hf:mercor/ACE": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "general"
+    ]
+   }
+  },
+  "hf:mercor/APEX-v1-extended": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "professional_work"
+    ]
+   }
+  },
+  "hf:mercor/apex-agents": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "professional_work",
+     "multi_tool"
+    ],
+    "shape": [
+     "long_horizon"
+    ]
+   }
+  },
+  "mg:aa-analyst-agent/default": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "data_analysis"
+    ]
+   }
+  },
+  "mg:agents-last-exam/default": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "professional_work"
+    ]
+   }
+  },
+  "mg:arc-agi-2/high": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "abstract_reasoning"
+    ]
+   }
+  },
+  "mg:arc-agi-2/max": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "abstract_reasoning"
+    ]
+   }
+  },
+  "mg:arc-agi-2/untiered": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "abstract_reasoning"
+    ]
+   }
+  },
+  "mg:arc-agi-2/xhigh": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "abstract_reasoning"
+    ]
+   }
+  },
+  "mg:deepswe/default": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "repo_coding"
+    ]
+   }
+  },
+  "mg:hle/no_tools": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "science_reasoning"
+    ],
+    "difficulty": [
+     "expert"
+    ]
+   }
+  },
+  "mg:hle/with_tools": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "science_reasoning"
+    ],
+    "difficulty": [
+     "expert"
+    ]
+   }
+  },
+  "mg:livebench/default": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "general"
+    ]
+   }
+  },
+  "mg:osworld-2-0/v2026_06_24_full": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "computer_use"
+    ],
+    "shape": [
+     "long_horizon"
+    ]
+   }
+  },
+  "mg:osworld-2-0/v2026_08_08_full": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "computer_use"
+    ],
+    "shape": [
+     "long_horizon"
+    ]
+   }
+  },
+  "mg:osworld-2-0/v2026_08_08_full_modified": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "computer_use"
+    ],
+    "shape": [
+     "long_horizon"
+    ]
+   }
+  },
+  "mg:osworld-2-0/v2026_08_08_offline": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "computer_use"
+    ],
+    "shape": [
+     "long_horizon"
+    ]
+   }
+  },
+  "mg:osworld-2-0/v2_1_full": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "computer_use"
+    ],
+    "shape": [
+     "long_horizon"
+    ]
+   }
+  },
+  "mg:osworld-2-0/v2_1_offline": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "computer_use"
+    ],
+    "shape": [
+     "long_horizon"
+    ]
+   }
+  },
+  "mg:terminal-bench-4-0/default": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "terminal_ops"
+    ]
+   }
+  },
+  "mg:terminal-bench-4-0/high": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "terminal_ops"
+    ]
+   }
+  },
+  "mg:terminal-bench-4-0/max": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "terminal_ops"
+    ]
+   }
+  },
+  "mg:terminal-bench-4-0/xhigh": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "terminal_ops"
+    ]
+   }
+  },
+  "mg:toolathlon-verified/default": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "multi_tool"
+    ],
+    "shape": [
+     "long_horizon"
+    ]
+   }
+  },
+  "terminal_exact": {
+   "labeled": true,
+   "facets": {
+    "task": [
+     "terminal_ops"
+    ]
+   }
+  }
+ }
+}

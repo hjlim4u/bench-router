@@ -1,0 +1,1539 @@
+{
+ "_note": "Claude 초안(2026-10-18, 사람 검토 전). facets는 'axis:value'(rule:always 제외), units는 active unit만 {id: 2 작업 유형을 직접 측정 | 1 언어·산업·전체 등 참고}. arena:agent/* 신호는 위임 대상이 항상 코딩 agent이므로 모든 케이스에서 1(기존 2는 유지)(steerability는 round>1 전용이라 제외). hard_ci/hard_pdf는 규칙 오탐(terminal_ops, ocr_parse)을 gold에서 뺐고, hard_none은 agent 신호 외 관련 unit이 없다.",
+ "cases": [
+  {
+   "id": "ws-pager",
+   "workset": "pager",
+   "labeled": true,
+   "facets_required": [
+    "task:coding",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:repo_coding",
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "aa_coding": 2,
+    "arena:text_style_control/coding": 2,
+    "mg:livebench/default": 1,
+    "aa_intelligence": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:text_style_control/industry_software_and_it_services": 1
+   }
+  },
+  {
+   "id": "ws-users",
+   "workset": "users",
+   "labeled": true,
+   "facets_required": [
+    "task:coding",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:repo_coding",
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "aa_coding": 2,
+    "arena:text_style_control/coding": 2,
+    "mg:livebench/default": 1,
+    "aa_intelligence": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:text_style_control/industry_software_and_it_services": 1
+   }
+  },
+  {
+   "id": "ws-csvline",
+   "workset": "csvline",
+   "labeled": true,
+   "facets_required": [
+    "task:coding",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:repo_coding",
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "aa_coding": 2,
+    "arena:text_style_control/coding": 2,
+    "mg:livebench/default": 1,
+    "aa_intelligence": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:text_style_control/industry_software_and_it_services": 1
+   }
+  },
+  {
+   "id": "ws-timeout",
+   "workset": "timeout",
+   "labeled": true,
+   "facets_required": [
+    "task:coding",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:repo_coding",
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "aa_coding": 2,
+    "arena:text_style_control/coding": 2,
+    "mg:livebench/default": 1,
+    "aa_intelligence": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:text_style_control/industry_software_and_it_services": 1
+   }
+  },
+  {
+   "id": "ws-bigfiles",
+   "workset": "bigfiles",
+   "labeled": true,
+   "facets_required": [
+    "task:terminal_ops",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:coding",
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 2,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "terminal_exact": 2,
+    "mg:terminal-bench-4-0/max": 2,
+    "aa_coding": 1,
+    "arena:text_style_control/coding": 1
+   }
+  },
+  {
+   "id": "ws-rotate",
+   "workset": "rotate",
+   "labeled": true,
+   "facets_required": [
+    "task:terminal_ops",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:coding",
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 2,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "terminal_exact": 2,
+    "mg:terminal-bench-4-0/max": 2,
+    "aa_coding": 1,
+    "arena:text_style_control/coding": 1
+   }
+  },
+  {
+   "id": "ws-units",
+   "workset": "units",
+   "labeled": true,
+   "facets_required": [
+    "task:terminal_ops",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:coding",
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 2,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "terminal_exact": 2,
+    "mg:terminal-bench-4-0/max": 2,
+    "aa_coding": 1,
+    "arena:text_style_control/coding": 1
+   }
+  },
+  {
+   "id": "ws-roman",
+   "workset": "roman",
+   "labeled": true,
+   "facets_required": [
+    "task:coding",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "aa_coding": 2,
+    "arena:text_style_control/coding": 2,
+    "mg:livebench/default": 1,
+    "aa_intelligence": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:text_style_control/industry_software_and_it_services": 1
+   }
+  },
+  {
+   "id": "ws-lru",
+   "workset": "lru",
+   "labeled": true,
+   "facets_required": [
+    "task:coding",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "aa_coding": 2,
+    "arena:text_style_control/coding": 2,
+    "mg:livebench/default": 1,
+    "aa_intelligence": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:text_style_control/industry_software_and_it_services": 1
+   }
+  },
+  {
+   "id": "ws-intervals",
+   "workset": "intervals",
+   "labeled": true,
+   "facets_required": [
+    "task:coding",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "aa_coding": 2,
+    "arena:text_style_control/coding": 2,
+    "mg:livebench/default": 1,
+    "aa_intelligence": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:text_style_control/industry_software_and_it_services": 1
+   }
+  },
+  {
+   "id": "ws-form",
+   "workset": "form",
+   "labeled": true,
+   "facets_required": [
+    "task:webdev_html",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:coding",
+    "task:instruction_following"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "arena:webdev/webdev-html": 2,
+    "arena:webdev/overall": 1,
+    "aa_coding": 1,
+    "arena:text_style_control/coding": 1
+   }
+  },
+  {
+   "id": "ws-table",
+   "workset": "table",
+   "labeled": true,
+   "facets_required": [
+    "task:webdev_html",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:coding",
+    "task:instruction_following"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "arena:webdev/webdev-html": 2,
+    "arena:webdev/overall": 1,
+    "aa_coding": 1,
+    "arena:text_style_control/coding": 1
+   }
+  },
+  {
+   "id": "ws-math1",
+   "workset": "math1",
+   "labeled": true,
+   "facets_required": [
+    "task:math",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "domain:mathematical"
+   ],
+   "units": {
+    "arena:text_style_control/korean": 1,
+    "arena:text_style_control/math": 2,
+    "arena:text_style_control/industry_mathematical": 1,
+    "mg:livebench/default": 1,
+    "aa_intelligence": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "ws-math2",
+   "workset": "math2",
+   "labeled": true,
+   "facets_required": [
+    "task:math",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "domain:mathematical"
+   ],
+   "units": {
+    "arena:text_style_control/korean": 1,
+    "arena:text_style_control/math": 2,
+    "arena:text_style_control/industry_mathematical": 1,
+    "mg:livebench/default": 1,
+    "aa_intelligence": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "ws-sales",
+   "workset": "sales",
+   "labeled": true,
+   "facets_required": [
+    "task:data_analysis",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:coding",
+    "domain:business_finance"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "mg:aa-analyst-agent/default": 2,
+    "mg:livebench/default": 1
+   }
+  },
+  {
+   "id": "ws-logs",
+   "workset": "logs",
+   "labeled": true,
+   "facets_required": [
+    "task:data_analysis",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:coding",
+    "domain:business_finance"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "mg:aa-analyst-agent/default": 2,
+    "mg:livebench/default": 1
+   }
+  },
+  {
+   "id": "ws-release",
+   "workset": "release",
+   "labeled": true,
+   "facets_required": [
+    "task:instruction_following",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:creative_writing",
+    "domain:writing_language",
+    "domain:software_it",
+    "lang:en"
+   ],
+   "units": {
+    "arena:text_style_control/instruction_following": 2,
+    "arena:text_style_control/korean": 2,
+    "arena:text_style_control/industry_writing_and_literature_and_language": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "ws-email",
+   "workset": "email",
+   "labeled": true,
+   "facets_required": [
+    "task:instruction_following",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:creative_writing",
+    "domain:business_finance",
+    "domain:writing_language"
+   ],
+   "units": {
+    "arena:text_style_control/korean": 2,
+    "arena:text_style_control/instruction_following": 2,
+    "arena:text_style_control/creative_writing": 1,
+    "arena:text_style_control/industry_writing_and_literature_and_language": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "ws-checklist",
+   "workset": "checklist",
+   "labeled": true,
+   "facets_required": [
+    "task:instruction_following",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "domain:business_finance"
+   ],
+   "units": {
+    "arena:text_style_control/instruction_following": 2,
+    "arena:text_style_control/korean": 2,
+    "arena:text_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "ws-translate",
+   "workset": "translate",
+   "labeled": true,
+   "facets_required": [
+    "lang:ko",
+    "domain:writing_language"
+   ],
+   "facets_acceptable": [
+    "task:instruction_following",
+    "lang:en"
+   ],
+   "units": {
+    "arena:text_style_control/korean": 2,
+    "arena:text_style_control/industry_writing_and_literature_and_language": 2,
+    "arena:text_style_control/instruction_following": 1,
+    "arena:text_style_control/english": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "abs1",
+   "summary": "Infer the grid transformation rule from examples.",
+   "prompt": "아래 3개의 입력/출력 격자 예시에서 변환 규칙을 찾아 네 번째 입력 격자에 적용한 출력을 쓰세요.\n입력1 [[0,1],[1,0]] → [[1,0],[0,1]] ...",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:abstract_reasoning",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "difficulty:hard_prompts"
+   ],
+   "units": {
+    "arena:text_style_control/korean": 1,
+    "mg:livebench/default": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "abs2",
+   "summary": "Continue a symbol sequence by its hidden rule.",
+   "prompt": "Given the sequences AB→BA, ABC→CBA, ABCD→?, state the rule and apply it to 'QWERTY'.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:abstract_reasoning",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "difficulty:hard_prompts"
+   ],
+   "units": {
+    "arena:text_style_control/english": 1,
+    "mg:livebench/default": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "cu1",
+   "summary": "Fill a web form in a desktop browser.",
+   "prompt": "브라우저를 열어 사내 포털에 로그인하고, 휴가 신청 양식에 10/21~10/23을 입력해 제출해 주세요.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:computer_use",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:multi_tool",
+    "shape:long_horizon"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1
+   }
+  },
+  {
+   "id": "cu2",
+   "summary": "Change OS display settings via GUI.",
+   "prompt": "Open the system settings app and switch the display to dark mode, then set the screen timeout to 15 minutes.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:computer_use",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "task:multi_tool"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1
+   }
+  },
+  {
+   "id": "cw1",
+   "summary": "Write a short story.",
+   "prompt": "가을 저녁 지하철에서 우연히 마주친 두 동창의 이야기를 2000자 내외 단편소설로 써 주세요.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:creative_writing",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "domain:writing_language",
+    "domain:entertainment_media"
+   ],
+   "units": {
+    "arena:text_style_control/creative_writing": 2,
+    "arena:text_style_control/korean": 2,
+    "arena:text_style_control/industry_writing_and_literature_and_language": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "cw2",
+   "summary": "Write a poem in a given form.",
+   "prompt": "Write a villanelle about debugging at 3 a.m.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:creative_writing",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "domain:writing_language",
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:text_style_control/english": 1,
+    "arena:text_style_control/creative_writing": 2,
+    "arena:text_style_control/industry_writing_and_literature_and_language": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "gui1",
+   "summary": "Locate a UI element in a screenshot.",
+   "prompt": "screenshot.png에서 '결제하기' 버튼의 픽셀 좌표 (x, y)를 알려 주세요.",
+   "context_files": [
+    "screenshot.png"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:gui_grounding",
+    "task:vision",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:vision_ocr"
+   ],
+   "units": {
+    "arena:text_style_control/korean": 1,
+    "arena:vision_style_control/overall": 1,
+    "arena:vision_style_control/ocr": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "gui2",
+   "summary": "Identify clickable element for an instruction.",
+   "prompt": "In the attached app screenshot, which element should be clicked to export the report as CSV? Return its bounding box.",
+   "context_files": [
+    "app.png"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:gui_grounding",
+    "task:vision",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "task:vision_ocr"
+   ],
+   "units": {
+    "arena:vision_style_control/overall": 1,
+    "arena:vision_style_control/english": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "i2w1",
+   "summary": "Recreate a web page from a design screenshot.",
+   "prompt": "mockup.png 디자인 시안을 보고 동일한 랜딩 페이지를 HTML/CSS로 구현하세요.",
+   "context_files": [
+    "mockup.png"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:image_to_webdev",
+    "task:webdev_html",
+    "task:vision",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:coding"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "arena:webdev/image_to_webdev": 2,
+    "arena:webdev/webdev-html": 2,
+    "arena:webdev/overall": 1,
+    "arena:vision_style_control/overall": 1
+   }
+  },
+  {
+   "id": "i2w2",
+   "summary": "Turn a hand-drawn wireframe into a page.",
+   "prompt": "Convert the attached wireframe sketch into a working responsive web page.",
+   "context_files": [
+    "wireframe.jpg"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:image_to_webdev",
+    "task:vision",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "task:webdev_html",
+    "task:coding"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:webdev/image_to_webdev": 2,
+    "arena:webdev/overall": 1,
+    "arena:webdev/webdev-html": 1,
+    "arena:vision_style_control/english": 1
+   }
+  },
+  {
+   "id": "if1",
+   "summary": "Answer under strict formatting constraints.",
+   "prompt": "다음 질문에 정확히 3문장, 각 문장 20자 이내, 마지막 문장은 질문형으로 답하세요: 왜 하늘은 파란가?",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:instruction_following",
+    "lang:ko"
+   ],
+   "facets_acceptable": [],
+   "units": {
+    "arena:text_style_control/instruction_following": 2,
+    "arena:text_style_control/korean": 2,
+    "arena:text_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "if2",
+   "summary": "Produce output with exact constraints.",
+   "prompt": "List five fruits in reverse alphabetical order, all lowercase, separated by ' | ', with no other text.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:instruction_following",
+    "lang:en"
+   ],
+   "facets_acceptable": [],
+   "units": {
+    "arena:text_style_control/english": 1,
+    "arena:text_style_control/instruction_following": 2,
+    "arena:text_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "legal1",
+   "summary": "Review contract clause risks.",
+   "prompt": "첨부한 용역 계약서의 손해배상·지체상금 조항에서 수급인에게 불리한 점을 정리해 주세요.",
+   "context_files": [
+    "contract.docx"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:legal",
+    "domain:legal_government",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:document"
+   ],
+   "units": {
+    "arena:text_style_control/korean": 1,
+    "arena:text_style_control/industry_legal_and_government": 2,
+    "arena:text_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "legal2",
+   "summary": "Explain applicability of a statute.",
+   "prompt": "Does GDPR Article 22 apply to an automated loan rejection made by a bank in Germany? Explain.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:legal",
+    "domain:legal_government",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "difficulty:expert"
+   ],
+   "units": {
+    "arena:text_style_control/english": 1,
+    "arena:text_style_control/industry_legal_and_government": 2,
+    "arena:text_style_control/expert": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "math3",
+   "summary": "Prove an inequality.",
+   "prompt": "모든 양의 실수 a,b,c에 대해 (a+b+c)(1/a+1/b+1/c) ≥ 9 임을 증명하세요.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:math",
+    "domain:mathematical",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "difficulty:hard_prompts"
+   ],
+   "units": {
+    "arena:text_style_control/korean": 1,
+    "arena:text_style_control/math": 2,
+    "arena:text_style_control/industry_mathematical": 2,
+    "mg:livebench/default": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "math4",
+   "summary": "Solve a competition combinatorics problem.",
+   "prompt": "How many 10-digit binary strings contain no two consecutive 1s? Show the derivation.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:math",
+    "domain:mathematical",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "difficulty:hard_prompts"
+   ],
+   "units": {
+    "arena:text_style_control/english": 1,
+    "arena:text_style_control/math": 2,
+    "arena:text_style_control/industry_mathematical": 2,
+    "mg:livebench/default": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "mt1",
+   "summary": "Plan a trip using several APIs.",
+   "prompt": "항공권 검색, 호텔 예약, 날씨 조회 도구를 조합해 11월 첫째 주 2박 3일 오사카 일정을 짜고 예약까지 진행하세요.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:multi_tool",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "shape:long_horizon",
+    "task:search"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 2,
+    "arena:text_style_control/korean": 1
+   }
+  },
+  {
+   "id": "mt2",
+   "summary": "Reconcile data across tools.",
+   "prompt": "Use the CRM API and the billing API to find customers whose subscription lapsed but who still have open tickets, then email each owner.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:multi_tool",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "domain:business_finance",
+    "shape:long_horizon"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 2,
+    "arena:text_style_control/english": 1
+   }
+  },
+  {
+   "id": "pro1",
+   "summary": "Draft a quarterly financial memo.",
+   "prompt": "3분기 매출·원가 자료를 바탕으로 경영진 보고용 1페이지 재무 메모를 작성해 주세요.",
+   "context_files": [
+    "q3.xlsx"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:professional_work",
+    "task:data_analysis",
+    "domain:business_finance",
+    "lang:ko"
+   ],
+   "facets_acceptable": [],
+   "units": {
+    "arena:text_style_control/korean": 1,
+    "arena:text_style_control/industry_business_and_management_and_financial_operations": 2,
+    "mg:aa-analyst-agent/default": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "pro2",
+   "summary": "Build a project plan for a consulting engagement.",
+   "prompt": "Prepare a 6-week engagement plan with workstreams, owners, and deliverables for an ERP migration assessment.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:professional_work",
+    "domain:business_finance",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:text_style_control/english": 1,
+    "arena:text_style_control/industry_business_and_management_and_financial_operations": 2,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "repo1",
+   "summary": "Fix a failing test across a repo.",
+   "prompt": "이 저장소에서 test_api.py::test_pagination이 실패합니다. 원인을 찾아 여러 모듈에 걸친 수정으로 고치고 전체 테스트를 통과시키세요.",
+   "context_files": [
+    "src/api.py",
+    "src/db.py",
+    "tests/test_api.py"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:repo_coding",
+    "task:coding",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "aa_coding": 2,
+    "arena:text_style_control/coding": 2,
+    "mg:livebench/default": 1,
+    "aa_intelligence": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:text_style_control/industry_software_and_it_services": 1
+   }
+  },
+  {
+   "id": "repo2",
+   "summary": "Implement a feature from an issue.",
+   "prompt": "Implement issue #412: add rate limiting middleware to the Flask app, with config and tests.",
+   "context_files": [
+    "app/__init__.py",
+    "app/config.py"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:repo_coding",
+    "task:coding",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "aa_coding": 2,
+    "arena:text_style_control/coding": 2,
+    "mg:livebench/default": 1,
+    "aa_intelligence": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:text_style_control/industry_software_and_it_services": 1
+   }
+  },
+  {
+   "id": "ret1",
+   "summary": "Answer from a provided document set.",
+   "prompt": "첨부한 사내 위키 문서 30개 중에서 VPN 재설정 절차가 나온 부분을 찾아 요약하고 출처를 표시하세요.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:retrieval",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:search",
+    "task:document"
+   ],
+   "units": {
+    "arena:text_style_control/korean": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "ret2",
+   "summary": "Find a needle in long context.",
+   "prompt": "In the attached 200-page transcript, find every place where the witness mentions the blue car.",
+   "context_files": [
+    "transcript.txt"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:retrieval",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "shape:longer_query"
+   ],
+   "units": {
+    "arena:text_style_control/english": 1,
+    "arena:text_style_control/longer_query": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "sci1",
+   "summary": "Explain a chemistry mechanism.",
+   "prompt": "SN1과 SN2 반응 메커니즘의 차이를 기질·용매·입체화학 측면에서 설명하세요.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:science_reasoning",
+    "domain:science",
+    "lang:ko"
+   ],
+   "facets_acceptable": [],
+   "units": {
+    "arena:text_style_control/korean": 1,
+    "arena:text_style_control/industry_life_and_physical_and_social_science": 2,
+    "mg:hle/no_tools": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "sci2",
+   "summary": "Solve a graduate physics problem.",
+   "prompt": "Derive the energy levels of a particle in a 3D isotropic harmonic oscillator and their degeneracy.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:science_reasoning",
+    "domain:science",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "difficulty:expert",
+    "difficulty:hard_prompts",
+    "domain:mathematical"
+   ],
+   "units": {
+    "arena:text_style_control/english": 1,
+    "arena:text_style_control/industry_life_and_physical_and_social_science": 2,
+    "mg:hle/no_tools": 2,
+    "arena:text_style_control/expert": 1,
+    "arena:text_style_control/hard_prompts": 1,
+    "arena:text_style_control/hard_prompts_english": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "srch1",
+   "summary": "Look up current information on the web.",
+   "prompt": "이번 주 발표된 한국은행 기준금리 결정과 시장 반응을 웹에서 찾아 정리해 주세요.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:search",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "domain:business_finance"
+   ],
+   "units": {
+    "arena:text_style_control/korean": 1,
+    "arena:search_factuality/overall": 2,
+    "arena:search_style_control/overall": 2,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "srch2",
+   "summary": "Compare products with web sources.",
+   "prompt": "Search the web and compare the current prices and battery life of the three most popular 14-inch laptops.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:search",
+    "lang:en"
+   ],
+   "facets_acceptable": [],
+   "units": {
+    "arena:text_style_control/english": 1,
+    "arena:search_factuality/overall": 2,
+    "arena:search_style_control/overall": 2,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "vd1",
+   "summary": "Read a chart image.",
+   "prompt": "chart.png 막대그래프에서 2023년 대비 2024년 증가율이 가장 큰 항목을 찾아 주세요.",
+   "context_files": [
+    "chart.png"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:vision_diagram",
+    "task:vision",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:data_analysis"
+   ],
+   "units": {
+    "arena:text_style_control/korean": 1,
+    "arena:vision_style_control/diagram": 2,
+    "arena:vision_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "vd2",
+   "summary": "Interpret an architecture diagram.",
+   "prompt": "Explain the data flow in the attached system architecture diagram and point out single points of failure.",
+   "context_files": [
+    "arch.png"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:vision_diagram",
+    "task:vision",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:vision_style_control/diagram": 2,
+    "arena:vision_style_control/english": 1,
+    "arena:vision_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "vh1",
+   "summary": "Solve a photographed homework problem.",
+   "prompt": "사진으로 찍은 수학 숙제 문제를 풀어 주세요.",
+   "context_files": [
+    "homework.jpg"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:vision_homework",
+    "task:vision",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:math",
+    "domain:mathematical"
+   ],
+   "units": {
+    "arena:text_style_control/korean": 1,
+    "arena:vision_style_control/homework": 2,
+    "arena:vision_style_control/overall": 1,
+    "arena:text_style_control/math": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "vh2",
+   "summary": "Check a student's handwritten solution.",
+   "prompt": "Check whether the handwritten physics solution in the photo is correct and explain any mistakes.",
+   "context_files": [
+    "solution.jpg"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:vision_homework",
+    "task:vision",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "task:science_reasoning",
+    "domain:science"
+   ],
+   "units": {
+    "arena:vision_style_control/homework": 2,
+    "arena:vision_style_control/english": 1,
+    "arena:vision_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "ocr1",
+   "summary": "Extract text from a receipt photo.",
+   "prompt": "영수증 사진에서 상호, 날짜, 품목별 금액을 JSON으로 추출하세요.",
+   "context_files": [
+    "receipt.jpg"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:vision_ocr",
+    "task:vision",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:ocr_parse"
+   ],
+   "units": {
+    "arena:text_style_control/korean": 1,
+    "arena:vision_style_control/ocr": 2,
+    "arena:vision_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "ocr2",
+   "summary": "Transcribe a scanned table.",
+   "prompt": "Transcribe the table in the scanned page into CSV, preserving all cells.",
+   "context_files": [
+    "scan.png"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:vision_ocr",
+    "task:vision",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "task:ocr_parse",
+    "task:data_analysis"
+   ],
+   "units": {
+    "arena:vision_style_control/ocr": 2,
+    "arena:vision_style_control/english": 1,
+    "arena:vision_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "hard_ci",
+   "summary": "Write a blog post about CI culture (not ops).",
+   "prompt": "팀 블로그에 'CI가 개발 문화에 주는 영향'에 대한 에세이를 써 주세요. 코드나 설정은 필요 없습니다.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:creative_writing",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "domain:software_it",
+    "domain:writing_language"
+   ],
+   "units": {
+    "arena:text_style_control/creative_writing": 2,
+    "arena:text_style_control/korean": 2,
+    "arena:text_style_control/industry_writing_and_literature_and_language": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "hard_pdf",
+   "summary": "Summarize a PDF report's argument.",
+   "prompt": "Summarize the main argument of the attached policy report in five bullet points.",
+   "context_files": [
+    "report.pdf"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:document",
+    "lang:en"
+   ],
+   "facets_acceptable": [],
+   "units": {
+    "arena:text_style_control/english": 1,
+    "arena:document_style_control/overall": 2,
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "hard_react",
+   "summary": "Build a React dashboard without files.",
+   "prompt": "Build a React dashboard with routing, a sidebar and shared state for filters.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:webdev_react",
+    "task:coding",
+    "lang:en"
+   ],
+   "facets_acceptable": [],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "arena:webdev/webdev-react": 2,
+    "arena:webdev/overall": 1,
+    "aa_coding": 1,
+    "arena:text_style_control/coding": 1
+   }
+  },
+  {
+   "id": "hard_multi",
+   "summary": "Analyze CSV and write a Korean report with charts.",
+   "prompt": "sales.csv를 분석해 지역별 추세 차트를 만들고, 경영진용 한국어 보고서(report.md)로 정리하세요.",
+   "context_files": [
+    "sales.csv"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:data_analysis",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "domain:business_finance",
+    "task:professional_work",
+    "task:coding"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "mg:aa-analyst-agent/default": 2,
+    "arena:text_style_control/industry_business_and_management_and_financial_operations": 1
+   }
+  },
+  {
+   "id": "hard_none",
+   "summary": "Choose a name for a cat.",
+   "prompt": "Suggest a name for my new orange cat.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "task:creative_writing",
+    "domain:entertainment_media"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1
+   }
+  },
+  {
+   "id": "hard_long",
+   "summary": "Long-running migration agent task.",
+   "prompt": "모노레포의 200개 패키지를 Python 3.8에서 3.12로 옮기는 작업을 끝까지 진행하세요. 패키지마다 테스트를 돌리고 실패를 고치며, 몇 시간이 걸려도 됩니다.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:repo_coding",
+    "task:coding",
+    "shape:long_horizon",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:terminal_ops",
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "aa_coding": 2,
+    "arena:text_style_control/coding": 1,
+    "terminal_exact": 1,
+    "mg:terminal-bench-4-0/max": 1
+   }
+  }
+ ]
+}

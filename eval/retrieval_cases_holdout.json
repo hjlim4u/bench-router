@@ -1,0 +1,778 @@
+{
+ "_note": "보류 검증 세트(2026-10-18). decision.md 경계 사례를 만든 뒤 Claude가 작성하고 Jev 실행 전에 고정했다. 라벨 규칙은 retrieval_cases.json과 같다. 경계 사례의 과잉 교정(진짜 instruction_following·hard_prompts·software_it·math)과 기존 세트에 없던 de/fr/es/ja/zh/pl/ru를 포함한다. 사람 검토 전.",
+ "cases": [
+  {
+   "id": "h_if1",
+   "summary": "Bullet list under strict format constraints.",
+   "prompt": "Write exactly four bullet points, each under 12 words, with no punctuation except hyphens, describing the benefits of unit tests.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:instruction_following",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "arena:text_style_control/instruction_following": 2
+   }
+  },
+  {
+   "id": "h_if2",
+   "summary": "Self-introduction under strict constraints.",
+   "prompt": "다음 조건을 모두 지켜 자기소개를 쓰세요: 정확히 5문장, 모든 문장은 '나는'으로 시작, 숫자 사용 금지, 마지막 문장은 50자 이상.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:instruction_following",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "domain:writing_language"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "arena:text_style_control/instruction_following": 2
+   }
+  },
+  {
+   "id": "h_if3",
+   "summary": "Answer with an exact JSON shape only.",
+   "prompt": "Antworte nur mit einem JSON-Objekt mit genau den Schlüsseln 'stadt' und 'land' für die Hauptstadt Frankreichs, ohne weitere Erklärung.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:instruction_following",
+    "lang:de"
+   ],
+   "facets_acceptable": [],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/german": 1,
+    "arena:text_style_control/instruction_following": 2
+   }
+  },
+  {
+   "id": "h_hard1",
+   "summary": "Design a lock-free MPMC queue.",
+   "prompt": "Design a lock-free MPMC queue in C++20 with correct memory orderings, argue linearizability informally, and discuss ABA mitigation strategies.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:coding",
+    "difficulty:hard_prompts",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "difficulty:expert",
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "arena:text_style_control/hard_prompts": 2,
+    "arena:text_style_control/hard_prompts_english": 2,
+    "aa_coding": 2,
+    "arena:text_style_control/coding": 2,
+    "arena:text_style_control/expert": 1,
+    "mg:livebench/default": 1,
+    "arena:text_style_control/industry_software_and_it_services": 1
+   }
+  },
+  {
+   "id": "h_hard2",
+   "summary": "Derive an optimal stopping rule.",
+   "prompt": "Derive the optimal stopping rule for the secretary problem with n candidates when the payoff is the reciprocal of the chosen candidate's rank, and give its asymptotic threshold.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:math",
+    "domain:mathematical",
+    "difficulty:hard_prompts",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "difficulty:expert"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "arena:text_style_control/math": 2,
+    "arena:text_style_control/industry_mathematical": 2,
+    "arena:text_style_control/hard_prompts": 1,
+    "arena:text_style_control/hard_prompts_english": 1,
+    "arena:text_style_control/expert": 1,
+    "mg:livebench/default": 1
+   }
+  },
+  {
+   "id": "h_swit1",
+   "summary": "Compare cluster schedulers (no code).",
+   "prompt": "Compare Kubernetes and Nomad for a 50-node on-prem cluster: operational cost, failure modes, and upgrade strategy. No code needed.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "domain:software_it",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "difficulty:hard_prompts"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "arena:text_style_control/industry_software_and_it_services": 2,
+    "arena:text_style_control/overall": 1
+   }
+  },
+  {
+   "id": "h_swit2",
+   "summary": "Design an IT helpdesk ticket taxonomy.",
+   "prompt": "사내 IT 헬프데스크 티켓 분류 체계를 설계해 주세요. 카테고리, 우선순위 기준, SLA를 표로 정리합니다.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "domain:software_it",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:professional_work",
+    "domain:business_finance"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "arena:text_style_control/industry_software_and_it_services": 2,
+    "arena:text_style_control/overall": 1
+   }
+  },
+  {
+   "id": "h_arith",
+   "summary": "Compute cart total with tax in Python.",
+   "prompt": "Write a Python function in cart.py that returns the total price of a cart: the sum of qty*price plus 8% tax, rounded to cents.",
+   "context_files": [
+    "cart.py"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:coding",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "aa_coding": 2,
+    "arena:text_style_control/coding": 2,
+    "mg:livebench/default": 1,
+    "aa_intelligence": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:text_style_control/industry_software_and_it_services": 1
+   }
+  },
+  {
+   "id": "h_alt",
+   "summary": "Write alt text for a logo image.",
+   "prompt": "Write an alt-text description for logo.png for our website accessibility audit.",
+   "context_files": [
+    "logo.png"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:vision",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "task:instruction_following"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "arena:vision_style_control/overall": 2,
+    "arena:vision_style_control/english": 1
+   }
+  },
+  {
+   "id": "h_ocr",
+   "summary": "Extract invoice fields from a photo.",
+   "prompt": "この請求書の写真から、請求番号・日付・合計金額を抜き出してJSONで出力してください。",
+   "context_files": [
+    "invoice.jpg"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:vision_ocr",
+    "task:vision",
+    "lang:ja"
+   ],
+   "facets_acceptable": [
+    "task:ocr_parse"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/japanese": 1,
+    "arena:vision_style_control/ocr": 2,
+    "arena:vision_style_control/overall": 1
+   }
+  },
+  {
+   "id": "h_fr",
+   "summary": "Write a cover letter in French.",
+   "prompt": "Rédige une lettre de motivation pour un poste de data scientist chez un assureur.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "domain:writing_language",
+    "lang:fr"
+   ],
+   "facets_acceptable": [
+    "task:creative_writing",
+    "domain:business_finance"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/french": 1,
+    "arena:text_style_control/industry_writing_and_literature_and_language": 1,
+    "arena:text_style_control/creative_writing": 1,
+    "arena:text_style_control/overall": 1
+   }
+  },
+  {
+   "id": "h_es",
+   "summary": "Explain simple vs compound interest.",
+   "prompt": "Explica la diferencia entre interés simple y compuesto con un ejemplo numérico para estudiantes de secundaria.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "lang:es"
+   ],
+   "facets_acceptable": [
+    "domain:business_finance",
+    "domain:mathematical"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/spanish": 1,
+    "arena:text_style_control/overall": 1
+   }
+  },
+  {
+   "id": "h_zh",
+   "summary": "Explain quantum entanglement in Chinese.",
+   "prompt": "请用中文解释量子纠缠，并给出一个日常生活中的类比。",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "domain:science",
+    "lang:zh"
+   ],
+   "facets_acceptable": [
+    "task:science_reasoning"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/chinese": 1,
+    "arena:text_style_control/industry_life_and_physical_and_social_science": 2
+   }
+  },
+  {
+   "id": "h_pl",
+   "summary": "Hourly backup bash script.",
+   "prompt": "Napisz skrypt bash, który co godzinę robi kopię zapasową katalogu /var/www do archiwum tar.gz z datą w nazwie.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:terminal_ops",
+    "lang:pl"
+   ],
+   "facets_acceptable": [
+    "task:coding",
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 2,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/polish": 1,
+    "terminal_exact": 2,
+    "mg:terminal-bench-4-0/max": 2,
+    "aa_coding": 1,
+    "arena:text_style_control/coding": 1
+   }
+  },
+  {
+   "id": "h_ru",
+   "summary": "Fix a memory leak in a Go service.",
+   "prompt": "Найди в репозитории причину утечки памяти в сервисе на Go и исправь её.",
+   "context_files": [
+    "svc/main.go",
+    "svc/cache.go"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:repo_coding",
+    "task:coding",
+    "lang:ru"
+   ],
+   "facets_acceptable": [
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/russian": 1,
+    "aa_coding": 2,
+    "arena:text_style_control/coding": 2,
+    "mg:livebench/default": 1,
+    "aa_intelligence": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:text_style_control/industry_software_and_it_services": 1
+   }
+  },
+  {
+   "id": "h_term",
+   "summary": "Fix a CI docker build out of disk.",
+   "prompt": "Our GitHub Actions workflow fails on the docker build step with 'no space left on device'. Diagnose and fix the workflow.",
+   "context_files": [
+    ".github/workflows/ci.yml"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:terminal_ops",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "domain:software_it",
+    "task:coding",
+    "task:repo_coding"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 2,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "terminal_exact": 2,
+    "mg:terminal-bench-4-0/max": 2,
+    "aa_coding": 1,
+    "arena:text_style_control/coding": 1
+   }
+  },
+  {
+   "id": "h_data",
+   "summary": "Fit a churn model with CV.",
+   "prompt": "Using the attached notebook, fit a logistic regression on churn.csv and report AUC with 5-fold cross-validation.",
+   "context_files": [
+    "churn.csv",
+    "analysis.ipynb"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:data_analysis",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "task:coding",
+    "domain:business_finance"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "mg:aa-analyst-agent/default": 2,
+    "mg:livebench/default": 1
+   }
+  },
+  {
+   "id": "h_react",
+   "summary": "Build a Next.js blog.",
+   "prompt": "Next.js로 블로그를 만들어 주세요. 글 목록, 상세 페이지, 태그 필터, 다크 모드를 포함합니다.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:webdev_react",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:coding",
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "arena:webdev/webdev-react": 2,
+    "arena:webdev/overall": 1,
+    "aa_coding": 1,
+    "arena:text_style_control/coding": 1
+   }
+  },
+  {
+   "id": "h_html",
+   "summary": "Single-file countdown page.",
+   "prompt": "Create a single-file HTML page with a countdown timer to New Year, styled with CSS animations.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:webdev_html",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "task:coding"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "arena:webdev/webdev-html": 2,
+    "arena:webdev/overall": 1,
+    "aa_coding": 1,
+    "arena:text_style_control/coding": 1
+   }
+  },
+  {
+   "id": "h_search",
+   "summary": "Look up today's KTX schedule.",
+   "prompt": "오늘 기준 서울-부산 KTX 첫차 시간과 요금을 찾아 주세요.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:search",
+    "lang:ko"
+   ],
+   "facets_acceptable": [],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "arena:search_factuality/overall": 2,
+    "arena:search_style_control/overall": 2
+   }
+  },
+  {
+   "id": "h_sci",
+   "summary": "Explain CRISPR off-target dependence.",
+   "prompt": "Explain why CRISPR-Cas9 off-target activity depends on the position of guide RNA mismatches, citing mechanistic reasons.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:science_reasoning",
+    "domain:science",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "domain:medicine_healthcare",
+    "difficulty:expert"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "arena:text_style_control/industry_life_and_physical_and_social_science": 2,
+    "mg:hle/no_tools": 1
+   }
+  },
+  {
+   "id": "h_med",
+   "summary": "Explain HbA1c targets vs hypoglycemia.",
+   "prompt": "당뇨병 환자의 HbA1c 목표치와 저혈당 위험 사이의 균형을 설명해 주세요.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "domain:medicine_healthcare",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:science_reasoning",
+    "domain:science"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "arena:text_style_control/industry_medicine_and_healthcare": 2
+   }
+  },
+  {
+   "id": "h_legal",
+   "summary": "Draft a mutual NDA.",
+   "prompt": "Draft a mutual NDA for two startups under California law, with a 2-year term and carve-outs for residual knowledge.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:legal",
+    "domain:legal_government",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "task:professional_work"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "arena:text_style_control/industry_legal_and_government": 2
+   }
+  },
+  {
+   "id": "h_cw",
+   "summary": "Write three haiku about a cat.",
+   "prompt": "猫が主人公の短い俳句を三つ作ってください。",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:creative_writing",
+    "lang:ja"
+   ],
+   "facets_acceptable": [
+    "domain:writing_language"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/japanese": 1,
+    "arena:text_style_control/creative_writing": 2,
+    "arena:text_style_control/industry_writing_and_literature_and_language": 1
+   }
+  },
+  {
+   "id": "h_vd",
+   "summary": "Read p99 from a latency histogram.",
+   "prompt": "From the attached latency histogram, estimate the p99 latency and say whether it meets a 200 ms SLO.",
+   "context_files": [
+    "latency.png"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:vision_diagram",
+    "task:vision",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "task:data_analysis",
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "arena:vision_style_control/diagram": 2,
+    "arena:vision_style_control/english": 1,
+    "arena:vision_style_control/overall": 1
+   }
+  },
+  {
+   "id": "h_mt",
+   "summary": "Cross-reference Jira, Sentry, Slack.",
+   "prompt": "Pull the open Jira issues, cross-reference them with Sentry errors from the last week, and post a summary to Slack.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:multi_tool",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 2,
+    "arena:text_style_control/english": 1
+   }
+  },
+  {
+   "id": "h_cu",
+   "summary": "Pivot table then paste into slides via GUI.",
+   "prompt": "엑셀에서 피벗 테이블을 만들어 지역별 합계를 구하고, 그 결과를 파워포인트 슬라이드에 붙여 넣어 주세요(GUI 조작).",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:computer_use",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "task:professional_work",
+    "task:multi_tool",
+    "task:data_analysis"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1
+   }
+  },
+  {
+   "id": "h_long",
+   "summary": "Port a Java monolith to Kotlin.",
+   "prompt": "Port this 300k-line Java monolith to Kotlin module by module, keeping all tests green; expect this to take many hours.",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "task:repo_coding",
+    "task:coding",
+    "shape:long_horizon",
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "domain:software_it"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1,
+    "aa_coding": 2,
+    "arena:text_style_control/coding": 2,
+    "mg:livebench/default": 1,
+    "aa_intelligence": 1,
+    "arena:text_style_control/overall": 1,
+    "arena:text_style_control/industry_software_and_it_services": 1
+   }
+  },
+  {
+   "id": "h_doc",
+   "summary": "Summarize a paper PDF.",
+   "prompt": "첨부한 PDF 논문의 실험 설정과 한계를 요약해 주세요.",
+   "context_files": [
+    "paper.pdf"
+   ],
+   "labeled": true,
+   "facets_required": [
+    "task:document",
+    "lang:ko"
+   ],
+   "facets_acceptable": [
+    "domain:science"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/korean": 1,
+    "arena:document_style_control/overall": 2
+   }
+  },
+  {
+   "id": "h_none",
+   "summary": "Name a houseplant.",
+   "prompt": "What's a good name for a houseplant?",
+   "context_files": [],
+   "labeled": true,
+   "facets_required": [
+    "lang:en"
+   ],
+   "facets_acceptable": [
+    "task:creative_writing"
+   ],
+   "units": {
+    "arena:agent/overall": 1,
+    "arena:agent_bash_reliability/overall": 1,
+    "arena:agent_praise_complaint/overall": 1,
+    "arena:agent_task_outcome_explicit/overall": 1,
+    "arena:agent_tool_hallucination/overall": 1,
+    "arena:text_style_control/english": 1
+   }
+  }
+ ]
+}
