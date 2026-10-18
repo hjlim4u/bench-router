@@ -1,0 +1,2410 @@
+# snapshot of public page, fetched 2026-10-17, text extracted from HTML
+
+Leaderboard Changelog - Arena.ai
+
+Skip to main content.
+
+Menu
+
+Leaderboard Changelog
+
+This page documents notable updates to our leaderboard—new models, new arenas, updates to the methodology, and more. Stay tuned! 
+
+For model deprecations, check the 
+public updates on GitHub
+.
+
+October 16, 2026
+
+beam-1.0-501b-a23b
+ has been added to the 
+Agent Arena
+ and 
+Code Arena: WebDev
+ leaderboards.
+
+October 15, 2026
+
+MiMo V2.6 Pro
+ & 
+MiMo V2.6 Flash
+ has been added to the 
+Agent Arena
+ leaderboard. 
+
+October 14, 2026
+
+Claude Haiku 5.5 (High)
+ has been added to the 
+Agent Arena
+ leaderboard. 
+
+Muse Wonder (Max)
+ has been added to the 
+Agent Arena
+ leaderboard. 
+
+October 13, 2026
+
+qwen3.8-max
+, 
+claude-fable-5.1-high
+, 
+claude-opus-5-high
+, 
+gpt-6-astra-max
+, 
+gpt-6.1-sol-max
+, 
+claude-opus-5.5-medium
+, 
+gpt-6-sol-max
+ & 
+gpt-6-luna-max
+ has been added to the 
+Search Arena
+ leaderboard. 
+
+muse-spark-1.3-max
+ has been added to the 
+Code Arena: WebDev
+ & 
+Text Arena
+ leaderboards. 
+
+October 12, 2026
+
+We’ve updated how the Bash Recovery score is calculated on the Agent Arena signal leaderboard and are now naming this signal, Bash Reliability. There are two changes: how we detect bash failures, and how we turn them into a score.
+
+Detecting failures. Previously, we used a simple set of rules to decide whether a bash call failed because of the agent’s mistake. The previous rules sometimes misjudged which bash calls were real failures, flagging correct tests and empty searches; sometimes missing errors were hidden by piped commands. We now use an LLM judge that looks at each call’s purpose, outcome, and cause of any error, and whether or not the error was fixed within the call. This results in a more accurate assessment of whether a bash call failed.
+
+Scoring. Previously, the score measured how many consecutive turns it took a model to recover after a bash error. This only looked at sessions where something went wrong, so a model with flawless bash use wasn’t being credited. It also treated any successful call after a failure as a "recovery," even though sometimes the subsequent call was not directly related to the original failure. The new score measures bash failures per call, so a session with no bash failures now counts in a model’s favor.
+
+Together, these changes mean the score better reflects how reliably a model uses the command line. The updates are reflected on the new Bash Reliability signal leaderboard. Many models have shifted, so we’re sharing this update because we want the community and our customers to understand exactly how and why it’s changing, and how it shows up on the leaderboard. Backfilled scores under this new methodology will be available in our public HuggingFace datasets soon. The full technical breakdown of the new definition is available on the 
+Agent Arena signal definitions page.
+
+October 10, 2026
+
+claude-opus-5.5-max
+ has been added to the 
+Image-to-WebDev
+ leaderboard. 
+
+October 9, 2026
+
+claude-opus-5.5-high
+, 
+muse-spark-1.3 (xHigh)
+, 
+gpt-6-sol-max
+, 
+deepseek-v4.1-flash-max
+, 
+grok-4.7-xhigh
+ and 
+gpt-6-luna-max
+ has been added to the 
+Vision Arena
+ leaderboard. 
+
+October 8, 2026
+
+Introducing the Alignment Index
+: A new leaderboard built from real-world agent sessions to measure agent reliability across key failure signals like unauthorized actions, false attribution, and deceptive completion.
+
+mistral-large-4
+ has been added to the 
+Text Arena
+ leaderboard. 
+
+mistral-large-4
+ has been added to the 
+Agent Arena
+ leaderboard. 
+
+October 7, 2026
+
+mimo-v2.6-flash
+ has been added to the 
+Code Arena: WebDev
+ & 
+Image-to-WebDev
+ leaderboards. 
+
+mimo-v2.6-pro
+ has been added to the 
+Image-to-WebDev
+ leaderboard. 
+
+mistral-large-4
+ has been added to the 
+Code Arena: WebDev
+ leaderboard. 
+
+October 6, 2026
+
+gemini-nano-banana-2.1
+ has been added to the 
+Text-to-Image
+ & 
+Image Edit
+ leaderboard. 
+
+October 2, 2026
+
+grok-imagine-image-2.0 (canvas)
+ has been added to the 
+Text-to-Image
+ & 
+Image Edit
+ leaderboard. 
+
+claude-sonnet-5.5-xhigh
+ has been added to the 
+Text Arena
+ & 
+Vision Arena
+ leaderboard. 
+
+Claude Sonnet 5.5 (Max)
+ has been added to the 
+Agent Arena
+ leaderboard. 
+
+GPT 6.1 Sol (Max)
+ has been added to the 
+Agent Arena
+ leaderboard.
+
+October 1, 2026
+
+claude-sonnet-5.5-xhigh
+ has been added to the 
+Code Arena: WebDev
+ leaderboard. 
+
+September 30, 2026
+
+We’ve updated how the Steerability score is calculated on the 
+Agent Arena signal leaderboard
+. Previously, it only measured whether a model fixed a mistake right after being corrected by a user. This meant that the signal rewarded corrected turns, but it didn’t reward a model for needing fewer corrections in the first place. That made the signal not as accurate as it could be: a model that made more mistakes had more chances to "pass," while a model that got things right the first time earned no credit.
+
+The newest frontier models require corrections less often than other models, but the old score didn’t capture that advantage. The updated methodology now evaluates every assistant turn in a conversation we can judge, so getting things right the first time counts. It also continues to weigh repeated corrections more heavily than one-off corrections that are resolved immediately.
+
+We're sharing this update because we want the community and our customers to understand exactly how and why it's changing, not just see scores move. Backfilled scores under the new methodology will be available in our public HuggingFace datasets soon.
+
+Full technical breakdown of the new definition is available on the 
+signal definitions page.
+
+ideogram-4.5
+ has been added to the 
+Image Edit
+ leaderboard. 
+
+gpt-6.1-sol-max
+ has been added to the 
+Code Arena: WebDev
+ leaderboard. 
+
+gemini-4-argon-high
+ has been added to
+ Code Arena: WebDev
+, 
+Agent Arena
+, and 
+Text Arena
+ leaderboards. 
+
+hidream-o1-video-1.0
+ has been added to the 
+Image-to-Video Arena
+ leaderboard.
+
+September 29, 2026
+
+claude-sonnet-5.5-high
+ has been added to the 
+Code Arena: WebDev
+ leaderboard. 
+
+September 28, 2026
+
+mimo-v2.6-flash
+ and 
+mimo-v2.6-pro
+ has been added to the 
+Vision Arena
+ leaderboard. 
+
+GPT 6 Luna (Max)
+ has been added to the 
+Agent Arena
+ leaderboard. 
+
+September 27, 2026
+
+Claude Opus 5.5 (High)
+ has been added to the 
+Agent Arena
+ leaderboard. 
+
+September 25, 2026
+
+step-5-preview-high
+ has been added to the 
+Code Arena: WebDev
+ leaderboard. 
+
+GPT 6 Sol (Max)
+ has been added to the 
+Agent Arena
+ leaderboard. 
+
+deepseek-v4.1-flash-max
+, 
+grok-4.7-xhigh
+, 
+gpt-6-sol-max
+, 
+gpt-6-luna-max
+, and 
+claude-opus-5.5-high
+ has been added to the 
+Text Arena
+ leaderboard. 
+
+September 24, 2026
+
+Released a fully redesigned 
+leaderboard overview
+ page. This new hub provides insights on model performance across categories, bringing all our live signals into one place for researchers, builders, and our global community of users who power our model evaluations.
+
+recraft-v4.1-flash
+ has been added to the 
+Text-to-Image Arena
+ leaderboard. 
+
+gpt-6-luna-max
+ has been added to the 
+Code Arena: WebDev
+ leaderboard.
+
+Grok 4.7 (xHigh)
+ has been added to the 
+Agent Arena 
+leaderboard. 
+
+September 23, 2026
+
+gpt-6-sol-max
+ has been added to the 
+Code Arena: WebDev
+ leaderboard. 
+
+claude-opus-5.5-max
+ has been added to the 
+Code Arena: WebDev
+ leaderboard. 
+
+September 22, 2026
+
+qwen-image-2.1
+ has been added to the 
+Text-to-Image Arena
+ and the 
+Image Edit Arena
+ leaderboard.
+
+grok-4.7-xhigh
+ has been added to the 
+Code Arena: WebDev
+ leaderboard. 
+
+September 21, 2026
+
+mimo-v2.6-pro
+ has been added to the 
+Code Arena: WebDev
+ leaderboard.
+
+September 14, 2026
+
+Deepseek V4.1 Flash (Max)
+ has been added to the 
+Agent Arena
+ leaderboard.
+
+hidream-o1-video
+ has been added to the 
+Image-to-Video Arena
+ leaderboard. 
+
+September 13, 2026
+
+Muse Spark 1.3 (Max)
+, 
+gpt-6-astra-max
+, 
+claude-fable-5.1-max
+, and 
+glm-5.3-flash
+ have been added to the 
+Image-to-WebDev Arena
+ leaderboard.
+
+Muse Spark 1.3 (Max)
+, 
+gpt-6-astra-max
+ and 
+claude-fable-5.1-max
+ have been added to the 
+Document
+ & 
+Vision Arena 
+leaderboards.
+
+Muse Spark 1.3 (Max)
+ has been added to the 
+Text Arena 
+leaderboard.
+
+September 11, 2026
+
+Muse Spark 1.3 (Max)
+ has been added to the 
+Agent Arena
+ leaderboard.
+
+gpt-6-astra-max
+ has been added to the 
+Text Arena
+ leaderboard.
+
+September 10, 2026
+
+deepseek-v4.1-flash-max
+ has been added to the 
+Code Arena: WebDev
+ leaderboard.
+
+September 8, 2026
+
+GPT 6 Astra (Max)
+ has been added to the 
+Agent Arena
+ leaderboard. 
+
+gpt-image-2.5-sunburst
+ & 
+gpt-image-2.5-flare
+ has been added to the 
+Text-to-Image Arena
+, 
+Image Edit Arena
+ and 
+Multi Image Edit
+ leaderboards. 
+
+muse-spark-1.3-max
+ has been added to the 
+Code Arena: WebDev
+ leaderboard.
+
+September 5, 2026
+
+gpt-6-astra-max
+ has been added to the 
+Code Arena: WebDev
+ leaderboard. 
+
+Claude Fable 5.1 (Max)
+ has been added to the 
+Agent Arena
+ leaverboard.
+
+grok-imagine-video-1.5-agent
+ has been added to the 
+Text-to-Video Arena
+ leaderboard.
+
+September 4, 2026
+
+wan3.0
+ has been added to the 
+Text-to-Video Arena
+ leaderboard. 
+
+September 2, 2026
+
+Gemini 3.8 Flash (High)
+ has been added to the 
+Agent Arena
+, 
+Code Arena:WebDev
+ and 
+Text Arena
+ leaderboards. 
+
+claude-fable-5.1-max
+ has been added to the 
+Code Arena: WebDev
+ and 
+Text Arena 
+leaderboards. 
+
+wan3.0
+ has been added to the 
+Image-to-Video Arena
+ leaderboard. 
+
+Hy4 preview
+ has been added to the 
+Agent Arena
+ leaderboard. 
+
+September 1, 2026
+
+granite-4.2-30b
+, 
+granite-4.2-3b
+ and 
+granite-4.2-8b
+ has been added to the Text Arena leaderboard. 
+
+qwen3.8-max-0902
+ has been added to the Code Arena leaderboard. 
+
+August 31, 2026
+
+glm-5.3-flash
+ has been added to the 
+Agent Arena
+ leaderboard.
+
+Qwen3.8 Flash Next
+ has been added to the 
+Agent Arena
+ leaderboard.
+
+August 27, 2026
+
+glm-5.3-flash
+ has been added to the Text Arena and Vision Arena leaderboards. 
+
+gemini-omni-1.1-flash
+ has been added to the Text-to-Video Arena and Image-to-Video leaderboards. 
+
+Grok 4.6 (xHigh)
+ has been added to the 
+Agent Arena
+ leaderboard. 
+
+wan3.0
+ has been added to the Video Edit Arena leaderboard. 
+
+hy4-preview
+ has been added to the Code Arena leaderboard. 
+
+August 26, 2026
+
+glm-5.3-flash
+ has been added to the Code Arena:WebDev leaderboard. 
+
+qwen3.8-flash-next
+ has been added to the Code Arena:WebDev leaderboard. 
+
+Qwen 3.8 27B
+ has been added to the 
+Agent Arena
+ leaderboard. 
+
+August 25, 2026
+
+qwen3.8-27b
+ has been added to the Image-to-WebDev Arena leaderboard. 
+
+August 24, 2026
+
+GLM 5.3 (Max)
+ has been added to the 
+Agent Arena
+ leaderboard. 
+
+gpt-5.6-sol-xhigh
+ & 
+grok-4.5
+ has been added to the Search Arena leaderboard. 
+
+August 21, 2026
+
+qwen3.8-27b
+ has been aded to the Text, Vision and Code Arena leaderboards.
+
+August 20, 2026
+
+Muse Spark 1.2 (xHigh)
+ has been added to the 
+Agent Arena
+ leaderboard.
+
+August 19, 2026
+
+deepseek-v4-pro-high
+ has been added to the 
+Agent Arena
+ and Text Arena leaderboard. 
+
+glm-5.3-max
+ has been added to the Text Arena and Code Arena leaderboard.
+
+August 18, 2026
+
+Inkling-Small
+ has been added to Agent Arena leaderboard. 
+
+MAI-Image-2.6
+ has been added to Image Edit Arena leaderboard. 
+
+August 17, 2026
+
+Qwen3.8 Max
+ has been added to the Agent Arena leaderboard. 
+
+dreamina-seedance-2.5-720p
+ has been added to the Text-to-Video, Image-to-Video, and Video Edit leaderboards. 
+
+August 14, 2026
+
+deepseek-v4-pro-high-20260813
+ has been added to the Code Arena leaderboard. 
+
+August 13, 2026
+
+flux-3-video-20260811
+ has been added to the Image-to-Video leaderboard. 
+
+minimax-h3
+ has been added to the Video Edit leaderboard. 
+
+Gemini 3.7 Flash (High)
+ has been added to the Agent Arena, Text Arena, and Code Arena leaderboards. 
+
+August 12, 2026
+
+grok-4.6-high
+ has been added to the Code Arena and Text Arena leaderboards. 
+
+August 11, 2026
+
+nvidia-nemotron-3.5-lightning-30b-a3b-nvfp4
+ has been added to the Text Arena leaderboard. 
+
+Solar Pro 4
+ has been added to 
+Agent Arena
+, Text Arena and Code Arena leaderboards. 
+
+August 10, 2026
+
+mai-image-2.6-preview
+ has been added to the Text-to-Image Arena leaderboard. 
+
+muse-glimmer
+ has been added to the Text and Code Arena leaderboards. 
+
+August 7, 2026
+
+grok-imagine-image-2.0 (low)
+ has been added to the Text-to-Image Arena and Image Edit Arena leaderboards. 
+
+August 6, 2026
+
+Mistral Medium 3.5
+ has been added to the 
+Agent Arena leaderboard
+. 
+
+August 5, 2026
+
+claude-opus-5-max
+ has been added to the Fullstack Code Arena leaderboard. 
+
+August 4, 2026
+
+Deepseek V4 Flash (High) (20260731) has been added to the 
+Agent Arena leaderboard
+. 
+
+qwen-image-3.0-pro
+ has been added to the Text-to-Image Arena leaderboard. 
+
+qwen3.8-max
+ has been added to the Image-to-WebDev Arena leaderboard. 
+
+Cosmos3-Super-Text2Image
+ and 
+Cosmos3-Super-Text2Image (Agentic)
+ scores now reflect the models' native endpoints instead of fal.ai on the Text-to-Image Arena leaderboard.
+
+August 3, 2026
+
+minimax-h3
+ has been added to the Text-to-Video Arena and Image-to-Video Arena leaderboards. 
+
+August 2, 2026
+
+qwen3.8-max
+ has been added to the Frontend Code Arena, Text Arena and Vision Arena leaderboards. 
+
+August 1, 2026
+
+Code Arena | Image-to-WebDev Leaderboard
+ update. 
+
+July 31, 2026
+
+gpt-5.6-sol-xhigh
+, 
+gpt-5.6-terra-xhigh
+, and 
+gpt-5.6-luna-xhigh
+ has been added to the Code Arena, Document Arena, Vision Arena and Text Arena leaderboards. 
+
+deepseek-v4-flash-high
+ has been added to the Code Arena leaderboard. 
+
+July 30, 2026
+
+Single Image Edit
+ and 
+Multi-Image Edit
+ categories in Image Edit Arena now have the same seven categories as the Text-to-Image Arena.
+
+inkling-small has been added to the Text Arena leaderboard. 
+
+July 29, 2026
+
+Claude Opus 5 (Max)
+ and 
+Claude Opus 5 (High)
+ has been added to the 
+Agent Arena leaderboard
+.
+
+July 28, 2026
+
+The 
+Code Arena Fullstack leaderboard
+ is now live. View overall rankings across AI models on full-stack web development tasks: multi-step reasoning, tool use, and end-to-end app generation. Read our 
+blog post
+ to learn more about how Code Arena now provides fullstack capabilities.
+
+July 27, 2026
+
+claude-opus-5-high
+ and 
+claude-opus-5-max
+ have been added to to the Text Arena, Vision Arena, Document Arena and Code Arena leaderboards. 
+
+muse-spark-1.1
+ and 
+grok-4.5
+ have been added to the Vision Arena and Document Arena leaderboards.
+
+GPT 5.6 Terra (xHigh)
+ and 
+GPT 5.6 Luna (xHigh)
+, have been added to the Agent Arena leaderboard. 
+Kimi K3 (Max)
+ has been renamed on the Agent leaderboard to reflect Max level of reasoning. 
+
+Kimi K3 and Inkling has been added to the 
+Agent Arena leaderboard
+.
+
+July 17, 2026
+
+claude-fable-5 and claude-sonnet-5-high has been added to the Image-to-WebDev Arena leaderboard.
+
+July 16, 2026
+
+inkling
+ has been added to the Text Arena & Code Arena leaderboards.
+
+kimi-k3
+ has been added to Text Arena & Code Arena leaderboards.
+
+July 13, 2026
+
+Muse Spark 1.1 has been added to the 
+Agent Arena leaderboard
+.
+
+July 13, 2026
+
+GPT 5.6 Sol (xHigh) has been added to the 
+Agent Arena leaderboard
+.
+Grok 4.5 has been added to the 
+Agent Arena leaderboard
+.
+
+July 12, 2026
+
+The claude-fable-5 scores have been updated to reflect only votes collected on or after July 1 for the Code Arena, Vision Arena, Document Arena and Search Arena leaderboards.
+
+July 11, 2026
+
+seedream-5.0-pro
+ has been added to the Image Arena leaderboard.
+
+July 10, 2026
+
+muse-spark-1.1
+ has been added to the Text Arena & Code Arena leaderboards.
+
+gpt-5.6-sol-xhigh (codex-harness)
+ has been added to the Code Arena leaderboard.
+
+July 9, 2026
+
+reve-2.1
+ has been added to the Text-to-Image Arena leaderboard.
+
+July 7, 2026
+
+muse-image has been added to the Text-to-Image Arena & Image Edit Arena leaderboard.
+
+muse-video has been added to the Text-to-Video Arena leaderboard.
+
+July 6, 2026
+
+Claude Opus 4.7 (Thinking)
+ has been added to the 
+Agent Arena leaderboard
+.
+
+July 2, 2026
+
+krea-2-turbo
+ has been added to the Text-to-Image Arena leaderboard.
+
+claude-sonnet-5-thinking
+ has been added to Code Arena, Text Arena, Search Arena, Vision Arena, and Document Arena leaderboards.
+
+June 30, 2026
+
+gemini-3.1-flash-lite-image (nano-banana-2-lite)
+ has been added to the Text-to-Image Arena and Image Edit Arena leaderboards.
+
+gemini-omni-flash
+ has been added to the Video Edit Arena leaderboard.
+
+June 25, 2026
+
+qwen-image-2.0-pro-2026-06-22
+ has been added to the Text-to-Image Arena and Image Edit Arena leaderboards.
+
+June 24, 2026
+
+qwen3.7-plus-preview has been deprecated from the Vision Arena leaderboard.
+
+qwen3.7-plus
+ has been added to the Vision Arena leaderboard.
+
+June 23, 2026
+
+wan2.7-i2v
+ has been added to the Image-to-Video Arena leaderboard.
+
+June 21, 2026
+
+seed-2.1-pro-preview
+ has been added to the Code Arena leaderboard.
+
+June 18, 2026
+
+muse-spark
+ has been deprecated from the Code Arena leaderboard.
+
+June 17, 2026
+
+Kimi K2.7 Code has been added to the 
+Agent Arena leaderboard
+.
+
+June 16, 2026
+
+Minimax M3
+ and 
+GLM 5.2 (Max)
+ has been added to the 
+Agent Arena leaderboard
+. 
+
+GLM 5.2 (Max)
+ has been added to Text Arena and Code Arena leaderboards.
+
+June 15, 2026
+
+claude-opus-4-8
+ and 
+claude-fable-5
+ has been added to the Search Arena leaderboard.
+
+kimi-k2.7-code
+ has been added to the Code Arena leaderboard.
+
+June 12, 2026
+
+Nemotron 3 Ultra has been added to the 
+Agent Arena leaderboard
+.
+
+June 11, 2026
+
+gemini-omni-flash
+ has been added to the Text-to-Video Arena leaderboard.
+
+GPT 5.5 (xHigh) has been added to the 
+Agent Arena leaderboard
+.
+
+June 10, 2026
+
+claude-fable-5
+ has been added to the Code Arena, Text Arena, Document Arena, Vision Arena, and 
+Agent Arena leaderboard
+.
+
+June 9, 2026
+
+Claude Opus 4.8 (Thinking) & Claude Opus 4.8 has been added to the 
+Agent Arena leaderboard
+.
+
+June 8, 2026
+
+Grok Build 0.1 & Grok 4.3 (High) has been added to the
+
+Agent Arena leaderboard
+.
+
+June 6, 2026
+
+claude-opus-4-8
+, and 
+claude-opus-4-8-thinking
+ has been added to the Text Arena, Vision Arena, Document Arena, and Code Arena leaderboards. 
+
+June 5, 2026
+
+krea-2-medium
+, 
+krea-2-large
+, 
+Cosmos3-Super-Text2Image
+, and 
+Cosmos3-Super-Text2Image (Agentic)
+ has been added to the Text-to-Image Arena leaderboard. 
+
+mistral-medium-3.5
+ has been added to the Code Arena leaderboard. 
+
+June 4, 2026
+
+The 
+Agent Arena leaderboard
+ is now live. It ranks models on real-world agentic evals at scale, measuring behavioral signals like file downloads, disapproval events, retries, and steerability rather than static benchmark scores or preference votes alone. Check out the 
+Agent Arena blog post
+ to learn more about the methodology.
+
+nvidia-nemotron-3-ultra-550b-a55b-nvfp4
+
+has been added to the Text-to-Image Arena leaderboard.
+
+mistral-medium-3.5
+ has been added to the Text Arena and Vision Arena leaderboards.
+
+June 3, 2026
+
+ideogram-4.0-quality
+
+has been added to the
+
+Text-to-Image Arena leaderboard.
+
+reve-2.0
+ has been added to the
+
+Text-to-Image Arena and Image Edit Arena leaderboard.
+
+June 2, 2026
+
+mai-image-2.5
+ has been added to the
+
+Image Edit Arena leaderboard.
+
+May 29, 2026
+
+wan2.7-t2v
+ has been added to the
+
+Text-to-Video Arena leaderboard.
+
+May 26, 2026
+
+mai-image-2.5-preview
+ has been added to the
+
+Text-to-Image Arena leaderboard.
+
+May 25, 2026
+
+qwen3.7-max-20260517
+ has been added to the
+
+Code Arena leaderboard.
+
+May 22, 2026
+
+recraft-v4.1-pro
+
+and
+
+recraft-v4.1-utility-pro
+
+has been added to the
+
+Arena Text-to-Image Arena leaderboard.
+
+May 21, 2026
+
+hidream-o1-image
+ has been added to the Text-to-Image Arena leaderboard.
+
+grok-imagine-image-quality (20260519)
+ has been added to the Image Edit Arena leaderboard.
+
+May 19, 2026
+
+gemini-3.5-flash
+
+has been added to Text and Code leaderboards. 
+
+May 14, 2026
+
+qwen3.7-max-preview
+ has been added to the Text Arena and Vision Arena leaderboards. 
+
+granite-4.1-8b
+ has been added to the Text Arena and Code Arena leaderboards.
+
+May 14, 2026
+
+trinity-large-thinking
+ has been added to the Text Arena leaderboard.
+
+gpt-5.5-xhigh (codex-harness)
+ has been added to the Code Arena leaderboard.
+
+May 12, 2026
+
+Votes collected from Battles in Direct now count toward leaderboards.
+
+Since March 2026, we've been running an experiment where 10% of direct-chat sessions on Arena are converted into battles between two randomly sampled models. Starting today, votes collected this way will be included in leaderboards. Over the next month, we'll also gradually backfill Battles in Direct votes collected from March through May, so models active during that time period may see vote counts increase and scores shift slightly.
+
+This change meaningfully increases daily vote volume, which tightens confidence intervals and stabilizes ranks faster. The distribution of prompts also shifts: direct battles arrive with prior conversational context and skew toward longer queries, harder prompts, coding, and instruction following. Direct battles where the user votes skip are not used, so every direct-battle vote is a decisive A-or-B preference.
+
+We observed two new biases in the Battles in Direct voting data and corrected for them in the Bradley-Terry fit for the text, vision, search, and document arenas. The first is a position bias favoring Model A (the model on the left); the second is an advantage given to models that share an organization with the prior turns of context. To correct each bias, we added a corresponding feature to the model: is_direct_battle and same_org_indicator, respectively. The model fitting learns coefficients for these features that absorb the biases.
+
+May 8, 2026
+
+gpt-5.5-instant
+ has been added to the Text Arena, Vision Arena, and Document Arena leaderboard.
+
+ernie-5.1
+ has been added to Search Arena leaderboard. 
+
+May 7, 2026
+
+gemma-4-31b
+ and 
+gemma-4-26b-a4b
+ has been added to the Vision Arena leaderboard.
+
+qwen3.6-max-preview
+ and 
+hunyuan-hy3-preview
+ has been added to Code Arena leaderboard. 
+
+May 6, 2026
+
+grok-imagine-image-quality
+ has been added to the Text-to-Image Arena leaderboard and Image Edit Arena leaderboard. 
+
+gpt-5.5-instant
+ has been added to the Vision Arena, Text Arena and Document Arena leaderboards.
+
+May 5, 2026
+
+uni-1.1-max
+ and 
+uni-1.1
+ has been added to the Text-to-Image Arena leaderboard and Image Edit Arena leaderboard. 
+
+gpt-image-2 (medium)
+ has been updated on the Image Arena leaderboards. The updated score reflects performance across Arena's full user base. As public usage scales, scores stabilize to reflect a larger sample of real-world use.
+
+gemma-4-26b-a4b
+ & 
+gemma-4-31b
+ have been added to the Code Arena leaderboard.
+
+May 1, 2026
+
+mimo-v2-omni
+ has been added to the Vision Arena leaderboard.
+
+grok-4.3
+ has been added to the Text Arena, Search Arena, Code Arena and Vision Arena leaderboards. 
+
+trinity-large-thinking
+ has been added to the Text Arena and Code Arena leaderboards.
+
+April 30, 2026
+
+qwen3.6-max-preview
+ has been added to the Text Arena leaderboard.
+
+hunyuan-hy3-preview
+ has been added to the Text Arena leaderboard.
+
+glm-5v-turbo
+ has been added to the Vision Arena leaderboard.
+
+April 29, 2026
+
+ernie-5.1-preview
+ has been added to the Text Arena leaderboard.
+
+April 27, 2026
+
+gpt-5.5-high
+
+has been added to Code, Text, Expert, Search, Document, and Vision leaderboards.
+
+claude-opus-4-7
+ has been added to the Search leaderboard.
+
+April 23, 2026
+
+qwen-image-2.0-pro-2026-04-22
+ has been added to the Text-to-Image Arena and Image Edit Arena leaderboards.
+
+deepseek-v4-pro
+, 
+deepseek-v4-pro-thinking
+, and 
+deepseek-v4-flash-thinking
+ has been added to the Text Arena and Code Arena leaderboards.
+
+April 22, 2026
+
+kimi-k2.6
+ has been added to Code Arena, Vision Arena, Document Arena, and Text Arena leaderboards. 
+
+muse-spark
+ has been added to Code Arena leaderboard. 
+
+April 21, 2026
+
+claude-opus-4-7-thinking
+ has been added to the Code Arena leaderboard.
+
+dreamina-seedance-2.0-720p
+ has been added to the Video Edit Arena leaderboard.
+
+gpt-image-2 (medium)
+ has been added to the Text-to-Image Arena and Image Edit Arena leaderboard.
+
+April 20, 2026
+
+claude-opus-4-6-thinking
+ and 
+claude-opus-4-7
+ have been added to the Vision Arena and Document Arena leaderboards.
+
+qwen3.6-plus
+ has been added to the Text Arena and Code Arena leaderboards.
+
+April 17, 2026
+
+kling-image-o1
+ has been added to the Image Edit Arena leaderboard.
+
+claude-opus-4-6-thinking
+ and 
+claude-opus-4-7
+ have been added to the Text Arena and Code Arena WebDev Arena leaderboards.
+
+April 15, 2026
+
+The Image to WebDev leaderboard is now live.
+
+April 14, 2026
+
+happyhorse-1.0
+
+is live on the Video Edit Arena leaderboard.
+
+claude-opus-4-6-thinking
+, 
+kimi-k2.5-thinking
+, 
+gemma-4-31b
+ and 
+grok-4.20-beta-0309-reasoning
+ have been added to the Document Arena leaderboard. 
+
+April 10, 2026
+
+trinity-large
+ has been renamed to 
+trinity-large-preview
+ for clarity on the Text Arena leaderboard.
+
+wan2.7-image
+ and 
+wan2.7-image-pro
+ have been added to the Text-to-Image Arena and Image Edit Arena leaderboards.
+
+April 9, 2026
+
+muse-spark
+
+has been added to the Text Arena leaderboard.
+
+glm-5.1
+ has been added to the Code Arena leaderboard.
+
+April 7, 2026
+
+glm-5.1
+ has been added to the Text Arena leaderboard.
+
+April 6, 2026
+
+dola-seed-2.0-pro
+ has been added to the Text Arena leaderboard.
+
+April 2, 2026
+
+qwen3.6-plus-preview
+ has been added to the Code Arena leaderboard.
+
+gpt-5.4-search
+ has been added to the Search Arena leaderboard.
+
+gpt-5.4-mini-high
+ has been added to the Code (WebDev) Arena leaderboard.
+
+longcat-flash-chat
+ has been added to the Text Arena leaderboard.
+
+gemma-4-31b
+ and 
+gemma-4-26b-a4b
+ have been added to the Text Arena leaderboard.
+
+March 31, 2026
+
+claude-opus-4-6
+
+, 
+
+claude-opus-4-6-thinking
+
+and
+
+claude-sonnet-4-6
+ have been added to the Vision Arena leaderboard.
+
+grok-4.20-multi-agent-beta-0309
+ is now on the Text Arena, Vision Arena, and Search Arena leaderboards.
+
+March 26, 2026
+
+gemini-3-flash-grounding
+
+has been added to the Search Arena leaderboard.
+
+mercury-2
+ has been added to the Text Arena and Code Area leaderboards.
+
+runway-gen4
+ has been added to the Text-to-Image Arena leaderboard.
+
+gpt-5.4-nano-high
+ and 
+gpt-5.4-mini-high
+ have been added to the Text Arena leaderboard. 
+
+March 20, 2026
+
+mimo-v2-pro
+ has been added to the Text Arena and Code Arena leaderboards.
+
+March 19, 2026
+
+qwen3.5-max-preview
+ has been added to the Text Arena leaderboard.
+
+mai-image-2
+ has been added to the Text-to-Image Arena leaderboard.
+
+grok-4.20-beta-0309-reasoning
+ has been added to the Vision Arena leaderboard.
+
+March 18, 2026
+
+minimax-m2.7
+
+has been added to the Text Arena and Code Arena leaderboards.
+
+March 16, 2026
+
+grok-4.20-beta-0309-reasoning
+ has been added to the Text Arena and Code Arena 
+leaderboards.
+
+amazon-nova-experimental-chat-26-02-10
+ has been added to the Text Arena leaderboard.
+
+March 12, 2026
+
+gpt-5.4-high (codex-harness)
+, 
+gpt-5.4-medium (codex-harness)
+, and 
+gpt-5.3-codex (codex-harness)
+ have been added to the Code Arena leaderboards.
+
+March 11, 2026
+
+nvidia-nemotron-3-super-120b-a12b
+ has been added to the Text Arena leaderboard.
+
+gpt-5.4
+ is on the Text Arena and Document Arena leaderboards.
+
+March 10, 2026
+
+The Video Arena leaderboards will reflect a single consolidated vote category going forward.
+
+Previously, prompts and generations were visible to a broader Discord community, allowing non-authors to vote. After the migration to 
+arena.ai
+, voting is now limited to the prompt author only. We are discontinuing the separate “Author Vote” category on the Video Arena leaderboards as all votes now originate from prompt authors.
+
+March 6, 2026
+
+pixverse-v5.6
+ has been added to the Text-to-Video Arena and Image-to-Video Arena leaderboards.
+
+March 5, 2026
+
+gpt-5.4-high
+ and 
+gpt-5.4
+ are on the Text Arena leaderboard.
+
+March 4, 2026
+
+qwen3.5-flash
+ has been added to the Text Arena and Code Arena leaderboards.
+
+March 3, 2026
+
+gemini-3.1-flash-lite-preview
+ has been added to the Text Arena and Code Arena leaderboards.
+
+qwen3.5-122b-a10b
+, 
+qwen3.5-35b-a3b
+ and 
+qwen3.5-27b
+ have been added to the Text Arena and Code Arena leaderboards. 
+
+The 
+Document Arena leaderboard
+ has been added. The Document Arena displays model rankings based on side-by-side evaluations of real-world document reasoning performance across user-uploaded PDF files.
+
+March 2, 2026
+
+runway-gen-4.5
+ has been added to the Text-to-Video Arena leaderboard.
+
+An older version of 
+grok-imagine-image
+ has been renamed to 
+grok-imagine-image (20260207)
+ in Image Edit Arena to reflect the dated snapshot. The current default model now listed as 
+grok-imagine-image
+ represents the latest version.
+
+February 26, 2026
+
+p-video
+
+has been added to the Text-to-Video Arena and Image-to-Video Arena leaderboards.
+
+gemini-3.1-flash-image-preview (nano-banana-2) [web-search]
+ has been added to the Text-to-Image Arena and Image Edit Arena leaderboards.
+
+claude-opus-4-6-search
+ has been added to the Search Arena leaderboard.
+
+kling-v3-pro
+ has been added to the Image-to-Video Arena leaderboard.
+
+Code Arena WebDev Leaderboard Categorization
+
+The Code Arena WebDev leaderboard is now segmented into two distinct categories to reflect different generation environments and capability surfaces:
+
+HTML: ranks standalone HTML/CSS/JS generation within a single document scope.React: ranks multi-file application generation, including component structure, routing, state coordination, and cross-file consistency.
+
+This separation provides clearer visibility into model performance across simple document-level outputs vs. structured application-level builds.
+
+February 25, 2026
+
+gpt-5.2-chat-latest-20260210
+ has been added to the Vision Arena leaderboard.
+
+grok-4.20-beta1
+ has been added to the Text Arena and Search Arena leaderboards.
+
+seedream-5.0-lite
+ has been added to the Text-to-Image Arena and Image Edit Arena leaderboards.
+
+February 24, 2026
+
+qwen3.5-397b-a17b
+ has been added to the Code Arena leaderboard.
+
+wan2.6-i2v
+ and 
+wan2.6-t2v
+ have been added to the Video Arena leaderboard.
+
+amazon-nova-experimental-chat-26-01-10
+ has been added to the Text Arena leaderboard.
+
+February 23, 2026
+
+trinity-large
+ has been added to the Text Arena leaderboard.
+
+reve-v1.5
+ has been added to the Text-to-Image Arena leaderboard.
+
+February 21, 2026
+
+gpt-5.2-chat-latest-20260210
+
+has been added to the Text Arena leaderboard.
+
+February 20, 2026
+
+claude-sonnet-4-6
+ has been added to the Text Arena and Code Arena leaderboard.
+
+qwen3.5-397b-a17b
+ has been added to the Vision Arena leaderboard.
+
+recraft-v4
+ has been added to the Text-to-Image Arena leaderboard.
+
+February 19, 2026
+
+molmo-2-8b
+ has been added to the Vision Arena leaderboard.
+
+gemini-3.1-pro-preview
+ has been added to the Text Arena, Vision Arena and Code Arena leaderboards.
+
+mimo-v2-flash (thinking)
+ has been added to the Text Arena and Code Arena leaderboards.
+
+February 16, 2026
+
+minimax-m2.5
+
+has been added to the Text Arena and Code Arena leaderboards.
+
+February 15, 2026
+
+dola-seed-2.0-preview
+ has been added to the Text Arena and Vision Arena leaderboards.
+
+February 12, 2026
+
+glm-5
+ has been added to the Code Arena leaderboard.
+
+February 11, 2026
+
+glm-5
+ has been added to the Text Arena leaderboard.
+
+February 10, 2026
+
+veo-3.1-fast-audio-1080p
+
+and
+
+veo-3.1-audio-1080p
+ have been added to the Text-to-Video Arena and Image-to-Video Arena leaderboards.
+
+step-3.5-flash
+ has been added to the Text Arena leaderboard.
+
+February 9, 2026
+
+claude-opus-4-6-thinking
+ has been added to the Text Arena and Code Arena leaderboards.
+
+We’ve updated the Text-to-Image Arena with:
+
+Prompt Categories: category-specific leaderboards for clearer domain-level performance Quality Filtering: reducing noisy or underspecified prompts for more reliable rankings
+
+Older categories for user-generated vs. pre-generated prompts have been deprecated. 
+
+February 7, 2026
+
+grok-imagine-image-pro
+
+and 
+grok-imagine-image
+ have been added to the Text-to-Image Arena and Image Edit Arena leaderboards.
+
+February 6, 2026
+
+claude-opus-4-6
+ has been added to the Text Arena and Code Arena leaderboards.
+
+kimi-k2.5-instant
+ has been added to the Text Arena, Vision Arena and Code Arena leaderboards.
+
+February 5, 2026
+
+vidu-q3-pro
+ is on the Image-to-Video Arena leaderboard
+
+February 4, 2026
+
+grok-imagine-video-720p
+ is on the Image-to-Video Arena leaderboard
+
+February 2, 2026
+
+kimi-k2.5-thinking
+ is on the Code Arena WebDev leaderboard.
+
+January 29, 2026
+
+glm-4.7-flash
+ has been added to the Text Arena leaderboard.
+
+devstral-2
+ has been added to the Code Arena leaderboard.
+
+kling-o1-pro
+
+ltx-2-19b
+ has been added to the Text-to-Video Arena leaderboard.
+
+ltx-2-19b
+ has been added to the Image-to-Video Arena leaderboard.
+
+p-image-edit
+
+wan2.6-image
+ has been added to the Image Edit Arena leaderboard.
+
+p-image
+
+wan2.6-t2i
+ has been added to the Text-to-Image Arena leaderboard. 
+
+gemini-3-flash-grounding
+
+claude-sonnet-4-5-search
+
+claude-opus-4-5-search
+
+gpt-5.2-search-non-reasoning
+ has been added to the Search Arena leaderboard. 
+
+kimi-k2.5-thinking
+ has been added to the Vision Arena leaderboard.
+
+January 28, 2026
+
+grok-imagine-video-480p
+ is the Text-to-Video Arena and Image-to-Video Arena leaderboards.
+
+January 27, 2026
+
+kimi-k2.5-thinking
+ is on the Text Arena Leaderboard.
+
+January 26, 2026
+
+hunyuan-image-3.0-instruct
+ is on the Image Edit Arena leaderboard
+
+January 23, 2026
+
+We've added Multi-Image Edit as new category to the Image Edit leaderboard which consists of votes where multiple images were passed into the models. The previous overall leaderboard has been renamed to Single-Image Edit.
+
+gpt-5.2-codex
+ has been added to the Code Arena leaderboard.
+
+January 21, 2026
+
+Video Arena leaderboards now include votes collected from both the 
+lmarena.ai
+ website and our 
+Discord server
+. Read 
+our blog
+ for more details.
+
+January 20, 2026
+
+olmo-3.1-32b-instruct
+ and 
+olmo-3.1-32b-think
+ have been added to the Text Arena leaderboard.
+
+glm-image
+ was added to the Text-to-Image Arena leaderboard.
+
+January 19, 2026
+
+wan2.5-i2i-preview
+ has been added to the Image Edit Arena leaderboard.
+
+January 16, 2026
+
+glm-4.6v
+ has been added to the Vision Arena leaderboard. 
+
+gemini-3-flash (thinking-minimal)
+ has been updated on the Vision Arena leaderboard.
+
+flux-2-klein-9b
+ & 
+flux-2-klein-4b
+ have been added to the Text-to-Image Arena and Image Edit Arena leaderboards. 
+
+z-image-turbo
+ has been added to the Text-to-Image Arena leaderboard.
+
+January 14, 2026
+
+ernie-5.0-0110
+ has been added to the Text Arena leaderboard.
+
+January 13, 2026
+
+We’ve completed a major improvement to our data pipeline that resolves several known issues and applies data filtering more consistently:
+
+The validation process led to minimal adjustments in leaderboard rankings. Models and leaderboards with fewer votes may see larger score fluctuations.
+
+Here's a summary of the changes in the new pipeline:
+
+Vote filters, such as identity leak detection and data quality filtering, are now applied more consistently across all votes.Vote de-duplication is now enabled in text-to-image and video arenas.
+
+January 8, 2026
+
+hunyuan-video-1.5
+ has been added to the Text-to-Video Arena and Image-to-Video Arena leaderboards.
+
+January 7, 2026
+
+ernie-5.0-preview-1220
+ has been added to the Vision Arena leaderboard. 
+
+seedance-v1.5-pro
+ has been added to the Text-to-Video Arena and Image-to-Video Arena leaderboards.
+
+December 31, 2025
+
+minimax-m2.1-preview
+
+and 
+glm-4.7
+ have been added to the Text Arena leaderboard.
+
+December 29, 2025
+
+minimax-m2.1-preview
+
+has been added to the WebDev Arena leaderboard.
+
+December 23, 2025
+
+mimo-v2-flash (non-thinking)
+ has been added to the Text Arena and WebDev Arena leaderboards.
+
+December 22, 2025
+
+ernie-5.0-preview-1203
+ has been added to the Text Arena leaderboard.
+
+glm-4.7
+ has been added to the WebDev Arena leaderboard powered by the new Code Arena.
+
+December 19, 2025
+
+amazon-nova-experimental-chat-11-10
+
+has been added to the Text Arena leaderboard.
+
+December 18, 2025
+
+gpt-5.2
+
+has been added to the Text Arena leaderboard.
+
+grok-4-1-fast-search
+ and 
+gpt-5.2-search
+ are on the Search Arena leaderboard.
+
+reve-v1.1
+ and 
+reve-v1.1-fast
+ are on the Image Edit Arena leaderboard.
+
+December 17, 2025
+
+gemini-3-flash
+
+and
+
+gemini-3-flash (thinking-minimal)
+ have been added to the Text Arena, Vision Arena and WebDev Arena leaderboards.
+
+December 16, 2025
+
+flux-2-max
+ is on the Text-to-Image Arena and Image Edit Arena leaderboards.
+
+gpt-image-1.5
+ is on the Text-to-Image Arena and Image Edit Arena leaderboards.
+
+chatgpt-image-latest (20251216)
+ has been added to the Image Edit Arena leaderboard.
+
+gpt-5.2-high
+ has been added to the Text Arena leaderboard.
+
+ibm-granite-h-small
+ has been added to the Text Arena leaderboard.
+
+December 15, 2025
+
+nvidia-nemotron-3-nano-30b-a3b-bf16
+ has been added to the Text Arena leaderboard
+
+December 12, 2025
+
+kandinsky-5.0-t2v-lite
+ and 
+kandinsky-5.0-t2v-pro
+ have been added to the Text-to-Video Arena leaderboard.
+
+kling-2.6-pro
+ has been added to the Text-to-Video Arena and Image-to-Video Arena leaderboards.
+
+flux-2-dev
+ has been added to the Text-to-Image Arena and Image Edit Arena leaderboards.
+
+December 11, 2025
+
+gpt-5.2
+ and 
+gpt-5.2-high
+
+have been added to the 
+WebDev leaderboard
+ powered by Code Arena.
+
+December 10, 2025
+
+mistral-large-3
+ has been added to the 
+WebDev leaderboard
+ powered by Code Arena.
+
+intellect-3
+ has been added to the Text Arena leaderboard.
+
+December 9, 2025
+
+ernie-5.0-preview-1103
+ and 
+nova-2-lite
+ have been added to the Text Arena leaderboard.
+
+December 5, 2025
+
+grok-4-fast
+ has been renamed to 
+grok-4-fast-chat
+ to better reflect the specific model variant. Additionally, 
+olmo-3-32b-think
+
+has been added to the Text Arena leaderboard.
+
+December 4, 2025
+
+grok-4-fast-reasoning
+
+has been added to the Text Arena leaderboard.
+
+devstral-medium-2507
+ has been added to the 
+new WebDev leaderboard
+ (powered by Code Arena). 
+
+gpt-5.1-high
+ and 
+gpt-5.1
+ has been added to the Vision Arena leaderboard.
+
+deepseek-v3.2
+ and 
+deepseek-v3.2-thinking
+ have been added to the Text Arena leaderboard.
+
+seedream-4.5
+ has been added to the Image Edit Arena and Text-to-Image Arena leaderboards
+
+December 3, 2025
+
+gpt-5.1-search
+
+and
+
+gemini-3-pro-grounding
+
+have been added to the Search Arena leaderboard.
+
+December 2, 2025
+
+mistral-large-3
+
+has been added to the Text Arena leaderboard.
+
+wan2.5-t2v-preview
+ has been added to the Text-to-Video Arena leaderboard.
+
+gemini-3-pro-image-preview-2k (nano-banana-pro)
+ has been added to the Text-to-Image Arena and Image Edit Arena leaderboards.
+
+December 1, 2025
+
+KAT-Coder-Pro-V1
+
+has been added to the new WebDev Arena leaderboard.
+
+flux-2-flex
+ and 
+flux-2-pro
+ have been added to the Text-to-Image Arena and Image Edit Arena leaderboards.
+
+November 26, 2025
+
+claude-opus-4-5-20251101
+ and 
+claude-opus-4-5-20251101-thinking-32k
+ have been added to the Text Arena and WebDev Arena leaderboards.
+
+November 21, 2025
+
+ernie-5.0-preview-1120
+ has been added to the Vision Arena leaderboard.
+
+gemini-3-pro-image-preview (nano-banana-pro)
+ has been added to the Text-to-Image Arena and Image Edit Arena leaderboards.
+
+Additionally, the following models have been added to the new WebDev leaderboard:
+
+gpt-5.1gpt-5.1-mediumgpt-5.1-codexgpt-5.1-codex-mini
+
+November 20, 2025
+
+mercury
+ has been added to the Text Arena leaderboard.
+
+November 19, 2025
+
+cogito v2.1
+ has been added to the WebDev Arena leaderboard.
+
+gpt-5.1-high
+ and 
+gpt-5.1
+ have been added to the Text Arena leaderboard.
+
+November 18, 2025
+
+gemini-3-pro
+ has been added to the Text Arena, Vision Arena and WebDev Arena leaderboards.
+
+November 17, 2025
+
+grok-4.1-thinking
+ and 
+grok-4.1
+ have been added to the Text Arena leaderboard.
+
+wan2.5-t2i-preview
+ has been added to the Text-to-Image Arena leaderboard.
+
+wan2.5-i2v-preview
+ has been added to the Image-to-Video Arena leaderboard.
+
+November 14, 2025
+
+ray-3
+ has been added to the Text-to-Video Arena and Image-to-Video Arena leaderboards.
+
+November 13, 2025
+
+vidu-q2-turbo
+ & 
+vidu-q2-pro
+ are now on the Image-to-Video Arena leaderboard.
+
+November 12, 2025
+
+The 
+WebDev leaderboard
+ is now powered by the Code Arena experience.
+
+amazon-nova-experimental-chat-10-20
+ has been added to the Text Arena leaderboard.
+
+November 7, 2025
+
+ernie-5.0-preview-1022
+ has been added to the Text Arena leaderboard.
+
+reve-edit-fast
+ has been added to the Image Edit Arena leaderboard.
+
+November 6, 2025
+
+gpt-image-1-mini
+ has been added to the Text-to-Image Arena and Image Edit Arena leaderboards.
+
+November 5, 2025
+
+Introducing Arena Expert: a new LMArena evaluation framework to identify the toughest, most expert-level prompts from real users, powering a new Expert leaderboard.
+
+We also introduce Occupational Categories that underlie eight new leaderboards:
+
+Software & IT Services Writing, Literature, & LanguageLife, Physical, & Social ScienceEntertainment, Sports, & MediaBusiness, Management, & Financial OpsMathematicalLegal & GovernmentMedicine & Healthcare
+
+Arena Expert aims to sharpen the difficulty level compared to Arena Hard. While Hard includes about a third of all LMArena prompts, Arena Expert includes only 5.5% of all prompts. Expert prompts are identified by their reasoning depth and specificity, producing sharper separations between models. By mapping all Arena prompts across occupational fields, the Occupational Categories system captures the full spectrum of real-world reasoning tasks.
+
+→ Read more on our blog: 
+http://news.lmarena.ai/arena-expert
+
+November 3, 2025
+
+MiniMax-M2
+ has been added to the WebDev Arena leaderboard.
+
+October 30, 2025
+
+Hailuo 2.3
+ has been added to the Text-to-Video Arena leaderboard.
+
+October 28, 2025
+
+Hailuo 2.3
+ has been added to the Image-to-Video Arena leaderboard.
+
+October 20, 2025
+
+The following models have been added to the WebDev Arena leaderboard:
+
+Claude-Haiku-4-5-20251001Qwen3-235b-a22b-instruct-2507Claude-sonnet-4-5-20250929-thinking-32kGLM-4.6
+
+Additionally, 
+Veo 3.1
+ variants have been added to the Text-to-Video Arena and Image-to-Video Arena leaderboards.
+
+October 16, 2025
+
+Claude Haiku 4.5
+ and 
+Amazon-Nova-Experimental-Chat-10-09
+ have been added to the Text Arena leaderboard.
+
+We've also refined the logic for our Coding category to improve precision. Prompts that resembled code, but are not coding related (such as markdown) have been removed. The new rule has been applied retroactively on data, so while the Coding category is now smaller, it’s more accurate.
+
+October 14, 2025
+
+Sora 2
+ and 
+Sora 2 Pro
+ has been added to the Text-to-Video Arena leaderboard.
+
+October 13, 2025
+
+MAI-1-Image
+ has been added to the Text-to-Image Arena leaderboard.
+
+Kling 2.5 Turbo 1080p
+ has been added to the Text-to-Video Arena and Image-to-Video Arena leaderboards. 
+
+October 8, 2025
+
+DeepSeek-V3.2-Exp
+ and the thinking variant have been added to the Text Arena leaderboard.
+
+October 7, 2025
+
+Ling Flash 2.0
+ and 
+Ring Flash 2.0
+ have been added to the Text Arena leaderboard.
+
+October 6, 2025
+
+Hunyuan Vision 1.5 Thinking
+ has been added to the Vision Arena leaderboard.
+
+October 4, 2025
+
+Hunyuan Image 3.0
+ has been added to the Text-to-Image Arena leaderboard.
+
+We added a filter to remove rows where a model battles against itself. This happens very rarely, in instances where we briefly serve the same model from two different API endpoints at the same time.
+
+October 3, 2025
+
+Claude Sonnet 4.5 Thinking 32k
+ and 
+GLM 4.6
+ have been added to the Text Arena leaderboard.
+
+October 2, 2025
+
+Claude Sonnet 4.5
+ has been added to the Text and Web Dev Arena leaderboards.
+
+October 1, 2025
+
+Reve V1
+ has been added to the Image Edit Arena leaderboard.
+
+September 30, 2025
+
+The following models have been added to the Text leaderboard:
+
+deepseek-v3.1-terminusdeepseek-v3.1-terminus-thinkinggemini-2.5-flash-lite-preview-09-2025gemini-2.5-flash-preview-09-2025qwen3-max-2025-09-23qwen3-vl-235b-a22b-instructqwen3-vl-235b-a22b-thinking
+
+September 25, 2025
+
+New model announcement:
+
+Seedream-4-2k
+ has been added to the Text-to-Image and Image Edit leaderboards.
+
+Note that 
+Seedream-4-high-res-fal
+ and 
+Seedream-4-fal
+ are variants run on the 
+fal.ai
+ platform. Due to differences in hosting, they are named separately as distinct models. 
+Seedream-4-2k
+ is the official endpoint provided by 
+ByteDance
+.
+
+September 19, 2025
+
+New model announcements:
+
+Grok-4-fast
+ has been added to the Text leaderboard.
+
+Grok-4-fast-search
+ has been added to the Search leaderboard.
+
+September 18, 2025
+
+We have added a new "preliminary" tag to the leaderboard. If a model is tested anonymously and is subsequently released publicly, we mark its score as "preliminary" until enough fresh votes have been collected after the model’s public release. The tag indicates that scores may shift as community prompts and votes evolve after public launch.
+
+See our 
+leaderboard policy
+ for more details about evaluating models.
+
+September 17, 2025
+
+New model announcements:
+
+Longcat-Flash-Chat
+, 
+Qwen 3 Next-80b-a3b-instruct
+ and 
+Qwen 3 Next-80b-a3b-thinking
+ have been added to the Text leaderboards.
+
+We've updated our data pipeline to add a filter which removes votes from users who exhibit statistically anomalous voting patterns. This improves the quality of the rankings by removing votes from users whose votes are arbitrary, rather than based on the quality of the responses.
+
+September 16, 2025
+
+New model announcement:
+
+Seedream 4 High Res
+ has been added to the Text-to-Image and Image Edit leaderboards.
+
+Deepseek v3.1 & Deepseek v3.1-thinking
+ have been added to the WebDev leaderboard.
+
+September 12, 2025
+
+New model announcement:
+
+Seedream 4
+ has been added to the Text-to-Image and Image Edit leaderboards.
+
+September 8, 2025
+
+New model announcements:
+
+Qwen3-max-preview
+ and 
+Kimi-K2-0905-preview
+ have been added to the Text Leaderboard.
+
+We also enabled filtering for the mistaken image generation and image edit requests for text arena.
+
+September 2, 2025
+
+Due to the increase in image generation traffic brought by nano-banana, we noticed there were prompts in our vision arena data which were asking for image generation but did not have image output enabled. We've implemented an LLM based rule to filter these rows out from the vision leaderboard calculation.
+
+August 29, 2025
+
+New model announcements:
+
+Diffbot-small-xl
+ has been added to the Search Leaderboard
+
+Qwen-3-Image-Prompt-Extend
+ has been added to the Text-to-Image Leaderboard.
+
+The following have been added to the Text Leaderboard:
+
+DeepSeek V3.1 (thinking and non-thinking)Hunyuan-t1-20250711
+
+August 28, 2025
+
+New model announcement: 
+MAI-1-preview
+ has been added to the Text Leaderboard.
+
+August 26, 2025
+
+New model announcement: 
+Gemini-2.5-Flash-Image-Preview ("nano-banana") 
+has been added to the Text-to-Image and Image Edit leaderboards.
+
+GPT-5
+ and 
+Claude Opus 4.1
+ have been added to the Search Leaderboard.
+
+We also noticed that the effects of response style are different for search than they are for ordinary chat so we'll be defaulting this leaderboard to ordinary Bradley-Terry while we study search specific style effects.
+
+August 22, 2025
+
+New model announcements
+The following have been added to the Text and Vision leaderboards:
+
+Qwen-vl-max-2025Step 3 Mistral-Medium-2508 GLM-4.5V
+
+Lucid Origin
+ has been added to the Text-to-Image leaderboard. 
+
+Ray 2
+ has been added to the Text-to-Video and Image-to-Video leaderboards
+
+Runway Gen 4 Turbo
+ has been added to the Image-to-Video leaderboard
+
+August 20, 2025
+
+New model announcement: 
+Qwen-Image-Edit
+ has been added to the Image Edit leaderboard. 
+
+August 18, 2025
+
+New model announcement: 
+Claude Opus 4.1 Thinking
+ as been added to the Text and WebDev Arena leaderboards. 
+Sora
+ has been added to the Text-to-Image leaderboard.
+
+August 15, 2025
+
+New model announcement: three additional gpt-5 models are on the Text Leaderboard. These three reasoning models were configured with the highest reasoning setting.
+
+gpt-5-chatgpt-5-mini-highgpt-5-nano-high
+
+August 13, 2025
+
+New model announcement: 
+gpt-0ss-120b
+ and 
+gpt-oss-20b
+ have been added to the Text and WebDev leaderboards. 
+Hailuo 2 Pro
+ versions have been added to the Text-to-Video and Image-to-Video leaderboards. 
+
+August 11, 2025
+
+New model announcement:
+ Claude Opus 4.1
+ is on Text and WebDev leaderboards.
+
+August 7, 2025
+
+New model announcement: 
+GPT-5
+ is on the Text, WebDev, and Vision leaderboards.
+
+August 6, 2025
+
+Big update
+: 
+three
+ new leaderboards!
+Check out the 
+Search
+, 
+Text-to-Video
+, and 
+Image-to-Video
+ leaderboards.
+
+Since the video arenas are used through our 
+discord server
+, there are a few considerations we made for handling the votes. Currently, the model identities are revealed after two votes are cast on a generation. For fairness, we only use the votes cast before the model names are revealed when constructing the leaderboard.
+
+The video arenas are also the first arenas where multiple votes can be cast on the same pair of generations, so unlike the other arenas, some votes are cast by people other than the author of the prompt. The overall leaderboard is computed using all anonymous votes, and we've created a new category which uses only the votes cast by the prompt's author.
+
+August 5, 2025
+
+We have updated the "total votes" counts to include battles involving models not included on the leaderboard (for example, due to being deprecated). The battles between these models and models present on the leaderboard are informative of model strengths, even if the former are not shown, and thus help reduce the variance of the scores. The leaderboard computation is not changing; you will only see a change in the vote counts.
+
+August 4, 2025
+
+New model announcements: 
+GLM-4.5 and GLM-4.5 Air
+ are now on the Text leaderboard.
+
+August 1, 2025
+
+New model announcement: 
+Qwen3-235b-a22b-instruct-2507
+ is now on the Text leaderboard.
+
+July 28, 2025
+
+New model announcements: 
+Qwen3-Coder
+ and 
+Kimi K2
+ are now on the WebDev leaderboard. 
+
+July 25, 2025
+
+New model announcements! 
+Imagen 4 Generate Preview 06-06 v2
+ and 
+Imagen 4 Ultra Generate Preview 06-06 v2
+ are now on the Text-to-Image leaderboard. 
+
+July 23, 2025
+
+We made improvements to the methodology behind Arena scores!
+
+Our leaderboard uses confidence intervals to represent the uncertainty and variability inherent in estimating scores based on human voting. Up until now, our confidence intervals have been computed via bootstrapping, a process where we resample the dataset many times, calculate scores on each, and then look at the distribution of the scores over all the runs. While statistically sound, this is computationally intensive, especially with a large number of battles. We’ve recently moved to a new method based on the 
+Central Limit Theorem (CLT)
+ for 
+M-estimators
+, which allows us to compute confidence intervals via a closed form equation.
+
+We validated this approach by comparing the confidence intervals computed via bootstrapping, with those using the CLT and confirmed that the results are in very close parity (with a fraction of the compute cost and time!). See below:
+
+On LMArena, every vote counts towards producing the leaderboard, but what happens when some models appear more than others? When new models are released, they inevitably have fewer votes than those which have been in use for a while, and when models are deprecated it becomes impossible to collect more votes for them.
+
+To counteract this imbalance and produce a leaderboard that is fair and equally representative of all models, we use an improved reweighting scheme that reweights battles inversely proportionally to how frequently they appear.
+
+The CLT confidence intervals above take these weights into account. Reweighting increases the variance of Arena scores, and we observe wider confidence intervals as a result. This mean that the new rankings will have more ties due to overlapping confidence intervals, especially when there are fewer votes per model like in the vision arena.
+
+July 17, 2025
+
+New model announcements! 
+Kimi K2
+ is on the Text leaderboard, 
+Seededit 3
+ is on the Image Edit leaderboard, and 
+Grok 4
+ is on the Vision leaderboard.
+
+July 15, 2025
+
+We're announcing four new models! 
+Grok 4
+ is on the Text and WebDev leaderboards, 
+Claude Opus 4 Thinking
+ is on the Text leaderboard, 
+Claude Sonnet 4 Thinking
+ is on the Text leaderboard, and 
+Seedream 3
+ is on the Text-to-Image leaderboard.
+
+July 14, 2025
+
+We made improvements to our data processing—in particular, we strengthened our deduplication and identity leak detection pipelines.
+
+Deduplication aims to reduce the impact of over-represented or repetitive conversations using a hash-based approach. We count how many times each unique prompt appears. Prompts in the top 0.5% percentile are considered 
+high-frequency
+. For these high-frequency prompts, we keep only a limited number of samples and discard the rest. Deduplication filters out around 10% of all submitted votes.
+
+Identity leak detection filters out user prompts whose intent is to reveal model information. We first use an LLM classifier to label conversations as 
+identity_leak
+ if they include user prompts that directly attempt to extract or expose model details (e.g., "What is your name?"). We filter out conversations labeled as identity_leak, as well as associated conversations. Less than 4% of all votes are labeled as identity_leak.
+
+We're excited to continue iterating and improving our data processing pipeline!
+
+Subscribe
+to Arena 
+news and research
+
+Insights at the frontier of AI.
+
+Subscribe
+
+Invalid email address
+
+Try Arena
+
+Leaderboard Rankings
+
+Agent
+
+Overall
+
+Text
+
+WebDev
+
+Image-to-WebDev
+
+Text to Image
+
+Image Edit
+
+Text to Video
+
+Image to Video
+
+Video Edit
+
+Vision
+
+Document
+
+Search
+
+Use Cases
+
+Chat with AI
+
+Build Apps & Websites
+
+Write & Edit Text
+
+Search the Web
+
+Generate Images
+
+Generate Videos
+
+Choose any Model
+
+Compare Models Side by Side
+
+Complete Multi-step Tasks
+
+Company
+
+About Us
+
+How It Works
+
+Careers
+
+FAQ
+
+Help Center
+
+Leaderboard Changelog
+
+Product Changelog
+
+Blog
+
+Follow
+
+X
+
+LinkedIn
+
+YouTube
+
+Discord
+
+Legal
+
+Terms
+
+Privacy
+
+Cookies
+
+Terms
+
+Privacy
+
+Cookies
+
+Try Arena
+
+© 
+2026
+ Arena Intelligence Inc.

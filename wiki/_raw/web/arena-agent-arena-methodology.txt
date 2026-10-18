@@ -1,0 +1,1460 @@
+# snapshot of public page, fetched 2026-10-17, text extracted from HTML
+
+Agent Arena: Causal Evaluation of Agents in the Real World - Arena.ai
+
+Skip to main content.
+
+Menu
+
+Try Arena
+
+Leaderboard Rankings
+
+Agent
+
+Overall
+
+Text
+
+WebDev
+
+Image-to-WebDev
+
+Text to Image
+
+Image Edit
+
+Text to Video
+
+Image to Video
+
+Video Edit
+
+Vision
+
+Document
+
+Search
+
+Use Cases
+
+Chat with AI
+
+Build Apps & Websites
+
+Write & Edit Text
+
+Search the Web
+
+Generate Images
+
+Generate Videos
+
+Choose any Model
+
+Compare Models Side by Side
+
+Complete Multi-step Tasks
+
+Company
+
+About Us
+
+How It Works
+
+Careers
+
+FAQ
+
+Help Center
+
+Leaderboard Changelog
+
+Product Changelog
+
+Blog
+
+Follow
+
+X
+
+LinkedIn
+
+YouTube
+
+Discord
+
+Legal
+
+Terms
+
+Privacy
+
+Cookies
+
+Terms
+
+Privacy
+
+Cookies
+
+Try Arena
+
+© 
+2026
+ Arena Intelligence Inc.
+
+Back to All Articles
+
+Product
+
+Research
+
+Arena
+
+Team
+
+Published on 
+4 Jun 2026
+
+Last updated on 
+15 Oct 2026
+
+Reading Time: 
+9 minutes
+
+Agent Arena: Causal Evaluation of Agents in the Real World
+
+Agents are increasingly doing real work. The resulting task distribution has greatly expanded. We desire an agent evaluation that scales along with usage and capability.
+
+10/1/26 methodology update
+: 
+click through for the latest signals and updated definitions
+ for Agent Arena.
+
+Agents are increasingly doing real work. From chat to terminal to OpenClaw, users everywhere are interacting with complex agents, comprising a model and a harness with many subcomponents and tools. As a result, the task distribution has greatly expanded. This makes evaluating agents progressively more difficult, because both task coverage and task complexity are growing in tandem. We desire an agent evaluation that scales 
+along with
+ usage and capability.
+
+Today we are releasing the Agent Arena leaderboard. Arena has always focused on evaluations in the real world. As such, Agent Arena collects and analyzes millions of in-the-wild interactions from people using 
+Agent Mode
+ on 
+arena.ai/agent
+ doing their jobs — software engineering, financial analysis, and more. From our observations of these agents running on our platform, we derive our first Agent Arena leaderboard, shown below:
+
+The methodology powering the Agent Arena Leaderboard is different from our previous arenas. Rather than pairwise votes, rankings are calculated using a methodology we call 
+causal tracing
+. Causal tracing treats the agent as a multi-component system, with each component selection representing a possible treatment. We observe individual point-wise traces and measure signals such as task success rates, verbal feedback, tool error recovery, tool hallucinations, and, over time, much more. Then, by randomizing the component selections, we create a multi-intervention randomized controlled trial in which we can aggregate measurements to estimate causal treatment effects. We refer to these effects as "net improvement" in the figure above. The causal framework produces an interpretable ranking that represents the improvement in agent performance due to a component selection. This decouples the contributions of the main orchestrator model, any subagents, image generation models, and the different elements in the harness, letting us combine multiple signals into one coherent leaderboard.
+
+This first leaderboard is the result of our causal evaluation of orchestrator models — the main LLMs that choose which tools to call. Rankings of other aspects of the agentic harness are coming soon. We include more methodological detail in the statistical-methodology section below.
+
+Per-Signal Leaderboards
+
+Every Agent Arena session contains a stream of rich feedback. Users iterate with the agent in natural language, expressing approval, frustration, or clarification turn by turn. They decide whether to download an artifact the agent produced. They click explicit approve / disapprove buttons. They issue in-line corrections when the agent goes off-track. And the agent, on its side, is interacting with an environment that talks back continuously: shell exit codes, tool errors, the absence of a tool it tried to call. 
+Agent Mode
+ lets us extract all of these signals — explicit user feedback, implicit user feedback, and feedback from the agent's environment. After we compute per-session outcomes for each signal, we turn them into leaderboards with causal methods and then aggregate them into the headline leaderboard. We present our first 5 signals today, and we plan to measure more in the near future.
+
+The headline leaderboard aggregates the following signals:
+
+Confirmed success
+ — the user marks a task as a success or failure using the Arena UI. Arena gives users approve and disapprove buttons on every turn; we use the final approval or disapproval of a given task's trajectory to determine the outcome. (There can be more than one task per session.)
+
+Praise vs. complaint
+ — the user praises or complains about the agent's output. For each task we identify messages expressing explicit verbal praise ("looks great", "this is exactly what I needed") or explicit verbal complaint ("this is broken", "you misunderstood entirely"). The task is marked a success if praise outnumbers complaints.
+
+Steerability
+ — the agent executes on user corrections. When a user issues an in-line correction ("no, do X instead", "you misread the file"), the agent should attempt to fix it. If the user accepts the fix, we mark the correction successful; if they reject it or give up, unsuccessful. When doing real work, mistakes are inevitable — this signal captures whether these errors are quickly resolved.
+
+Bash recovery
+ — turns taken to recover from a bash error. When the agent issues a bash command that errors due to a model failure (not an environment issue), the recovery clock starts; we count follow-up bash calls until the next non-erroring command. If the agent gives up, we impose an additional penalty.
+
+Tool hallucination
+ — the agent references a tool that does not exist. This penalizes invented tool names, malformed syntax that produces a junk name, and chain-of-thought tokens leaking into the tool field. We mark the task a failure if the agent calls a nonexistent tool.
+
+This set of five signals is only a starting point. We plan to add more signals to further enrich these evaluations, retire ones that age out of relevance, and modify them as we improve our trace-mining.
+
+Finally, though not a leaderboard signal, we can also calculate the realized, post-deployment cost of the agents to assess Pareto optimality. We directly calculate the 
+exact
+ cost of a session. We find some models more expensive in practice, despite cheaper on-paper pricing. This is as a result of model behavior (e.g. more steps per turn) or induced user behavior (e.g. more turns to reach satisfaction).
+
+Agents in the Real World
+
+Here we present a deep dive into the data that powers the leaderboards. Agent Arena is a live stream of real users asking models to work: write code, debug broken projects, research across the web, create documents, build frontends, analyze files, and iterate over multi-step tasks.
+
+In a recent 7-day slice, Arena saw 160,480 Agent Mode tasks (note there can be multiple tasks in a session). The largest categories were code writing (17.5%), research and lookup (10.8%), planning and brainstorming (10.6%), and multimodal image/video work (10.2%), followed by document creation (9.1%) and code debugging (8.9%). Code writing alone accounted for roughly 28,000 tasks, with another ~14,000 in code debugging and ~17,000 in research and lookup.
+
+Across 128,244 sessions, 75.6% used at least one tool — 41.1% ran bash and 27.1% ran web search. In the week, Agent Mode issued 2 million structured tool calls, including ~936,000 bash calls, ~550,000 file writes, and ~275,000 web searches.
+
+Tracking via successful 
+write_file
+ calls, Agent Mode wrote 
+40.3 million lines of code
+ in the last week — roughly 1,000 lines per coding session.
+
+In the past 7 days, sessions averaged ~16.5 structured tool calls, and high-tool sessions were common enough to form their own cohort: more than 3,400 loop-filtered sessions ran very long tool chains in a single week. Those sessions were mostly real work — 53.2% coding or repo-debugging, 39.0% artifact/file-creation, with the rest spanning web synthesis, terminal workflows, and data analysis.
+
+Finally, about 32% of recent sessions ended with at least 128k input tokens in the final turn, 22% with at least 256k, and 8% with at least 1M.
+
+What People Build
+
+In a sample of the heaviest real sessions we saw: a live sports-TV schedule site, an autonomous-underwater-vehicle autopilot, a self-hosted movie-watchlist app, a financial-research RAG pipeline, a live study-tracking platform, and more. Many end with the user downloading the finished workspace.
+
+Overall in the same week, the workspace saw over 50,000 downloads — far beyond just code, including office and media artifacts (
+.docx
+, 
+.pptx
+, 
+.xlsx
+, 
+.pdf
+, and images).
+
+How People Work With Agents
+
+Beyond 
+which
+ model wins, the trace stream reveals 
+how
+ people actually delegate to agents — and how agents handle being corrected.
+
+Most opening messages hand over a whole job rather than ask for advice: the delegation posture skews heavily toward "build this deliverable" and "operate autonomously." However, after seeing the first response, they tighten the reins — pulling control back far more often than they hand over more.
+
+We also find that when the opening ask bundles several explicit parts, agents usually cover all of them; the typical shortfall is leaving one incomplete. A rarer but more consequential shortfall is covert: the agent could have surfaced the incomplete work, but instead presents the result as complete. We call this "Bluffing".
+
+Finally, agents do sometimes push back against users — but we find they usually only 
+sound
+ firm, rarely holding their ground in practice. We call this "Bluster": an artificial assertiveness that melts under additional pressure.
+
+Formal Details of Methodology
+
+In this section we describe the formal details of our evaluation framework.
+
+Consider a 
+
+K
+
+K
+
+K
+
+-component agent and sessions indexed by 
+
+i
+
+∈
+
+[
+
+n
+
+]
+
+i \in [n]
+
+i
+
+∈
+
+[
+
+n
+
+]
+
+. Each session independently samples a 
+
+K
+
+K
+
+K
+
+-dimensional vector representing an agent configuration, 
+
+T
+
+i
+
+T_i
+
+T
+
+i
+
+​
+
+. The configuration includes at minimum the orchestrator model, and as Agent Arena expands will encompass additional components such as the tools, system prompt, and harness. The configuration is drawn from a sampling distribution 
+
+P
+
+P
+
+P
+
+. We denote 
+
+p
+
+i
+
+,
+
+k
+
+(
+
+t
+
+)
+
+=
+
+P
+
+T
+
+i
+
+∼
+
+P
+
+(
+
+T
+
+i
+
+,
+
+k
+
+=
+
+t
+
+)
+
+p_{i,k}(t) = \mathbb{P}_{T_i \sim P}(T_{i,k} = t)
+
+p
+
+i
+
+,
+
+k
+
+​
+
+(
+
+t
+
+)
+
+=
+
+P
+
+T
+
+i
+
+​
+
+∼
+
+P
+
+​
+
+(
+
+T
+
+i
+
+,
+
+k
+
+​
+
+=
+
+t
+
+)
+
+; components are sampled independently. Each session yields an outcome 
+
+Y
+
+i
+
+∈
+
+R
+
+Y_i \in \mathbb{R}
+
+Y
+
+i
+
+​
+
+∈
+
+R
+
+, representing one of our signals from the previous sections. (We compute the per-signal leaderboards separately, then average them at the end.)
+
+Our target of estimation is the treatment effect of each component selection with respect to a fixed baseline distribution 
+
+Q
+
+Q
+
+Q
+
+, with analogous probabilities 
+
+q
+
+i
+
+,
+
+k
+
+(
+
+t
+
+)
+
+=
+
+P
+
+T
+
+i
+
+∼
+
+Q
+
+(
+
+T
+
+i
+
+,
+
+k
+
+=
+
+t
+
+)
+
+q_{i,k}(t) = \mathbb{P}_{T_i \sim Q}(T_{i,k} = t)
+
+q
+
+i
+
+,
+
+k
+
+​
+
+(
+
+t
+
+)
+
+=
+
+P
+
+T
+
+i
+
+​
+
+∼
+
+Q
+
+​
+
+(
+
+T
+
+i
+
+,
+
+k
+
+​
+
+=
+
+t
+
+)
+
+. Typically, we take 
+
+Q
+
+Q
+
+Q
+
+ to be a uniform distribution over components. Formally, the treatment effect of the 
+
+t
+
+t
+
+t
+
+-th choice of the 
+
+k
+
+k
+
+k
+
+-th component is defined as the expected difference in outcomes 
+
+Y
+
+i
+
+Y_i
+
+Y
+
+i
+
+​
+
+ under treatment and control:
+
+τ
+
+k
+
+→
+
+t
+
+=
+
+E
+
+T
+
+i
+
+∼
+
+Q
+
+[
+
+Y
+
+i
+
+(
+
+T
+
+i
+
+,
+
+k
+
+=
+
+t
+
+)
+
+−
+
+Y
+
+i
+
+]
+
+.
+
+\tau_{k \to t} = \mathbb{E}_{T_i \sim Q} \bigl[Y_i(T_{i,k} = t) - Y_i\bigr].
+
+τ
+
+k
+
+→
+
+t
+
+​
+
+=
+
+E
+
+T
+
+i
+
+​
+
+∼
+
+Q
+
+​
+
+[
+
+Y
+
+i
+
+​
+
+(
+
+T
+
+i
+
+,
+
+k
+
+​
+
+=
+
+t
+
+)
+
+−
+
+Y
+
+i
+
+​
+
+]
+
+.
+
+Here, 
+
+Y
+
+i
+
+(
+
+T
+
+i
+
+,
+
+k
+
+=
+
+t
+
+)
+
+Y_i(T_{i,k} = t)
+
+Y
+
+i
+
+​
+
+(
+
+T
+
+i
+
+,
+
+k
+
+​
+
+=
+
+t
+
+)
+
+ denotes the "potential outcome" when we intervene on the 
+
+k
+
+k
+
+k
+
+-th component and set it to 
+
+t
+
+t
+
+t
+
+. 
+
+Given that we sample the components independently, using standard identification results from causal inference we can rewrite the treatment effect as:
+
+τ
+
+k
+
+→
+
+t
+
+=
+
+E
+
+T
+
+i
+
+∼
+
+Q
+
+[
+
+Y
+
+i
+
+∣
+
+T
+
+i
+
+,
+
+k
+
+=
+
+t
+
+]
+
+−
+
+E
+
+T
+
+i
+
+∼
+
+Q
+
+[
+
+Y
+
+i
+
+]
+
+.
+
+\tau_{k \to t} = \mathbb{E}_{T_i \sim Q} \bigl[Y_i \,\big|\, T_{i,k} = t\bigr] - \mathbb{E}_{T_i \sim Q}\bigl[Y_i\bigr].
+
+τ
+
+k
+
+→
+
+t
+
+​
+
+=
+
+E
+
+T
+
+i
+
+​
+
+∼
+
+Q
+
+​
+
+[
+
+Y
+
+i
+
+​
+
+​
+
+T
+
+i
+
+,
+
+k
+
+​
+
+=
+
+t
+
+]
+
+−
+
+E
+
+T
+
+i
+
+​
+
+∼
+
+Q
+
+​
+
+[
+
+Y
+
+i
+
+​
+
+]
+
+.
+
+We estimate this quantity using the self-normalized estimator:
+
+τ
+
+^
+
+k
+
+→
+
+t
+
+=
+
+∑
+
+i
+
+:
+
+T
+
+i
+
+,
+
+k
+
+=
+
+t
+
+w
+
+i
+
+Y
+
+i
+
+∑
+
+i
+
+:
+
+T
+
+i
+
+,
+
+k
+
+=
+
+t
+
+w
+
+i
+
+−
+
+∑
+
+i
+
+w
+
+i
+
+Y
+
+i
+
+∑
+
+i
+
+w
+
+i
+
+,
+
+\hat\tau_{k \to t} = \frac{\sum_{i:\, T_{i,k} = t} w_i Y_i}{\sum_{i:\, T_{i,k} = t} w_i} - \frac{\sum_i w_i Y_i}{\sum_i w_i},
+
+τ
+
+^
+
+k
+
+→
+
+t
+
+​
+
+=
+
+∑
+
+i
+
+:
+
+T
+
+i
+
+,
+
+k
+
+​
+
+=
+
+t
+
+​
+
+w
+
+i
+
+​
+
+∑
+
+i
+
+:
+
+T
+
+i
+
+,
+
+k
+
+​
+
+=
+
+t
+
+​
+
+w
+
+i
+
+​
+
+Y
+
+i
+
+​
+
+​
+
+−
+
+∑
+
+i
+
+​
+
+w
+
+i
+
+​
+
+∑
+
+i
+
+​
+
+w
+
+i
+
+​
+
+Y
+
+i
+
+​
+
+​
+
+,
+
+where
+
+w
+
+i
+
+=
+
+∏
+
+k
+
+=
+
+1
+
+K
+
+q
+
+k
+
+(
+
+T
+
+i
+
+,
+
+k
+
+)
+
+p
+
+i
+
+,
+
+k
+
+(
+
+T
+
+i
+
+,
+
+k
+
+)
+
+.
+
+w_i = \prod_{k=1}^K \frac{q_k(T_{i,k})}{p_{i,k}(T_{i,k})}.
+
+w
+
+i
+
+​
+
+=
+
+k
+
+=
+
+1
+
+∏
+
+K
+
+​
+
+p
+
+i
+
+,
+
+k
+
+​
+
+(
+
+T
+
+i
+
+,
+
+k
+
+​
+
+)
+
+q
+
+k
+
+​
+
+(
+
+T
+
+i
+
+,
+
+k
+
+​
+
+)
+
+​
+
+.
+
+τ
+
+^
+
+k
+
+→
+
+t
+
+\hat\tau_{k \to t}
+
+τ
+
+^
+
+k
+
+→
+
+t
+
+​
+
+ is asymptotically normal under standard CLT conditions for self-normalized estimators. We report 95% confidence intervals 
+
+τ
+
+^
+
+k
+
+→
+
+t
+
+±
+
+1.96
+
+S
+
+E
+
+^
+
+\hat\tau_{k \to t} \pm 1.96\,\widehat{\mathrm{SE}}
+
+τ
+
+^
+
+k
+
+→
+
+t
+
+​
+
+±
+
+1.96
+
+SE
+
+ alongside every estimate.
+
+To address distribution shift, such as the shift arising from new models entering the Arena, we use additional time-decaying weights to place more emphasis on the most recent data points. That way, the leaderboard always reflects the current strengths and weaknesses of agents.
+
+The current leaderboards evaluate orchestrators and no other components, so in the production setting we currently have 
+
+K
+
+=
+
+1
+
+K = 1
+
+K
+
+=
+
+1
+
+.
+
+Citation
+
+Arena Team. (2026). 
+Agent Arena: Causal Evaluation of Agents in the Real World
+. https://arena.ai/blog/agent-arena-methodology
+
+Copy as BibTeX
+
+Appendix: Per-Signal Leaderboards
+
+Share 
+this Article
+
+LinkedIn
+
+X
+
+Copy Link
+
+Back to All Articles
+
+Back to Top
+
+Per-Signal Leaderboards
+
+Agents in the Real World
+
+What People Build
+
+How People Work With Agents
+
+Formal Details of Methodology
+
+Citation
+
+Appendix
+
+Related 
+Articles
+
+Read Article
+
+Introducing Max in Agent Arena
+
+Today, we are releasing our newest version of Max, Arena’s agentic router that achieves frontier performance in Agent Arena with 37% cost savings compared to top models.
+
+Product
+
+Arena Team
+—
+12 Oct 2026
+
+Read Article
+
+Measuring the AI Frontier for Real-World Alignment: Arena's $200 Million Series B
+
+Arena announces a $200 million Series B at a $3.1 billion valuation to advance real-world AI evaluation. Alongside this milestone, we're introducing the Arena Alignment Index, ‌​​‌‌‍​‌​‌​​​​​‌​​​​‍​‍‌‍‌‌​‌‍‌‌​​‌‍‌‌​‌‌‍​‌‌​‍‌‌​‌‍‍‌‌‍​‌‍​‌‍‌‌​‍‌‍‌​​‌‍​‌‌‌​‌‍‍​​‌‌‍‌‌‌‍​‌‍​‌‍‌‌‌​‍‌​​‌‌​​‍‍‌‌​‌‍‌‌‌‍​‌‌​​‍​‍‌‌a new measurement of how well frontier AI models act in line with human intent.​​​​‌‍​‍​‍‌‍‌​‍‌‍‍‌‌‍‌‌‍‍‌‌‍‍​‍​‍​‍‍​‍​‍‌​‌‍​‌‌‍‍‌‍‍‌‌‌​‌‍‌​‍‍‌‍‍‌‌‍​‍​‍​‍​​‍​‍‌‍‍​‌​‍‌‍‌‌‌‍‌‍​‍​‍​‍‍​‍​‍‌‍‍​‌‌​‌‌​‌​​‌​​‍‍​‍​‍‌‍​‌‌​‍‌‍‌‌‌‍‍‌‍​‌​‍‍‌‍​‌‌‍‍‌​‍‌​‌‌​‌‌‌‌‍‌​‌‍‍‌‌‍​‍‌‍‍‌‌‍‍‌‌​‌‍‌‌‌‍‍‌‌​​‍‌‍‌‌‌‍‌​‌‍‍‌‌‌​​‍‌‍‌‌‍‌‍‌​‌‍‌‌​‌‌​​‌​‍‌‍‌‌‌​‌‍‌‌‌‍‍‌‌​‌‍​‌‌‌​‌‍‍‌‌‍‌‍‍​‍‌‍‍‌‌‍‌​​‌‌‍‌‌‌‍‌​​​‍​‌‌‍​‌‍‌‌​‌‍​‍​​‍‌​​​​‌‍‌‌​‌​​‍‌​‌​​‌​​‌​‌‍​‍‌​‍‌‌‍​‍‌‍‌‍​​‌​‍‌‌‍‌​​‌​​‌‍‌‍‌‌​​‌​​‌‌‍​‌​‌​​​​​‌​​​​‍​‍‌‌​‌‍‌‌​​‌‍‌‌​‌‌‍​‌‌​‍‌‌​‌‍‍‌‌‍​‌‍​‌‍‌‌​‍‌​​‌‍​‌‌‌​‌‍‍​​‌‌‍‌‌‌‍​‌‍​‌‍‌‌‌​‍‌​​‌‌​​‍‍‌‌​‌‍‌‌‌‍​‌‌​​‌‍​‍‌‍​‌‌​‌‍‌‌‌‌‌‌‌​‍‌‍​​‌‌‍‍​‌‌​‌‌​‌​​‌​​‍‌‌​​‌​​‌​‍‌‌​​‍‌​‌‍​‍‌‌​​‍‌​‌‍‌‍​‌‌​‍‌‍‌‌‌‍‍‌‍​‌​‍‍‌‍​‌‌‍‍‌​‍‌‌​​‍‌​‌‍‌​‌‌​‌‌‌‌‍‌​‌‍‍‌‌‍​‍‌‍‌‍‍‌‌‍‌​​‌‌‍‌‌‌‍‌​​​‍​‌‌‍​‌‍‌‌​‌‍​‍​​‍‌​​​​‌‍‌‌​‌​​‍‌​‌​​‌​​‌​‌‍​‍‌​‍‌‌‍​‍‌‍‌‍​​‌​‍‌‌‍‌​​‌​​‌‍‌‍‌‌​​‌​​‌‌‍​‌​‌​​​​​‌​​​​‍​‍‌‍‌‌​‌‍‌‌​​‌‍‌‌​‌‌‍​‌‌​‍‌‌​‌‍‍‌‌‍​‌‍​‌‍‌‌​‍‌‍‌​​‌‍​‌‌‌​‌‍‍​​‌‌‍‌‌‌‍​‌‍​‌‍‌‌‌​‍‌​​‌‌​​‍‍‌‌​‌‍‌‌‌‍​‌‌​​‍​‍‌‌
+
+News
+
+Arena Team
+—
+8 Oct 2026
+
+Read Article
+
+Arena Alignment Index
+
+Today we are introducing the Arena Alignment Index, comparing 27 models across 90,000 real-world agent sessions. GPT-6.1 Sol, Claude Opus 5.5, and Grok 4.7 are among the highest-scoring models, with alignment improving across generations. Yet even frontier models still fail in consequential ways, from deleting files without permission to claiming checks they never performed.
+
+Research
+
+Arena Team
+—
+8 Oct 2026
+
+Read Article
+
+How to Post-Train Text-to-Image Models: Combining Preference and Rubric Rewards
+
+We introduce a post-training approach that combines human preference signals with explicit rubric-based rewards. Trained on 5M Arena pairwise preference votes, it pushes FLUX.2-dev to #2 on the live T2I leaderboard and Ideogram 4 past every publicly listed open-source model.
+
+Research
+
+Arena Team
+—
+2 Oct 2026
+
+Read Article
+
+Self-Preference of AI Judges
+
+LLM judges prefer their own responses 70% more often than humans do.
+
+Research
+
+Arena Team
+—
+30 Sept 2026
+
+Read Article
+
+HarnessTax: How Much Does the Harness Matter for Coding Agents?
+
+We tested 21 coding agent model–harness combinations across Claude Code, Codex CLI, and Pi to understand how harness choice affects performance and cost. The results show that harness choice can significantly impact cost, even when task success rates are similar.
+
+Research
+
+Arena Team
+—
+16 Sept 2026
+
+Read Article
+
+Call for Proposals: Arena's Academic Partnerships Program, Fall 2026
+
+Arena's Academic Partnerships Program opens a call for research proposals twice a year, every Spring and Fall. We're excited to open the Fall 2026 cycle today, with submissions due October 30, 2026.
+
+Arena Team
+—
+1 Sept 2026
+
+Read Article
+
+Announcing the First Cohort of Arena's Academic Partnerships Program
+
+We're glad to introduce the first cohort of researchers supported through the Arena Academic Partnerships program.
+
+Arena Team
+—
+1 Sept 2026
+
+Read Article
+
+Coding in Agent Mode: From Idea to Shipping with GitHub
+
+AI coding assistants have fundamentally changed how code is created. But for most developers, a chat interface has been a "read-only" or "copy-paste" coding experience — until now.
+
+Product
+
+Arena Team
+—
+24 Aug 2026
+
+See All Articles
+
+Subscribe
+to Arena 
+news and research
+
+Insights at the frontier of AI.
+
+Subscribe
+
+Invalid email address

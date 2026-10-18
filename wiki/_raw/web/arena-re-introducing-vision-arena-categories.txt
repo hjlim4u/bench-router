@@ -1,0 +1,332 @@
+# snapshot of public page, fetched 2026-10-17, text extracted from HTML
+
+Re-introducing Vision Arena Categories - Arena.ai
+
+Skip to main content.
+
+Menu
+
+Back to All Articles
+
+Research
+
+Arena
+
+Team
+
+Published on 
+3 Oct 2025
+
+Last updated on 
+3 Oct 2025
+
+Reading Time: 
+4 minutes
+
+Re-introducing Vision Arena Categories
+
+Since we first introduced categories over two years ago, and Vision Arena last year, the AI evaluation landscape has evolved. New categories have been added, existing ones have been updated, and the leaderboards they power are becoming more insightful with each round of community input.
+
+If you need a refresher: categories are how we organize conversations on LMArena. Each message can be tagged into one or more categories, though tagging isn’t required. This flexibility ensures that we capture the richness of real-world use cases without forcing conversations into boxes.
+
+When you view a category leaderboard, you’re seeing the same ranking methodology as the overall Arena leaderboard, but filtered only to conversations within that category. This makes categories a powerful way to zoom in on specific domains of model performance, whether that’s coding, creative writing, or multimodal reasoning.
+
+In Vision Arena, users upload images and give text prompts asking all sorts of questions, from homework to storytelling. Like in Text Arena, many insights can be gained by looking at the categories of these conversations, both in terms of the prompts and the accompanying images.
+
+Today, we’ll define and explain the new Vision Arena categories paired with example prompts and images. 
+
+Captioning
+
+The Captioning category covers requests for general descriptions of images. This measures a model’s capacity to understand and describe images, often for users interested in getting overall information about an image, rather than seeking specific information from it.
+
+Prompt: Please describe the photo in English.
+
+Prompt: Translate, analyze, and summarize the contents of this document.
+
+Creative Writing
+
+The Creative Writing category is designed to capture the models’ skills in compositions outside of academic, professional, and technical areas, and typically involve creativity, imagination or storytelling.
+
+Prompt: give 4 titles retrospectively to the abstract pieces depicting the emotional consciousness of Ulysses
+
+Prompt: Give a sensory rich description of this Wabi sabi space
+
+Diagrams
+
+For testing recognition and understanding of technical information in images, we have the Diagrams category. This includes instances where the image contains graphs, charts, or figures, and the user is asking questions which require understanding of the concepts of the visuals.
+
+Prompt: The graph of a parent function is shown. Which function belongs to the same function family as the graphed function? A f\left ( x \right ): =: 5^{x}: - : 4 B f\left ( x \right ): =: \frac{1}{5}\sqrt[3]{x: +: 4} C f\left ( x \right ): =: 5x^{2}: +: 4 D f\left ( x \right ): =: 5\sqrt{x}: -: 4
+
+Prompt: Please answer the question from the attached file with an explanation. Thanks.
+
+Entity Recognition
+
+For recognizing, identifying, and explaining 
+specific 
+objects, items, or people from images, we have the Entity Recognition category. This tests the models on their ability to associate visual features of particular things with the associated knowledge from their pretraining.
+
+Prompt: What kind of pokemon is this
+
+Prompt: who are the people in this image?
+
+Homework
+
+This category measures models’ abilities to understand and solve problems from assignments based on pictures of the assignments. These vary widely in topics and across the level of education.
+
+Prompt: answer this correctly
+
+Prompt: explain the answer
+
+Humor
+
+The Humor category is a lighthearted and fun category which contains images and prompts where users ask the models to identify funny components or explain the joke. Understanding and explaining humor has historically been a difficult task for AI, and adding image understanding makes it even more challenging.
+
+Prompt: whats a better caption to write for us on weekdays vs us on fridays?
+
+Prompt: Can you explain the humor in this meme?
+
+Optical Character Recognition (OCR)
+
+The OCR category contains images with text, with prompts asking questions for information from the textual components of the image. This is the test of the models’ abilities to read and understand text in images.
+
+Prompt: extract the article text
+
+Prompt: send me the text in the image.
+
+Conclusion
+
+These examples highlight the variety of inputs and tasks that people are using Vision Arena’s multimodal capabilities for, while also providing context for the categories.
+
+You can now explore how your favorite AI models compare across these different categories on the 
+Vision Leaderboard
+!
+
+Share 
+this Article
+
+LinkedIn
+
+X
+
+Copy Link
+
+Back to All Articles
+
+Back to Top
+
+Related 
+Articles
+
+Read Article
+
+Introducing Max in Agent Arena
+
+Today, we are releasing our newest version of Max, Arena’s agentic router that achieves frontier performance in Agent Arena with 37% cost savings compared to top models.
+
+Product
+
+Arena Team
+—
+12 Oct 2026
+
+Read Article
+
+Measuring the AI Frontier for Real-World Alignment: Arena's $200 Million Series B
+
+Arena announces a $200 million Series B at a $3.1 billion valuation to advance real-world AI evaluation. Alongside this milestone, we're introducing the Arena Alignment Index, ‌​​‌‌‍​‌​‌​​​​​‌​​​​‍​‍‌‍‌‌​‌‍‌‌​​‌‍‌‌​‌‌‍​‌‌​‍‌‌​‌‍‍‌‌‍​‌‍​‌‍‌‌​‍‌‍‌​​‌‍​‌‌‌​‌‍‍​​‌‌‍‌‌‌‍​‌‍​‌‍‌‌‌​‍‌​​‌‌​​‍‍‌‌​‌‍‌‌‌‍​‌‌​​‍​‍‌‌a new measurement of how well frontier AI models act in line with human intent.​​​​‌‍​‍​‍‌‍‌​‍‌‍‍‌‌‍‌‌‍‍‌‌‍‍​‍​‍​‍‍​‍​‍‌​‌‍​‌‌‍‍‌‍‍‌‌‌​‌‍‌​‍‍‌‍‍‌‌‍​‍​‍​‍​​‍​‍‌‍‍​‌​‍‌‍‌‌‌‍‌‍​‍​‍​‍‍​‍​‍‌‍‍​‌‌​‌‌​‌​​‌​​‍‍​‍​‍‌‍​‌‌​‍‌‍‌‌‌‍‍‌‍​‌​‍‍‌‍​‌‌‍‍‌​‍‌​‌‌​‌‌‌‌‍‌​‌‍‍‌‌‍​‍‌‍‍‌‌‍‍‌‌​‌‍‌‌‌‍‍‌‌​​‍‌‍‌‌‌‍‌​‌‍‍‌‌‌​​‍‌‍‌‌‍‌‍‌​‌‍‌‌​‌‌​​‌​‍‌‍‌‌‌​‌‍‌‌‌‍‍‌‌​‌‍​‌‌‌​‌‍‍‌‌‍‌‍‍​‍‌‍‍‌‌‍‌​​‌‌‍‌‌‌‍‌​​​‍​‌‌‍​‌‍‌‌​‌‍​‍​​‍‌​​​​‌‍‌‌​‌​​‍‌​‌​​‌​​‌​‌‍​‍‌​‍‌‌‍​‍‌‍‌‍​​‌​‍‌‌‍‌​​‌​​‌‍‌‍‌‌​​‌​​‌‌‍​‌​‌​​​​​‌​​​​‍​‍‌‌​‌‍‌‌​​‌‍‌‌​‌‌‍​‌‌​‍‌‌​‌‍‍‌‌‍​‌‍​‌‍‌‌​‍‌​​‌‍​‌‌‌​‌‍‍​​‌‌‍‌‌‌‍​‌‍​‌‍‌‌‌​‍‌​​‌‌​​‍‍‌‌​‌‍‌‌‌‍​‌‌​​‌‍​‍‌‍​‌‌​‌‍‌‌‌‌‌‌‌​‍‌‍​​‌‌‍‍​‌‌​‌‌​‌​​‌​​‍‌‌​​‌​​‌​‍‌‌​​‍‌​‌‍​‍‌‌​​‍‌​‌‍‌‍​‌‌​‍‌‍‌‌‌‍‍‌‍​‌​‍‍‌‍​‌‌‍‍‌​‍‌‌​​‍‌​‌‍‌​‌‌​‌‌‌‌‍‌​‌‍‍‌‌‍​‍‌‍‌‍‍‌‌‍‌​​‌‌‍‌‌‌‍‌​​​‍​‌‌‍​‌‍‌‌​‌‍​‍​​‍‌​​​​‌‍‌‌​‌​​‍‌​‌​​‌​​‌​‌‍​‍‌​‍‌‌‍​‍‌‍‌‍​​‌​‍‌‌‍‌​​‌​​‌‍‌‍‌‌​​‌​​‌‌‍​‌​‌​​​​​‌​​​​‍​‍‌‍‌‌​‌‍‌‌​​‌‍‌‌​‌‌‍​‌‌​‍‌‌​‌‍‍‌‌‍​‌‍​‌‍‌‌​‍‌‍‌​​‌‍​‌‌‌​‌‍‍​​‌‌‍‌‌‌‍​‌‍​‌‍‌‌‌​‍‌​​‌‌​​‍‍‌‌​‌‍‌‌‌‍​‌‌​​‍​‍‌‌
+
+News
+
+Arena Team
+—
+8 Oct 2026
+
+Read Article
+
+Arena Alignment Index
+
+Today we are introducing the Arena Alignment Index, comparing 27 models across 90,000 real-world agent sessions. GPT-6.1 Sol, Claude Opus 5.5, and Grok 4.7 are among the highest-scoring models, with alignment improving across generations. Yet even frontier models still fail in consequential ways, from deleting files without permission to claiming checks they never performed.
+
+Research
+
+Arena Team
+—
+8 Oct 2026
+
+Read Article
+
+How to Post-Train Text-to-Image Models: Combining Preference and Rubric Rewards
+
+We introduce a post-training approach that combines human preference signals with explicit rubric-based rewards. Trained on 5M Arena pairwise preference votes, it pushes FLUX.2-dev to #2 on the live T2I leaderboard and Ideogram 4 past every publicly listed open-source model.
+
+Research
+
+Arena Team
+—
+2 Oct 2026
+
+Read Article
+
+Self-Preference of AI Judges
+
+LLM judges prefer their own responses 70% more often than humans do.
+
+Research
+
+Arena Team
+—
+30 Sept 2026
+
+Read Article
+
+HarnessTax: How Much Does the Harness Matter for Coding Agents?
+
+We tested 21 coding agent model–harness combinations across Claude Code, Codex CLI, and Pi to understand how harness choice affects performance and cost. The results show that harness choice can significantly impact cost, even when task success rates are similar.
+
+Research
+
+Arena Team
+—
+16 Sept 2026
+
+Read Article
+
+Call for Proposals: Arena's Academic Partnerships Program, Fall 2026
+
+Arena's Academic Partnerships Program opens a call for research proposals twice a year, every Spring and Fall. We're excited to open the Fall 2026 cycle today, with submissions due October 30, 2026.
+
+Arena Team
+—
+1 Sept 2026
+
+Read Article
+
+Announcing the First Cohort of Arena's Academic Partnerships Program
+
+We're glad to introduce the first cohort of researchers supported through the Arena Academic Partnerships program.
+
+Arena Team
+—
+1 Sept 2026
+
+Read Article
+
+Coding in Agent Mode: From Idea to Shipping with GitHub
+
+AI coding assistants have fundamentally changed how code is created. But for most developers, a chat interface has been a "read-only" or "copy-paste" coding experience — until now.
+
+Product
+
+Arena Team
+—
+24 Aug 2026
+
+See All Articles
+
+Subscribe
+to Arena 
+news and research
+
+Insights at the frontier of AI.
+
+Subscribe
+
+Invalid email address
+
+Try Arena
+
+Leaderboard Rankings
+
+Agent
+
+Overall
+
+Text
+
+WebDev
+
+Image-to-WebDev
+
+Text to Image
+
+Image Edit
+
+Text to Video
+
+Image to Video
+
+Video Edit
+
+Vision
+
+Document
+
+Search
+
+Use Cases
+
+Chat with AI
+
+Build Apps & Websites
+
+Write & Edit Text
+
+Search the Web
+
+Generate Images
+
+Generate Videos
+
+Choose any Model
+
+Compare Models Side by Side
+
+Complete Multi-step Tasks
+
+Company
+
+About Us
+
+How It Works
+
+Careers
+
+FAQ
+
+Help Center
+
+Leaderboard Changelog
+
+Product Changelog
+
+Blog
+
+Follow
+
+X
+
+LinkedIn
+
+YouTube
+
+Discord
+
+Legal
+
+Terms
+
+Privacy
+
+Cookies
+
+Terms
+
+Privacy
+
+Cookies
+
+Try Arena
+
+© 
+2026
+ Arena Intelligence Inc.

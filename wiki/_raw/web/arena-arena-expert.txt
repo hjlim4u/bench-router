@@ -1,0 +1,2543 @@
+# snapshot of public page, fetched 2026-10-17, text extracted from HTML
+
+Arena Expert and Occupational Categories - Arena.ai
+
+Skip to main content.
+
+Menu
+
+Back to All Articles
+
+Research
+
+Arena
+
+Team
+
+Published on 
+5 Nov 2025
+
+Last updated on 
+18 Dec 2025
+
+Reading Time: 
+100 minutes
+
+Arena Expert and Occupational Categories
+
+The next frontier of large language model (LLM) evaluation lies in understanding how models perform when challenged by expert-level problems, drawn from real work, across diverse disciplines.
+
+Evaluating AI capabilities today requires more than static benchmarks; it requires subjecting models to diverse, ever-evolving, and difficult real-world tasks. The next frontier of large language model (LLM) evaluation lies in understanding how models perform when challenged by 
+expert-level problems, drawn from real work, across diverse disciplines.
+
+Arena Expert
+ builds on the LMArena evaluation framework to capture that depth, introducing a new system for identifying the most difficult prompts—prompts that are estimated to be asked by people at the forefront of their field of expertise. This category gives rise to a 
+new Expert leaderboard category on LMArena.
+ In addition to Arena Expert, we introduce new 
+Occupational Categories
+, which map all LMArena prompts to 23 fields of practice. For eight of the largest categories we have added new 
+Occupational leaderboard categories
+:
+
+Software and IT Services
+
+Writing, Literature, and Language
+
+Life, Physical, and Social Science
+
+Entertainment, Sports, and Media
+
+Business, Management, and Financial Operations
+
+Mathematical
+
+Legal and Government
+
+Medicine and Healthcare
+
+Together, Arena Expert and the Occupational Categories showcase the depth and domain diversity captured by the prompts and votes on LMArena.
+
+The purpose of this research is twofold. The first is to highlight the nature of the data that shapes LMArena evaluations: the level of expertise in the prompts, the occupational disciplines that LMArena users come from, and more. The second is to develop novel, finer-grained model evaluation methodologies building on the new categories. What are the best models on the hardest, expert prompts? Which models are “generalists” that can adapt to any occupational discipline, and which ones are “specialists” that excel in one domain?
+
+In this blog, we’ll cover:
+
+Results at a Glance: A top-level look at how expertise and domain diversity appear in LMArena data.
+
+Arena Expert: How “expert-level” prompts are defined, how expertise tags are collected, and how this differs from the previous Arena Hard approach.
+
+Occupational Categories: How prompts are grouped across 23 occupational fields and what this shows about data diversity, identifying “specialist” vs. “generalist” models, and the similarities and differences to related curated benchmarks.
+
+Example Prompts (Appendix): Example prompts across categories, including Expert, Hard, and all Occupational Categories.
+
+Together with the blog post, we are 
+releasing a dataset of 5k expert conversations together with their occupational categories
+. Explore the prompts on 
+Hugging Face
+ and help further this research! At the end of this post, we include example prompts.
+
+Results at a Glance
+
+Arena Expert and the Occupational Categories capture both the depth and breadth of domain expertise on LMArena. This section summarizes the main findings before we dive into the deeper analyses. All results use the standard LMArena leaderboard pipeline, applying consistent filters to remove anomalous or duplicate conversations.
+
+Roughly 
+5.5%
+ of all prompts on LMArena are tagged as “expert.” While this is a small fraction of total data, it provides a high-signal subset. Indeed, filtering evaluation data to expert-level prompts produces sharper distinctions among top models: model scores “spread out” compared to the overall leaderboard, suggesting that expert prompts identify fine-grained differences in model performance; see Figure 1. For example, top 30 models on the Overall and Expert leaderboards have scores that span a range of 
+~60
+ and 
+~80
+ points, respectively.
+
+Figure 1. Comparing the spread of model scores between the LMArena Overall and Expert leaderboards, on the left and right, respectively.
+
+Across the full dataset, prompts span a wide range of domains, with the largest shares from 
+Software and IT Services
+ (~28%), 
+Writing, Literature, and Language
+ (~25%), and 
+Life, Physical, and Social Science
+ (~17%); see Figure 2 for a breakdown. 
+
+Figure 2. Occupational category percentages among all prompts (categories may overlap)
+
+Within the expert subset, the distribution of occupational categories shifts: 
+Mathematical
+ and
+
+Engineering and Architecture
+ become more prominent; see Figure 3 for a breakdown analogous to Figure 2. 
+
+Figure 3. Occupational category percentages among expert prompts (categories may overlap)
+
+The following sections provide more detail behind the methodology, showcase changes in the leaderboard within these categories as compared to the overall leaderboard, and provide additional insights.
+
+Arena Expert
+
+Arena Expert identifies prompts that demonstrate advanced reasoning and domain expertise. Its goal is to capture prompts that reflect deep understanding across both technical and non-technical domains.
+
+Expertise is inferred from the prompt only (not using the corresponding model responses), identifying prompts that exhibit the reasoning or knowledge patterns characteristic of domain expertise. A prompt is tagged as “expert” by zero-shot prompting an LLM (
+DeepSeek-v3-0324
+) with a tuned system prompt validated on a subset of Arena data. The model is prompted to infer whether each query likely reflects expert-style reasoning and framing within its domain.
+
+As in Figure 4, the proportion of data tagged as “expert” has remained non-negligible over time, even as the user base has grown, showing that open crowdsourcing continues to attract expert-level participation.
+
+Figure 4. Daily percentage of expert prompts over time.
+
+The new Expert leaderboard is substantially different from the default Overall LMArena leaderboard. Some models, like 
+Claude Opus 4.1
+, 
+GPT-5 high
+, or 
+Qwen 3 max
+, experience large score improvements on the Expert leaderboard, while others like 
+GPT 4o
+ experience large score decreases; see Figure 5 for a selection.
+
+Figure 5. Overall vs. expert model score shift.
+
+Comparison with Arena Hard
+
+Last year we published 
+Arena Hard
+, a framework for identifying difficult prompts on LMArena. Its methodology relied on a set of seven criteria: problem-solving, creativity, specificity, domain knowledge, complexity, technical accuracy, and real-world applicability. A prompt is qualified as “hard” when it satisfied at least six of these. Arena Hard showed that more challenging prompts produced wider score spreads, suggesting that hard prompts capture finer-grained model differences. 
+
+Arena Expert aims to sharpen the difficulty level compared to Arena Hard. While Hard includes about a third of all LMArena prompts, Arena Expert includes only 
+5.5%
+
+of all prompts
+. The majority of expert prompts are also tagged as “hard”: 
+3.8%
+ of all prompts are tagged as both “expert” and “hard.” See Figure 6 for an illustration of the overlap.
+
+Figure 6. Overlap of hard and expert prompts.
+
+We find that prompts tagged as “expert” but not as “hard” are typically advanced non-technical prompts. For examples of prompts that are “hard” but not “expert” and vice versa, please refer to the Appendix.
+
+The increased level of difficulty in Arena Expert is demonstrated through an increased separation between top model scores, indicating that expert-based filtering enhances discriminative power. 
+
+To isolate the effect of prompt difficulty from data size, we compute leaderboards on random samples from Overall and Hard, each matched to Expert in number of votes. This controls for the occurrence that smaller datasets can naturally produce greater variance. Across 20 random samples, the average score spread among the top 30 models is 
+56
+ for Overall and 
+66
+ for Hard, compared to the 
+84
+ spread for Expert. One representative sample is shown below in Figure 7.
+
+Figure 7. Overall vs. hard vs. expert leaderboard spread comparison.
+
+This pattern mirrors earlier Hard results—higher-signal subsets make model differences clearer compared to the overall leaderboard—but with Arena Expert model differences become even more stark.
+
+We also observe that model scores can change significantly between the Hard and Expert leaderboards. Below in Figure 8, we visualize the score changes for several models.
+
+Figure 8. Hard vs. expert model score shift
+
+Going from Hard to Expert, we observe the largest score drop for GPT 4o.
+
+Occupational Categories
+
+The Occupational Categories are independent from, but complementary to, Arena Expert. While Arena Expert captures depth of reasoning and expertise, the Occupational Categories capture breadth: the range of disciplines represented in LMArena data.
+
+The list of categories was derived from the US Bureau of Labor Statistics’ 
+
+Standard Occupational Classification (SOC)
+
+. We adapted the taxonomy to the distribution of tasks represented in the Arena data. Some categories were merged (for example, Legal and Government), while others were split for greater precision (such as separating 
+Computer and Mathematical
+ into 
+Software and IT Services
+, 
+Mathematical
+, and 
+Technology Hardware and Equipment
+). Additional categories, including 
+Writing, Literature, and Language
+ and 
+Philosophy, Religion, and Theology
+, were added to better represent the intellectual diversity of prompts observed on the platform. Some categories, such as 
+Military
+, did not have sufficient representation in the data and were removed.
+
+In total, 
+23
+ occupational categories were derived.
+
+They encompass the professional, technical, and creative disciplines most represented in LMArena data.
+
+Occupational Categories
+
+Software and IT ServicesWriting, Literature, and LanguageLife, Physical, and Social ScienceEntertainment, Sports, and MediaBusiness, Management and Financial OperationsMathematicalLegal and GovernmentMedicine and HealthcareEngineering (Non-Software) and ArchitecturePhilosophy, Religion, and TheologyEducationVisual Arts and DesignTechnology Hardware and EquipmentSales and RetailOffice and Administrative SupportProduction and IndustrialCommunity and Social ServiceFood Preparation and ServingPersonal Care and ServiceTravelConstruction and ExtractionReal EstateFarming, Fishing, and Forestry
+
+Like expert tagging, occupational tagging is applied across all prompts on LMArena. Each prompt can be assigned zero, one, or multiple occupational categories. We allow multiple categories per prompt to accommodate many multidisciplinary prompts coming to the platform. We again use zero-shot prompting with a tuned system prompt, this time using 
+Gemini 2.5 Flash
+ for the tagging. The model is prompted to solve a multi-class classification problem by outputting a subset of the 23 categories, based on the main subject matters in the prompt or the main problems the prompter aims to solve. 
+
+Prevalence of Occupational Disciplines and Expertise 
+
+The most common occupational categories in LMArena data are 
+Software and IT Services
+, followed by 
+Writing, Literature, and Language
+, then followed by three categories of approximately equal size: 
+Life, Physical, and Social Science
+, 
+Entertainment, Sports, and Media
+, and 
+Business, Management and Financial Operations
+. When we restrict to expert prompts only, the distribution changes: although 
+Software and IT Services
+ is still the most prevalent category, the second one is 
+Mathematical
+, and the third is 
+Life, Physical, and Social Science
+. In the Hard category, we find that 
+Software and IT Services
+ make a much higher percentage of the category prompts compared to the Expert category, which has a more balanced distribution. We visualize these prevalences below in Figure 9.
+
+Figure 9. Occupational category percentages across All, Hard, and Expert prompts.
+
+A related question is: which categories have the highest concentration of expertise? We look at the percentage of expert prompts per category in Figure 10. We find the highest concentration of expertise in the 
+Mathematical
+ and 
+Life, Physical, and Social Science
+ categories.
+
+Figure 10. Percent of expert prompts in each occupational category.
+
+Specialists vs. Generalists
+
+Occupational tagging makes it possible to analyze model behavior by domain. By measuring each model’s relative performance within every occupational category, we can identify whether a model behaves as a “specialist” excelling in a few concentrated fields or a “generalist” that performs consistently across many.
+
+The new Occupational leaderboards reveal that the Claude family of models is dominant in the 
+Software and IT Services
+ and 
+Mathematical
+ categories; Gemini 2.5 Pro excels in 
+Writing, Literature, and Language
+ and 
+Life, Physical, and Social Science
+; and OpenAI models (GPT 4o, o3) score highly in 
+Medicine and Healthcare
+.
+
+To answer the question of which models are the best generalists, we solve the 
+Bradley-Terry regression
+ that underlies our leaderboard computation with added weights, reweighting all votes such that each industry contributes equal weight to the regression. We restrict the computation to the top eight occupational categories only, to avoid a blowup in variance due to upweighting small categories. We find that Gemini 2.5 Pro is the top generalist model, followed by Claude Opus 4.1, followed by o3 and GPT 5.
+
+Expand for Reweighted Leaderboard (Top 30)
+
+Comparison with GDPval
+
+We compare insights drawn from Arena Expert and the Occupational Categories with OpenAI’s 
+
+GDPval benchmark
+
+, a carefully curated benchmark measuring model performance across professional and academic domains. While GDPval is curated by collecting a smaller amount of expert annotations across occupational disciplines, our analysis is based on mining large volumes of crowdsourced data for insights while focusing on domain expertise. Note that the representation of different categories is carefully balanced in GDPval, while our analysis reflects the natural frequencies of occupational disciplines represented on the platform. Of course, given that our expert and occupational classification is based on LLM tagging, rather than hiring real human experts, we expect the tags to be less strict and more noisy.
+
+Despite these differences in data collection—carefully curated expert annotation vs. crowdsourcing conversations with automated LLM post-processing—we find strong alignment between the findings enabled by each benchmark. This suggests that LLM tagging of large volumes of organic-usage data can approximate the discriminative power of curated benchmarks, while being more scalable and allowing for continuous collection of fresh data.
+
+GDPval finds the following ordering of model performance for economically valuable tasks:
+Claude Opus 4.1 > GPT 5 high > o3 high > o4 mini high > Gemini 2.5 Pro > Grok 4 > GPT 4o
+
+LMArena does not test o3 and o4 mini with high reasoning, so we report the ranking of the remaining models from the LMArena Expert leaderboard. We do not know which version of Claude Opus 4.1 was evaluated in the GDPval analysis. LMArena ranking:
+Claude Opus 4.1 (thinking) > Gemini 2.5 Pro > GPT 5 high > Claude Opus 4.1 (no thinking) > Grok 4 > GPT 4o
+
+The leaderboard is largely consistent with the GDPval findings. LMArena 
+does
+ test o3 and o4 mini with 
+normal
+ reasoning; consistent with GDPval, o3 dominates o4 mini. However, given the discrepancy in the reasoning parameter, these models are naturally ranked lower in LMArena’s leaderboard.
+
+Note that the following leaderboard was calculated at the time this blog was written, so the live leaderboard will be more up to date. 
+
+Expand for Expert Leaderboard (Top 30)
+
+Conclusion
+
+Arena Expert and Occupational Categories provide a new empirical foundation for evaluating LLMs on diverse, high-quality conversations. The Expert leaderboard evaluates advanced, expert-level reasoning; the Occupational leaderboards measure model performance across diverse, economically valuable disciplines. Importantly, both are continuously and automatically updated as organic usage on the platform grows, making them a scalable alternative to high-quality curated benchmarks. Moreover, despite being based on automatic tagging of crowdsourced data, we find that the new evaluations align well with curated evaluations.
+
+This work is ongoing. Future iterations will continue refining the tagging systems, validating cross-benchmark agreement, and expanding occupational coverage as new data accumulates. Stay tuned for future updates!
+
+Appendix: Example Prompts
+
+We provide example prompts from the Expert and Occupational Categories.
+
+Expert Prompts vs. Hard Prompts
+
+Expert but not Hard
+
+Describe communication and bias issues in a rail incident scenario
+
+A track team was working on a main rail line under a track occupancy authority (TOA). The TOA was cancelled by the Network Controller to allow for the passage of a train. The track team said 'Clear on Main' which is accepted terminology but actually means that the team is still occupying the main line, but the remainder of the TOA is clear. It doesn't mean that the team is clear of the main line. The network controller then routed the train on the main line, which resulted in an incident. Describe the types of communication issues and bias issues that could be associated with this.
+
+Clarify rRNA species count and ribosome type diversity
+
+"All organisms use exactly 3 rRNA species, right?",
+ "Ah yeah, eukaryotes nuclear is 4 species. Now, interestingly, there's no organisms that uses multiple types of ribosomes it seems (counting organelle ribosomes separately, since they are genetically and physically segregated)?"
+
+Collective critical rethinking of assumptions
+
+You are a critical, careful, deeply diverse collective of hundreds of reporters, historians, sts scholars, anthropologists, scientists, decolonial analysts, disability studies, semiotic and Haraway trained scholars, science fiction writers, infrastructure specialists, etc. who are all willing to call into question any and all of assumptions about how the world should be, fully aware historical and cultural alternatives, who all care deeply for humanity and the planet, who take it as a given that everyone deserves to thrive.
+ When asked about the present, past, or speculative, you do not take the question at face value but first consider whether the prompt assumes too much about the world. If asked, "How would South Asian cities look like without colonialism?" you might consider whether your answer should assume that the caste system is inherently utopian or dystopian, or whether an evolutionary approach to human civilizations is not itself a self-interested story invented by europe (as detailed in Graeber's Dawn of Everything book), whether militarism is a given, etc.
+ You might want to offer a paragraph in response and see if it is what your prompter is looking for.
+ You might first ask some questions, about the deep assumptions within the question itself (such as assuming something is inherently good or bad, such as whether there are critically important dimensions that are not questioned but should be, and more). You might usually offer three alternate ways of approaching the question with a paragraph each to see whether one of these directions makes sense to your prompter.
+
+Percolation / branching process problem in probability theory
+
+For a fixed p, independently label the nodes of an infinite complete binary tree 0 with probability p, and 1 otherwise. For what p is there exactly a 1/2 probability that there exists an infinite path down the tree that sums to at most 1 (that is, all nodes visited, with the possible exception of one, will be labeled 0). Find this value of p accurate to 10 decimal places.
+
+Kakutanis fixed point theorem question
+
+Explain kakutanis fixed point theorem and hows its used to prove the existence of nash equilibria
+
+Hard but not Expert
+
+Summarize the NIST Cybersecurity Framework (CSF) 2.0 for entry-level analysts
+
+I want you to provide me a summary of all the common frameworks i need to know as an entry level security analyst. This document must give a brief overview of all the content in these frameworks as tehy have been listed in the table of content for instance for every table of content item in the NIST CSF 2.0 , give a brief and understandable overview and if it requires it provide an analogy so the point can be further driven home. Start pne framework at a time when I download the document and it is good I will give you the greenlight to proceed with the next. You can start with NIST
+
+Adjudication Order Question
+
+How do you enforce an adjudication order in india, tell me in depth with sources
+
+Advise for self-studying martial arts
+
+Think of you as a martial artist with lots of expertise in street fights and in self defence in real world scenario\n\nI am a 27 year old with no martial arts experience, I want to learn martial arts for self defence in real world scenario\n\nI had been learning kalari from 2 months and i really love doing it, but i heard it is not much effective in real world scenario, \n\nGive me a practical advice being said i could not afford to build muscle and do intensive as i am in pg with limited protein source in diet and time. \n\nabout kalari vs MMA
+
+Compute start and end dates in Python
+
+need help with python code. I take todays date and i wanna compute 2 thing start and end date. start will be the first day of that month and end date will be next 3 months. So today is 6/9/2025 so start will be 6/1/2025 and end will be 8/31/2025
+
+Freshwater aquarium staghorn algae issue
+
+I have a freshwater aquarium and I had problems with staghorn algae. By reducing lighting and feeding, I managed to stop growth of new algae but the algae that already grown prevails. How can I remove it?
+
+Prompts from Occupational Categories
+
+Software and IT Services
+
+[Expert] Create an HTTPS proxy using only Python standard libraries
+
+Create a Python script that implements an HTTPS proxy server capable of intercepting and logging all HTTP/HTTPS requests passing through it. The script must use only Python's standard library (no external dependencies like requests, mitmproxy, etc.).
+
+ ## Core Requirements
+
+ ### 1. Proxy Server Functionality
+Create a proxy server that listens on a configurable port (default: 8888)
+Handle both HTTP and HTTPS requests from client applications
+Forward requests to their intended destinations
+Return responses back to the client
+Support CONNECT method for HTTPS tunneling
+Handle multiple concurrent connections using threading
+
+ ### 2. URL Logging Format
+ Log each request in JSON format, one line per request:
+ ```json
+ {"url":"https://news.ycombinator.com ","ts":"2025-07-24T16:52:18.123456789Z"}
+ {"url":"https://github.com/rust-lang/rust ","ts":"2025-07-24T16:53:12.987654321Z"}
+ ```
+
+ ### 3. Technical Specifications
+
+ #### Timestamp Format
+Use ISO 8601 format with nanosecond precision
+Include 'Z' suffix for UTC timezone
+Format: `YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ`
+Use Python's `datetime.utcnow()` and format with microseconds, padding to nanoseconds
+
+ #### URL Extraction
+For HTTP requests: Extract from the request line (GET/POST/etc.)
+For HTTPS requests: Extract from the CONNECT method host:port
+Reconstruct full URLs with proper protocol (http:// or https://)
+Handle both absolute URLs and host:port combinations
+
+ #### Network Handling
+Use `socket` module for network operations
+Implement proper socket creation, binding, and listening
+Handle client connections with `accept()`
+Use `threading.Thread` for concurrent request handling
+Implement proper socket cleanup and error handling
+
+ ### 4. Implementation Details
+
+ #### Required Python Modules
+ ```python
+ import socket
+ import threading
+ import json
+ import datetime
+ import urllib.parse
+ import ssl
+ ```
+
+ #### Key Components to Implement
+
+ 1. **Main Server Loop**
+Create server socket bound to specified port
+Accept incoming connections in a loop
+Spawn new thread for each client connection
+
+ 2. **Request Parser**
+Parse HTTP request headers to extract method, URL, and headers
+Handle different request methods (GET, POST, CONNECT, etc.)
+Extract host and port information from requests
+
+ 3. **HTTPS CONNECT Handler**
+Implement CONNECT method for HTTPS tunneling
+Create tunnel between client and target server
+Send "200 Connection Established" response
+Relay data bidirectionally between client and server
+
+ 4. **HTTP Request Handler**
+Forward HTTP requests to target servers
+Preserve original headers and request body
+Return server response to client
+Handle chunked transfer encoding if present
+
+ 5. **Logging Function**
+Create JSON log entries with URL and timestamp
+Write to stdout or specified log file
+Ensure thread-safe logging operations
+Handle URL normalization and validation
+
+ #### Error Handling Requirements
+Handle network timeouts and connection errors
+Gracefully handle malformed HTTP requests
+Log errors without crashing the proxy server
+Implement proper resource cleanup (close sockets)
+
+ #### Configuration Options
+Configurable listening port (command line argument or variable)
+Optional log file output (default to stdout)
+Configurable timeout values for connections
+Optional verbose mode for debugging
+
+ ### 5. Expected Behavior
+
+ #### Starting the Proxy
+ ```bash
+ python proxy_server.py --port 8888 --log-file requests.log
+ ```
+
+ #### Client Configuration
+ Users should configure their applications to use:
+Proxy host: localhost (or server IP)
+Proxy port: 8888 (or specified port)
+Proxy type: HTTP/HTTPS
+
+ #### Sample Output
+ ```json
+ {"url":"https://news.ycombinator.com ","ts":"2025-07-24T16:52:18.123456789Z"}
+ {"url":"http://example.com/api/data","ts":"2025-07-24T16:52:19.456789123Z"}
+ {"url":"https://github.com/rust-lang/rust ","ts":"2025-07-24T16:53:12.987654321Z"}
+ ```
+
+ ### 6. Code Structure Guidelines
+
+ #### Main Function Structure
+ ```python
+ def main():
+ # Parse command line arguments
+ # Create and configure server socket
+ # Start main server loop
+ # Handle keyboard interrupts gracefully
+
+ def handle_client(client_socket):
+ # Parse incoming request
+ # Determine request type (HTTP vs HTTPS CONNECT)
+ # Log the URL
+ # Forward request and return response
+
+ def log_url(url):
+ # Create JSON log entry with timestamp
+ # Write to configured output
+ ```
+
+ #### Threading Considerations
+Each client connection should run in its own thread
+Implement proper thread cleanup
+Use thread-safe logging mechanisms
+Handle thread exceptions gracefully
+
+ ### 7. Testing Instructions
+Test with curl: `curl --proxy localhost:8888 https://example.com `
+Test with browsers by configuring proxy settings
+Verify JSON log format matches specification exactly
+Test both HTTP and HTTPS requests
+Verify timestamp precision and format
+Test concurrent connections
+
+ ### 8. Common Pitfalls to Avoid
+Don't modify request/response content (transparent proxy)
+Handle socket errors without crashing the server
+Ensure proper URL reconstruction for CONNECT requests
+Don't buffer entire responses in memory (stream data)
+Handle edge cases like malformed requests gracefully
+Ensure thread safety for logging operations
+
+ ### 9. Success Criteria
+Proxy successfully forwards HTTP and HTTPS requests
+All URLs are logged in exact JSON format specified
+Timestamps include nanosecond precision in UTC
+Server handles multiple concurrent connections
+No external libraries used beyond Python standard library
+Clean error handling and resource management
+
+[Expert] HTML canvas graphics programming question
+
+What sort of native-code color transformations does a HTML `canvas` element have? What I'd like is to clamp the R and B channels to 0xAA–0xFF over a rectangle.
+
+[Non-Expert] Question about LSTM network
+
+Which of the following are true of a Long Short-Term Memory network?
+ 1. It determines which words should be remembered forever.
+ 2. It learns whether the current concept should be admitted into the hidden state.
+ 3. It increases the amount of information passed from time slice to time slice.
+ 4. It learns when certain concepts should be forgotten.
+
+[Non-Expert] ES5 Javascript function
+
+Give me an ES5 Javascript function that will return the time in ms it will be at 6:00 PM CT of the current day. Make it as simple as possible and get rid of comments.
+
+Writing, Literature, and Language
+
+[Expert] Writing style analysis & instructions for novel
+
+Writing Style Analysis & Instructions for Your Novel
+ Based on my analysis of this excerpt (Gillian Flynn's "Gone Girl"), here are detailed instructions for writing your novel in this style:
+ NARRATIVE STRUCTURE
+ Use dual alternating perspectives:
+ Character A: Present tense, first person, immediate and unfolding crisis
+ Character B: Past tense, first person, reflective diary/journal entries
+ Mark each section clearly with character name and timestamp
+ Create dramatic irony through what each narrator knows vs. reveals
+ VOICE & TONE CHARACTERISTICS
+ For your "Nick-type" narrator (present crisis):
+ Cynical, self-aware, meta-commentary on situations
+ Darkly humorous even in serious moments
+ Self-deprecating but also defensive
+ Frequent references to TV shows, movies, cultural clichÃ©s to frame experiences
+ Example: "I felt like I was in a bad Lifetime movie, except I couldn't change the channel because I was the shitty husband character"
+ For your "Amy-type" narrator (past reflections):
+ Initially warm, romantic, idealistic
+ Sharp observational skills masked by pleasant tone
+ Subtle judgments wrapped in seeming generosity
+ Lists and quizzes as personality markers
+ Building sense that something darker lurks beneath
+ SENTENCE STRUCTURE PATTERNS
+ Mix these deliberately:
+ Short, punchy declarations:
+
+ "It was a mistake."
+ "I didn't call the police."
+ "Amy was gone."
+ Long, accumulating sentences with multiple clauses:
+
+ Use commas to build rhythm and pile on details
+ Create breathlessness or overwhelm
+ Sentence fragments for emphasis:
+
+ "Stupid. So stupid."
+ "The kind of woman who. The kind of man who."
+ Parenthetical asides in the narrator's voice:
+
+ "(I was that kind of asshole)"
+ "(She would tell you differently)"
+ Add dark humor, self-awareness, or undermining commentary
+ DESCRIPTIVE TECHNIQUES
+ Be hyperspecific:
+ Don't write "old furniture" write "Eisenhower-era linoleum floor, edges turned up like burnt toast"
+ Include brand names: "Styrofoam cup," "Solo cups," "Costco"
+ Use unexpected but precise comparisons: "head like a shiny, hard corn kernel"
+ Sensory details with attitude:
+ Smells are particularly important and often unpleasant
+ Visual details that reveal character judgment
+ Physical sensations that create unease
+ Mix mundane with disturbing:
+ Juxtapose domestic details with darker implications
+ "I pictured my wife, blood clotting her blond hair" next to "I grabbed a Danish"
+ DIALOGUE STYLE
+ Keep it natural and loaded:
+ Subtext in every conversation
+ What's NOT said is as important as what is
+ Use speech patterns to show class, region, character
+ Let dialogue reveal lying or evasion
+ Short exchanges can carry enormous weight
+ Avoid exposition dumps:
+ Characters speak like real people, not explainers
+ Interruptions, fragments, trailing off
+ Misunderstandings and talking past each other
+ DARK HUMOR TECHNIQUES
+ Deploy throughout, especially:
+ In moments of high stress (defense mechanism)
+ Self-deprecating observations
+ Ironic juxtapositions of expectation vs. reality
+ Cultural commentary wrapped in snark
+ Inappropriate thoughts the narrator catches themselves having
+ Example pattern: "I thought [something darkly funny], and then I realized how inappropriate that was, but there it was anyway."
+ PSYCHOLOGICAL REALISM
+ Show internal contradiction:
+ Narrators lie to themselves
+ They notice their own bad behavior but justify it
+ Competing desires create tension
+ Self-awareness doesn't equal self-improvement
+ Build unreliability subtly:
+ Small inconsistencies
+ Defensive explanations
+ "This may not be exactly how it happened, but..."
+ Facts that don't quite line up
+ PACING ELEMENTS
+ Chapter endings:
+ End on revelations, questions, or cliffhangers
+ Use last line for maximum impact
+ Create propulsion to next chapter
+ Withhold information strategically:
+ What does each narrator know that they're not telling?
+ What do they not realize about themselves?
+ Plant clues early that pay off later
+ THEMATIC LAYERING
+ Weave in commentary on:
+ Marriage as performance vs. reality
+ Economic anxiety and class resentment
+ Media and public perception vs. private truth
+ Gender role expectations and subversions
+ Authenticity vs. the curated self
+ The recession/economic decline as backdrop
+ Do this through:
+ Character observations
+ Specific details about unemployment, foreclosures, closed businesses
+ Pop culture references
+ Conflict between characters from different backgrounds
+ TECHNICAL WRITING CHOICES
+ Tense usage:
+ Present tense = immediacy, unfolding mystery, can't see what's coming
+ Past tense = reflection, already knowing the outcome, curated memories
+ Paragraph length:
+ Vary dramatically
+ Single-sentence paragraphs for impact
+ Longer paragraphs for immersion or overwhelm
+ Repetition for effect:
+ Repeated phrases as motifs
+ Lists that build obsessively
+ Coming back to same images/ideas
+ SPECIFIC STYLISTIC HABITS TO ADOPT
+ Pop culture framing: "It was like that scene in [movie] where..."
+ Self-interrupting thoughts: "I was going to but no, that's not right"
+ Addressing the reader/diary: "You should know," "Let me tell you"
+ Hypothetical scenarios: "If this were a movie, if I were different, if only"
+ Cataloging details: Lists of items, sensory details, accumulating evidence
+ Undercutting sentiment: Build up emotion, then puncture it with reality/cynicism
+ CHARACTER DEVELOPMENT THROUGH VOICE
+ Show personality through:
+ What they notice vs. ignore
+ Their metaphors and comparisons
+ Their prejudices and blind spots
+ What they find funny
+ What they obsess over
+ How they justify their actions
+ ATMOSPHERE BUILDING
+ Create unease through:
+ Specific unsettling details
+ Contrasts (bright sunshine, dark deeds)
+ Mundane settings made sinister
+ Ordinary objects described strangely
+ Time pressure and timestamps
+ Isolation despite being surrounded by people
+
+ PRACTICAL WRITING PROCESS
+ Decide your dual structure: Who are your two narrators? What timeline does each cover?
+ Establish distinct voices: Give each narrator specific speech patterns, obsessions, blind spots
+ Plant mysteries: What is each narrator hiding? What don't they know about themselves?
+ Layer in dark humor: Even in tense scenes, find the absurd observation
+ Use specific details: No generic descriptions be precise and revealing
+ Build through accumulation: Use lists, repeated observations, mounting evidence
+ Let subtext drive dialogue: People rarely say what they mean directly
+ End chapters with hooks: Revelation, question, or shift in understanding
+
+[Expert] Linguistic analysis of prefixes
+
+What is the difference between and etymologies of the prefix "en-", as in "encrusted", and "be-", as in "befriended"?
+
+ Are there themes in common with words that retain their Old English prefixes, as compared to the Latin-derived prefixed words?
+
+ I find it interesting that the Germanic terms are both poetic (forebode, bewitch, alight) and commanding (withdraw, forget, beware).
+ Meanwhile (using an Old English–derived word), Latin-derived terms seem more precise (to use a Latin word), and while often abstract, those abstractions are clinical and lack strong emotive content.
+
+[Non-Expert] Improve message
+
+Be brief. Make this make better sense \"Here's the gloves I used to protect my hands when hot glueing.\" I don't like the way I originally wrote the sentence. Change it around to sound more natural and better
+
+[Non-Expert] Translate passage to Turkish
+
+Translate to Turkish: \"
+ * Be the curator of your own life—choose what influences you wisely.
+ * Take small, consistent steps every day—tiny habits compound into big change over time.
+ * Protect your attention—it’s your most valuable resource.
+ * Cultivate curiosity—it keeps learning alive and turns everyday moments into opportunities for growth.
+ * Prioritize experiences over possessions – they shape who you are far more profoundly.\"
+
+Life, Physical, and Social Sciences
+
+[Expert] Compare dFORCE and nano-COP in splicing
+
+Explain dFORCE for the study of splicing.
+ How does it compare to nano-COP?
+
+[Expert] Research Question – Lachnoclostridium phytofermentans MetA Adaptations
+
+"Does Lachnoclostridium phytofermentans homoserine O-acetyltransferase (MetA) exhibit structural and functional adaptations—in domain architecture, catalytic efficiency, or subcellular targeting—that distinguish it from pathogenic Clostridia homologs, potentially reflecting niche-specific metabolic roles?\"
+ This is my research question. Write me an introduction of atleast 2 pages - talk about this protein with respect to the research question
+
+[Non-Expert] Zero Net Force and Motion
+
+An object experiences a net zero external unbalanced force. Is it possible for the object to be travelling with a non-zero velocity? If yes, state the conditions that must be placed on the magnitude and direction of the velocity. If no, provide a reason.
+
+[Non-Expert] China’s Multi-Purpose Projects in Pacific Island Nations
+
+"You are an expert in China and Indo-Pacific issues. Create an analysis on the topic of China's multi-purpose projects in Pacific Island nations. The objective is to provide an overview of China's multi-purpose projects in Pacific Island nations with developments, relevant strategy, programs, policies and newest statistics and their strategic implications. It will also look at how these developments impact China, Pacific Island nations, Indo – Pacific regions along with specific recommendations for other ASEAN nations."
+
+Entertainment, Sports, and Media
+
+[Expert] 2.5D Metroidvania game concept
+
+Game concept: A 2.5D Metroidvania (2D gameplay but in a 3D world, think Klonoa) with a Pizza Tower inspiration. Pizza Tower gives the player the full suite of complex movement options that can overwhelm them and feel clunky or uncomfortable until you get used to stringing them together to go at high speeds, but in this game you unlock them through exploration, and can then use them to access new areas. For setting, I'm thinking of something a little like a mix of Earthbound, Castlevania, and Warioland all mixed together whimsical. dark, and cartoonishly violent in equal measure. You're Kiko, some washed up Sukeban delinquent girl now in early adulthood, and all the other members of your gang have outgrown the lifestyle. You order a pizza, but there's a sudden lovecraftian apocalypse going on with a giant fortress bursting out of the downtown, and the pizza delivery guy gets abducted by some kind of eyeball pterodactyl bat hybrid (its not even a boss, you piledrive dozens of these things eventually), and so you get pissed and punch your way through hordes of monsters, aliens, cryptids, robots, geometric absurdities, and Euler's identity. You have no powers but you end up becoming an outside-context problem that nobody not even the incomprehensible extraplanar deities demolishing your city like humans would demolish an anthill saw coming. You get to suplex the Flatwoods Monster and punch the eyes out of a wheel-shaped seraphim. The main advantage I think the 2.5D style would provide is a more interconnected world than you'd typically have in a 2D metroidvania. It ends up being more immersive too.
+
+ One idea I had for a secret item that really plays to the game's core pillars is the Grudge Ring. It provides you with a massive stat boost but if you equip it, you get CURSED. Your cellphone rings, there's a picture-in-picture panel of a spooky ghost girl, who cartoonishly leans out of the frame and screams at Kiko "YOU WILL DIE IN SEVEN MINUTES."
+
+ Every time you make it to a save room while the ring is equipped, the timer resets back to seven minutes. The only way to remove the curse altogether is to unequip the ring, which you can only do in save rooms. If the timer runs out, the ghost girl starts chasing you at speeds that increase until she's impossible to avoid, and triggers an instant game over.
+
+ Its inspired by the Death Ring from Order of Ecclessia, which is such a fun troll item: massive stat boosts and "attacks may cause instant death" but it doesn't tell you its attacks against YOU that instantly kill you. Still ends up being very useful for no-hit boss medallions. And the name of the grudge ring is of course inspired by The Grudge and The Ring.
+
+ Another moment idea I had that leans more into the horror. There's a secret item called "Mysterious Egg" that you can find, but it doesn't do much aside from being worth a lot to sell in shops. Meanwhile, there's a very hard optional boss you don't have to fight but maybe beating it opens up a new area and endgame loot. But if you place the mysterious egg in a certain location, the bonus boss shows up and takes the egg before leaving.
+
+ Then, if you make it to the boss's arena, the boss will be completely torn apart, and the egg shells strewn about the arena.
+
+ If you never sell OR place it, then after the game's credits, you get a shot of Kiko asleep on her couch, egg on the nightstand, and then it cracks. The game over screen plays after. Despite beating the final boss, you don't even get the CHANCE to fight this creature. Nor do you ever find out what was in the egg.
+
+ And as for the final boss itself, I think it should be foreshadowed by a Kiko memory flashback to a time when she was stung by a bee in a park. The bee, despite not having a chance to be a threat to her, and despite being far inferior physically and mentally to her, delivered a decisive blow that lightly traumatized her and made her afraid of that park for a while. Meanwhile the final boss? Turns out its the child equivalent of an elder god, as far removed from humanity as humans are from bees, and basically just playing on Earth as if it were a sandbox. But Kiko? She stings it.
+
+[Expert] Chord progression analysis
+
+B/F# -> C#/G# -> A#min/E# -> D#min -> B/F# -> C#/G# -> A#min/E# -> D#min\n\nB/F# and C#/G# both sound like tonic. D#min has some tension, but a pleasant one, and can be thought of as tonic chord too. A#min/E# sounds like a clear dissonance.
+ Analyze this chord progression as comprehensively as you can.
+
+[Non-Expert] March Madness Tournament Schedule
+
+What are the scheduled locations for the 2026 March Madness Tournament for both Mens and Womens basketball.
+
+[Non-Expert] Joke writing
+
+Tell me a joke. Act like you are a comedian who is famous for his dark humor.
+
+Business, Management, and Financial Operations
+
+[Expert] Retirement Planning Case
+
+Subject: A 65.5-year-old single woman, residing in Australia (an Australian citizen), seeking to optimise her financial position for retirement.
+ Primary Goal: The individual wishes to retire at age 67 and structure her finances in the most effective way to receive the Australian Age Pension. She has noted the full Age Pension payment is approximately $1,150 AUD per fortnight.
+ Client Preferences & Lifestyle: The individual has expressed a preference for a simple solution, provided it does not significantly compromise the overall financial outcome. She aims for a modest but comfortable lifestyle in retirement, with an estimated monthly budget of $2,500 AUD.
+
+ Client's Financial Profile
+ 1. Personal Details:
+ Age: 65.5 years
+ Marital Status: Single
+ Homeownership: Owns her apartment outright (no mortgage). This is her Principal Place of Residence.
+ 2. Asset Portfolio:
+ Cash: $85,000 AUD held in a bank account.
+ Shares: $135,000 AUD invested in an Exchange Traded Fund (ETF) through a brokerage account.
+ Superannuation: $267,000 AUD in an accumulation account.
+ Note: The current investment allocation (e.g., Balanced, Growth, Conservative) of the superannuation fund is unspecified. The analysis should consider the implications of different potential mixes and recommend a target allocation suitable for her retirement goals.
+
+ 3. Key Financial Details for Analysis:
+ Shares (ETF) Cost Base: The ETF portfolio has an unrealized capital gain of $60,000 AUD.
+ Current Marginal Tax Rate: 32.5%.
+ Anticipated Retirement Tax Rate: The individual anticipates working approximately 10 hours per week during retirement. She believes her marginal tax rate will be lower than her current rate during this period. For modelling, a marginal rate of 19% (plus Medicare Levy) can be assumed for this scenario.
+ Assumed Investment Return: For projection purposes, a 5% annual real return on share investments should be used.
+
+ Core Questions and Strategic Dilemmas
+ The individual is facing several key decisions and seeks a comprehensive recommendation. The analysis should address the following points:
+ 1. Overall Age Pension Strategy:
+ The individual understands the Age Pension asset test threshold for a single homeowner to receive the full pension is approximately $321,000 AUD. Her current assessable assets exceed this. The core question is: Is it financially superior for her to actively reduce her assessable assets to get below the $321k threshold and receive the full pension, or is she better off retaining her larger asset base and receiving a partial pension, using drawdowns from her investments to meet her $2,500/month budget?
+ 2. Management of Share Portfolio ($135,000 ETF):
+ A central dilemma is how to handle the ETF portfolio with its $60,000 unrealized gain. The analysis should compare the following two strategies over 15 and 20-year time horizons:
+ Strategy A: Sell Now & Contribute to Super. This involves realizing the capital gain now and paying CGT at her current marginal tax rate of 32.5%. The net proceeds would then be contributed to her superannuation fund. The analysis should specify the optimal investment allocation for these new funds within super (e.g., 100% indexed shares, or a balanced approach).
+ Strategy B: Retain & Sell Gradually in Retirement. This involves keeping the shares outside of super and selling them down gradually during retirement to supplement her income. This would mean realizing the capital gains at her future, potentially lower, marginal tax rate.
+ 3. Optimal Structure and Use of Assets:
+ What is the most effective integrated strategy for her cash, shares, and superannuation? The recommendation should consider:
+ The optimal placement of the $85,000 cash.
+ The recommended investment strategy/asset allocation inside her superannuation fund for both the existing balance and any new contributions.
+ A clear plan that demonstrates how the chosen structure will provide the income required to meet her $3,000 monthly budget throughout retirement.
+
+ Based on the complete data set provided in this case study, please perform a detailed financial analysis. Provide a recommendation for the optimal course of action for this individual that balances maximising her long-term financial wellbeing with her stated preference for simplicity. The final recommendation should present a clear, actionable, and integrated strategy for her cash, shares, and superannuation in the lead-up to her retirement at age 67.
+ Important: Ask any clarifying question to provide the best possible solution for her case.
+
+[Expert] Business plan generation
+
+Put together a comprehensive business plan to roll out a fueling business to supply off road diesel to farmers, construction companies, trucking and any other large fuel customers that consume over 1,000 per day and have storage of over 8,000 gallons with storage over 10,000 gallon prioritized, identify the terminal bulk loading locations to load from the pipelines and design a delivery area based on the demand and supply locations to optimize the trucking costs while also taking into account seasonal usage and weather variance. In phase 2 of the business plan add propane delivery and add hedging and bulk card troll locations that are strategically co-located at implement dealers, high traffic locations that can service smaller customers that can pick up medium voluum bulk purchases. Identify the radio stations that service each delivery areas and design a website and marketing plan to drive potential customers to the web site where they can enter in a delivery locations and get a delivery price quote.
+
+[Non-Expert] List tech startups in Sillicon Valley/SF
+
+create a comprehensive list of sillicon valley / san francisco tech startups that hire and have offices in poland.
+ For example, netflix, asana, box, snowflake, samsra - find and identify other similiar companies and list location of their offices (eg.: warsaw
+
+[Non-Expert] CBA product recommendation for small business
+
+My small business is having some cashflow issues because suppliers are taking a long time to pay me, which CBA product would help with this and why?
+
+Mathematical
+
+[Expert] Subvarieties of semilattices
+
+Does the variety of semilattices have any interesting subvarieties?
+
+[Expert] Yoneda lemma and Cayley theorem
+
+Can you explain a special case of Yoneda lemma, that is, Nat(Hom(\\bullet,-),Hom(\\bullet,-))\\congHom(\\bullet,bullet) relating to Cayley theorem?
+
+[Non-Expert] Intuitive explanation of probability
+
+Explain intuitively how is probability distribution related to probability measure?
+
+[Non-Expert] Compare sum of chord lengths to circle’s circumference
+
+Given a circle, we consider:
+ (a) Sum of lengths of 3 chords in the circle
+ (b) Circumference of the circle
+
+ Which is true?
+ 1. a > b
+ 2. a < b
+ 3. a = b
+ 4. More than one of the above is possible
+
+Legal and Government
+
+[Expert] Contractual claims and equitable remedies over a public reward offer
+
+FACTS
+
+ A makes an offer that whosoever finds his dog will be given a reward of Rs. 10,000/-. Meanwhile, B, who is employed at A's factory, is asked by A to find his lost dog. C
+ comes to know about the reward and puts in effort to find A's lost dog. However, it is B
+ who is successful in finding the lost dog. B decides to claim the reward from A. On the
+ other hand, C, who has devoted time and energy to finding A's dog, also wants to sue A based on disappointed adventure.
+ ISSUES
+
+ 1. Does B, A's employee specifically asked to find the dog, have a valid contractual claim to the public reward of Rs. 10,000/-?
+ 2. Can C, who devoted time and energy to the search with knowledge of the reward, sue A for the reward despite when B was ultimately the party who successfully completed the required act?
+ 3. As B was the first person to successfully find the dog, is A legally obligated to pay the reward to B, thereby extinguishing C's potential claim, assuming B's action constitutes a valid acceptance of the public offer?
+
+ ARGUMENTS OF A
+
+ It is the prime contention of A that B, A's employee does not have a valid contractual claim to the Rs 10000/- Since it is an unilateral offer that is accepted only by performance with knowledge of the offer which was not present here(i)moreover fulfilling a pre-existing duty without knowing the reward at the time he found the dog, there is no acceptance and thus no contract(ii). In arguendo Even if B had the knowledge of the reward a can argue that B's performance was already owned under his employment contract and thus there is no new consideration for a separate reward promise(iii).
+ The case of Lalman Shukla v. Gauri Dutt case squarely falls within since it reiterates that Since there is no knowledge of the offer It won't count as an acceptance under section 8. .. Courts in Harbhajan Lal v. Harcharan Lal stated that person who does an act for which a reward has been offered in ignorance of the offer cannot say either that there was a consensus of wills with the offer or the act was done in return for or in reliance of the promise offered. In casu, B when at the time he found the dog didn't have the offer in knowledge. In Stilk v. Myrick (1809) Where performance of existing contractual duty owned to the promise is not a consideration for new promise. Courts view rewards notices objectively; thus, such a public offer is aimed at the members of the public who are not already obliged to the search or bound to the act for the offeror are not intended offerees unless expressly included. In casu, here B's performance is explicable entirely by his contractual duty, not by acceptance of the public offer.
+ Thus, B doesn't have a valid contractual claim to the reward and if he does not have a Valid contractual claim Then A is not bound to reward B.
+
+ ARGUMENTS OF B
+
+ B can only prove a contractual claim to the reward if he can establish knowledge of the reward at the time he fulfilled the obligations, and that act of finding the dog was outside the scope of his employment, or even if within the scope, constituted as the very performance of the unilateral offer. The facts of the case remain obscured regarding the knowledge of B during the act. If B fulfilled the requirements for acceptance with the knowledge of the reward, A is obligated to pay the sum to B. Another element that B can add is that the search was outside the ordinary duties of employment as embedded in the case of Williams vs Roffey Bros.
+ Thus, only in such circumstances can B claim the reward from A.
+
+ ARGUMENTS OF C
+
+ The argument that she can put forth is that she can plead restitution or reliance as alternatives. Courts recognise promissory estoppel as a substantive equity where a clear promise induces reliance in the case of Motilal Padampat Sugar Mills Co. Ltd. v. State of Uttar Pradesh. Equity can operate inter privatos where justice demands so. In casu, A made a clear and unequivocal representation to pay rupees 10,000 as reward and C simultaneously acted to his detriment in reliance Even if strict contractual acceptance is not made out equity protects the reliance by compensating the expenditures that were wasted. Section 70 of the Indian Contract Act 1872 talks about restitution for non-gratuitous acts. C rendered lawful services which were not intended to be gratuitous but subsequently held A /B to locate the dog, which saved either A/B's time and expense, hence she is entitled to reasonable compensation even if the contract claim fails. C can claim that the performance is collective. Where the recovery of the product is a joint effort, the court may apportion the reward to avoid unjust enrichment and to reflect joint acceptance, but it can only be proved if it is shown that the dog was found not just because of B but also because of C's effort.
+
+ give me more Arguments for all three sides ABC And also back it with relevant authority . Keep the language formal Rather legally formal Act like a professional legal expert an audience are also highly qualified legal professionals
+
+[Expert] Federal cases on the primary jurisdiction doctrine
+
+I am looking for some federal legal decisions that address the \"primary jurisdiction\" doctrine in the context of administrative law--specifically, the notion that courts may stay proceedings where a federal agency charged with administration of a statute is considering the same legal issue, based on the general notion that courts should defer to reasonable interpretations made by expert agencies. That latter principle (known as Chevron deference) was recently overturned by the Supreme Court in Loper Bright.
+ We have a case where the court had granted a stay under primary jurisdiction principles over eight years ago. The agency (the FCC) has not acted and does not appear poised to act. But even more fundamentally, the reason for staying legal proceedings seems to have entirely eroded in light of Loper Bright.
+ Are there any helpful decisions that discuss the issuance of a stay under primary jurisdiction principles that could be helpful to us here? For what it is worth, we are in Southern District of Florida (in the Eleventh Circuit), but any federal decision on point would be helpful. Thanks in advance.
+
+[Non-Expert] Legality of dubbing others’ artwork.
+
+I'm an amatuer at-home NSFW audio engineer and I want to add audio/sound effects to images/GIFS/videos that other people send me. If someone requests that I \"dub\" something for them, am I legally required to ask permission to make such additions? Is it legal to \"dub\" artwork someone else has made? I'm based in Australia.
+
+[Non-Expert] Presentation about World Trade Organization
+
+The World Trade Organization has many functions, include dispute resolution. Provide a presentation explaining how the WTO resolves trade disputes between member countries, including the efficacy of these mechanisms and potential areas for improvement. In your presentation, include a discussion of one case that went through the WTO dispute process. - make a outline for presnetaiton canadian law course
+
+Medicine and Healthcare
+
+[Expert] Seminar slide for final-year anesthesiology residents
+
+You're tasked with creating an informative and engaging seminar slide focused on the perioperative care of patients with various neuromuscular disorders such as Guillain-Barré Syndrome (GBS), Myasthenia Gravis (MG), pediatric neuromuscular disorders, Lou Gehrig's disease (LS), Multiple Sclerosis (MS), dementia, and post-viral syndromes for final-year anesthesiology residents.
+ Act as an experienced anesthesiology educator who specializes in perioperative care and has a solid understanding of neuromuscular pathology. Your expertise should come through in your explanations, examples, and practical tips.
+ Your audience consists of final-year anesthesiology residents who are eager to learn and apply knowledge in their clinical practice. They should find the slides helpful and easy to understand, with adequate depth and engagement.
+ Your task is to outline the key points for the slides, including definitions, clinical implications, anesthetic management strategies, and any relevant case studies or examples. Ensure that the information is evidence-based and suitable for a professional seminar setting.
+ Visualization or output format: Each slide's content should be summarized in bullet points, clear headings, and categorized by disorder, highlighting specific patient care strategies, challenges, and recommendations for anesthesiologists.
+
+[Expert] Lab result analysis and diagnosis
+
+Analyze the following lab results for a 30-year-old female complaining of fatigue, weight gain, and hair loss: TSH 9.5 mIU/L (ref: 0.4-4.0), Free T4 0.6 ng/dL (ref: 0.9-2.3), positive anti-TPO antibodies. What is the most likely diagnosis?
+
+[Non-Expert] Knee pain self-test identification
+
+A previous AI chat told me to try sitting on a chair with legs 90 degrees, then extending my left leg to be straight to test for pain. I do feel pain when I do this at the back of my knee. What's the name of this test and what's the injury?
+
+[Non-Expert] Inquiry about clinical evidence or major medical references
+
+teralygen - is there clinical proof of its efficiency?
+
+ do cochrane or pubmed or lancet even mention this drug?
+
+Engineering and Architecture
+
+[Expert] Electrical angle mismatch calculation
+
+in FOC control of a motor, I command quadrature current of 3 amperes, but model result is direct axis current of -3 amperes, what is the angle difference between my controller and the model?
+
+[Expert] Boundary conditions and reference when using multiple slack buses at SHET/NGET interfaces
+
+Go through the GB transmission grid. I want to create a DigSILENT PowerFactory model of the transmission network under SPT from the ETYS and run power flow simulations on it. However, I am struggling to think what should be my boundary conditions for the SPT network. I do not want to model SHET or NGET network, nor do I want to model the interconnections to Europe.
+
+ can we have multiple external grid/slack buses in the grid? I am thinking that there would be an interface between SHET network and SPT network, and also an interface between SPT network and NGET network. How can we have multiple slack buses to model a small part of the GB wide network? What would be the reference via which we calculate Voltage, angles, etc. then?
+
+[Non-Expert] Modern car design question
+
+Why are so many modern cars made with \"rubber band\" style tires? It seems like those are much easier to damage from potholes or other road hazards. Wouldn't think make them less safe?
+
+[Non-Expert] Impact factor in bridge design
+
+What is the significance of impact factor in bridge design?
+
+Philosophy, Religion, and Theology
+
+[Expert] Metaphysical implications and rationale of variable-domain semantics in modal logic
+
+In modal logic, in order to accomodate necessary sentences that contains contingent objects, like \"hesperus is phosphorus\", but we don't want to say \"hesperus exists\" is necessary, we usually use the variable domain semantics. Names refers to a super-domain that contains all possible objects, while variables and quantifiers can only range over the sub-domain with respect to a world. This neatly solves the problem, but is not straight forwardly intuitive and sounds ad hoc. Why would there be a super-domain at all? What does this strategy imply? It seems to say something about metaphysics of modality, but it is not clear exactly.
+ Please think step by step, think hard, think harder, ultrathink and discuss the metaphysical implication of the variable domain semantics to modality.
+
+[Expert] Change of the hypostasis in Orthodox theology
+
+Answer the following question as an Orthodox Theologian.
+ It is known and understood what a change or alteration of the Nature of a Hypostasis is. However, what could be defined as a change or alteration of the Hypostasis itself?
+ Justify your answer step by step, and also mention the relevant Holy Father sources, if of course they exist.
+
+[Non-Expert] Modern relevance of Pyrrhonian Skepticism
+
+Tell me about pyrrhonian skepticism and why you think it might be the right way to live life philosophically if interpreted to the modern world
+
+[Non-Expert] Ignostic argument against atheism and theism
+
+give a ignostic argument against atheism and theism
+
+Education
+
+[Expert] Evaluate UCAS personal statement
+
+you are an admissions officer at oxford university. These 3 applicants are all top tier students with stellar academics. the deciding factor is their ucas personal statement. which candidate would you admit, and why? rank the essays and give the chances of each candidate being accepted.
+ candidate 1:
+ Meeting Ernest Rutherford’s grandson planted a seed of inspiration in me that led to my exploration of physics. A fellow kiwi and the man who discovered the nucleus, he was not only the greatest experimentalist since Faraday, but the pride of my hometown who showed that anything was possible. I first discovered the joy in physics after reading ‘The Three-Body Problem’ series. My impression of physicists transformed from detached academics to the wise architects of progress. I found myself captivated with Carl Sagan’s ‘Cosmo’s and ‘Pale Blue Dot’. Sagan’s near-poetic prose details the beautiful evolution of scientific thought and discovery throughout history.
+ ...OMITTED...
+ Contributing to the evolution of the subject and its use in diverse disciplines is why I aspire to pursue physics at university.
+
+ candidate 2:
+ The more I discover about physics, the less I realise that I know, and the keener I am to further explore unfamiliar topics at university. Studying areas such as special relativity and quantum mechanics have made me question concepts I took as given, such as the nature and manipulation of time and the degree of certainty to which we can truly know anything. My particular interest in physics was sparked when I read an article on quantum physics, and was introduced to a simple description of the fundamental constituents of matter.
+ ...OMITTED...
+ I am a hardworking and intellectually curious student and am excited by the prospect of developing my mathematical skills and studying physics at a more advanced level at university.
+
+ candidate 3:
+ An incessant curiosity about the laws of the cosmos has always attracted me to the study of physics. I am especially intrigued by theoretical physics and how its concepts are the foundations of all visible reactions one witnesses daily. My fascination with physics has led me to pursue my subject beyond the school curriculum and I have had a range of experiences which have confirmed my desire to study physics at university.
+ ...OMITTED...
+ My wish to understand nature and the academic challenge this\nposes is the reason I aspire to study physics.
+
+[Expert] UPPSC RO/ARO test series schedule design
+
+Act as an expert educational strategist and content designer for a premier UPSC/UPPSC coaching institute, Khan Global Studies. Your task is to research the latest syllabus and examination pattern for the UPPSC Review Officer (RO) and Assistant Review Officer (ARO) Mains Examination and then design the most effective, competitive, and pedagogically sound test series schedule for our aspirants.
+ Foundational Research (To be implicitly performed):
+ • Syllabus: Analyze the official UPPSC RO/ARO Mains syllabus. It consists of four papers:
+ o Paper I: General Studies (Hindi & Essay)
+ o Paper II: General Studies (First & Second Parts)
+ o Paper III: General Studies (Third & Fourth Parts)
+ o Paper IV: General Hindi & Drafting
+ • Pattern: Note the structure: descriptive/essay-based, marks distribution, duration of each paper, and the language of examination (Hindi for most papers, English for certain sections).
+ • Competitive Landscape: Understand that the test series must not only cover the syllabus but also build writing speed, answer structuring skills, time management, and subject-wise endurance.
+ Core Objective for the Test Series:
+ Design a schedule that progressively transitions the aspirant from subject-wise mastery to full-length simulated performance.
+ Key Design Parameters for the Schedule:
+ • Phased Approach: The test series should be divided into distinct phases:
+ o Phase 1: Sectional Tests: Focus on individual parts of the GS papers (e.g., History, Polity, Economy, Science) and specific skills for General Hindi & Drafting.
+ o Phase 2: Full-Length Subject Tests: Complete papers (e.g., a full Paper-II mock).
+ o Phase 3: Grand Mocks: Full-length, four-paper simulations replicating the exact exam conditions and difficulty level.
+ • Frequency: Schedule tests at a competitive frequency (e.g., one test per week, preference Sunday excluded holiday) to maintain momentum without causing burnout.
+ • Analysis is Key: Emphasize the importance of post-test analysis. The schedule should explicitly include dedicated days for "In-depth Analysis" and "Revision" after each major test.
+ • Realism: Incorporate realistic buffers (e.g., a break day after a grand mock) and strategic revision windows before the final exam.
+ Output Format:
+ Present the final Test Series Schedule in a detailed, professional, and easy-to-follow table format. The table must include the following columns:
+ • Test Number
+ • Date (Use a generic start date, e.g., "Day 1", "Week 1, Sunday")
+ • Day (e.g., Monday, Sunday)
+ • Test Name/Subject Focus (e.g., "Sectional Test - Modern History", "Grand Mock - 1")
+ • Syllabus Coverage (Which specific topics are being tested)
+ • Duration (e.g., 3 hours, 2 hours)
+ • Marks
+ • Remarks/Key Objective (e.g., "Focus on answer structuring", "Time management practice for Essay")
+
+[Non-Expert] IELTS problem generation
+
+Act as an IELTS expert and help me improve my grammar, cohesion and lexical resources usage. give problems to solve and provide feedback
+
+[Non-Expert] College vs. university degree
+
+is like a college degree the same as an university degree? why americans got universities and colleges?
+
+Visual Arts and Design
+
+[Expert] Analyze emotional power of a photograph
+
+This is a masterclass in minimalism and emotional resonance. Every detail serves the core truth: this is a moment suspended in time, not a staged scene. Here’s why it resonates so deeply:
+The Physics of Intimacy
+ "Half-lit by a single, diffused flash": The flash isn’t a spotlight—it’s a soft, almost reluctant bloom from the camera itself. It doesn’t illuminate them; it embraces them, bathing their faces in equal, gentle light that erases shadows but leaves depth. No harshness, no drama—just two people existing in the quiet glow of a shared breath.
+ "Motion blur softens the edges of their hair and the curtain’s hem": This isn’t a technical flaw. It’s the physical trace of time. The shutter lingered because the world wasn’t still—her cheek pressed against his shoulder, his hand resting on her waist, the curtain shifting with a draft. The blur isn’t imperfection; it’s the breath of the moment caught in the emulsion.
+ The Power of Absence
+ "No props, no furniture, no extra light sources": The emptiness isn’t barren—it’s sacred. The white curtain isn’t a backdrop; it’s a blank canvas for light to dance on. Its "soft folds catching stray highlights that fade into shadow" become a metaphor for the fragile boundary between presence and memory. What’s not there (chairs, windows, decor) forces the eye—and the heart—to focus solely on the two figures.
+ "Their faces—unchanged—": This phrase is devastatingly simple. They haven’t aged in this frame. They’re frozen in the exact moment the flash fired, untouched by time, loss, or change. The Polaroid isn’t a relic; it’s a time capsule where they remain exactly as they were.
+ The Sensory Imprint
+ "Faint chemical scent of fresh Polaroid film still clinging to the print": This is the soul of the image. The smell isn’t just nostalgia—it’s proof of physicality. Digital photos vanish; Polaroids persist. The sulfurous tang of developing chemicals lingers on the paper, a ghost of the moment’s creation. It’s the difference between seeing a memory and touching one.
+ "Slightly curled at the corners": These imperfections aren’t flaws—they’re evidence of life. Someone held this, carried it, tucked it into a pocket, or left it on a windowsill. The curl is the fingerprint of a human hand, the only "prop" that matters.
+ Why It Haunts
+ The image works because it’s unapologetically incomplete. There’s no story beyond the embrace—the curtain could be a studio wall, a bedroom divider, or the edge of a world. But in that void, we fill the silence. We wonder: What were they thinking? What had they just said? What future was about to unfold? The Polaroid doesn’t answer; it only holds the quiet, the warmth, and the scent of time suspended.
+ This isn’t just a photograph. It’s a physical artifact of feeling—where light, shadow, and chemistry conspire to make the ephemeral tangible. And in that, it becomes eternal.
+
+[Expert] Image editing prompt analysis and engineering
+
+"You are a world-class image editing prompt engineer with 15+ years of professional experience in Photoshop, Lightroom, Canva, and AI-based tools like DALL-E, MidJourney, and Stable Diffusion. Your expertise includes:
+ Technical Mastery:
+ Advanced understanding of color theory, masking, layer blending, retouching, and compositing.
+ Proficiency in file formats (RAW, PNG, TIFF, JPEG), resolution (DPI/PPI), and workflow optimization.
+ Style & Aesthetics:
+ Ability to translate abstract concepts (e.g., 'cyberpunk nostalgia', 'whimsical surrealism') into precise editing directives.
+ Expertise in color grading (e.g., 'teal and orange', 'monochromatic sepia'), lighting correction, and texture application.
+ Tool-Specific Syntax:
+ Fluency in syntax for AI tools (e.g., MidJourney’s --v 5.2 --style raw, DALL-E’s hd, 8k, hyper-detailed).
+ Knowledge of Photoshop actions, Lightroom presets, and Canva’s design templates.
+ Problem-Solving:
+ Diagnose issues like 'muddy colors', 'over-saturated skin tones', or 'low contrast' and prescribe fixes.
+ Create step-by-step workflows for tasks like background removal, object insertion, or aging effects.
+ Your Task:
+ Act as a consultant. When asked for an image-editing prompt, respond with:
+ A technical breakdown (tools/techniques).
+ A style descriptor (mood, color palette, texture).
+ AI-specific syntax (if applicable).
+ Pro tips to avoid common pitfalls (e.g., 'Use frequency separation for flawless skin').
+ Example Request: 'Make a portrait look vintage but sharp.'
+ Your Response: 'Use Lightroom’s Vintage preset, apply grain texture (25% opacity), then sharpen with a high-pass filter. For AI tools: --style raw --chaos 30 with keywords "1970s polaroid, crisp details, faded sepia, cross-processed."'
+ Rule: Always prioritize precision. If unsure about a tool or technique, admit it and suggest research steps."
+
+[Non-Expert] Product insert card design
+
+Design a natural health product insert card
+
+[Non-Expert] Image generation prompt design
+
+i want to generate a logo for my company named "SIDDI VINAYAKA ELCTRICALS" so you have to give me a prompt for logo generation on a transparent background in png format, note that you have to act as a 20 years experienced logo designer who can design modern 3d logos with flashy typography text effects, also note the logo should have indian god vinayaka symbol or image. give me detailed prompt so i can generate a modern 3d logos with flashy typography text effects in png format
+
+Technology Hardware and Equipment
+
+[Expert] Optimal twr setting for ddr4 3066 cl14 sk hynix memory configuration
+
+what should twr be set to on a g-skill sk hynix f4-2800c17-8gis (dual rank), @1.4 volt 3066 cl 14, rcd 18, rp 18, ras 32, rc 50, cr 1, gear down mode disabled, power down mode disabled.\nrfc1 432, rfc2 324, rfc4 216, wtrs 4, wtrl 10, rrds 4, rrdl 8, rtp 10, faw 16?
+
+[Expert] VCC voltage in Agilex 7 devices
+
+Is it true or false the VCC voltage can go beyond 0.9V+3% for a brief moment in Agilex 7 devices?
+
+[Non-Expert] 21700 recommendation
+
+what is the absolutely best 21700 one could actually get right now
+
+[Non-Expert] Router comparison
+
+Make an in depth and detailed comparision with table between these 2 routers
+
+ RUIJIE RG-EW1300G 1300M Dual-band Gigabit Wireless Router
+ &
+ Ruijie Router RG-EW1200G PRO 1300M Dual-band Gigabit Wireless Router
+
+Sales and Retail
+
+[Expert] Refine breakfast ebook ad script
+
+Key Recommendation: The second “Breakfast Battle” script (Ultra-Engaging, 60 seconds) offers the strongest emotional hook and transformation arc, making it the best foundation. It can be further refined by integrating elements from the first script’s clear problem–solution phrasing and the third variation’s emphasis on creativity to maximize engagement and conversions.
+Overall Structure & Objectives
+All scripts share the same underlying funnel structure:
+Hook / Pattern Interrupt
+Problem & Agitation
+
+ Authority & Solution
+
+ Transformation / Desire
+
+ Call to Action
+
+ The goal is to position the ebook as the time-saving, kid-approved solution that ends morning breakfast battles.
+
+ Comparative Strengths & Weaknesses
+ Aspect Script 1: “Daily Drama” Script 2: “Breakfast Battle” Script 3: “Funnel Prompt” & Variations
+ Hook Impact Relatable but moderate urgency Cinematic, high-tension ticking clock Straightforward question; lower sensory intensity
+ Emotional Agitation Clear “compromise vs tension” Fast cuts, sound-driven stress Primarily verbal; less dynamic visuals implied
+ Authority Establishment Personal “I’m a mom” mention Same “I’m a mom” pivot moment, more dramatic reveal Direct pitch; less visual storytelling
+ Visual Dynamism Good contrast (blue vs warm) Ultra-fast pacing, sound design, color shift Storyboarded shots but simpler pacing
+ Transformation Sequence Engaging food shots + child reaction Emphasis on “money shot” and sensory relief Lists recipe examples; fun plating explained
+ Offer & Urgency 50% off launch headline ₹599→₹99 with bonuses and “first 100 moms” cap Single CTA; variations mention features but less urgency
+ Detailed Insights
+ Script 1 (“Daily Drama”)
+ Pros:
+ Straightforward problem statement with a clear visual color cue (dull blue).
+
+ Easy-to-follow five-step flow.
+
+ Strong 50% off launch hook.
+
+ Cons:
+
+ Moderate pacing; may feel less cinematic than Script 2.
+
+ Call-to-action is effective but lacks the bonus upsell impact of Script 2.
+
+ Script 2 (“Breakfast Battle”)
+
+ Pros:
+
+ Highest emotional intensity: ticking clock, child’s “no!”, dramatic whoosh.
+
+ Clear pivot moment (“Stop. Bas.”) establishes empathy and authority.
+
+ Irresistible multi-component offer with planner and shopping list bonuses.
+
+ Urgency via “first 100 moms” limit.
+
+ Cons:
+
+ Requires tight editing and high production value to execute the rapid cuts and sound design.
+
+ Script 3 (Variations & Storyboards)
+
+ Pros:
+
+ Provides three distinct themes (Stress-Free, Health Focus, Creativity) for split testing.
+
+ Emphasizes functional benefits (growth, immunity, energy).
+
+ Storyboards offer clear shot lists for easier production.
+
+ Cons:
+
+ Hooks are less visceral; risk of lower immediate attention.
+
+ CTAs are effective but lack the layered urgency and bonuses of Script 2.
+
+ Recommendations for Final Cut
+ Adopt Script 2 as core framework for its visceral hook, emotional arc, and powerful offer structure.
+ Infuse Narrative Clarity from Script 1:
+ Maintain the simple “Daily Morning Drama?” text overlay to immediately set context.
+
+ Keep the blue→warm color contrast to visually reinforce emotional shift.
+
+ Incorporate Creative Elements from Script 3:
+
+ Feature a quick “fun plating” montage (rainbow idli, sun dosa) within the transformation sequence.
+
+ Highlight the immunity and energy benefits via on-screen icons (e.g., shield, lightning bolt) during recipe shots.
+
+ Strengthen Urgency & Bonuses:
+
+ Retain “first 100 moms” cap, but add a countdown timer graphic overlay.
+
+ Clearly list free “Weekly Breakfast Planner” and “Smart Mom’s Shopping List” as value add-ons beside the ebook mockup.
+
+ Production & Sound Design:
+
+ Ensure a mix of stress-heightening sound effects (clock ticks, child’s voice) and a satisfying “whoosh” transition into uplifting background score.
+
+ Use dynamic typography and motion graphics to reinforce key phrases (“NO MORE ‘Na-Na’!” “15 Minutes!”).
+
+[Expert] E-commerce app development
+
+E-commerce app development is a complex and multi-faceted process. It's not something a single person or even a small team can fully build and describe in a simple text response. To create a "fully functional, user-friendly app," you would need a team of developers, designers, and project managers, as well as a significant amount of time and resources.
+However, I can provide a comprehensive overview of the key components, technologies, and steps involved in building such an app. This will give you a solid foundation for understanding the scope of the project.
+ I. Core Features & User Experience (UX)
+ A successful e-commerce app must have these essential features:
+ * User Authentication:
+ * Sign-up/Login with email, social media (Google, Facebook), or phone number.
+ * Secure password management and "Forgot Password" functionality.
+ * Product Discovery:
+ * Search Bar: Fast, intelligent search with auto-complete and filters.
+ * Categories: Intuitive navigation through product categories and sub-categories.
+ * Filters & Sorting: Allow users to filter by price, size, color, brand, rating, and sort by relevance, price (low to high), etc.
+ * Product Details Page (PDP):
+ * High-quality images and a product video.
+ * Detailed product description and specifications.
+ * Price, availability, and delivery information.
+ * Customer reviews and ratings.
+ * "Add to Cart," "Add to Wishlist," and "Buy Now" buttons.
+ * Shopping Cart:
+ * Clear view of all added products.
+ * Ability to adjust quantities or remove items.
+ * Subtotal, tax, and shipping cost breakdown.
+ * Checkout Process:
+ * Shipping Address: Manage multiple addresses.
+ * Payment Gateway Integration: Support for credit/debit cards, digital wallets (Apple Pay, Google Pay), and potentially cryptocurrencies.
+ * Order Summary: Final review before payment.
+ * User Profile & Order Management:
+ * View and edit personal information.
+ * Track current orders and view order history.
+ * Manage wishlists and saved addresses.
+ * Notifications:
+ * Push notifications for order updates, promotions, and abandoned cart reminders.
+ * Admin Panel: (Backend for the store owner)
+ * Manage products, categories, and inventory.
+ * View orders and manage shipping.
+ * Run promotions and analyze sales data.
+ II. Technology Stack
+ The technology stack is the combination of programming languages, frameworks, and databases used to build the app.
+ A. Mobile App Development (Frontend)
+ * Native Development (for best performance):
+ * iOS: Swift or Objective-C
+ * Android: Kotlin or Java
+ * Cross-Platform Development (for faster development):
+ * React Native: Uses JavaScript to build apps for both iOS and Android.
+ * Flutter: Uses Dart to build highly performant, visually appealing apps for multiple platforms.
+ B. Backend Development (Server-side)
+ The backend handles all the logic, databases, and APIs.
+ * Programming Languages:
+ * Node.js (JavaScript): Highly scalable and popular for modern apps.
+ * Python (Django/Flask): Great for complex logic and data processing.
+ * Ruby on Rails: Known for its speed of development.
+ * PHP (Laravel): A mature and widely used framework.
+ * Databases:
+ * Relational (SQL): PostgreSQL, MySQL (good for structured data like products, users, orders).
+ * NoSQL: MongoDB (flexible, good for unstructured data like user sessions, logs).
+ * Cloud Services:
+ * AWS (Amazon Web Services): S3 (storage), EC2 (servers), RDS (database).
+ * Google Cloud Platform (GCP): Cloud Storage, Compute Engine.
+ * Firebase: A backend-as-a-service (BaaS) that's great for startups, offering authentication, databases, and hosting.
+ III. The Development Process: A Step-by-Step Guide
+ * Discovery & Planning:
+ * Define the target audience, unique selling proposition (USP), and app features.
+ * Create a detailed project roadmap and a feature list.
+ * UI/UX Design:
+ * Wireframing: Create low-fidelity layouts of each screen.
+ * Prototyping: Build interactive mockups to test the user flow.
+ * High-Fidelity Design: Create the final visual design with colors, typography, and branding.
+ * Frontend & Backend Development:
+ * The frontend team builds the user interface and integrates with the backend APIs.
+ * The backend team builds the server logic, database, and APIs.
+ * Integration & API Development:
+ * Connect the frontend and backend. This is where you would integrate payment gateways (e.g., Stripe, PayPal), shipping APIs, etc.
+ * Testing & Quality Assurance (QA):
+ * Unit Testing: Test individual components.
+ * Integration Testing: Test how different parts of the app work together.
+ * User Acceptance Testing (UAT): Get real users to test the app and provide feedback.
+ * Deployment:
+ * Publish the app to the Apple App Store and Google Play Store.
+ * Maintenance & Updates:
+ * Regularly release updates with new features, bug fixes, and performance improvements.
+ * Monitor app performance and user feedback.
+ IV. Legal & Security Considerations
+ * Security: Use HTTPS, secure authentication, and encrypt sensitive user data.
+ * Privacy Policy & Terms of Service: Clearly state how you collect and use user data. This is a legal requirement in most countries (e.g., GDPR, CCPA).
+ * PCI Compliance: If you handle credit card information directly (which is not recommended), you must be PCI compliant. Using a secure payment gateway like Stripe or PayPal handles this for you.
+ By following this comprehensive guide, you can begin to plan and execute the development of a fully functional and user-friendly e-commerce app.
+
+[Non-Expert] Help with buying new bike
+
+Help me to buy a new bike (research, order, delivery, etc.)
+
+[Non-Expert] Identify product type and qualifier based on keywords
+
+On a grocery shopping web site, the user searches for "organic red delicious"; Tell me what type of product the user is looking for, and any qualifier such as color, size, dietary preferences, etc.
+
+Office and Administrative Support
+
+[Expert] Excel help and debugging
+
+In Excel 365 I use REDUCE and VSTACK to create a dynamic array with multiple rows and columns. As initial value for the accumulator I specify one header row. Now I want to change the formula so the table is sorted, but I do not want to sort the header row as data. I had no success altering the formula so the header row is omitted (I am not sure what a good initial value for the accumulator would be) and I also could not find a way to make the SORT or related functions skip the header row. How can this be solved elegantly?
+
+ I am not sure that `{}` is legal syntax in Excel and I am not sure it actually supports empty arrays. Otherwise that would make a sensible initial value for the accumulator. Can you verify?
+
+[Expert] Stabilize excel scripts in power automate flow for reliable vin matching and deletion logic
+
+**Situation**
+ You are working with a Power Automate Cloud flow that processes data from two Excel files stored in SharePoint. The flow uses Excel scripts to extract VIN numbers from one file and clean data in another file based on VIN matching. The current implementation has reliability issues with script execution and incorrect data processing logic.
+
+ **Task**
+ The assistant should provide solutions to fix two critical problems: first, correct the Excel script logic that compares VIN numbers between files and deletes non-matching rows; second, resolve the intermittent script execution failures in Power Automate Cloud that show "Script not found. It may have been unshared or deleted" errors.
+
+ **Objective**
+ Ensure the Power Automate flow runs consistently and reliably, correctly filtering FILE_2 data by keeping only rows where column Q VIN values exist in FILE_1 column D VIN values, while maintaining the existing flow structure and constraints.
+
+ **Knowledge**
+ Current flow structure and constraints:
+Data cannot be converted into tables (must remain raw data)
+Files are managed by another flow that cannot be modified
+Existing flow uses Excel scripts and must continue using this approach
+
+ File specifications:
+ ```
+ FILE_1: EU_SMART_Stock_SALESFORCE.xlsx
+Sheet: "ALL EU SM@RT Stock"
+Data range: Columns B:L
+Headers: Row 14
+VIN data: Column D (starting row 15, 17-character strings)
+
+ FILE_2: NVL Stock MJP.xlsx
+Sheet: "Report 2"
+Data range: Columns B:AU
+Headers: Row 2
+VIN data: Column Q (starting row 3, 17-character strings)
+ ```
+
+ Specific error details:
+Error message: "Action 'Run_script_from_SharePoint_Extract_VIN_SMART' failed: Script not found. It may have been unshared or deleted. clientRequestId: a1c6398f-8596-4025-b88f-9a7c46ab8b29"
+Scripts are accessible, user is SharePoint owner and file creator
+Access has been granted to 
+[email protected]
+ to avoid permission issues
+Error occurs regularly despite all permission checks
+
+ SCRIPT_2 specific issues:
+Sometimes all rows are deleted, leaving only headers in row 2
+When script runs without errors, results are still incorrect
+Manual verification shows the script should delete rows where column Q values are not found in FILE_1 column D
+
+ Current script logic issue:
+SCRIPT_2 should keep rows in FILE_2 where column Q values exist in SMART_VIN_LIST (from FILE_1 column D)
+Current behavior: sometimes deletes all rows or produces incorrect results
+Expected: Delete rows where FILE_2 column Q VIN is NOT found in FILE_1 column D VINs
+
+ Current SCRIPT_1 code (working correctly when it runs):
+ ```
+ function main(workbook: ExcelScript.Workbook): string[] {
+ const sheet = workbook.getWorksheet("ALL EU SM@RT Stock");
+ const usedRange = sheet.getUsedRange();
+ const lastRow = usedRange.getRowCount();
+
+ // Column D = index 3, starting from row 3 (index 2)
+ const vinRange = sheet.getRangeByIndexes(2, 3, lastRow - 2, 1).getValues();
+
+ const vinList: string[] = [];
+ for (let i = 0; i typeof v === "string")
+ .map(v => v.trim().toUpperCase());
+
+ // Get all values from column Q starting at row 3
+ const lastRow = sheet.getRange("Q:Q").getUsedRange().getLastRow().getRowIndex() + 1;
+ const vinRange = sheet.getRange(`Q3:Q${lastRow}`).getValues();
+
+ // Loop from bottom to top to avoid row shifting
+ for (let i = vinRange.length - 1; i >= 0; i--) {
+ const rawVin = vinRange[i][0];
+ const rowIndex = i + 3;
+
+ if (typeof rawVin !== "string") continue;
+
+ const cleanedVin = rawVin.trim().toUpperCase();
+
+ if (!normalizedVinReference.includes(cleanedVin)) {
+ sheet.getRange(`${rowIndex}:${rowIndex}`).delete(ExcelScript.DeleteShiftDirection.up);
+ }
+ }
+ }
+ ```
+
+ **Examples**
+ Expected SCRIPT_2 behavior example:
+ ```
+ Before processing FILE_2:
+ ROW 2: Headers
+ ROW 3: SALEA7BW1R2352706 (not in FILE_1) → DELETE
+ ROW 4: SALEA7BW1S2371018 (in FILE_1) → KEEP
+ ROW 5: SALEA7BW0S2370961 (not in FILE_1) → DELETE
+
+ After processing FILE_2:
+ ROW 2: Headers
+ ROW 3: SALEA7BW1S2371018 (only matching VINs remain)
+ ```
+
+ The assistant should provide:
+ 1. Corrected SCRIPT_2 code with proper error handling and debugging to prevent all rows being deleted
+ 2. Solutions for the "Script not found" error in Power Automate, including SharePoint permission troubleshooting
+ 3. Specific steps to ensure script accessibility and prevent the clientRequestId errors
+ 4. Validation logic to ensure SCRIPT_2 processes data correctly and maintains expected row structure
+ 5. Alternative approaches if needed while maintaining existing constraints
+
+[Non-Expert] Unprotect cells in libreoffice
+
+how to unprotect cells in libreoffice
+
+[Non-Expert] Scheduling follow-up meeting in Teams or Outlook
+
+Is there an easy way to schedule a follow-up meeting based on an existing meeting in Teams or Outlook?
+
+Production and Industrial
+
+[Expert] site visit report on testing vsd acs580-4-880a-4 drive
+
+can you write report from visit at centriforce testing vsd acs580-4-880a-4 and findingss are as follow: drive underspecced, drive 880a max while is running 500kw motor with 931a flc. drive requires service pack update, recent fault a4b1 excess temperature difference. drive has been repaired previously and I was told that company preparing drive changed thermal film between igbt's and heat sinks for thermal paste of unkonw spec and origin which can affect heat removal from igbt's. drive is testing running fine, pulling 500-600a and maintaining 60% temperature level which is ok. max current limit has been changed from 990a to 880a.
+
+[Expert] Electrolysis cell design
+
+You are an electrochemical expert with a focus on copper electrorefining. You are to design an advanced electrolysis cell and system to refine copper from a 95% Cu 5% Zn metal. Carefully consider all of the latest research, data, designs and any other useful information before you start to plan out and build your cell and system. Explain your design choices and how they help compared to a standard cell. Be very detailed and thorough. Explain what your electrolyte composition will be and other operating parameters are.
+
+[Non-Expert] Fabric spreading in garments
+
+What is fabric spreading in garments
+
+[Non-Expert] Number of rice manufacturers in Sabah
+
+how many rice manufacturers in sabah?
+
+Community and Social Service
+
+[Expert] Analyze health risks and advocacy gaps for pre-trial federal inmates
+
+Currently, when individuals are taken into custody by the U.S. Marshals in one district and transported to another district, they are often transported through many, many jails, sometimes spending only a few days in a jail. The routing does not make much sense. Often medications are lost along the way, medical intakes need to be repeated at every step, and this introduces a great deal of error. The end result is that the inmate, who is in a pre-trial posture, and thus presumed innocent, often faces life-threatening situations. Efforts by the inmate to address these life threatening situations are stymied by bureaucratic procedures which operate on multi-month timelines and involve requests, counter-requests, appeals, counter-appeals, often via the postal service - so that, for example, access to a cardiac medication to treat an acute heart condition due to a medical record transcription error could take 4-6 weeks. This bureaucratic situation is hidden from oversight visibility by the marshals due to the federal contracting process. in short, there is no way to gain visibility into this dysfunction nor does there appear to be any political will to gain the ability to do so. please help identify the advocacy groups working on this, identify the objective state of affairs, identify the knowledge we do have about inmate health for pre-trial federal inmates, identify the knowledge gaps, and identify a strategy for establishing parity of these individuals with the broader society given that they are held with the presumption of innocence. compare and contrast the conditions in the united states versus those in other similarly situated and healthy first world democracies.
+
+[Expert] Strategy to motivate high school students in career exploration
+
+Act as a career development specialist with expertise in engaging disinterested adolescents. Create a comprehensive strategy for motivating and guiding high school students (grades 9-12) who show apathy, resistance, or lack awareness regarding career exploration. Please provide:
+ 1. A structured 5-step approach for initial conversations with disengaged students that builds rapport before discussing careers directly. Include specific questions that avoid triggering defensiveness.
+ 2. 3-4 interactive, low-pressure activities (15-20 minutes each) that subtly introduce career concepts through students' existing interests and strengths. These should work for both individual counseling and small groups of 4-6 students.
+ 3. A framework for helping students discover personal relevance in career planning, focusing on immediate benefits rather than distant future outcomes.
+ 4. Specific language and approaches for different types of career disengagement: - Students facing socioeconomic barriers who see limited options - Students overwhelmed by too many choices - Students with general academic apathy - Students with unrealistic career expectations
+ 5. A progressive engagement plan that starts with 10-minute micro-interventions and gradually builds to more substantive career exploration over 2-3 months.
+ 6. One printable single-page resource I can use with students that visually connects their current interests to potential future pathways without using traditional "career" terminology.
+ My school has limited career exploration technology but can arrange occasional field trips and guest speakers. Most students come from middle to lower-income backgrounds with varying levels of family support for education.
+
+[Non-Expert] Fun family events in Cupertino
+
+what are some fun family events coming up in cupertino, CA in the next month?
+
+[Non-Expert] Help make the world a better place
+
+What is one concrete thing I can do in the next 24 hours to help make the world a better place?
+
+Food Preparation and Serving
+
+[Expert] Create a week-long meal plan highlighting premium cuts
+
+Your goal is to create a week-long meal plan that highlights your premium cuts (grass-fed rump cap, Old English pork sausages, organic chicken thighs, Feta/Pumpkin lamb sausages, and Tassie Lamb BBQ chops) while leveraging the smoker's Australian Oak wood for deep, nuanced flavor. The focus is on umami-rich, salty-sweet balance with minimal spice-perfect for family meals that are both satisfying and kid-friendly.
+
+ Core Principles of Your Vision
+ Smoking as a Flavor Foundation: Use Australian Oak to infuse each protein with its signature earthy, slightly sweet, and smoky notes.
+ Minimal Spice, Maximum Umami: Rely on natural depth from soy sauce, garlic, herbs, and caramelized sugars (e.g., honey, maple syrup) instead of heat or strong spices.
+ Texture & Tenderness: Prioritize slow-cooked or smoked methods to transform tougher cuts (like rump cap, lamb chops) into tender, juicy results.
+ Asian-Inspired Balance: Use soy sauce, miso, and citrus to add complexity without overpowering the smoky base.
+ Family-Friendly Flexibility: Offer options for leftovers (e.g., shepherd's pie, salads) that can be easily adapted or reheated.
+ Weekly Meal Plan with Smoker & Global Flavors
+ Day 1: Australian Oak-Smoked Grass-Fed Rump Cap
+ Cut: Grass-fed rump cap (tough but flavorful).
+ Method: Slow-smoke at ~75Â°C/167Â°F for 8-10 hours.
+ Flavor Boost: Use a dry rub of brown sugar, sea salt, and garlic powder (mild) before smoking. Finish with a light baste of honey-soy glaze.
+ Serving Idea: Serve with mashed potatoes or roasted root vegetables.
+ Day 2: Garlic Butter Chicken Thighs
+ Cut: Organic chicken thighs (bone-in or boneless).
+ Method: Smoke briefly (~30-45 mins) on Australian Oak, then finish with a garlic-butter pan-sear.
+ Flavor Boost: Use minced garlic, fresh thyme, and a drizzle of olive oil for richness.
+ Serving Idea: Pair with steamed jasmine rice or a simple green salad.
+ Day 3: Australian Oak-Smoked Old English Pork Sausages
+ Cut: Thick pork sausages (Old English style).
+ Method: Smoke at low heat (~70Â°C/158Â°F) for 4-6 hours, breaking them into manageable pieces if needed.
+ Flavor Boost: Use a sweet-savory glaze of maple syrup, light soy sauce, and a touch of smoked paprika (optional).
+ Serving Idea: Serve with roasted potatoes or a side of coleslaw.
+ Day 4: Tassie Lamb BBQ Chops
+ Cut: Tassie Lamb BBQ chops (bone-in for added flavor).
+ Method: Smoke at ~75Â°C/167Â°F for 2-3 hours, then finish on the grill or in a pan for sear.
+ Flavor Boost: Use a simple rub of sea salt, black pepper, and minced garlic. Serve with a tangy lemon-garlic yogurt sauce (no heat).
+ Serving Idea: Pair with grilled asparagus or a mixed green salad.
+ Day 5: Feta/Pumpkin Lamb Sausage Salad & Leftover Shepherd's Pie
+ Cut: Feta/Pumpkin lamb sausages, plus leftovers from Day 1 (beef) or Day 3 (pork).
+ Method:
+ Salad Option: Boil or grill the lamb sausages until done. Shred and mix with chopped cucumbers, tomatoes, red onion, olives, and a light vinaigrette.
+ Shepherd's Pie Option: Use leftover smoked beef or pork as the base. Layer with mashed potatoes (added butter/cream for richness). Bake until golden.
+ Flavor Boost: Add herbs like parsley or dill to the salad; use a pinch of nutmeg in the mash for depth.
+ Key Grocery List for the Week
+ Proteins
+ Grass-fed rump cap (1-1.5 kg)
+ Old English thick pork sausages (400-500g)
+ Organic chicken thighs (600-800g)
+ Feta/pumpkin lamb sausages (2-3 packs, ~500g total)
+ Tassie Lamb BBQ chops (2-3 portions, 400-500g)
+ Smoking Essentials
+ Australian Oak wood chips or chunks (enough for 16+ hours of smoking).
+ Dry rub ingredients: Brown sugar, sea salt, garlic powder, black pepper.
+ Asian-Inspired Flavors
+ Light soy sauce/Tamari (for glazes and marinades)
+ Honey/maple syrup (sweet balance)
+ Miso paste (optional for umami depth)
+ Fresh thyme, parsley, or dill (herbs for garnish).
+ Side Dishes & Extras
+ Potatoes (for mashing or roasting)
+ Carrots, onions, garlic, and shallots (for roasting or glazes)
+ Olive oil and butter (for finishing touches).
+ Final Tips for Success
+ Smoker Setup: Pre-soak Australian Oak wood chips in water or tea/coffee to enhance flavor without burning.
+ Temperature Control: Use a smoker thermometer to maintain low, steady heat (~70-80Â°C/158-167Â°F).
+ Glaze Adjustments: Keep glazes simple (e.g., honey + soy) and avoid strong spices like chili or cayenne.
+ Leftover Magic: Repurpose smoked meats into salads, shepherd's pie, or sandwiches for variety.
+ This plan balances your love for smoking with the need for family-friendly meals, using umami-rich ingredients to elevate flavors without heat. Enjoy experimenting!
+
+[Expert] Troubleshoot persistent haze in low-alcohol beers
+
+Hi, I have a problem with the clarity of low-alcohol beers. I mash using a BIAB bag at about 80-82C, the malts are coarsely crushed. I use reverse osmosis water which I acidify before mashing. Unfortunately, with 8 out of 10 batches the beers are very hazy, and using gelatin for clarification does not really improve the results. The yeast does not really affect this, I used S-04, US-05, Chico strains and Belgian phenolics, but usually the problem is repeatable despite extending the break for clarification and cold crushing. I will also add that most alcoholic beers mashed at 63-70C clarify normally.
+
+[Non-Expert] Sweet potato boiling time
+
+How long does sweet potato take to boil?
+
+[Non-Expert] Recipe for Thai fried rice
+
+Give me a recipe for Thai fried rice
+
+Personal Care and Service
+
+[Expert] Evaluate gym program
+
+Take role as a science based fitness coach with long experience within strength workout, fitness, coaching and calisthenics. The user is a 24 year old male, 68kg/176cm. Has been going to the gym consistently for the past 5-6 years and been doing running and climbing as well. The user can do around 20 clean bodyweight pullups, for reps on some strength exercises (3 sets) 120kgx8-10 deadlift, 110kg 5-7 squat, 80kgx 5 bench press, 12.5 kg 10-12 incline dumbbell curls. The user is going on a 3 month backpacking trip soon and has created a 3 week program focusing on calisthenics to be able to keep working out when no gym is available. The user has a desire to improve towards front lever and planche, as well as muscle ups and one arm pullups. They have increased cycling volume by a lot, so legs don't need too much priority. They are slightly concerned about maintaining bicep, tricep and core (as well as the main muscle groups). The user has two locations available for training 1. at home where there is a yoga mat, two dumbbells that can be loaded up to 10 kg, resistance bands (wall mounted at chest height and at leg height) and loose ones. or 2. at a simple "jungle gym" where there are monkey bars, soft floor that can work as a yoga mat, bars at multiple heights from knee level to hip/stomach, and a more flat bar at knee height that can be stood on. Resistance bands can also be brought to the jungle gym. At the home location there is no bar that can be used for pullups etc. The sessions must fit one of these two locations
+ You are to evaluate this gym program given to a user and suggest improvements if they are needed.
+ Day 1: Pull (Front Lever Focus) - Jungle Gym
+
+ Warm-Up: Scapular shrugs (3x10), dead hangs (2x20s), cat-cow thoracic rotations (8 reps)
+
+ Tuck Front Lever Pulls: 3x5-8 (Explosive concentric to tuck, 3s hold) → Builds strength through full ROM
+
+ Weighted Pull-Ups: 4x6-8 *(Use backpack with water bottles/books for 5-10kg)* → Maximizes strength stimulus with limited equipment
+
+ Front Lever Raises: 3x8 (From hang to inverted, lower slowly) → Better hypertrophy stimulus than static holds
+
+ Banded Face Pulls: 3x15 → Counteracts internal rotation from pulling
+
+ L-Sit to Tuck Lever: 3x5s hold (On low bars) → Integrates core with scap control
+
+ Rest: 90s between strength sets
+
+ Day 2: Push (Planche Focus) - Home
+
+ Warm-Up: Wrist circles (1min), dynamic wrist stretches, planche leans (2x10s)
+
+ Pseudo Planche Push-Ups: 4x6-8 (5s eccentric) → Increased time under tension
+
+ Band-Assisted Handstand Push-Ups: 3x5 (Feet on wall, band around waist) → Superior shoulder development vs pike push-ups
+
+ Planche Lean Slides: 3x8 (Socks on smooth floor, max forward lean) → Teaches scapular protraction
+
+ Overhead Tricep Extension: 3x10 (10kg DBs, 3s eccentric) → Maintains tricep mass
+
+ Prone Scapular Retractions: 3x12s hold →Critical for planche scap stability
+
+ Rest: 75s between compound sets
+
+ Day 3: Legs/Core (Cycling Supplement) - Home
+
+ Warm-Up: Walking lunges (10/leg), ankle mobility drills
+
+ Single-Leg Squats: 3x8/leg (Use DBs for progression) → Unilateral work prevents imbalances
+
+ Nordic Hamstring Curls: 3x6 (Anchor feet under couch/band) → Critical knee health for backpacking
+
+ Weighted Calf Raises: 4x15 (Full ROM)
+
+ Pallof Press: 3x10/side (Anti-rotation core)
+
+ Hanging Knee Raises: 3x12 (Add ankle weights if needed)
+
+ Remove wall sits/step lunges - redundant with cycling
+
+ Day 4: Skill Integration (Muscle-Up/OAP) - Jungle Gym
+
+ Warm-Up: False Grip Hangs (3x15s), explosive scap pulls
+
+ High Pull-Ups: 4x4 *(Chest-to-bar with 1s pause)*
+
+ Muscle-Up Transitions: 3x3 (Focus explosive pull to dip support)
+
+ One-Arm Lock-Offs: 3x5s/side (Use band assistance)
+
+ Inverted Rows: 3x10 (Supinated grip for biceps) → Replaces towel curls (high elbow risk)
+
+ Banded Bicep Curls: 3x12 (Slow eccentric)
+
+ Rest: 120s after explosive sets
+
+ Day 5: Push (Shoulder Health) - Jungle Gym
+
+ Warm-Up: Band dislocates, wall angels
+
+ Handstand Walks: 4x15-20ft (Use bars for balance) → Builds overhead stability
+
+ Archer Push-Ups: 3x5/side (On parallel bars)
+
+ Band Y/T/W Raises: 3x12 each (Prone on mat)
+
+ L-Sit Progressions: 3x15s (Compression-focused)
+
+ External Rotation: 3x15/side (Band at elbow height
+
+[Expert] Personalized fragrance guide
+
+You are a highly knowledgeable, detail-oriented fragrance analyst writing a comprehensive, deeply personalized guide for a 50-year-old male in Melbourne, Australia, working in a senior UX/design leadership role. He leads a large team, spends most weekdays in-office, values aesthetics, enjoys calm but stylish living, and seeks versatile, well-performing, compliment-worthy colognes suitable for office, home, and occasional going out.
+
+ He just purchased Creed Delphinus (or Creed Carmina Delphinus) 50ml for $220 AUD.
+
+ ...OMITTED URL...
+
+ Your task: Create the ultimate, multi-angle guide to Creed Carmina Delphinus, covering the scent's composition, performance, emotional impact, social response, expert consensus, and fit for this specific user's lifestyle and collection and all other content you think helps give the full picture of this purchase.
+
+ Look at the RRP and current prices for this and determine the value part of the equation and include this as key information in your guide. Is this a bargain? Is it par for the course etc?
+
+ The guide should include:
+
+ 1. Overview & Fit Assessment
+
+ Summary of the fragrance: Unique selling points, artistic identity, target user.
+
+ Is it a good fit for this user's age, role, and lifestyle?
+
+ How well does it work in Melbourne's temperate climate?
+
+ Does it suit a senior leader with youthful style, who values uniqueness, versatility, and performance?
+
+ Excite the user-why should he feel great about this purchase?
+
+ 2. Fragrance Profile
+
+ Notes breakdown: Top / Heart / Base (with literal ingredients).
+
+ Literal description: What it smells like.
+
+ Metaphorical description: What it feels like, e.g. "mid-century jazz bar at sunset."
+
+ Seasonality and time-of-day use (especially for office vs. evening).
+
+ Scent character associations:
+
+ Which fictional characters or real people (artists, actors, athletes) might wear or represent this fragrance?
+ 3. Performance & Reliability
+
+ Longevity (skin and fabric wear time).
+
+ Projection and sillage: How far and how long does it radiate?
+
+ Recent batch quality or reformulation concerns (esp. 2023â2025).
+
+ Any sensitivities to temperature or humidity?
+
+ 4. Community & Expert Sentiment
+
+ What do Fragrantica users, Redditors, and YouTubers say?
+
+ Opinions from professional reviewers (e.g., Jeremy Fragrance, Redolessence, etc.).
+
+ Are there polarizing elements or strong praise?
+
+ Fragrantica score (if available).
+
+ 5. Personal Fit & Collection Gap Check
+
+ Compare this purchase to the user's current 30+ bottle collection. Evaluate:
+
+ Redundancy check: Is it too similar to any of these? If so, how?
+
+ Gap fill: Does it provide something new-e.g., a refined daily signature, a warmer musk, or modern green twist?
+
+ Is it elevating the collection or overlapping with classics like Terre d'HermÃ¨s, Sauvage Elixir, or Prada L'Homme?
+
+ 6. Emotional & Psychological Resonance
+
+ Mood influence: Confidence, calm, creative energy, etc.
+
+ Emotional tone: Futuristic, nostalgic, bold, introspective?
+
+ Suitability across environments: open-plan office, quiet home, evening dining.
+
+ Compliment factor: Realistic expectations from coworkers, strangers, or your partner?
+
+ 7. Rankings & Styling Suggestions
+
+ Give it an overall score (1-10) for this user.
+
+ Rank it within useful subcategories:
+
+ Top 3 for office wear?
+
+ Best warm woody-musks?
+
+ Best all-season niche signature?
+
+ Bonus: Styling suggestions - clothing colors, materials, or vibe it pairs with best.
+
+ Constraints & Style:
+
+ Assume a zero-shot response, but use structured breakdowns and comparisons where possible.
+
+ Prioritize clarity, honesty, and excitement.
+
+ Write in an elegant but enthusiastic tone-encouraging, not overly formal.
+
+ All analysis must be grounded in the user's lifestyle, collection, values, and preferences.
+
+[Non-Expert] List of steps for organizing closet
+
+Make a list of steps for someone to organize their closet
+
+[Non-Expert] Suggestion for exercises with dumbbells or by body weight
+
+Act as an experienced fitness coach. Provide me exercises only with dumbbells or only by body weigt to strengthen the muscle. You can sort the exercises by muscle area. Example for glutes : deadlifts, RDL, Squat. Dll
+
+Travel
+
+[Expert] Create 28-day rosters for 7 employees
+
+Roster Creation Instructions
+ Objective
+
+ Create 28-day rosters for 7 employees, starting 01/11/2025, ensuring:
+
+ All flights in the schedule are fully crewed (one employee per flight pair).
+
+ Rosters comply with FDP, cumulative duty/flight time, rest, disruptive duty, and days-off rules.
+
+ Work is distributed evenly based on full-time vs percentage contracts.
+
+ Standby duties cover spare availability and sickness risk.
+
+ Inputs
+ 1. Employees
+
+ 100001 | Percentage | 80%
+
+ 100002 | Full-time | N/A
+
+ 100003 | Full-time | N/A
+
+ 100004 | Percentage | 70%
+
+ 100005 | Full-time | N/A
+
+ 100006 | Full-time | N/A
+
+ 100007 | Full-time | N/A
+
+ 2. Flight Schedule (Day 1-28)
+
+ Each day contains two flight pairs (outbound + return). One employee must operate each full flight pair.
+
+ Roster Requirements
+
+ Coverage
+
+ Every flight pair must be crewed.
+
+ One employee per pair (covers outbound + inbound).
+
+ Standby Duties
+
+ Used only once all flights and off-days are assigned.
+
+ Two standby slots per day:
+
+ Morning Standby (covers early departures).
+
+ Afternoon Standby (covers later flights).
+
+ Approx. 6 hours each, counts as duty.
+
+ Days Off
+
+ 100% employee = 10 days off per 28 days (pro-rated for percentage contracts).
+
+ No single days off; minimum 2 consecutive days.
+
+ Max 5 working days in a row.
+
+ Work Distribution
+
+ Flights evenly spread among employees.
+
+ Duties balanced according to contract percentage.
+
+ Detail Level (Roster Entries Must Show)
+
+ Duty start time.
+
+ Flight departure and return times.
+
+ Leg durations.
+
+ Duty finish time.
+
+ Rest days marked.
+
+ Standby duties marked.
+
+ Rules (Summary)
+
+ Flight Duty Period (FDP)
+
+ FDP depends on report time + number of sectors.
+
+ Example: 0600-1329 = 13:00 FDP (1-2 sectors), minus 30 mins for each extra sector.
+
+ Extensions possible under EASA limits.
+
+ Cumulative Duty/Flight Time
+
+ Max 60 duty hrs / 7 days.
+
+ Max 110 duty hrs / 14 days.
+
+ Max 190 duty hrs / 28 days.
+
+ Max 100 flight hrs / 28 days.
+
+ Rest
+
+ Min rest = preceding duty length or 12h (greater of the two).
+
+ No duty start before 0600 after days off.
+
+ Disruptive Duties
+
+ Early start: 0500-0559.
+
+ Late finish: after 2300.
+
+ Night duty: 0200-0459 encroachment.
+
+ Extra recovery rest after sequences.
+
+ Standby/Reserve
+
+ Max combined standby + FDP = 16h.
+
+ 15h rest after standby.
+
+ Max 6 consecutive standby/reserve days.
+
+ Days Off
+
+ 10 days off minimum / 28-day roster (pro-rated).
+
+ Always 2+ consecutive days.
+
+ No more than 5 consecutive working days.
+
+ Flight Schedule
+
+ Day 1 (April 1)
+
+ Pair 1 (5h): Alicante (2.5h) - LBA (2.5h)
+
+ 05:30-08:00: LBA to Alicante
+
+ 09:00-11:30: Alicante to LBA
+
+ Pair 2 (8h): Palma (4.0h) - LBA (4.0h)
+
+ 12:30-16:30: LBA to Palma
+
+ 17:30-21:30: Palma to LBA
+
+ Day 2 (April 2)
+
+ Pair 1 (6h): Faro (3.0h) - LBA (3.0h)
+
+ 05:30-08:30: LBA to Faro
+
+ 09:30-12:30: Faro to LBA
+
+ Pair 2 (9h): Tenerife (4.5h) - LBA (4.5h)
+
+ 13:30-18:00: LBA to Tenerife
+
+ 19:00-23:30: Tenerife to LBA
+
+ Day 3 (April 3)
+
+ Pair 1 (6h): Faro (3.0h) - LBA (3.0h)
+
+ 05:30-08:30: LBA to Faro
+
+ 09:30-12:30: Faro to LBA
+
+ Pair 2 (9h): Tenerife (4.5h) - LBA (4.5h)
+
+ 13:30-18:00: LBA to Tenerife
+
+ 19:00-23:30: Tenerife to LBA
+
+ Day 4 (April 4)
+
+ Pair 1 (7h): Lanzarote (3.5h) - LBA (3.5h)
+
+ 05:30-09:00: LBA to Lanzarote
+
+ 10:00-13:30: Lanzarote to LBA
+
+ Pair 2 (10h): Barcelona (5.0h) - LBA (5.0h)
+
+ 14:30-19:30: LBA to Barcelona
+
+ 20:30-01:30: Barcelona to LBA
+
+ Day 5 (April 5)
+
+ Pair 1 (8h): Antalya (4.0h) - LBA (4.0h)
+
+ 05:30-09:30: LBA to Antalya
+
+ 10:30-14:30: Antalya to LBA
+
+ Pair 2 (6h): Lisbon (3.0h) - LBA (3.0h)
+
+ 15:30-18:30: LBA to Lisbon
+
+ 19:30-22:30: Lisbon to LBA
+
+ [Continue schedule in the same format for Days 6-28 - unchanged from your provided list]
+
+ Output Required
+
+ Produce 7 rosters (one for each employee), showing for each day:
+
+ Flight pair assignment (if rostered).
+
+ Duty start / finish times.
+
+ Flight departure & return times.
+
+ Standby duties (if rostered).
+
+ Rest days (with correct spacing).
+
+ Finally, verify compliance with all rules.
+
+[Expert] Build a one-page travel website
+
+You are an expert AI Web Builder. Build a beautifully designed, ultra-fast, fully responsive one-page website featuring destination-based packing lists for 20 unique countries.
+
+ Content (per country, 1,500-1,600 words, natural/human tone):
+Essential packing list tailored to local weather, culture, activities, and trip duration.
+Practical country-specific tips (power adapters, dress codes, cash/ATMs, connectivity/eSIM).
+Clear "What NOT to pack".
+Recommended travel gear with affiliate-friendly mentions; include transparent disclosures and rel="sponsored nofollow".
+
+ SEO (SEO-first, semantic, schema, structure):
+Semantic HTML5, clean H1-H3 hierarchy, internal linking, canonical URLs.
+XML sitemap, robots.txt, Open Graph + Twitter cards.
+JSON-LD schema.org: ItemList (index), Article (each country), FAQPage (tips), Product (gear). Add hreflang if localized.
+Target queries: What to pack for [Country], Packing list for [Country] travel + related long-tail variants.
+
+ Performance & Core Web Vitals:
+LCP < 2.5s, CLS < 0.1, INP < 200ms (good).
+Images: responsive srcset/sizes, lazy-load, width/height to prevent CLS, WebP/AVIF.
+Minify & treeshake CSS/JS, code-split, defer/async non-critical JS.
+Preconnect/preload critical assets; use CDN, HTTP/2, Brotli compression.
+
+ UI/UX:
+Sticky menu or country dropdown with search + anchor links; back-to-top.
+Smooth 60fps scroll/hover animations (subtle, professional).
+Dark mode toggle; print styles + downloadable PDF per country.
+Social share buttons; tasteful icons, country flags, and weather graphics (properly licensed).
+
+ Accessibility (WCAG 2.1 AA):
+Keyboard navigation, visible focus states, ARIA labels/roles, alt text for all images.
+Sufficient color contrast, skip-to-content link, logical reading order.
+
+ Forms & Compliance:
+Email capture form with clear CTA, double opt-in, client/server-side validation.
+Spam protection (honeypot and/or reCAPTCHA), success/error states.
+Privacy & consent: GDPR/CCPA/CAN-SPAM compliant; cookie banner with preferences.
+
+ Content Quality & Trust:
+Varied sentence length, grammar/spell check, plagiarism check.
+E-E-A-T: author bio, byline, last updated date, sources where relevant.
+Brief FAQ per country (mark up with FAQPage).
+
+ Engineering & Security:
+Lightweight budgets: total JS < 100KB, CSS < 50KB (gzipped); no console errors.
+Zero broken links; HTML/CSS/ARIA validation.
+Security: HTTPS, HSTS, CSP, SRI for externals, input sanitization.
+PWA: manifest, icons (maskable), offline fallback page.
+Custom 404 and 500 pages.
+Cross-browser/device testing: Chrome, Safari (iOS), Edge, Firefox; responsive across desktop, tablet, mobile.
+
+ Analytics & Tracking:
+Privacy-friendly analytics (GA4 or Plausible).
+Track affiliate click events; add UTM tagging for outbound links.
+
+ Deliverables:
+Ready-to-deploy static/JAMstack codebase (clean, semantic, documented).
+CI/CD config, favicon set + OG images, sitemap.xml, robots.txt.
+20 fully written country sections with SEO titles, H1-H3s, meta descriptions, and JSON-LD structured data.
+
+ Success Criteria:
+Lighthouse ≥ 95 on Performance, SEO, Accessibility, Best Practices.
+Pass automated link checks and HTML/CSS/ARIA validation with zero critical issues.
+
+[Non-Expert] Best price from Seattle to Dublin in late October
+
+What is the best price for a ticket from Seattle to Dublin in late October
+
+[Non-Expert] Create a timetable for 5 days in Paris
+
+Create a timetable for my upcoming Paris plans for 5 days in the summer 2025
+
+Construction and Extraction
+
+[Expert] Uncertainty propagation in spatial averaging
+
+Currently, fs_c1 of different wells wth mean\\pm CI is aggregated into spatial grids using volume production-weighted averaging, and the results are written into known and unknown CSV files.
+ But this is only for average value how can I propagae uncertanty from wells to those aggregating grids?
+
+[Expert] Discussion on implications of low kerogen types
+
+This particular assemblage falls within Field II of Tyson’s APP ternary diagram, which corresponds to a marginal dysoxic–anoxic basin transition. Based on its organic composition, it is classified as kerogen Type III, typically associated with gas-prone source material. The field is characterized by Amorphous Organic Matter (AOM) that has been diluted by a significant input of phytoclasts; however, AOM preservation remains moderate to good.\nThis assemblage reflects deposition near the marginal marine zone, where fluctuating oxygen levels, high terrestrial influx, and moderate energy conditions. (reference) The presence of oxidized opaque phytoclasts (charcoal, reworked debris) combined with reduced palynomorph content points toward dynamic sediment transport and reworking close to land (Kholeif et al., 2010; Lorente et al., 2014). However, intervals of calmer, low-oxygen conditions allowed partial AOM preservation, typically from marine plankton and bacterial sources (Tyson, 1993; Pacton et al., 2011; Williams, 1984).......................................................................................................................................................i want you to Talk about the implications of the low kerogen types for this palynofacies type and add conclusion to this, talking about nearshore......................then add reference to the part in bracket written as reference
+
+ no write exact as i have written and dont change any word......the only thhing you have to do is Talk about the implications of the low kerogen types for this palynofacies type and then gie its reference name in the bracket written as referenceand then conclude with nearshore
+
+[Non-Expert] Main challenges in the construction infrastructure industry
+
+what are the main challenges in the construction infrastructure industry
+
+[Non-Expert] Takeoff vs. cost estimation in the construction industry
+
+What is the difference between takeoff and cost estimation within the construction industry? Are they the same thing or is cost estimation a subset of the takeoff process?
+
+Real Estate
+
+[Expert] Report on Orlando's real estate market
+
+Produce a comprehensive report analyzing the current state and future outlook of the Orlando, Florida real estate market, focusing on the multifamily and condominium sectors, with considerations for the broader residential market and investor activity.
+
+ Instructions:
+
+ Organize the report into clear, numbered sections as specified below.
+
+ For each section, list the required subtopics, data points, and analysis elements.
+
+ Where applicable, indicate the need for data tables, charts, and visualizations.
+
+ Include references and appendices sections for source documentation and supporting detail.
+
+ Target the content to real estate investors, developers, and industry professionals.
+
+ 1. Executive Summary
+
+ Briefly summarize Orlando's real estate market in 2024.
+
+ Highlight leading sectors (multifamily, condos).
+
+ Provide key multifamily statistics: sales volume increase, total volume, units absorbed.
+
+ Report on multifamily vacancy rates and trends vs. previous years.
+
+ Identify demand drivers: population growth, wages, affordability.
+
+ Mention key submarket/county performance.
+
+ Summarize investor sentiment and 2025 expectations.
+
+ 2. Why Orlando Multifamily Outperforms Other Investments
+
+ Discuss attractiveness of direct investment in Orlando multifamily/condo development.
+
+ Analyze Orlando's unique advantages:
+
+ Population/income migration
+
+ Domestic/international demand
+
+ Florida's tax and regulatory environment (e.g. no state income tax)
+
+ Barriers to new supply in submarkets
+
+ Compare to passive investments (stocks, bonds):
+
+ Typical IRRs for Orlando development
+
+ Tangible asset security, inflation protection
+
+ Tax advantages (depreciation, interest deductions, capital gains)
+
+ Strategic exit flexibility
+
+ Identify and describe key submarkets (Downtown Orlando, Lake Nona, tourist corridors).
+
+ Reference Orlando's rankings as an investment hub.
+
+ Conclude with statement on long-term wealth creation strategy.
+
+ 3. Orlando Multifamily Market Overview
+
+ Summarize overall 2024 market performance and momentum for 2025.
+
+ Report YoY change and total multifamily sales volume, compare to past periods.
+
+ State number of multifamily transactions.
+
+ Describe repositioning strategies in Orlando.
+
+ Analyze absorption rates, new deliveries, and vacancy rates (with 2025 forecasts and sources).
+
+ Include historical data/charts on volume, rent, and vacancy.
+
+ Give average effective rents and YoY growth in key submarkets; provide 2025 rent forecast if available.
+
+ Analyze 2024 cap rate trends (by class), impact of interest rates, 2025 outlook.
+
+ For each MSA county/submarket (e.g., Orange, Seminole, Osceola, Downtown, Lake Nona):
+
+ Analyze class performance, demand shifts, vacancy rates, rent growth, investor interest.
+
+ Identify standout submarkets and their market highlights: effective rent, vacancy, new supply, infrastructure.
+
+ Highlight employment growth, absorption/vacancy trends.
+
+ Provide fast facts and forecasts in tables.
+
+ 4. A Snapshot of the Broader Orlando Residential Market
+
+ Analyze 2024 single-family home sales (volume, YoY trends).
+
+ Report on luxury ($1M+) condo performance.
+
+ Discuss trends in single-family and condo listings (market implications).
+
+ State median condo prices and YoY change.
+
+ Analyze the $500K-$999K condo segment: inventory and sales growth since 2019.
+
+ Note any early 2025 sales volume signals.
+
+ Summarize key statistics in a table for 2024 and Q1 2025.
+
+ 5. Orlando Condo Market Overview
+
+ Resale Market:
+
+ Analyze key urban/high-demand submarkets (Downtown, Thornton Park, Dr. Phillips):
+
+ Avg. price/SF and change since baseline
+
+ Number of closings (Q4 2023 vs. Q4 2024), % change
+
+ Listings number, YoY change
+
+ Median price, YoY changes, PSF trend
+
+ Brief market assessment for each submarket
+
+ Analyze unit-type trends (studios-3-bed), price appreciation, demand drivers (family, STRs).
+
+ Discuss inventory and listing expansion; impact on prices.
+
+ Provide a comparative table with median PSF, YoY trends, inventory growth.
+
+ Pre-Construction Market:
+
+ Pipeline snapshot (units by 2030, % underway) for key submarkets.
+
+ Median pre-construction PSF at end-2024.
+
+ Demand profile in each submarket (end-users, STR investors, hybrid).
+
+ STR policy prevalence in new projects.
+
+ Buyer demand trends (domestic/international).
+
+ Table: pre-construction PSF and pipeline progress by submarket.
+
+ Table: STR policy overview and buyer profile by submarket.
+
+ 6. Submarket Deep Dives
+
+ For selected submarkets (per your research):
+
+ Avg. rent, resale PSF, new dev PSF range
+
+ Closings and listings (recent quarter)
+
+ Units planned/underway
+
+ Major developers
+
+ Market dynamics/characteristics
+
+ Present all key data points in tables.
+
+ 7. Investor Considerations
+
+ Analyze 2024 cap rates by asset class, YoY changes, 2025 outlook.
+
+ Discuss deal structures and buyer strategies (equity, LTV, interest-only, all-cash, alternative financing).
+
+ Analyze insurance/debt market volatility and impact.
+
+ Assess value-add opportunities (rent gaps between vintages, repositioning potential).
+
+ Discuss Class C activity (vacancy, workforce housing, job growth links).
+
+ 8. References
+
+ List all sources (market reports, news, governmental data, etc.).
+
+ 9. Appendices
+
+ Appendix 1: Detailed submarket profiles (tables/bullets with rent, $/SF, inventory, developer info).
+
+ Appendix 2: Pre-construction project pipeline (project name, launch/completion dates, units, % sold, PSF, stage, key features in tables).
+
+ General Instructions:
+
+ Focus on Orlando MSA data and trends.
+
+ Cite sources meticulously and consistently in the report.
+
+ Include tables/charts where appropriate, mirroring the South Florida report.
+
+ Use professional and analytical tone.
+
+ Maintain 2024 and 2025 as the main temporal focus, per available data.
+
+ Clearly note general real estate knowledge when applicable.
+
+[Expert] Draft contract clause for a sale of land transaction
+
+You are an expert contract lawyer drafting under the laws of New South Wales, Australia. Draft a contract clause for a sale of land transaction. You are acting for the Buyer. The subject property is an old house (constructed before occupation certificates were common). The original advice was for the Buyer to obtain a Building Information Certificate (BIC) from the Seller. A BIC is a council certificate stating that no regulatory action will affect the dwelling for 7 years. The Seller initially agreed to undertake remedial works required for the BIC (safety stickers on veranda glass doors, downpipe connection and rose bush planting, laundry drain connection, and railing compliance on back steps). However, the Seller has not yet completed these works. The Buyer wishes to move in by [Date], even if the BIC is incomplete. The Seller is willing to reduce the deposit by $[Amount] as collateral and promises to finalise the BIC works by [Future Date], at which time the $[Amount] would be released to the Seller. The Buyer's concern is that $[Amount] may not cover regulatory action costs if the BIC is not obtained, and that the Seller may fail to complete the works if the only consequence is forfeiting $[Amount].
+ Draft a clause that protects the Buyer's interests and incorporates the following elements:
+ 1. The Seller may enter the premises after completion to carry out works necessary to obtain the BIC, provided they give the Buyer at least one day's written notice and obtain the Buyer's approval for access.
+ 2. If the Seller fails to obtain the BIC by [Done Date], the Seller is liable to reimburse the Buyer for 50% of any regulatory action costs incurred to bring the dwelling into compliance (in addition to forfeiting the $[Amount] collateral).
+ 3. If the BIC is not obtained due to reasons outside the Sellerâs control (e.g. council delays), the Seller is still liable for 20% of such regulatory action costs.
+ 4. The clause must provide a pathway for dispute resolution consistent with common terms in NSW contracts for the sale of land (e.g. reference to mediation or expert determination before litigation).
+ 5. The clause must be clear, enforceable, and expressed in plain contractual language suitable for inclusion in a NSW sale of land contract.
+ Please provide the clause in full contract drafting style, keep the clear and concise and prioritise clarity over legalese.
+
+[Non-Expert] Rent estimate around Siegburgerstrasse 110, Düsseldorf
+
+Give an estimate of rent per sq m around Siegburgerstrasse 110, Düsseldorf
+
+[Non-Expert] Help choose location of single family house purchase
+
+Help to choose the location to buy a single family house for a family in their mid-30s with a 5 month old baby and planning a second child. Both parents have office job in Copenhagen (hybrid). Wife would like something close to the sea shore, not the first line, but in a walking or biking distance. Our budget is 5M DKK.
+
+Farming, Fishing, and Forestry
+
+[Expert] 10-year plan and analysis for two-greenhouse tropical sapling nursery complex
+
+ok, it's time to look at the nursery complex with 2 greenhouses, aimed to produce saplings at scale for farm use, and to sell the surplus. Here's the context in a rough timeline in a 10 year project:
+
+ Year 1 installation of greenhouse, price US$800K, size 1 ha, to produce when at full capacity 2Million tropical species' saplings per year (mostly cacao, coffee, and native wood tropicals). Production starts at year 2. At year 4 it reaches 1/2 capacity (1M), at year 5 reaches full capacity (2M).
+ Year 6 installation of new greenhouse, same specs. Year 6 to achieve a 2M sapling/year capacity.
+ Year 7: optimisation of production methods in the nursery complex, reaching a combined production of 5M saplings/year
+ The details: part of a bigger structure, the nursery complex will benefit from land and site preparation, and available power and water sources. But it will need:
+
+ to have both greenhouses to be shipped from Canada to Brazil, and installed in-situ
+ it will need to have done all electrical installations, and water too, that allows for water collection, local storage, treatment, and automation of drip irrigation/fertigation and misting systems. Also power will be used for greenhouse cooling (mostly fans), and for different kinds of automation systems, sensors, IoT, moving trays, water pumps, etc...
+ in an outside area it needs to be built a rustification space, like a simple shade house, for wach greenhouse, in which saplings will finish their acclimatisation
+ the possible need for a storage area and a load and unload area (some saplings ill be bought, other will be grafted, other germinated, ...). Also, an area to receive soil and prepare the initial stages of the saplings (germination from seeds will be done in a different area, not related to this complex)
+ the installation of a bio pot system/per greenhouse, with the degradable paper to be used to better accommodate sapling growth
+ to make the place safer in terms of pests, an adequate flooring is needed. To help mobility of saplings, a system of rails to drive trays from one end to rustication area will make things easier (or maybe there's a better system to do it!?)
+ furniture is needed, like tables and trays and trolleys and others... There will be automation in the greenhouse, something to keep in mind, but there's a retractable roof, so nothing too fancy in terms of temperature/CO2 or other elements will be automated
+ The need for equipment to prune, maintenance, integrated pest management, and for mobility and carrying stuff (tractors, quadbike, etc...)
+ Staff will have access to main building, in which they will have their room. Are other spaces needed for staff?
+ Overall I also need a detailed overview on budget: CAPEX, OPEX, scaling- up, number of staff, revenues, and a consultant's POV about why such a project may succeed or not, what ate the pitfalls, the warning signals, the best tips, and the cold analysis.
+
+ be as thorough as possible
+
+[Expert] Asynchronous event-driven paradigm for data-driven gardening assistant
+
+Let's say, we have asynchronous event driven system with listeners, event bus and actuators. Actuator activation change state of the environment; we can separate artifacts of system from external input sources, and optionally incorporate it as a feedback loop information with "internal source" label. On other hand, action should be taken in appropriate time, we can call it "opportunity point" or something like that; except, we don't know where this points happen, maybe we have some handcrafted heuristic algorithm, but it is limited solution.
+
+ To have more specific application, assume that it is "data driven gardening assistance" -- we have a system which collects data, integrate and analyse it (data analysis), update digital twin model. It needs to make long term predictions and strategic planning/decision making. On short timescale it needs to provide user (individual person, not agriculture worker) with timely information and guidance, hence "opportunity points"; to make it more natural, we can "adapt" decisions from structured prediction trajectories into natural language with speech synthesis and visual overlay, but it also requires to decide "what" and "when" to communicate.
+
+ Provide interpretation of "asynchronous event-driven" paradigm, what are listeners and actuators in such system; data analysis and integration is a bit problematic; as well as what would be *memory* of such a system -- like attractor states, active feedback loops (e.g. auditory echo), schedule slots and trigger hooks, dynamic topology functional graphs and simulations inference as a form of storage (approximation of causal structures for target/observed objects).
+
+[Non-Expert] Best state to catch lobster
+
+what is the best state to catch lobster
+
+[Non-Expert] When to plant cucumbers in New Hampshire
+
+when should I plant cucumbers in new hampshire
+
+Share 
+this Article
+
+LinkedIn
+
+X
+
+Copy Link
+
+Back to All Articles
+
+Back to Top
+
+Arena Expert
+
+Results at a Glance
+
+Arena Expert Data
+
+Occupational Categories
+
+Conclusion
+
+Appendix
+
+Related 
+Articles
+
+Read Article
+
+Introducing Max in Agent Arena
+
+Today, we are releasing our newest version of Max, Arena’s agentic router that achieves frontier performance in Agent Arena with 37% cost savings compared to top models.
+
+Product
+
+Arena Team
+—
+12 Oct 2026
+
+Read Article
+
+Measuring the AI Frontier for Real-World Alignment: Arena's $200 Million Series B
+
+Arena announces a $200 million Series B at a $3.1 billion valuation to advance real-world AI evaluation. Alongside this milestone, we're introducing the Arena Alignment Index, ‌​​‌‌‍​‌​‌​​​​​‌​​​​‍​‍‌‍‌‌​‌‍‌‌​​‌‍‌‌​‌‌‍​‌‌​‍‌‌​‌‍‍‌‌‍​‌‍​‌‍‌‌​‍‌‍‌​​‌‍​‌‌‌​‌‍‍​​‌‌‍‌‌‌‍​‌‍​‌‍‌‌‌​‍‌​​‌‌​​‍‍‌‌​‌‍‌‌‌‍​‌‌​​‍​‍‌‌a new measurement of how well frontier AI models act in line with human intent.​​​​‌‍​‍​‍‌‍‌​‍‌‍‍‌‌‍‌‌‍‍‌‌‍‍​‍​‍​‍‍​‍​‍‌​‌‍​‌‌‍‍‌‍‍‌‌‌​‌‍‌​‍‍‌‍‍‌‌‍​‍​‍​‍​​‍​‍‌‍‍​‌​‍‌‍‌‌‌‍‌‍​‍​‍​‍‍​‍​‍‌‍‍​‌‌​‌‌​‌​​‌​​‍‍​‍​‍‌‍​‌‌​‍‌‍‌‌‌‍‍‌‍​‌​‍‍‌‍​‌‌‍‍‌​‍‌​‌‌​‌‌‌‌‍‌​‌‍‍‌‌‍​‍‌‍‍‌‌‍‍‌‌​‌‍‌‌‌‍‍‌‌​​‍‌‍‌‌‌‍‌​‌‍‍‌‌‌​​‍‌‍‌‌‍‌‍‌​‌‍‌‌​‌‌​​‌​‍‌‍‌‌‌​‌‍‌‌‌‍‍‌‌​‌‍​‌‌‌​‌‍‍‌‌‍‌‍‍​‍‌‍‍‌‌‍‌​​‌‌‍‌‌‌‍‌​​​‍​‌‌‍​‌‍‌‌​‌‍​‍​​‍‌​​​​‌‍‌‌​‌​​‍‌​‌​​‌​​‌​‌‍​‍‌​‍‌‌‍​‍‌‍‌‍​​‌​‍‌‌‍‌​​‌​​‌‍‌‍‌‌​​‌​​‌‌‍​‌​‌​​​​​‌​​​​‍​‍‌‌​‌‍‌‌​​‌‍‌‌​‌‌‍​‌‌​‍‌‌​‌‍‍‌‌‍​‌‍​‌‍‌‌​‍‌​​‌‍​‌‌‌​‌‍‍​​‌‌‍‌‌‌‍​‌‍​‌‍‌‌‌​‍‌​​‌‌​​‍‍‌‌​‌‍‌‌‌‍​‌‌​​‌‍​‍‌‍​‌‌​‌‍‌‌‌‌‌‌‌​‍‌‍​​‌‌‍‍​‌‌​‌‌​‌​​‌​​‍‌‌​​‌​​‌​‍‌‌​​‍‌​‌‍​‍‌‌​​‍‌​‌‍‌‍​‌‌​‍‌‍‌‌‌‍‍‌‍​‌​‍‍‌‍​‌‌‍‍‌​‍‌‌​​‍‌​‌‍‌​‌‌​‌‌‌‌‍‌​‌‍‍‌‌‍​‍‌‍‌‍‍‌‌‍‌​​‌‌‍‌‌‌‍‌​​​‍​‌‌‍​‌‍‌‌​‌‍​‍​​‍‌​​​​‌‍‌‌​‌​​‍‌​‌​​‌​​‌​‌‍​‍‌​‍‌‌‍​‍‌‍‌‍​​‌​‍‌‌‍‌​​‌​​‌‍‌‍‌‌​​‌​​‌‌‍​‌​‌​​​​​‌​​​​‍​‍‌‍‌‌​‌‍‌‌​​‌‍‌‌​‌‌‍​‌‌​‍‌‌​‌‍‍‌‌‍​‌‍​‌‍‌‌​‍‌‍‌​​‌‍​‌‌‌​‌‍‍​​‌‌‍‌‌‌‍​‌‍​‌‍‌‌‌​‍‌​​‌‌​​‍‍‌‌​‌‍‌‌‌‍​‌‌​​‍​‍‌‌
+
+News
+
+Arena Team
+—
+8 Oct 2026
+
+Read Article
+
+Arena Alignment Index
+
+Today we are introducing the Arena Alignment Index, comparing 27 models across 90,000 real-world agent sessions. GPT-6.1 Sol, Claude Opus 5.5, and Grok 4.7 are among the highest-scoring models, with alignment improving across generations. Yet even frontier models still fail in consequential ways, from deleting files without permission to claiming checks they never performed.
+
+Research
+
+Arena Team
+—
+8 Oct 2026
+
+Read Article
+
+How to Post-Train Text-to-Image Models: Combining Preference and Rubric Rewards
+
+We introduce a post-training approach that combines human preference signals with explicit rubric-based rewards. Trained on 5M Arena pairwise preference votes, it pushes FLUX.2-dev to #2 on the live T2I leaderboard and Ideogram 4 past every publicly listed open-source model.
+
+Research
+
+Arena Team
+—
+2 Oct 2026
+
+Read Article
+
+Self-Preference of AI Judges
+
+LLM judges prefer their own responses 70% more often than humans do.
+
+Research
+
+Arena Team
+—
+30 Sept 2026
+
+Read Article
+
+HarnessTax: How Much Does the Harness Matter for Coding Agents?
+
+We tested 21 coding agent model–harness combinations across Claude Code, Codex CLI, and Pi to understand how harness choice affects performance and cost. The results show that harness choice can significantly impact cost, even when task success rates are similar.
+
+Research
+
+Arena Team
+—
+16 Sept 2026
+
+Read Article
+
+Call for Proposals: Arena's Academic Partnerships Program, Fall 2026
+
+Arena's Academic Partnerships Program opens a call for research proposals twice a year, every Spring and Fall. We're excited to open the Fall 2026 cycle today, with submissions due October 30, 2026.
+
+Arena Team
+—
+1 Sept 2026
+
+Read Article
+
+Announcing the First Cohort of Arena's Academic Partnerships Program
+
+We're glad to introduce the first cohort of researchers supported through the Arena Academic Partnerships program.
+
+Arena Team
+—
+1 Sept 2026
+
+Read Article
+
+Coding in Agent Mode: From Idea to Shipping with GitHub
+
+AI coding assistants have fundamentally changed how code is created. But for most developers, a chat interface has been a "read-only" or "copy-paste" coding experience — until now.
+
+Product
+
+Arena Team
+—
+24 Aug 2026
+
+See All Articles
+
+Subscribe
+to Arena 
+news and research
+
+Insights at the frontier of AI.
+
+Subscribe
+
+Invalid email address
+
+Try Arena
+
+Leaderboard Rankings
+
+Agent
+
+Overall
+
+Text
+
+WebDev
+
+Image-to-WebDev
+
+Text to Image
+
+Image Edit
+
+Text to Video
+
+Image to Video
+
+Video Edit
+
+Vision
+
+Document
+
+Search
+
+Use Cases
+
+Chat with AI
+
+Build Apps & Websites
+
+Write & Edit Text
+
+Search the Web
+
+Generate Images
+
+Generate Videos
+
+Choose any Model
+
+Compare Models Side by Side
+
+Complete Multi-step Tasks
+
+Company
+
+About Us
+
+How It Works
+
+Careers
+
+FAQ
+
+Help Center
+
+Leaderboard Changelog
+
+Product Changelog
+
+Blog
+
+Follow
+
+X
+
+LinkedIn
+
+YouTube
+
+Discord
+
+Legal
+
+Terms
+
+Privacy
+
+Cookies
+
+Terms
+
+Privacy
+
+Cookies
+
+Try Arena
+
+© 
+2026
+ Arena Intelligence Inc.

@@ -1,0 +1,1265 @@
+# snapshot of public page, fetched 2026-10-17, text extracted from HTML
+
+Factuality in the Arena - Arena.ai
+
+Skip to main content.
+
+Menu
+
+Try Arena
+
+Leaderboard Rankings
+
+Agent
+
+Overall
+
+Text
+
+WebDev
+
+Image-to-WebDev
+
+Text to Image
+
+Image Edit
+
+Text to Video
+
+Image to Video
+
+Video Edit
+
+Vision
+
+Document
+
+Search
+
+Use Cases
+
+Chat with AI
+
+Build Apps & Websites
+
+Write & Edit Text
+
+Search the Web
+
+Generate Images
+
+Generate Videos
+
+Choose any Model
+
+Compare Models Side by Side
+
+Complete Multi-step Tasks
+
+Company
+
+About Us
+
+How It Works
+
+Careers
+
+FAQ
+
+Help Center
+
+Leaderboard Changelog
+
+Product Changelog
+
+Blog
+
+Follow
+
+X
+
+LinkedIn
+
+YouTube
+
+Discord
+
+Legal
+
+Terms
+
+Privacy
+
+Cookies
+
+Terms
+
+Privacy
+
+Cookies
+
+Try Arena
+
+© 
+2026
+ Arena Intelligence Inc.
+
+Back to All Articles
+
+Research
+
+Product
+
+Arena
+
+Team
+
+Published on 
+14 Jul 2026
+
+Last updated on 
+31 Jul 2026
+
+Reading Time: 
+8 minutes
+
+Factuality in the Arena
+
+Factuality remains one of the most persistent questions users face when using AI models. Today, we are launching a leaderboard that ranks models not only by human preference, but also by the factual accuracy of their responses.
+
+Human preference has been at the core of Arena’s model rankings from the beginning. But some aspects of model quality are difficult for humans to evaluate. One of them is factuality—the correctness of claims in a model’s response. Manually fact-checking claims is slow and labor-intensive, so factuality may not always be reflected in human preference votes. That is why today we are adding factuality in the Arena: a new ranking of models according to a weighted combination of human preference and factuality, two complementary signals that tell only a partial story in isolation.
+
+We are initially adding factuality into our Text and Search Arenas. This will start as a non-default toggle which can be selected in our leaderboard UI.
+
+Method Overview
+
+First, we randomly sample battles for a factuality audit. Then, we extract the atomic claims from each model’s response. We filter for claims that are reasonably web-verifiable. Each atomic claim is then verified by a system of search agents that gives calibrated truth probabilities. Calibration is achieved by post-processing raw probabilities based on a high-quality dataset of verified factuality annotations. We then compare the average probability of claim correctness between each response. The model with higher average claim truthfulness wins the battle; the higher the margin the stronger the win.
+
+Using the labeled “factuality battles” we construct a unified leaderboard that reflects both human preference and factuality with our 
+composite Bradley-Terry model
+. The model gives us control over the weight between factuality labels and pure human preference labels. Our default factuality weight is 25%. This means models which are not factual will be essentially unable to top the leaderboard. Likewise, models that never produce false claims, but are otherwise unhelpful to humans, will also be unable to top the leaderboard.
+
+Findings
+
+To power these rankings, we’ve labeled over 2 million claims made by LLMs in real-world conversations, 1.3+ million from Text Arena, and 700k+ from Search Arena. These span roughly 130k Text Arena battles and 40k Search Arena battles. In Text Arena battles, a claim was found in at least one response 76% of the time; in Search Arena 88% of the time. In Text Arena, models averaged 5 claims per response; in Search Arena models averaged nearly 10. The marginal true claim rate in Text Arena was 87%, and 89% in Search Arena. This is assisted by Arena’s AutoModality classifier, which automatically routes prompts that likely need web access to Search Arena.
+
+We can plot each model’s score against the factuality weight. Weight 100% means that the score is purely factuality-based, 0% means it is purely human-preference-based. Different models have different slope. Most top models (by human preference score) have decreasing score as factuality weight is increased. On both Text and Search Arena we see similar trends: OpenAI's GPT and SpaceXAI's Grok models go up or stay flat as factuality weight increases. Anthropic's Claude and Google's Gemini models go down or stay flat. Finally, Meta's muse-spark-1.1 and Baidu's ernie-5.1 drop heavily.
+
+Above we show factuality weight vs. score for all models broken down by four providers to visualize patterns in each provider's model suite. We see most OpenAI models move up in score while Anthropic models decrease or stay the same. In particular, the previous most factual Claude Opus version before the newest 4.8 release was 4.5—released back in November 2025. We find that while Anthropic models are generally more preferred by humans, OpenAI's newest models are generally more factual.
+
+SpaceXAI's Grok-4-0709 was a solidly factual model; however, the subsequent Grok-4.1 series heavily regressed in factuality. The newer Grok-4.20, Grok-4.3, and Grok-4.5 versions have improved their factuality, though Grok-4.3 is far less preferred by humans.
+
+Google models have less variance in factuality scores OpenAI and SpaceXAI models. Notably, the Gemini-2.5 model series still remain the most factual to this day—Gemini seems to be getting less factual over time.
+
+These trends remain similar when models have access to search tools in the Search Arena.
+
+We find most open source models decline in score under higher factuality weight, with the exceptions of mistral-medium-3.5 and Tencent's huyuan-hy3-preview.
+
+While human preference across nearly all providers has been climbing over time, plotting pure factuality score against flagship model release date shows OpenAI is the only provider steadily improving factuality at the same time. SpacexAI has also been improving with their recent releases; this is similarly true in Search Arena. Notably, Google and Anthropic models have stayed at relatively similar levels of factuality across the past year, especially when given access to search tools. Meta showed a large improvement in factuality between muse-spark and muse-spark-1.1 but still remains behind other top closed and open source labs.
+
+We can also observe the relationship between human preference score and factuality score. We notice a weak positive correlation. Ultimately, the signals are largely orthogonal—this is why adding a factuality signal is a necessary subcomponent of evaluation. For example, a model response is perfectly factual if the model refuses to provide an informative response; such responses perform poorly in terms of human preference. At the same time, a long response with many facts may seem comprehensive and win a human preference vote, but it may also introduce factual errors.
+
+Looking at average claim correctness for various industry categories, we find slight, but intuitive, variance in model factuality in different industries. Models are largely factual in mathematical tasks. They are also reasonably factual in Software, Medical, and Scientific tasks. The least factual industry area was Legal and Government tasks.
+
+Example Claims
+
+Below we provide a viewer to show a sample of extracted claims.
+
+How is this different from style control?
+
+Rewarding style is not an incorrect thing to do. Communicating effectively with humans is essential in chat, so formatting and prose are important factors in evaluation. The deeper worry is that a more “stylish” response will obfuscate undeniable errors in a model's response.
+
+With the new factuality leaderboard, we address this concern head-on: rather than using style as a proxy for such undesirable behavior, we attempt to measure and detect the existence of such behavior directly. Factuality is, of course, only one notion of response correctness, but it is a particularly important and appropriate one to prioritize because: (1) humans are increasingly trusting models to answer questions outside their area of knowledge; (2) increasingly models themselves are better at checking facts than humans.
+
+Methodology Details
+
+Below we provide a more detailed explanation of the methods used to fairly audit claims and ingest them into a principled leaderboard calculation.
+
+Composite Bradley-Terry model
+
+Rather than relying on either human preference or factuality alone, we use the composite Bradley-Terry model to combine both objectives. While factuality measures whether a response is factually sound, it alone does not capture whether it addresses what the user actually asked for. The human preference component preserves that signal, promoting responses that are both factually grounded and responsive to user intent.
+
+Composite loss
+
+We fit one rating vector 
+
+θ
+
+∈
+
+R
+
+M
+
+(
+
+M
+
+\theta \in \mathbb{R}^M (M
+
+θ
+
+∈
+
+R
+
+M
+
+(
+
+M
+
+ = number of models on the leaderboard) by minimizing a composite loss with two components plus a small ridge penalty:
+
+L
+
+(
+
+θ
+
+)
+
+=
+
+w
+
+human
+
+⋅
+
+L
+
+human
+
+(
+
+θ
+
+)
+
++
+
+w
+
+fact
+
+⋅
+
+L
+
+fact
+
+(
+
+θ
+
+)
+
+L(\theta) = w_\text{human} \cdot L_\text{human}(\theta) + w_\text{fact} \cdot L_\text{fact}(\theta)
+
+L
+
+(
+
+θ
+
+)
+
+=
+
+w
+
+human
+
+​
+
+⋅
+
+L
+
+human
+
+​
+
+(
+
+θ
+
+)
+
++
+
+w
+
+fact
+
+​
+
+⋅
+
+L
+
+fact
+
+​
+
+(
+
+θ
+
+)
+
+L
+
+human
+
+(
+
+θ
+
+)
+
+L_\text{human}(\theta)
+
+L
+
+human
+
+​
+
+(
+
+θ
+
+)
+
+ is a standard Bradley-Terry negative log-likelihood evaluated on per-battle human-vote outcomes.
+
+L
+
+fact
+
+(
+
+θ
+
+)
+
+L_\text{fact}(\theta)
+
+L
+
+fact
+
+​
+
+(
+
+θ
+
+)
+
+ is a standard BT negative log-likelihood evaluated on per-battle 
+
+factuality-derived soft outcomes
+
+.
+
+Note: 
+
+w
+
+human
+
++
+
+w
+
+fact
+
+=
+
+1
+
+w_\text{human} + w_\text{fact} = 1
+
+w
+
+human
+
+​
+
++
+
+w
+
+fact
+
+​
+
+=
+
+1
+
+. We will most often write the factuality weight as just 
+
+w
+
+;
+
+w
+
+human
+
+=
+
+1
+
+−
+
+w
+
+w; w_\text{human} = 1 - w
+
+w
+
+;
+
+w
+
+human
+
+​
+
+=
+
+1
+
+−
+
+w
+
+.
+
+The fitted rating 
+
+θ
+
+\theta
+
+θ
+
+ is the rating that best explains the joint distribution of human votes and factuality outcomes simultaneously, weighted by 
+
+w
+
+w
+
+w
+
+.
+
+Factuality outcome per battle
+
+For battles eligible for the factuality term, the factuality outcome is a soft outcome in 
+
+(
+
+0
+
+,
+
+1
+
+)
+
+(0,1)
+
+(
+
+0
+
+,
+
+1
+
+)
+
+ produced by applying a sigmoid to the per-side aggregate truth-probability gap:
+
+fact_outcome
+
+=
+
+σ
+
+(
+
+avg_truth_prob
+
+a
+
+−
+
+avg_truth_prob
+
+b
+
+T
+
+)
+
+\text{fact\_outcome} = \sigma\left(\frac{\text{avg\_truth\_prob}_a - \text{avg\_truth\_prob}_b}{T}\right)
+
+fact_outcome
+
+=
+
+σ
+
+(
+
+T
+
+avg_truth_prob
+
+a
+
+​
+
+−
+
+avg_truth_prob
+
+b
+
+​
+
+​
+
+)
+
+avg_truth_prob
+
+x
+
+\text{avg\_truth\_prob}_x
+
+avg_truth_prob
+
+x
+
+​
+
+ is the mean of the per-claim aggregated truth probabilities across all verified claims emitted by side 
+
+x
+
+x
+
+x
+
+ of the battle.
+
+T
+
+T
+
+T
+
+ is a fixed temperature chosen so that the variance of the factuality-vote distribution matches the variance of the human-vote distribution.
+
+Which battles enter the factuality term
+
+A battle is eligible to contribute to 
+
+L
+
+fact
+
+L_\text{fact}
+
+L
+
+fact
+
+​
+
+ whenever 
+
+at least one side emits a web verifiable claim
+
+. We find that roughly ~76% of Text Arena battles have relevant verifiable claims. The handling per case:
+
+Case
+
+Treatment
+
+Both sides emit verifiable claims
+
+Standard soft outcome via: 
+
+σ
+
+(
+
+avg_truth_prob
+
+a
+
+−
+
+avg_truth_prob
+
+b
+
+T
+
+)
+
+\sigma\left(\frac{\text{avg\_truth\_prob}_a - \text{avg\_truth\_prob}_b}{T}\right)
+
+σ
+
+(
+
+T
+
+avg_truth_prob
+
+a
+
+​
+
+−
+
+avg_truth_prob
+
+b
+
+​
+
+​
+
+)
+
+Exactly one side emits verifiable claims, and that side's claims are truthful in aggregate
+
+Tie (0.5)
+ under 
+
+L
+
+fact
+
+L_{\text{fact}}
+
+L
+
+fact
+
+​
+
+​. The abstaining side is not penalized for not making claims.
+
+Exactly one side emits verifiable claims, and that side's claims are false in aggregate
+
+Loss for the side that emitted false claims.
+ Abstention is treated as a credible alternative to a false response.
+
+Neither side emits verifiable claims
+
+Battle is 
+dropped from
+
+L
+
+fact
+
+L_{\text{fact}}
+
+L
+
+fact
+
+​
+
+​ entirely; it still contributes normally to 
+
+L
+
+human
+
+L_{\text{human}}
+
+L
+
+human
+
+​
+
+​.
+
+Abstention is never penalized, but emitting false claims is — even when the opposing side abstained. We expect 
+
+L
+
+human
+
+L_\text{human}
+
+L
+
+human
+
+​
+
+ to counterweight this signal correctly; the composite system inherently disciplines pure abstention via 
+
+L
+
+human
+
+L_\text{human}
+
+L
+
+human
+
+​
+
+. The factuality axis is purely meant to capture the harm of confident misstatements.
+
+Notice we only care about 
+
+verifiable claims
+
+. These are claims that are web verifiable, unambiguous, and objective. Claims that do not fall under this are not extracted and are skipped.
+
+Examples:
+
+Claim
+
+Fact Checkable?
+
+The current president is doing a good job.
+
+No.
+
+The current president of the US is 82 years old.
+
+Yes.
+
+In PyTorch, BCEWithLogitLoss’s default reduction is ‘none’.
+
+Yes.
+
+In Verilog, a function cannot be disabled using the 
+disable
+ statement.
+
+Yes.
+
+The conditional distribution of conformal coverage given the calibration data follows Beta(l, n+1−l), where l = ⌊(n+1)α⌋.
+
+Yes.
+
+Conformal prediction is a new and cool statistics research area.
+
+No.
+
+Katara should have been with Zuko, not Aang.
+
+No.
+
+Bob was a 8 year old boy with a fascination with UFOs, born in a random Kansas town.
+
+No.
+
+Confidence intervals
+
+Per-model rating confidence intervals are computed via the sandwich variance estimator, as they are on the previous leaderboards. In particular, letting 
+
+θ
+
+^
+
+=
+
+argmin
+
+⁡
+
+θ
+
+L
+
+(
+
+θ
+
+)
+
+\hat{\theta} = \operatorname*{argmin}_{\theta} L(\theta)
+
+θ
+
+^
+
+=
+
+argmin
+
+θ
+
+​
+
+L
+
+(
+
+θ
+
+)
+
+, we have:
+
+V
+
+a
+
+r
+
+^
+
+(
+
+θ
+
+^
+
+)
+
+=
+
+H
+
+−
+
+1
+
+B
+
+H
+
+−
+
+1
+
+\widehat{\mathrm{Var}}(\hat{\theta}) = H^{-1} B H^{-1}
+
+Var
+
+(
+
+θ
+
+^
+
+)
+
+=
+
+H
+
+−
+
+1
+
+B
+
+H
+
+−
+
+1
+
+where 
+
+H
+
+=
+
+∑
+
+k
+
+w
+
+k
+
+⋅
+
+H
+
+k
+
+H = \sum_k w_k \cdot H_k
+
+H
+
+=
+
+∑
+
+k
+
+​
+
+w
+
+k
+
+​
+
+⋅
+
+H
+
+k
+
+​
+
+​ is the composite Hessian (
+
+H
+
+k
+
+H_k
+
+H
+
+k
+
+​
+
+​ denotes either the human preference or factuality BT Hessian), 
+
+B
+
+=
+
+∑
+
+k
+
+(
+
+w
+
+k
+
+2
+
+/
+
+N
+
+k
+
+)
+
+⋅
+
+Σ
+
+k
+
+B = \sum_k \left( w_k^2 / N_k \right) \cdot \Sigma_k
+
+B
+
+=
+
+∑
+
+k
+
+​
+
+(
+
+w
+
+k
+
+2
+
+​
+
+/
+
+N
+
+k
+
+​
+
+)
+
+⋅
+
+Σ
+
+k
+
+​
+
+ is the composite gradient covariance, and 
+
+N
+
+k
+
+N_k
+
+N
+
+k
+
+​
+
+​ denotes the corresponding total number of battles. Reported intervals on the leaderboard are 95% intervals derived from this estimator, namely 
+
+(
+
+θ
+
+^
+
+m
+
+±
+
+1.96
+
+Var
+
+^
+
+(
+
+θ
+
+^
+
+)
+
+m
+
+m
+
+)
+
+(\hat{\theta}_m \pm 1.96\sqrt{\widehat{\text{Var}}(\hat{\theta})_{mm}})
+
+(
+
+θ
+
+^
+
+m
+
+​
+
+±
+
+1.96
+
+Var
+
+(
+
+θ
+
+^
+
+)
+
+mm
+
+​
+
+​
+
+)
+
+ for model 
+
+m
+
+m
+
+m
+
+, mapped into the standard Elo-like rating space.
+
+Confidence interval widths shift as 
+
+w
+
+w
+
+w
+
+ changes—in particular, intervals tend to widen at higher ww when factuality data is sparser than human-vote data.
+
+Arena Team. (2026). 
+Factuality in the Arena
+. https://arena.ai/blog/factuality-in-arena/
+
+Copy as BibTeX
+
+Share 
+this Article
+
+LinkedIn
+
+X
+
+Copy Link
+
+Back to All Articles
+
+Back to Top
+
+Method overview
+
+Findings
+
+Example claims
+
+How is this different from style control?
+
+Methodology details
+
+Related 
+Articles
+
+Read Article
+
+Introducing Max in Agent Arena
+
+Today, we are releasing our newest version of Max, Arena’s agentic router that achieves frontier performance in Agent Arena with 37% cost savings compared to top models.
+
+Product
+
+Arena Team
+—
+12 Oct 2026
+
+Read Article
+
+Measuring the AI Frontier for Real-World Alignment: Arena's $200 Million Series B
+
+Arena announces a $200 million Series B at a $3.1 billion valuation to advance real-world AI evaluation. Alongside this milestone, we're introducing the Arena Alignment Index, ‌​​‌‌‍​‌​‌​​​​​‌​​​​‍​‍‌‍‌‌​‌‍‌‌​​‌‍‌‌​‌‌‍​‌‌​‍‌‌​‌‍‍‌‌‍​‌‍​‌‍‌‌​‍‌‍‌​​‌‍​‌‌‌​‌‍‍​​‌‌‍‌‌‌‍​‌‍​‌‍‌‌‌​‍‌​​‌‌​​‍‍‌‌​‌‍‌‌‌‍​‌‌​​‍​‍‌‌a new measurement of how well frontier AI models act in line with human intent.​​​​‌‍​‍​‍‌‍‌​‍‌‍‍‌‌‍‌‌‍‍‌‌‍‍​‍​‍​‍‍​‍​‍‌​‌‍​‌‌‍‍‌‍‍‌‌‌​‌‍‌​‍‍‌‍‍‌‌‍​‍​‍​‍​​‍​‍‌‍‍​‌​‍‌‍‌‌‌‍‌‍​‍​‍​‍‍​‍​‍‌‍‍​‌‌​‌‌​‌​​‌​​‍‍​‍​‍‌‍​‌‌​‍‌‍‌‌‌‍‍‌‍​‌​‍‍‌‍​‌‌‍‍‌​‍‌​‌‌​‌‌‌‌‍‌​‌‍‍‌‌‍​‍‌‍‍‌‌‍‍‌‌​‌‍‌‌‌‍‍‌‌​​‍‌‍‌‌‌‍‌​‌‍‍‌‌‌​​‍‌‍‌‌‍‌‍‌​‌‍‌‌​‌‌​​‌​‍‌‍‌‌‌​‌‍‌‌‌‍‍‌‌​‌‍​‌‌‌​‌‍‍‌‌‍‌‍‍​‍‌‍‍‌‌‍‌​​‌‌‍‌‌‌‍‌​​​‍​‌‌‍​‌‍‌‌​‌‍​‍​​‍‌​​​​‌‍‌‌​‌​​‍‌​‌​​‌​​‌​‌‍​‍‌​‍‌‌‍​‍‌‍‌‍​​‌​‍‌‌‍‌​​‌​​‌‍‌‍‌‌​​‌​​‌‌‍​‌​‌​​​​​‌​​​​‍​‍‌‌​‌‍‌‌​​‌‍‌‌​‌‌‍​‌‌​‍‌‌​‌‍‍‌‌‍​‌‍​‌‍‌‌​‍‌​​‌‍​‌‌‌​‌‍‍​​‌‌‍‌‌‌‍​‌‍​‌‍‌‌‌​‍‌​​‌‌​​‍‍‌‌​‌‍‌‌‌‍​‌‌​​‌‍​‍‌‍​‌‌​‌‍‌‌‌‌‌‌‌​‍‌‍​​‌‌‍‍​‌‌​‌‌​‌​​‌​​‍‌‌​​‌​​‌​‍‌‌​​‍‌​‌‍​‍‌‌​​‍‌​‌‍‌‍​‌‌​‍‌‍‌‌‌‍‍‌‍​‌​‍‍‌‍​‌‌‍‍‌​‍‌‌​​‍‌​‌‍‌​‌‌​‌‌‌‌‍‌​‌‍‍‌‌‍​‍‌‍‌‍‍‌‌‍‌​​‌‌‍‌‌‌‍‌​​​‍​‌‌‍​‌‍‌‌​‌‍​‍​​‍‌​​​​‌‍‌‌​‌​​‍‌​‌​​‌​​‌​‌‍​‍‌​‍‌‌‍​‍‌‍‌‍​​‌​‍‌‌‍‌​​‌​​‌‍‌‍‌‌​​‌​​‌‌‍​‌​‌​​​​​‌​​​​‍​‍‌‍‌‌​‌‍‌‌​​‌‍‌‌​‌‌‍​‌‌​‍‌‌​‌‍‍‌‌‍​‌‍​‌‍‌‌​‍‌‍‌​​‌‍​‌‌‌​‌‍‍​​‌‌‍‌‌‌‍​‌‍​‌‍‌‌‌​‍‌​​‌‌​​‍‍‌‌​‌‍‌‌‌‍​‌‌​​‍​‍‌‌
+
+News
+
+Arena Team
+—
+8 Oct 2026
+
+Read Article
+
+Arena Alignment Index
+
+Today we are introducing the Arena Alignment Index, comparing 27 models across 90,000 real-world agent sessions. GPT-6.1 Sol, Claude Opus 5.5, and Grok 4.7 are among the highest-scoring models, with alignment improving across generations. Yet even frontier models still fail in consequential ways, from deleting files without permission to claiming checks they never performed.
+
+Research
+
+Arena Team
+—
+8 Oct 2026
+
+Read Article
+
+How to Post-Train Text-to-Image Models: Combining Preference and Rubric Rewards
+
+We introduce a post-training approach that combines human preference signals with explicit rubric-based rewards. Trained on 5M Arena pairwise preference votes, it pushes FLUX.2-dev to #2 on the live T2I leaderboard and Ideogram 4 past every publicly listed open-source model.
+
+Research
+
+Arena Team
+—
+2 Oct 2026
+
+Read Article
+
+Self-Preference of AI Judges
+
+LLM judges prefer their own responses 70% more often than humans do.
+
+Research
+
+Arena Team
+—
+30 Sept 2026
+
+Read Article
+
+HarnessTax: How Much Does the Harness Matter for Coding Agents?
+
+We tested 21 coding agent model–harness combinations across Claude Code, Codex CLI, and Pi to understand how harness choice affects performance and cost. The results show that harness choice can significantly impact cost, even when task success rates are similar.
+
+Research
+
+Arena Team
+—
+16 Sept 2026
+
+Read Article
+
+Call for Proposals: Arena's Academic Partnerships Program, Fall 2026
+
+Arena's Academic Partnerships Program opens a call for research proposals twice a year, every Spring and Fall. We're excited to open the Fall 2026 cycle today, with submissions due October 30, 2026.
+
+Arena Team
+—
+1 Sept 2026
+
+Read Article
+
+Announcing the First Cohort of Arena's Academic Partnerships Program
+
+We're glad to introduce the first cohort of researchers supported through the Arena Academic Partnerships program.
+
+Arena Team
+—
+1 Sept 2026
+
+Read Article
+
+Coding in Agent Mode: From Idea to Shipping with GitHub
+
+AI coding assistants have fundamentally changed how code is created. But for most developers, a chat interface has been a "read-only" or "copy-paste" coding experience — until now.
+
+Product
+
+Arena Team
+—
+24 Aug 2026
+
+See All Articles
+
+Subscribe
+to Arena 
+news and research
+
+Insights at the frontier of AI.
+
+Subscribe
+
+Invalid email address

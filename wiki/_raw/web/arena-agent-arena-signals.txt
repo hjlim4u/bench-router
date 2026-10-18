@@ -1,0 +1,46 @@
+# snapshot of public page https://arena.ai/resources/agent-arena-signals, fetched 2026-10-18, text extracted from Next.js payload
+
+Agent Arena Signal Definitions - Arena.ai
+
+Last Updated: October 12, 2026
+
+Agent Arena ranks models on their agentic capabilities using signals drawn directly from the real work our global community of users completes on Arena - not synthetic benchmarks. Each signal below is built from explicit confirmations or extracted from live traces: the turns, corrections, errors, and feedback that naturally occur when people use agents to get work done on Arena.ai. Each is scored at the level of an individual turn or task before being aggregated into a model-level score. The definitions on this page describe what each signal measures, what counts toward it, and how it rolls up: they're the ground truth for how a raw interaction becomes a number on the Agent Arena signal leaderboards.
+
+### Confirmed Success
+
+We score every task by whether the user explicitly confirms the final outcome. We prompt the user with a pop-up that asks: “Did this complete your task?” If the user clicks “yes”, the task counts towards a confirmed success. If the user clicks “no”, it does not count as confirmed. There is no partial credit for work that looks right but that was never actually validated by the user.
+
+A model's score for this signal is based on the share of its tasks that end in confirmed success. Confirmation contributes positively; a rejection or a silent ending contributes nothing. A task where the user says "perfect, thanks" or clicks accept does not count as confirmed, as this signal is based on the explicit answer to the question prompt. A task where the user pushes back, walks away mid-session, or never responds after the last turn also does not count, even if the output was technically fine.
+
+### Praise vs Complaint
+
+We label every turn that draws explicit user sentiment as either praise or complaint. Praise is unprompted positive feedback. This is when the user says the work is good, thanks the agent, or reacts approvingly. A complaint is unprompted negative feedback. Whenever the user says something is wrong or expresses frustration, independent of whether they go on to correct it.
+
+We then score every task, which may span multiple turns, as a success or failure based on those labels. A task succeeds if it contains more praise than complaints, and fails if complaints outnumber praise. When the two are equal, including the common case of no explicit sentiment at all, the task isn't scored. A model's score is based on its success rate across all scored tasks. Praise contributes positively, complaint contributes negatively.
+
+### Steerability
+
+We score every assistant turn by how much steering effort it requires from the user. If the user does not need to correct the model, the turn requires no steering. If the user does correct it, the effort is higher—and highest when the correction itself does not land.
+
+| What happens on that turn | Steering effort |
+| --- | --- |
+| The user doesn't need to correct the model | None |
+| The user corrects the model, and the next turn is fine | Low |
+| The user corrects the model, and has to correct it again | High |
+
+A model's score is based on its average steering effort across all assistant turns. Steering effort contributes negatively, so a higher score means the model requires less steering from its users. Examples:
+- A turn that requires no correction contributes positively to the model's overall steerability.
+- Every correction represents additional steering effort and therefore counts against the model.
+- A correction the user has to repeat counts for much more, since the first correction didn't land. A correction with no judged next turn is not treated as a repeat — there is no follow-up to show whether it landed.
+
+### Bash Reliability (previously known as Bash Recovery)
+
+We score every bash call the agent makes as a success, a failure, or exempt. A call is a failure when the agent causes the error, such as a mistyped flag, or a bug in a script it wrote. Tests that run correctly but find issues, as well as searches that find nothing, both count as successes. Errors outside the agent’s control, like a network outage, don’t count for or against the model.
+
+A model’s score is based on the number of bash failures per call, across all non-exempt calls. More failures count negatively against the model’s Net Improvement score for Bash Reliability.
+
+### Tool Hallucinations
+
+We score every tool call the agent makes by whether the tool it invoked actually exists in its available toolset. A call to a real, available tool is clean. A call that invents a tool name, uses a signature that doesn't exist, or references a capability the agent doesn't actually have counts as a tool hallucination.
+
+A model's score is based on the rate of hallucinated calls across all its tool-using turns. Hallucinated calls count against the model, since they typically stall the task while the agent or the user has to recover from the invented reference. Calling a real function with valid arguments is clean; calling a tool that was never registered, or claiming a file-editing capability that isn't there, counts as a hallucination. Base rates for tool hallucination are low across most frontier models today; the signal is most informative at the margin, where models diverge from one another.
