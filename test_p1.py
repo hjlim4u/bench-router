@@ -329,5 +329,242 @@ class P1(unittest.TestCase):
         self.assertEqual(d.status(self.cache, NOW, r.config_hash(self.cfg, MAPPING))["snapshot"]["config_matches"], True)
 
 
+MG_BENCH = [{"id": "deepswe", "variants": ["default"]}, {"id": "hle", "variants": ["no_tools", "with_tools"]}]
+MG_SCORES = [{"model_id": "mg-a", "benchmark_id": "deepswe", "variant": "default", "value": 40, "harness": "deepswe-official",
+              "source_type": "independent", "source_url": "https://x", "date_observed": "2026-09-01", "notes": ""},
+             {"model_id": "mg-b", "benchmark_id": "deepswe", "variant": "default", "value": 55.5, "harness": "vendor-self-report",
+              "source_type": "self-reported", "source_url": "https://y", "date_observed": "2026-09-02", "notes": ""},
+             {"model_id": "mg-a", "benchmark_id": "hle", "variant": "no_tools", "value": 30, "harness": "artificial-analysis",
+              "source_type": "independent", "source_url": "https://z", "date_observed": "2026-08-01", "effort": "high", "notes": ""}]
+
+
+class FakeHTTP2(FakeHTTP):
+    """+ The Model Gap, + agent config(score 컬럼). 요청 URL을 기록한다."""
+
+    def __call__(self, url, headers, budget=None):
+        if url.startswith(d.MG_URL):
+            self.calls.append(url)
+            if budget is not None:
+                budget["used"] += 1
+            return MG_BENCH if url.endswith("benchmarks.json") else MG_SCORES
+        body = super().__call__(url, headers, budget)
+        if "config=agent" in url:
+            body = {**body, "rows": [{"row": {k if k != "rating" else "score": (v / 10000 if k == "rating" else v)
+                                              for k, v in x["row"].items()}} for x in body["rows"]]}
+        return body
+
+
+class P1Sources(unittest.TestCase):
+    """wiki unit 수집: arena:* 추가 cohort, Model Gap 어댑터."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cache = Path(self.tmp.name)
+        self.cfg = config([profile("a", model_id="model-a"), profile("b", model_id="model-b")], default="a")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_v62_model_gap_units_and_conditions(self):
+        res = d.refresh(self.cache, self.cfg, MAPPING, {"mg": {"mg-a": "model-a", "mg-b": "model-b"}}, NOW,
+                        only="mg", get_json=FakeHTTP2(), env=ENV)
+        self.assertEqual((res["status"], res["sources"]["mg"]["requests"]), ("ok", 2))
+        snap = json.loads((self.cache / "snapshot.json").read_text("utf-8"))
+        a, b = (snap["profiles"][p]["evidence"] for p in ("a", "b"))
+        self.assertEqual((a["mg:deepswe/default"]["normalized"], b["mg:deepswe/default"]["normalized"]), (0.0, 1.0))
+        self.assertEqual(a["mg:hle/no_tools"]["cohort_id"], "mg:hle/no_tools")  # 변형은 별도 cohort
+        self.assertEqual((b["mg:deepswe/default"]["conditions"]["source_type"], a["mg:hle/no_tools"]["conditions"]["reasoning_effort"]),
+                         ("self-reported", "high"))
+        self.assertIsNone(a["mg:deepswe/default"]["conditions"]["agent_scaffold"])  # 평가기관 ≠ 스캐폴드
+        bad = {"unknown variant": [{**MG_SCORES[0], "variant": "xhigh"}], "non-number": [{**MG_SCORES[0], "value": "40"}],
+               "duplicate": [MG_SCORES[0], MG_SCORES[0]]}
+        for name, scores in bad.items():
+            with self.subTest(name), self.assertRaises(d.SourceError):
+                d.parse_mg({"benchmarks": MG_BENCH, "scores": scores})
+
+    def test_v62_wiki_arena_units_collected_once_with_separate_cohorts(self):
+        units = {"arena:agent/overall": {"adoption": "active"}, "arena:text_style_control/math": {"adoption": "candidate"},
+                 "arena:text_to_image/overall": {"adoption": "excluded"}, "mg:deepswe/default": {"adoption": "active"}}
+        http = FakeHTTP2()
+        res = d.refresh(self.cache, self.cfg, MAPPING, {"arena": {"arena-149": "model-a", "arena-0": "model-b"}}, NOW,
+                        only="arena", get_json=http, env=ENV, index={"units": units})
+        # revision + (legacy 5 + agent 1) × 2페이지. text math는 legacy arena_text_math와 같은 조각이라 재요청 없음, excluded는 수집 안 함
+        self.assertEqual(res["sources"]["arena"]["requests"], 1 + 2 * (len(d.ARENA_COHORTS) + 1))
+        self.assertFalse([u for u in http.calls if "text_to_image" in u])
+        ev = json.loads((self.cache / "snapshot.json").read_text("utf-8"))["profiles"]["a"]["evidence"]
+        self.assertEqual(ev["arena:agent/overall"]["conditions"]["metric"], "score")
+        self.assertEqual(ev["arena:text_style_control/math"]["normalized"], ev["arena_text_math"]["normalized"])  # 모집단 이중 계산 없음
+        self.assertNotEqual(ev["arena:text_style_control/math"]["cohort_id"], ev["arena_text_math"]["cohort_id"])
+
+    def test_v62_arena_effort_from_model_name(self):
+        names = {"Claude Opus 5.5 (High)": "high", "gpt-6.1-sol-max": "max", "GPT-5.4 (High, Codex Harness)": "high",
+                 "claude-opus-5.5-medium": "medium", "Gemini 3 Pro": None, "gpt-oss-120b": None}
+        self.assertEqual({n: d.effort_from_name(n) for n in names}, names)
+        aa = {"claude-opus-5-5-high": "high", "gpt-6-1-sol-xhigh": "xhigh", "gpt-6-sol-non-reasoning": None, "gemini-4-argon": None}
+        self.assertEqual({n: d.effort_from_name(n) for n in aa}, aa)  # AA slugs carry the effort as a suffix too
+        rows = [{"model_name": n, "rating": 1000 + i, "rank": i, "leaderboard_publish_date": "2026-10-08"}
+                for i, n in enumerate(names)]
+        payload = {"revision": "r", "cohorts": {e: rows for e in d.ARENA_COHORTS}}
+        got = {o["source_model"]: (o["reasoning_effort"], o["conditions"]["reasoning_effort"])
+               for o in d.parse_arena(payload) if o["evidence_id"] == "arena_text"}
+        self.assertEqual(got, {n: (e, e) for n, e in names.items()})  # column and conditions agree, so snapshots show the effort
+
+    def test_v62_arena_page_retries_5xx_only(self):
+        calls = []
+
+        def flaky(n_fail, err):
+            def get(url, headers, budget=None):
+                calls.append(url)
+                if len(calls) <= n_fail:
+                    raise d.SourceError(err)
+                return {"num_rows_total": 1, "rows": [{"row": {"model_name": "m", "rating": 1, "rank": 1,
+                                                               "leaderboard_publish_date": "2026-10-08"}}]}
+            return get
+        with mock.patch.object(d, "ARENA_RETRY_SLEEP_S", 0):
+            self.assertEqual(len(d._arena_rows(flaky(3, "HTTP 500"), "webdev", "overall")), 1)  # recovers after 3 failures
+            self.assertEqual(len(calls), 4)
+            calls.clear()
+            with self.assertRaises(d.SourceError):  # a persistent outage still fails, after the bounded retries
+                d._arena_rows(flaky(99, "HTTP 500"), "webdev", "overall")
+            self.assertEqual(len(calls), d.ARENA_PAGE_RETRIES + 1)
+            calls.clear()
+            with self.assertRaises(d.SourceError):  # 4xx / budget are not retried
+                d._arena_rows(flaky(99, "HTTP 404"), "webdev", "overall")
+            self.assertEqual(len(calls), 1)
+
+    @mock.patch.object(d, "ARENA_RETRY_SLEEP_S", 0)
+    def test_v62_wiki_arena_unit_failure_is_isolated(self):
+        def flaky(fail_config):
+            http = FakeHTTP2()
+            base = http.__call__
+            def call(url, headers, budget=None):
+                if f"config={fail_config}&" in url:
+                    raise d.SourceError("HTTP 500")
+                return base(url, headers, budget)
+            return call
+        spec = {**d.ARENA_COHORTS, "arena:agent/overall": ("agent", "overall")}
+        payload, _, _ = d.fetch_arena(flaky("agent"), ENV, spec)
+        self.assertEqual((sorted(payload["spec"]), payload["failed"]), (sorted(d.ARENA_COHORTS), {"arena:agent/overall": "HTTP 500"}))
+        self.assertEqual({o["evidence_id"] for o in d.parse_arena(payload)}, set(d.ARENA_COHORTS))
+        with self.assertRaises(d.SourceError):  # legacy evidence 실패는 기존대로 source 실패 → last-good 유지
+            d.fetch_arena(flaky("webdev"), ENV, spec)
+
+
+def wiki_page(lifecycle, table, rows):
+    body = "\n".join(f"[[{table}]]\n" + "\n".join(f"{k} = {json.dumps(v)}" if not isinstance(v, dict) else
+                                                  f"{k} = {{ " + ", ".join(f"{a} = {json.dumps(x)}" for a, x in v.items()) + " }"
+                                                  for k, v in row.items()) + "\n" for row in rows)
+    return f"---\ntitle: >-\n    t\nlifecycle: {lifecycle}\n---\n# t\n\n## Index\n\n```toml\n{body}```\n\n## Sources\n"
+
+
+def unit(uid, adoption="active", **facets):
+    return {"id": uid, "desc": "d", "metric": "elo", "status": "current", "adoption": adoption,
+            "facets": facets or {"task": ["coding"]}}
+
+
+class P1Wiki(unittest.TestCase):
+    """Wiki → index.json 컴파일 (wiki/AGENTS.md 계약). 합성 vault, 네트워크 없음."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.vault, self.cache = Path(self.tmp.name) / "wiki", Path(self.tmp.name) / "cache"
+        self.write("AGENTS.md", "schema")
+        self.write("concepts/facets/task.md", wiki_page("reviewed", "facet", [
+            {"id": "coding", "desc": "d", "detect": "rule:code_block_or_code_ext", "evidence": "official"},
+            {"id": "math", "desc": "d", "detect": "self", "evidence": "official"}]))
+        self.write("concepts/facets/lang.md", wiki_page("draft", "facet", [
+            {"id": "ko", "desc": "d", "detect": "rule:script(hangul)", "evidence": "official"}]))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write(self, rel, text):
+        p = self.vault / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+
+    def compile(self):
+        from bench_router import wiki
+        return wiki.compile_wiki(self.vault)
+
+    def test_v61_wiki_draft_pages_excluded_and_postings_active_only(self):
+        self.write("entities/benchmarks/a.md", wiki_page("reviewed", "unit", [
+            unit("arena:text_style_control/coding"), unit("arena:text_style_control/math", task=["math", "coding"]),
+            unit("mg:deepswe/default", "candidate"), unit("hf:x/y", "excluded") | {"facets": {}}]))
+        self.write("entities/benchmarks/b.md", wiki_page("draft", "unit", [unit("swe_verified_exact")]))
+        idx = self.compile()
+        self.assertEqual(set(idx["facets"]), {"task"})  # draft facet 페이지(lang) 제외
+        self.assertEqual(set(idx["units"]), {"arena:text_style_control/coding", "arena:text_style_control/math",
+                                             "mg:deepswe/default", "hf:x/y"})  # draft 벤치마크 페이지 제외
+        self.assertEqual(idx["postings"], {"task:coding": ["arena:text_style_control/coding", "arena:text_style_control/math"],
+                                           "task:math": ["arena:text_style_control/math"]})
+        self.assertEqual(idx["units"]["mg:deepswe/default"]["page"], "entities/benchmarks/a.md")
+
+    def test_v61_wiki_rejects_invalid_units(self):
+        bad = {"unknown facet value": unit("arena:x/y", task=["painting"]),
+               "draft facet page value": unit("arena:x/y", lang=["ko"]),
+               "unknown id format": unit("nope"),
+               "bad adoption": unit("arena:x/y", "maybe"),
+               "empty facets": unit("arena:x/y") | {"facets": {}},
+               "unknown key": unit("arena:x/y") | {"weight": 0.5}}
+        for name, u in bad.items():
+            with self.subTest(name):
+                self.write("entities/benchmarks/a.md", wiki_page("reviewed", "unit", [u]))
+                with self.assertRaises(r.InputError):
+                    self.compile()
+        with self.subTest("duplicate across pages"):
+            self.write("entities/benchmarks/a.md", wiki_page("reviewed", "unit", [unit("arena:x/y")]))
+            self.write("entities/benchmarks/b.md", wiki_page("reviewed", "unit", [unit("arena:x/y")]))
+            with self.assertRaisesRegex(r.InputError, "duplicate unit"):
+                self.compile()
+
+    def test_v61_wiki_cli_check_and_failure_keeps_previous_index(self):
+        from bench_router import cli
+        self.write("entities/benchmarks/a.md", wiki_page("reviewed", "unit", [unit("arena:x/y")]))
+        base = ["--cache-dir", str(self.cache), "wiki", "compile", "--vault", str(self.vault)]
+        with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            self.assertEqual(cli.main(base + ["--check"]), 0)
+        self.assertIsNone(json.loads(out.getvalue())["written"])
+        self.assertFalse((self.cache / "index.json").exists())
+        with mock.patch("sys.stdout", new_callable=io.StringIO):
+            self.assertEqual(cli.main(base), 0)
+        before = (self.cache / "index.json").read_bytes()
+        self.write("entities/benchmarks/a.md", wiki_page("reviewed", "unit", [unit("arena:x/y", task=["painting"])]))
+        with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            self.assertEqual(cli.main(base), 2)
+        self.assertEqual(json.loads(out.getvalue())["error"]["code"], "validation")
+        self.assertEqual((self.cache / "index.json").read_bytes(), before)
+
+    def test_v61_refresh_reports_wiki_error_without_failing(self):
+        import argparse
+        from bench_router import cli
+        args = argparse.Namespace(config_dir=Path(self.tmp.name), cache_dir=self.cache, vault=self.vault,
+                                  import_file=None, source=None, force=False)
+        with mock.patch.object(cli, "_config", return_value=(None, None)), \
+                mock.patch.object(d, "load_aliases", return_value={}), \
+                mock.patch.object(d, "refresh", return_value={"status": "ok"}):
+            self.write("entities/benchmarks/a.md", wiki_page("reviewed", "unit", [unit("arena:x/y")]))
+            self.assertEqual(cli._refresh(args)["wiki_index"]["units"], 1)
+            self.write("entities/benchmarks/a.md", wiki_page("reviewed", "unit", [unit("arena:x/y", task=["painting"])]))
+            res = cli._refresh(args)
+        self.assertEqual((res["status"], res["wiki_index"]["status"]), ("ok", "error"))
+        self.assertEqual(len(json.loads((self.cache / "index.json").read_text())["units"]), 1)
+
+    def test_v61_repo_wiki_compiles_when_reviewed(self):
+        """저장소 wiki/ 내용 자체의 계약 검사: 전 페이지를 reviewed로 가정해 컴파일."""
+        import shutil
+        from bench_router import cli, wiki
+        shutil.rmtree(self.vault)
+        shutil.copytree(cli.WIKI_VAULT, self.vault)
+        for p in self.vault.rglob("*.md"):
+            p.write_text(p.read_text(encoding="utf-8").replace("\nlifecycle: draft\n", "\nlifecycle: reviewed\n"),
+                         encoding="utf-8")
+        idx = wiki.compile_wiki(self.vault)
+        self.assertEqual(set(idx["facets"]), set(wiki.AXES))
+        active = {u for ids in idx["postings"].values() for u in ids}
+        self.assertEqual(active, {k for k, u in idx["units"].items() if u["adoption"] == "active"})
+        self.assertTrue(set(d.EVIDENCE_IDS) & set(idx["units"]))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -56,6 +56,7 @@ refresh/status가 정상 종료하면 0이다. completed는 산출물 수신의 
 - timeout_ms: 1,000~3,600,000의 integer. 전체 위임 deadline이며 start/prompt/collect에 남은 예산을 나눠 사용한다.
 - priority: quality|balanced|cost(default balanced).
 - exclude_profiles: 선택, profile ID 배열.
+- facets: 선택, `{axis: [value]}`. Orchestrator가 직접 태그한 작업 성격(`evidence`가 benchmark wiki 어휘로 검증하며, `wiki/concepts/facets/` 참조). 선택·제약·`semantic_task_hash`에는 영향이 없다.
 - 알 수 없는 top-level/constraint field는 v1에서 오류다. 오타나 monetary budget이 조용히 무시되면 안 된다.
 - task.json 크기 상한 1 MiB. NaN/Infinity, duplicate JSON keys, invalid UTF-8를 거부한다.
 - context/capabilities는 Orchestrator가 전달한다. 분류 결과가 권한/하드 제약을 늘릴 수 없다.

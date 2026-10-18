@@ -5,6 +5,7 @@ refresh/import/status 전용. route는 이 모듈을 import하지 않는다(요�
 import contextlib
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -17,7 +18,7 @@ from pathlib import Path
 from . import locking
 from . import routing as r
 
-ADAPTER_VERSION = "2"
+ADAPTER_VERSION = "4"  # 3: arena rows carry the effort parsed from the model name; 4: AA rows too
 DB_SCHEMA_VERSION = 2
 HTTP_TIMEOUT_S = 30
 HTTP_MAX_BYTES = 20 * 1024 * 1024
@@ -40,6 +41,7 @@ ARENA_COHORTS = {"arena_text": ("text_style_control", "overall"),
                  "arena_document": ("document_style_control", "overall"),
                  "arena_vision": ("vision_style_control", "overall")}
 # 수동 import로만 들어오는 exact_profile evidence. suite/version이 다르면 거부(점수 혼합 금지).
+MG_URL = "https://themodelgap.com/data"
 EXACT_PINS = {"swe_verified_exact": {"source_id": "swe", "suite": "swe-bench", "version": "verified"},
               "terminal_exact": {"source_id": "tb", "suite": "terminal-bench", "version": "4.0"}}
 EVIDENCE_IDS = sorted([*AA_FIELDS, *ARENA_COHORTS, *EXACT_PINS])
@@ -47,8 +49,11 @@ EVIDENCE_IDS = sorted([*AA_FIELDS, *ARENA_COHORTS, *EXACT_PINS])
 SOURCES = {
     "aa": {"url": AA_URL, "ttl_hours": 24, "max_stale_hours": 168, "max_requests": 50,
            "attribution": "Artificial Analysis (artificialanalysis.ai)"},
+    # wiki unit(arena:*)을 더하면 text category당 약 5요청이 는다. 상한은 전체 등록 기준(약 160요청)에 여유를 둔 값
     "arena": {"url": f"https://huggingface.co/datasets/{ARENA_DATASET}", "ttl_hours": 24, "max_stale_hours": 168,
-              "max_requests": 60, "attribution": "LMArena leaderboard-dataset (CC BY 4.0)"},
+              "max_requests": 300, "max_seconds": 600, "attribution": "LMArena leaderboard-dataset (CC BY 4.0)"},
+    "mg": {"url": MG_URL, "ttl_hours": 24, "max_stale_hours": 168, "max_requests": 4,
+           "attribution": "The Model Gap (themodelgap.com, CC BY 4.0)"},
     "swe": {"url": "https://www.swebench.com/", "ttl_hours": 168, "max_stale_hours": 720, "manual": True,
             "attribution": "SWE-bench (manual import)"},
     "tb": {"url": "https://www.tbench.ai/", "ttl_hours": 168, "max_stale_hours": 720, "manual": True,
@@ -163,39 +168,79 @@ def parse_aa(payload):
                             "conditions": {"suite": "artificial-analysis", "version": f"v{version}", "subset": "all",
                                            "metric": field, "direction": "higher", "variant": None,
                                            "dataset_revision": None, "evaluation_harness": None,
-                                           "aggregation": None, "agent_scaffold": None, "reasoning_effort": None},
-                            "harness_id": None, "reasoning_effort": None, "published_at": None, "evaluated_at": None})
+                                           "aggregation": None, "agent_scaffold": None, "reasoning_effort": effort_from_name(slug)},
+                            "harness_id": None, "reasoning_effort": effort_from_name(slug), "published_at": None, "evaluated_at": None})
     return obs
 
 
-def fetch_arena(get_json, env):
+def fetch_arena(get_json, env, cohorts_spec=ARENA_COHORTS):
+    """cohorts_spec: {evidence_id: (config, category)}. 같은 (config, category)는 한 번만 요청한다."""
     info = get_json(ARENA_REVISION_URL, None)
     revision = info.get("sha") if isinstance(info, dict) else None
     if not isinstance(revision, str):
         raise SourceError("Arena: dataset revision missing")
-    cohorts = {}
-    for eid, (subset, category) in ARENA_COHORTS.items():
-        rows, offset, total = [], 0, None
-        while total is None or offset < total:
-            q = urllib.parse.urlencode({"dataset": ARENA_DATASET, "config": subset, "split": "latest",
-                                        "where": f"\"category\"='{category}'", "offset": offset, "length": 100})
-            body = get_json(f"{ARENA_API}?{q}", None)
-            if not isinstance(body, dict) or type(body.get("num_rows_total")) is not int or not isinstance(body.get("rows"), list):
-                raise SourceError(f"Arena {subset}/{category}: unexpected response")
-            total = body["num_rows_total"]
-            page = [x.get("row") for x in body["rows"]]
-            if not page and offset < total:
-                raise SourceError(f"Arena {subset}/{category}: short page")
-            rows += page
-            offset += len(page)
-        cohorts[eid] = rows
+    cohorts, fetched, failed = {}, {}, {}
+    for eid, (subset, category) in cohorts_spec.items():
+        if (subset, category) in fetched:
+            cohorts[eid] = fetched[subset, category]
+            continue
+        try:
+            rows = _arena_rows(get_json, subset, category)
+        except SourceError as e:
+            if eid in ARENA_COHORTS:
+                raise
+            failed[eid] = str(e)  # wiki 추가 조각의 일시 장애가 legacy evidence 수집 전체를 실패시키지 않게 한다
+            continue
+        cohorts[eid] = fetched[subset, category] = rows
     # ponytail: datasets-server는 변환본을 서비스한다. revision은 main sha로 기록하며 변환 지연 가능성은 남는다.
-    return {"revision": revision, "cohorts": cohorts}, revision, None
+    return {"revision": revision, "cohorts": cohorts, "failed": failed,
+            "spec": {e: list(c) for e, c in cohorts_spec.items() if e in cohorts}}, revision, None
+
+
+ARENA_PAGE_RETRIES = 4   # datasets-server /filter answers 500 in bursts and recovers; http_get_json's own 2 retries are too short
+ARENA_RETRY_SLEEP_S = 5
+
+
+def _arena_page(get_json, url):
+    for i in range(ARENA_PAGE_RETRIES + 1):
+        try:
+            return get_json(url, None)
+        except SourceError as e:
+            if i == ARENA_PAGE_RETRIES or not str(e).startswith("HTTP 5"):  # budget/deadline/4xx errors are not retried
+                raise
+            time.sleep(ARENA_RETRY_SLEEP_S)
+
+
+def _arena_rows(get_json, subset, category):
+    rows, offset, total = [], 0, None
+    while total is None or offset < total:
+        q = urllib.parse.urlencode({"dataset": ARENA_DATASET, "config": subset, "split": "latest",
+                                    "where": f"\"category\"='{category}'", "offset": offset, "length": 100})
+        body = _arena_page(get_json, f"{ARENA_API}?{q}")
+        if not isinstance(body, dict) or type(body.get("num_rows_total")) is not int or not isinstance(body.get("rows"), list):
+            raise SourceError(f"Arena {subset}/{category}: unexpected response")
+        total = body["num_rows_total"]
+        page = [x.get("row") for x in body["rows"]]
+        if not page and offset < total:
+            raise SourceError(f"Arena {subset}/{category}: short page")
+        rows += page
+        offset += len(page)
+    return rows
+
+
+ARENA_EFFORT = re.compile(r"(?i)[(\- ,](xhigh|low|medium|high|max)(?=[,)]|$)")
+
+
+def effort_from_name(name):
+    """Arena names and AA slugs. 'Claude Opus 5.5 (High)', 'claude-opus-5-5-high', 'gpt-6.1-sol-max', 'GPT-5.4 (High, Codex Harness)' → 'high' / 'max' / 'high'; none → None.
+    shortcut: a model whose own name ends in a tier word (e.g. '...-max') is read as an effort; informational only, never used to match, upgrade when a source publishes effort as a column."""
+    m = ARENA_EFFORT.search(name)
+    return m.group(1).lower() if m else None
 
 
 def parse_arena(payload):
     obs = []
-    for eid, (subset, category) in ARENA_COHORTS.items():
+    for eid, (subset, category) in payload.get("spec", ARENA_COHORTS).items():
         rows = payload["cohorts"].get(eid)
         if not rows:
             raise SourceError(f"Arena {subset}/{category}: no rows")
@@ -203,9 +248,12 @@ def parse_arena(payload):
         if len(dates) != 1 or not isinstance(next(iter(dates)), str):
             raise SourceError(f"Arena {subset}/{category}: expected one publish date, got {sorted(map(str, dates))}")
         date = next(iter(dates))[:10]
+        metric = "score" if "score" in rows[0] else "rating"  # agent_* config는 IPS score(τ̂), 나머지는 Bradley-Terry rating
+        # legacy evidence와 같은 (config, category)를 wiki unit이 다시 쓰면 cohort를 나눠 모집단을 두 번 세지 않는다
+        cohort = f"arena:{subset}:{category}:{date}" if eid in ARENA_COHORTS else f"{eid}@{date}"
         names = [x.get("model_name") for x in rows]
         for x in rows:
-            name, rating = x.get("model_name"), x.get("rating")
+            name, rating = x.get("model_name"), x.get(metric)
             if not isinstance(name, str) or type(rating) not in (int, float) or rating != rating:
                 raise SourceError(f"Arena {subset}/{category}: invalid row {name!r}")
             if names.count(name) > 1:
@@ -215,13 +263,14 @@ def parse_arena(payload):
                 if name in names:
                     raise SourceError(f"Arena {subset}/{category}: unresolvable duplicate {name!r}")
                 names.append(name)
-            obs.append({"evidence_id": eid, "cohort_id": f"arena:{subset}:{category}:{date}", "source_model": name,
+            effort = effort_from_name(name)
+            obs.append({"evidence_id": eid, "cohort_id": cohort, "source_model": name,
                         "raw": rating, "metric_version": f"{subset}/{category}@{date}", "scope": "model_proxy",
                         "conditions": {"suite": "lmarena", "version": date, "subset": subset,
-                                       "metric": "rating", "direction": "higher", "variant": category,
+                                       "metric": metric, "direction": "higher", "variant": category,
                                        "dataset_revision": payload["revision"], "evaluation_harness": None,
-                                       "aggregation": None, "agent_scaffold": None, "reasoning_effort": None},
-                        "harness_id": None, "reasoning_effort": None, "published_at": date, "evaluated_at": None})
+                                       "aggregation": None, "agent_scaffold": None, "reasoning_effort": effort},
+                        "harness_id": None, "reasoning_effort": effort, "published_at": date, "evaluated_at": None})
     return obs
 
 
@@ -285,8 +334,45 @@ def parse_import(doc):
     return obs
 
 
-FETCH = {"aa": fetch_aa, "arena": fetch_arena}
-PARSE = {"aa": parse_aa, "arena": parse_arena, "swe": parse_import, "tb": parse_import}
+def fetch_mg(get_json, env):
+    benchmarks, scores = get_json(f"{MG_URL}/benchmarks.json", None), get_json(f"{MG_URL}/scores.json", None)
+    if not isinstance(benchmarks, list) or not isinstance(scores, list) or not benchmarks or not scores:
+        raise SourceError("Model Gap: benchmarks.json and scores.json must be non-empty arrays")
+    return {"benchmarks": benchmarks, "scores": scores}, None, None
+
+
+def parse_mg(payload):
+    """evidence_id = wiki unit id(mg:<benchmark>/<variant>). harness는 평가기관이라 agent_scaffold에 넣지 않는다."""
+    variants = {}
+    for b in payload["benchmarks"]:
+        if not isinstance(b, dict) or not isinstance(b.get("id"), str) or not isinstance(b.get("variants"), list) \
+                or b["id"] in variants:
+            raise SourceError(f"Model Gap: invalid benchmark entry {b.get('id') if isinstance(b, dict) else b!r}")
+        variants[b["id"]] = set(b["variants"])
+    obs, seen = [], set()
+    for x in payload["scores"]:
+        bid, variant, model, v = (x.get(k) if isinstance(x, dict) else None
+                                  for k in ("benchmark_id", "variant", "model_id", "value"))
+        if variant not in variants.get(bid, ()) or not isinstance(model, str) or type(v) not in (int, float) \
+                or v != v or v in (float("inf"), float("-inf")) or not isinstance(x.get("date_observed"), str):
+            raise SourceError(f"Model Gap: invalid score row {model!r} {bid!r}/{variant!r}")
+        eid = f"mg:{bid}/{variant}"
+        if (eid, model) in seen:
+            raise SourceError(f"Model Gap: duplicate score {model} {eid}")
+        seen.add((eid, model))
+        # Model Gap이 모델·변형마다 대표 점수 하나를 고른 큐레이션이라 unit 전체를 한 cohort로 둔다. 평가기관·자가보고는 conditions로 남긴다
+        obs.append({"evidence_id": eid, "cohort_id": eid, "source_model": model, "raw": v, "metric_version": variant,
+                    "scope": "model_proxy",
+                    "conditions": {"suite": bid, "version": None, "subset": variant, "metric": "score", "direction": "higher",
+                                   "variant": variant, "dataset_revision": None, "evaluation_harness": x.get("harness"),
+                                   "aggregation": None, "agent_scaffold": None, "reasoning_effort": x.get("effort"),
+                                   "source_type": x.get("source_type"), "source_url": x.get("source_url")},
+                    "harness_id": None, "reasoning_effort": None, "published_at": None, "evaluated_at": x["date_observed"]})
+    return obs
+
+
+FETCH = {"aa": fetch_aa, "arena": fetch_arena, "mg": fetch_mg}
+PARSE = {"aa": parse_aa, "arena": parse_arena, "mg": parse_mg, "swe": parse_import, "tb": parse_import}
 
 
 def normalize(obs):
@@ -339,7 +425,7 @@ def refresh_lock(cache_dir):
         yield
 
 
-def refresh_source(db, sid, now, force=False, import_doc=None, get_json=None, env=None):
+def refresh_source(db, sid, now, force=False, import_doc=None, get_json=None, env=None, arena_spec=ARENA_COHORTS):
     meta = SOURCES[sid]
     db.execute("INSERT OR IGNORE INTO sources(id) VALUES (?)", (sid,))
     src = db.execute("SELECT * FROM sources WHERE id=?", (sid,)).fetchone()
@@ -347,15 +433,16 @@ def refresh_source(db, sid, now, force=False, import_doc=None, get_json=None, en
         age_h = (now - datetime.fromisoformat(src["last_success_at"])).total_seconds() / 3600
         if age_h < meta["ttl_hours"]:
             return {"result": "skipped_fresh", "requests": 0}
-    budget = {"used": 0, "max": meta.get("max_requests", 0), "max_seconds": SOURCE_MAX_SECONDS,
-              "deadline": time.monotonic() + SOURCE_MAX_SECONDS}
+    max_s = meta.get("max_seconds", SOURCE_MAX_SECONDS)
+    budget = {"used": 0, "max": meta.get("max_requests", 0), "max_seconds": max_s, "deadline": time.monotonic() + max_s}
     db.execute("UPDATE sources SET last_attempt_at=? WHERE id=?", (_iso(now), sid))
     db.commit()
     try:
         if import_doc is not None:
             payload, revision, published = import_doc, None, import_doc.get("published_at") or import_doc.get("evaluated_at")
         else:
-            payload, revision, published = FETCH[sid](lambda url, h: get_json(url, h, budget), env)
+            get = lambda url, h: get_json(url, h, budget)
+            payload, revision, published = (fetch_arena(get, env, arena_spec) if sid == "arena" else FETCH[sid](get, env))
         obs = normalize(PARSE[sid](payload))
     except SourceError as e:
         with db:
@@ -386,7 +473,10 @@ def refresh_source(db, sid, now, force=False, import_doc=None, get_json=None, en
         for oid in old:
             db.execute("DELETE FROM observations WHERE snapshot_id=?", (oid,))
             db.execute("DELETE FROM snapshots WHERE id=?", (oid,))
-    return {"result": "unchanged" if unchanged else "updated", "requests": budget["used"], "snapshot": snap_id}
+    res = {"result": "unchanged" if unchanged else "updated", "requests": budget["used"], "snapshot": snap_id}
+    if payload.get("failed"):
+        res["skipped_units"] = payload["failed"]
+    return res
 
 
 # ---------- routing snapshot ----------
@@ -434,7 +524,7 @@ def build_snapshot(db, cfg, mapping, aliases, now):
     profiles = {}
     for p in cfg["profile"]:
         ev = {}
-        for eid in EVIDENCE_IDS:
+        for eid in sorted({e for e, _ in index} | set(EVIDENCE_IDS)):  # wiki unit evidence 포함
             found = index.get((eid, p["model_id"]), [])
             if eid in EXACT_PINS:  # 이름만 같다고 exact가 아님: harness·effort까지 일치
                 found = [o for o in found if o["harness_id"] == p["harness_id"]
@@ -476,14 +566,23 @@ def publish(cache_dir, snap, now):
             f.unlink(missing_ok=True)
 
 
+def arena_spec(index):
+    """기존 ARENA_COHORTS + wiki index의 수집 대상 arena:* unit(active·candidate)."""
+    spec = dict(ARENA_COHORTS)
+    for uid, u in (index or {}).get("units", {}).items():
+        if uid.startswith("arena:") and u["adoption"] in ("active", "candidate"):
+            spec[uid] = tuple(uid[len("arena:"):].split("/", 1))
+    return spec
+
+
 def refresh(cache_dir, cfg, mapping, aliases, now, only=None, force=False, import_doc=None,
-            get_json=http_get_json, env=os.environ):
+            get_json=http_get_json, env=os.environ, index=None):
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     with refresh_lock(cache_dir):
         db = open_db(cache_dir / "bench-router.db")
         try:
-            results = {sid: refresh_source(db, sid, now, force, import_doc, get_json, env)
+            results = {sid: refresh_source(db, sid, now, force, import_doc, get_json, env, arena_spec(index))
                        for sid in ([only] if only else AUTO_SOURCES)}
             snap = build_snapshot(db, cfg, mapping, aliases, now)
             publish(cache_dir, snap, now)

@@ -2,6 +2,7 @@
 import contextlib
 import io
 import json
+import re
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -359,6 +360,130 @@ class P0(unittest.TestCase):
         tampered = dict(snapshot(ev, ps), generated_at="x")
         with self.assertRaises(r.InputError):
             r.validate_snapshot(tampered)
+
+
+def index_fixture():
+    """wiki compile 결과와 같은 모양의 합성 index."""
+    f = lambda detect: {"desc": "d", "detect": detect, "evidence": "official"}
+    unit = lambda d, facets: {"desc": d, "metric": "elo", "status": "current", "adoption": "active", "facets": facets,
+                              "page": "entities/benchmarks/x.md"}
+    return {"schema_version": "1.0", "wiki_hash": "w" * 64,
+            "facets": {"task": {"coding": f("rule:code_block_or_code_ext"), "repo_coding": f("self"), "general": f("rule:always"),
+                                "terminal_ops": f("rule:kw(bash,CI,빌드)")},
+                       "lang": {"ko": f("rule:script(hangul)")}, "shape": {"multi_turn": f("rule:round>1")}},
+            "postings": {"task:coding": ["u/coding", "u/both"], "task:repo_coding": ["u/both", "u/repo"],
+                         "task:general": ["u/general"], "lang:ko": ["u/ko"]},
+            "units": {"u/coding": unit("coding prefs", {}), "u/both": unit("both", {}), "u/repo": unit("repo", {}),
+                      "u/general": unit("general", {}), "u/ko": unit("korean", {})}}
+
+
+class P0Evidence(unittest.TestCase):
+    """evidence: facet 판정(규칙 + Orchestrator 태그), 역색인 조회, 프로필별 증거 표. 점수 합산 없음."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.t = lambda **kw: r.validate_task({"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "fix it",
+                                               "prompt": "p", "cwd": self.tmp.name, **kw})
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def snap(self, ps, ev, **kw):
+        """ev: {pid: {uid: (raw, normalized, effort)}}"""
+        s = snapshot({pid: {} for pid in ev}, ps, **kw)
+        for p in ps:
+            s["profiles"][p["id"]]["evidence"] = {
+                uid: {"raw": raw, "normalized": n, "scope": "model_proxy", "cohort_id": f"c-{uid}", "metric_version": "1",
+                      "conditions": {"reasoning_effort": eff}, "source_id": "syn", "source_revision": "r", "fetched_at": "x"}
+                for uid, (raw, n, eff) in ev[p["id"]].items()}
+        s["snapshot_id"] = r.snapshot_hash(s)
+        return r.validate_snapshot(s)
+
+    def test_v62_rules_are_deterministic(self):
+        from bench_router import evidence as ev
+        t = self.t(prompt="```py\nx\n```", summary="CI가 깨짐 한국어 요청입니다", round=2, context_files=[])
+        hit = lambda rule, task=t: ev.rule_hit(rule, task)
+        self.assertEqual([hit("always"), hit("round>1"), hit("code_block_or_code_ext"), hit("script(hangul)"), hit("kw(bash,CI,빌드)"),
+                          hit("script(cyrillic)"), hit("prompt_tokens>500"), hit("nonsense")],
+                         [True, True, True, True, True, False, False, None])
+        long_ = self.t(prompt="x" * 2100)
+        self.assertEqual((hit("prompt_tokens>500", long_), hit("ext(.tsx,.css)", long_)), (True, False))
+        self.assertTrue(hit("script(han_only)", self.t(summary="修复登录错误并提交")))
+        self.assertFalse(hit("script(han_only)", self.t(summary="ログインの修正です 修复")))  # 가나가 있으면 일본어
+
+    def test_v62_terminal_ops_ignores_plain_build_verb(self):
+        from bench_router import evidence as ev
+        rule = re.search(r'id = "terminal_ops".*?detect = "rule:(.+?)"', (Path(__file__).parent / "wiki/concepts/facets/task.md").read_text(), re.S).group(1)
+        hit = lambda **kw: ev.rule_hit(rule, self.t(**kw))
+        self.assertFalse(hit(summary="Build React dashboard component", prompt="Build a responsive dashboard page in React."))
+        self.assertTrue(hit(summary="Fix flaky CI", prompt="docker compose up fails in the pipeline"))
+
+    def test_v62_facets_from_rules_and_orchestrator(self):
+        from bench_router import evidence as ev
+        idx = index_fixture()
+        facets, warns = ev.task_facets(self.t(prompt="```x```", summary="CI 실패", facets={"task": ["repo_coding"]}), idx)
+        self.assertEqual({(f["axis"], f["value"]): f["origin"] for f in facets},
+                         {("task", "coding"): "rule", ("task", "general"): "rule", ("task", "terminal_ops"): "rule",
+                          ("lang", "ko"): "rule",
+                          ("task", "repo_coding"): "orchestrator"})
+        for bad in ({"task": ["painting"]}, {"colour": ["red"]}):  # 어휘 밖의 값은 조용히 무시하지 않는다
+            with self.assertRaises(r.InputError):
+                ev.task_facets(self.t(facets=bad), idx)
+        with self.assertRaises(r.InputError):
+            self.t(facets=["task"])
+
+    def test_v62_evidence_table_has_effort_missing_and_no_score(self):
+        from bench_router import evidence as ev
+        ps = [profile("a", reasoning_effort="high"), profile("b", reasoning_effort="high")]
+        snap = self.snap(ps, {"a": {"u/both": (1500.0, 0.98, "high"), "u/coding": (1400.0, 0.5, "max")},
+                              "b": {"u/both": (1300.0, 0.2, "max")}})
+        res = ev.build(self.t(prompt="```x```", facets={"task": ["repo_coding"]}), config(ps), snap, [], index_fixture(), NOW)
+        self.assertEqual([u["id"] for u in res["units"]][:2], ["u/both", "u/coding"])  # facet 2개 일치가 먼저
+        both = res["units"][0]["profiles"]
+        self.assertEqual((both["a"]["effort_matches"], both["b"]["effort_matches"], res["units"][1]["profiles"]["b"]["missing_reason"]),
+                         (True, False, "no_observation"))
+        self.assertNotIn("score", json.dumps(res))
+        text = ev.table(res)
+        self.assertIn("1300 p20 max≠high", text)
+        self.assertIn("a (high): 1=1500 p98 high · 2=1400 p50 max≠high", text)
+        self.assertIn("b (high): 1=1300 p20 max≠high · 2=—", text)
+        capped = ev.build(self.t(prompt="```x```", facets={"task": ["repo_coding"]}), config(ps), snap, [], index_fixture(), NOW, max_units=2)
+        self.assertEqual((len(capped["units"]), capped["omitted_units"]), (2, 2))
+
+    def test_v62_evidence_without_index_or_with_stale_config(self):
+        from bench_router import evidence as ev
+        ps = [profile("a")]
+        none = ev.build(self.t(), config(ps), None, [], None, NOW)
+        self.assertEqual((none["status"], none["units"], [w["code"] for w in none["warnings"]]), ("ok", [], ["wiki_index_missing"]))
+        empty = dict(index_fixture(), postings={}, units={})
+        self.assertIn("wiki_index_empty", [w["code"] for w in ev.build(self.t(), config(ps), None, [], empty, NOW)["warnings"]])
+        snap = self.snap(ps, {"a": {"u/general": (1.0, 0.9, None)}})
+        changed = [profile("a", config_revision="v2")]  # 프로필이 바뀌면 이전 snapshot 증거는 쓰지 않는다
+        res = ev.build(self.t(), config(changed), snap, [], index_fixture(), NOW)
+        self.assertEqual(res["units"][0]["profiles"]["a"]["missing_reason"], "stale_config")
+        self.assertIn("stale_config", [w["code"] for w in res["warnings"]])
+
+    def test_v62_evidence_cli_is_read_only(self):
+        ps = [profile("a", reasoning_effort="high")]
+        home, cache = Path(self.tmp.name) / "cfg", Path(self.tmp.name) / "cache"
+        home.mkdir(), cache.mkdir()
+        (home / "profiles.toml").write_text('schema_version = "1.0"\n[[profile]]\n' + "\n".join(
+            f"{k} = {json.dumps(v)}" for k, v in ps[0].items()) + "\n")
+        (cache / "index.json").write_text(json.dumps(index_fixture()))
+        fresh = datetime.now(timezone.utc).isoformat(timespec="seconds")  # CLI는 실제 시계를 쓴다
+        (cache / "snapshot.json").write_text(json.dumps(self.snap(ps, {"a": {"u/general": (1.0, 0.9, "high")}}, last_success=fresh)))
+        tf = Path(self.tmp.name) / "task.json"
+        tf.write_text(json.dumps({"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "p", "cwd": self.tmp.name}))
+        before = sorted(p.name for p in cache.iterdir())
+        for fmt, needle in (("table", "a (high): 1=1 p90 high"), ("json", '"missing_reason": null')):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = cli.main(["--config-dir", str(home), "--cache-dir", str(cache), "evidence", "--task", str(tf), "--format", fmt])
+            self.assertEqual(code, 0)
+            self.assertIn(needle, out.getvalue())
+        self.assertEqual(sorted(p.name for p in cache.iterdir()), before)  # 파일 쓰기 없음
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.main(["--config-dir", str(home), "--cache-dir", str(cache), "evidence", "--task", str(tf), "--max-units", "0"]), 2)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,1948 @@
+{
+  "schema_version": "1.0",
+  "observed_on": "2026-10-17",
+  "generated_at": "2026-10-17T14:00:35.662918+00:00",
+  "purpose": "Public source data-shape observations for benchmark relevance index design; not a runnable relevance index or performance evaluation.",
+  "scope": "Current 9 evidence IDs, all 14 TMG metadata entries, 6 additional HF candidates from benchmark-source-plan; representative case schemas and result manifests. 49 HF official datasets discovered; not all reviewed.",
+  "limitations": [
+    "No authenticated AA payload was fetched; AA field analysis uses public OpenAPI.",
+    "Gated DeepSWE/HLE/GPQA case payloads were not downloaded.",
+    "HF dataset info revisions and Dataset Viewer rows/statistics are independently observed live responses; they are not an atomic pinned snapshot.",
+    "Source schemas and sample rows were inspected; not every task or every model result was reviewed."
+  ],
+  "the_model_gap": {
+    "benchmark_count": 14,
+    "score_count": 351,
+    "benchmarks_url": "https://themodelgap.com/data/benchmarks.json",
+    "scores_url": "https://themodelgap.com/data/scores.json",
+    "metadata_fields": [
+      "id",
+      "name",
+      "short",
+      "category",
+      "skill",
+      "measures",
+      "n_items",
+      "meaningful_gap",
+      "trust_grade",
+      "lifecycle",
+      "variants",
+      "task_shape",
+      "source_url",
+      "notes",
+      "sources",
+      "preferred_sources",
+      "related_benchmarks",
+      "faq"
+    ],
+    "score_fields": [
+      "benchmark_id",
+      "date_observed",
+      "effort",
+      "harness",
+      "model_id",
+      "notes",
+      "source_type",
+      "source_url",
+      "value",
+      "variant"
+    ],
+    "harness_nonnull_count": 351,
+    "effort_nonnull_count": 202,
+    "benchmarks": [
+      {
+        "id": "hle",
+        "category": "reasoning",
+        "skill": "Reasoning",
+        "variants": [
+          "no_tools",
+          "with_tools"
+        ],
+        "has_task_shape": true,
+        "primary_source_url": "https://arxiv.org/abs/2501.14249",
+        "score_rows": 52
+      },
+      {
+        "id": "terminal-bench-2-1",
+        "category": "agentic",
+        "skill": "Terminal ops",
+        "variants": [
+          "default"
+        ],
+        "has_task_shape": true,
+        "primary_source_url": "https://hub.harborframework.com/datasets/terminal-bench/terminal-bench-2-1/6",
+        "score_rows": 33
+      },
+      {
+        "id": "deepswe",
+        "category": "coding",
+        "skill": "Long-horizon coding",
+        "variants": [
+          "default"
+        ],
+        "has_task_shape": true,
+        "primary_source_url": "https://arxiv.org/abs/2607.07946",
+        "score_rows": 30
+      },
+      {
+        "id": "toolathlon-verified",
+        "category": "agentic",
+        "skill": "Multi-tool chores",
+        "variants": [
+          "default"
+        ],
+        "has_task_shape": true,
+        "primary_source_url": "https://github.com/hkust-nlp/Toolathlon",
+        "score_rows": 17
+      },
+      {
+        "id": "agents-last-exam",
+        "category": "agentic",
+        "skill": "Professional work",
+        "variants": [
+          "default"
+        ],
+        "has_task_shape": true,
+        "primary_source_url": "https://arxiv.org/abs/2606.05405",
+        "score_rows": 20
+      },
+      {
+        "id": "swe-bench-verified",
+        "category": "coding",
+        "skill": "Bug fixing",
+        "variants": [
+          "default"
+        ],
+        "has_task_shape": true,
+        "primary_source_url": "https://www.swebench.com/verified.html",
+        "score_rows": 18
+      },
+      {
+        "id": "gpqa-diamond",
+        "category": "reasoning",
+        "skill": "Expert science Q&A",
+        "variants": [
+          "default"
+        ],
+        "has_task_shape": true,
+        "primary_source_url": "https://arxiv.org/abs/2311.12022",
+        "score_rows": 27
+      },
+      {
+        "id": "livecodebench",
+        "category": "coding",
+        "skill": "Contest coding",
+        "variants": [
+          "default"
+        ],
+        "has_task_shape": true,
+        "primary_source_url": "https://github.com/LiveCodeBench/LiveCodeBench",
+        "score_rows": 17
+      },
+      {
+        "id": "arc-agi-2",
+        "category": "reasoning",
+        "skill": "Compositional visual reasoning",
+        "variants": [
+          "max",
+          "high",
+          "xhigh",
+          "untiered"
+        ],
+        "has_task_shape": true,
+        "primary_source_url": "https://arcprize.org/leaderboard",
+        "score_rows": 20
+      },
+      {
+        "id": "livebench",
+        "category": "composite",
+        "skill": "Composite score across 7 domains",
+        "variants": [
+          "default"
+        ],
+        "has_task_shape": true,
+        "primary_source_url": "https://livebench.ai/",
+        "score_rows": 30
+      },
+      {
+        "id": "hmmt-feb-2026",
+        "category": "reasoning",
+        "skill": "Competition mathematics",
+        "variants": [
+          "default"
+        ],
+        "has_task_shape": true,
+        "primary_source_url": "https://matharena.ai/?comp=hmmt--hmmt_feb_2026",
+        "score_rows": 4
+      },
+      {
+        "id": "aa-analyst-agent",
+        "category": "agentic",
+        "skill": "Spreadsheet & document analysis",
+        "variants": [
+          "default"
+        ],
+        "has_task_shape": true,
+        "primary_source_url": "https://artificialanalysis.ai/evaluations/aa-analyst-agent",
+        "score_rows": 27
+      },
+      {
+        "id": "terminal-bench-4-0",
+        "category": "agentic",
+        "skill": "Terminal ops",
+        "variants": [
+          "max",
+          "high",
+          "xhigh",
+          "default"
+        ],
+        "has_task_shape": true,
+        "primary_source_url": "https://hub.harborframework.com/datasets/terminal-bench/terminal-bench/4",
+        "score_rows": 38
+      },
+      {
+        "id": "osworld-2-0",
+        "category": "agentic",
+        "skill": "Long-horizon computer use",
+        "variants": [
+          "v2026_06_24_full",
+          "v2026_08_08_full",
+          "v2026_08_08_offline",
+          "v2026_08_08_full_modified",
+          "v2_1_full",
+          "v2_1_offline"
+        ],
+        "has_task_shape": true,
+        "primary_source_url": "https://osworld-v2.xlang.ai/",
+        "score_rows": 18
+      }
+    ],
+    "response_sha256": {
+      "tmg_benchmarks.json": "4f64c53a62e00785f1795466e01cc9e4d982d2f076930218e6fe65c78a205084",
+      "tmg_scores.json": "0f2931cfc0240487568ae91e57436440eb2cb04334a85808ba1f9eb2a41c0667"
+    }
+  },
+  "hf_official_discovered_count": 49,
+  "hf_inventory": [
+    {
+      "dataset": "SWE-bench/SWE-bench_Verified",
+      "sha": "78f471bf655a3137b2e8a75af1501690ec009ec3",
+      "gated": false,
+      "configs": [
+        {
+          "config": "default",
+          "fields": [
+            "base_commit",
+            "created_at",
+            "difficulty",
+            "environment_setup_commit",
+            "eval_type",
+            "image",
+            "instance_id",
+            "log_parser",
+            "repo",
+            "version",
+            "patch",
+            "test_patch",
+            "eval_script",
+            "problem_statement",
+            "hints_text",
+            "FAIL_TO_PASS",
+            "PASS_TO_PASS"
+          ],
+          "splits": [
+            "test"
+          ]
+        }
+      ],
+      "config_count": 1,
+      "files": [
+        ".gitattributes",
+        "README.md",
+        "data/test-00000-of-00001.parquet",
+        "eval.yaml"
+      ],
+      "eval_files": [
+        "eval.yaml"
+      ],
+      "file_count": 4,
+      "description": "Dataset Summary\nSWE-bench Verified is a subset of 500 samples from the SWE-bench test set, which have been human-validat"
+    },
+    {
+      "dataset": "ScaleAI/SWE-bench_Pro",
+      "sha": "2d52cb3df914a3fcf80c7f66738b3a88ae37fc50",
+      "gated": false,
+      "configs": [
+        {
+          "config": "default",
+          "fields": [
+            "repo",
+            "instance_id",
+            "base_commit",
+            "patch",
+            "test_patch",
+            "problem_statement",
+            "requirements",
+            "interface",
+            "repo_language",
+            "fail_to_pass",
+            "pass_to_pass",
+            "issue_specificity",
+            "issue_categories",
+            "before_repo_set_cmd",
+            "selected_test_files_to_run",
+            "dockerhub_tag",
+            "docker_image",
+            "hard",
+            "version"
+          ],
+          "splits": [
+            "test"
+          ]
+        },
+        {
+          "config": "hard",
+          "fields": [
+            "repo",
+            "instance_id",
+            "base_commit",
+            "patch",
+            "test_patch",
+            "problem_statement",
+            "requirements",
+            "interface",
+            "repo_language",
+            "fail_to_pass",
+            "pass_to_pass",
+            "issue_specificity",
+            "issue_categories",
+            "before_repo_set_cmd",
+            "selected_test_files_to_run",
+            "dockerhub_tag",
+            "docker_image",
+            "hard",
+            "version"
+          ],
+          "splits": [
+            "test"
+          ]
+        },
+        {
+          "config": "v1",
+          "fields": [
+            "repo",
+            "instance_id",
+            "base_commit",
+            "patch",
+            "test_patch",
+            "problem_statement",
+            "requirements",
+            "interface",
+            "repo_language",
+            "fail_to_pass",
+            "pass_to_pass",
+            "issue_specificity",
+            "issue_categories",
+            "before_repo_set_cmd",
+            "selected_test_files_to_run",
+            "dockerhub_tag"
+          ],
+          "splits": [
+            "test"
+          ]
+        }
+      ],
+      "config_count": 3,
+      "files": [
+        ".gitattributes",
+        "README.md",
+        "data/default/test-00000-of-00001.parquet",
+        "data/hard/test-00000-of-00001.parquet",
+        "data/v1/test-00000-of-00001.parquet",
+        "eval.yaml"
+      ],
+      "eval_files": [
+        "eval.yaml"
+      ],
+      "file_count": 6,
+      "description": "\n\t\n\t\t\n\t\n\t\n\t\tSWE-bench Pro V2\n\t\n\nSWE-bench Pro is a benchmark of long-horizon software engineering tasks drawn from real "
+    },
+    {
+      "dataset": "harborframework/terminal-bench",
+      "sha": "bc1a7b6586da8ee3c27e41817dd8fa106c370dfb",
+      "gated": false,
+      "configs": [],
+      "config_count": 0,
+      "files": [
+        ".gitattributes",
+        "LICENSE",
+        "README.md",
+        "eval.yaml",
+        "registry.json",
+        "tasks/atrx-vep-crispr/LICENSE.md"
+      ],
+      "eval_files": [
+        "eval.yaml",
+        "tasks/atrx-vep-crispr/LICENSE.md",
+        "tasks/atrx-vep-crispr/README.md",
+        "tasks/atrx-vep-crispr/environment/Dockerfile",
+        "tasks/atrx-vep-crispr/environment/data/CDS-information.txt",
+        "tasks/atrx-vep-crispr/environment/data/InterPro-domain-information.tsv.gz"
+      ],
+      "file_count": 2583,
+      "description": "\n\t\n\t\t\n\t\n\t\n\t\tTerminal-Bench\n\t\n\nThe primary source is hosted on GitHub, please open issues and\npull requests there, not he"
+    },
+    {
+      "dataset": "harborframework/terminal-bench-2.1",
+      "sha": "3e235dff6880252a587fa479c09bcb1e16edf2eb",
+      "gated": false,
+      "configs": [],
+      "config_count": 0,
+      "files": [
+        ".gitattributes",
+        "LICENSE",
+        "README.md",
+        "eval.yaml",
+        "registry.json",
+        "tasks/adaptive-rejection-sampler/.gitignore"
+      ],
+      "eval_files": [
+        "eval.yaml",
+        "tasks/adaptive-rejection-sampler/.gitignore",
+        "tasks/adaptive-rejection-sampler/README.md",
+        "tasks/adaptive-rejection-sampler/environment/Dockerfile",
+        "tasks/adaptive-rejection-sampler/environment/protected.tar.gz.enc",
+        "tasks/adaptive-rejection-sampler/instruction.md"
+      ],
+      "file_count": 1040,
+      "description": "\n\t\n\t\t\n\t\n\t\n\t\tTerminal-Bench 2.1 (Harbor git-repos dataset)\n\t\n\nHarbor website · Harbor GitHub\nThis is a private mirror of "
+    },
+    {
+      "dataset": "lmarena-ai/leaderboard-dataset",
+      "sha": "0ebb411abf001fa30ad48fc7e49c5cd5891d5f8a",
+      "gated": false,
+      "configs": [
+        {
+          "config": "agent",
+          "fields": [
+            "model_name",
+            "organization",
+            "license",
+            "score",
+            "score_ci_lower",
+            "score_ci_upper",
+            "observation_count",
+            "session_count",
+            "rank",
+            "category",
+            "leaderboard_publish_date"
+          ],
+          "splits": [
+            "latest",
+            "full"
+          ]
+        },
+        {
+          "config": "agent_bash_recovery_steps",
+          "fields": [
+            "model_name",
+            "organization",
+            "license",
+            "score",
+            "score_ci_lower",
+            "score_ci_upper",
+            "observation_count",
+            "session_count",
+            "rank",
+            "category",
+            "leaderboard_publish_date"
+          ],
+          "splits": [
+            "latest",
+            "full"
+          ]
+        },
+        {
+          "config": "agent_bash_reliability",
+          "fields": [
+            "model_name",
+            "organization",
+            "license",
+            "score",
+            "score_ci_lower",
+            "score_ci_upper",
+            "observation_count",
+            "session_count",
+            "rank",
+            "category",
+            "leaderboard_publish_date"
+          ],
+          "splits": [
+            "latest",
+            "full"
+          ]
+        },
+        {
+          "config": "agent_bash_reliability_no_prereq",
+          "fields": [
+            "model_name",
+            "organization",
+            "license",
+            "score",
+            "score_ci_lower",
+            "score_ci_upper",
+            "observation_count",
+            "session_count",
+            "rank",
+            "category",
+            "leaderboard_publish_date"
+          ],
+          "splits": [
+            "latest",
+            "full"
+          ]
+        },
+        {
+          "config": "agent_praise_complaint",
+          "fields": [
+            "model_name",
+            "organization",
+            "license",
+            "score",
+            "score_ci_lower",
+            "score_ci_upper",
+            "observation_count",
+            "session_count",
+            "rank",
+            "category",
+            "leaderboard_publish_date"
+          ],
+          "splits": [
+            "latest",
+            "full"
+          ]
+        },
+        {
+          "config": "agent_steerability",
+          "fields": [
+            "model_name",
+            "organization",
+            "license",
+            "score",
+            "score_ci_lower",
+            "score_ci_upper",
+            "observation_count",
+            "session_count",
+            "rank",
+            "category",
+            "leaderboard_publish_date"
+          ],
+          "splits": [
+            "latest",
+            "full"
+          ]
+        },
+        {
+          "config": "agent_task_outcome_explicit",
+          "fields": [
+            "model_name",
+            "organization",
+            "license",
+            "score",
+            "score_ci_lower",
+            "score_ci_upper",
+            "observation_count",
+            "session_count",
+            "rank",
+            "category",
+            "leaderboard_publish_date"
+          ],
+          "splits": [
+            "latest",
+            "full"
+          ]
+        },
+        {
+          "config": "agent_tool_hallucination",
+          "fields": [
+            "model_name",
+            "organization",
+            "license",
+            "score",
+            "score_ci_lower",
+            "score_ci_upper",
+            "observation_count",
+            "session_count",
+            "rank",
+            "category",
+            "leaderboard_publish_date"
+          ],
+          "splits": [
+            "latest",
+            "full"
+          ]
+        }
+      ],
+      "config_count": 24,
+      "files": [
+        ".gitattributes",
+        "README.md",
+        "agent/full-00000-of-00001.parquet",
+        "agent/latest-00000-of-00001.parquet",
+        "agent_bash_recovery_steps/full-00000-of-00001.parquet",
+        "agent_bash_recovery_steps/latest-00000-of-00001.parquet"
+      ],
+      "eval_files": [
+        "agent_task_outcome_explicit/full-00000-of-00001.parquet",
+        "agent_task_outcome_explicit/latest-00000-of-00001.parquet"
+      ],
+      "file_count": 50,
+      "description": "\n\t\n\t\t\n\t\n\t\n\t\tArena Leaderboard Dataset\n\t\n\nHistorical snapshots of the Arena leaderboard.\n\n\t\n\t\t\n\t\n\t\n\t\tUsage\n\t\n\nfrom datase"
+    },
+    {
+      "dataset": "datacurve/deep-swe",
+      "sha": "6d6f134460c137e24c6bb7e1e69954116ea9dbb3",
+      "gated": "auto",
+      "configs": [],
+      "config_count": 0,
+      "files": [
+        ".gitattributes",
+        ".gitignore",
+        "README.md",
+        "data/test-00000-of-00001.parquet",
+        "eval.yaml",
+        "tasks/README.md"
+      ],
+      "eval_files": [
+        "eval.yaml",
+        "tasks/README.md",
+        "tasks/abs-module-cache-flags/environment/Dockerfile",
+        "tasks/abs-module-cache-flags/instruction.md",
+        "tasks/abs-module-cache-flags/solution/solution.patch",
+        "tasks/abs-module-cache-flags/solution/solve.sh"
+      ],
+      "file_count": 800,
+      "description": "\n\t\n\t\t\n\t\n\t\n\t\tDeepSWE\n\t\n\nDeepSWE is a benchmark for measuring frontier coding agents on original, long-horizon software en"
+    },
+    {
+      "dataset": "hkust-nlp/Toolathlon",
+      "sha": "b5092f978818c6c757a26cc027b3a0e5849392cd",
+      "gated": "auto",
+      "configs": [],
+      "config_count": 0,
+      "files": [
+        ".gitattributes",
+        "README.md",
+        "eval.yaml",
+        "tasks/ab-testing/docs/agent_system_prompt.md",
+        "tasks/ab-testing/docs/task.md",
+        "tasks/ab-testing/docs/user_system_prompt.md"
+      ],
+      "eval_files": [
+        "eval.yaml",
+        "tasks/ab-testing/docs/agent_system_prompt.md",
+        "tasks/ab-testing/docs/task.md",
+        "tasks/ab-testing/docs/user_system_prompt.md",
+        "tasks/ab-testing/evaluation/list_storage_buckets.py",
+        "tasks/ab-testing/evaluation/main.py"
+      ],
+      "file_count": 1815,
+      "description": "\n\t\n\t\t\n\t\n\t\n\t\tToolathlon-Verified\n\t\n\nToolathlon is a benchmark for evaluating language agents on diverse, realistic,\nand l"
+    },
+    {
+      "dataset": "agents-last-exam/agents-last-exam",
+      "sha": "d35928193ff62fee808d0af5fc45af03e43b9216",
+      "gated": false,
+      "configs": [],
+      "config_count": 0,
+      "files": [
+        ".gitattributes",
+        "README.md",
+        "eval.yaml",
+        "release-v1.1.json",
+        "task_cards.parquet",
+        "task_release_statuses.json"
+      ],
+      "eval_files": [
+        "eval.yaml",
+        "task_cards.parquet",
+        "task_release_statuses.json"
+      ],
+      "file_count": 6,
+      "description": "\n\t\n\t\t\n\t\n\t\n\t\tAgents Last Exam v1.1 — Task Card Metadata\n\t\n\n150 active tasks. Use matching v1.1 task code, environment ima"
+    },
+    {
+      "dataset": "cais/hle",
+      "sha": "5a81a4c7271a2a2a312b9a690f0c2fde837e4c29",
+      "gated": "auto",
+      "configs": [
+        {
+          "config": "default",
+          "fields": [
+            "id",
+            "question",
+            "image",
+            "image_preview",
+            "answer",
+            "answer_type",
+            "author_name",
+            "rationale",
+            "rationale_image",
+            "raw_subject",
+            "category",
+            "canary"
+          ],
+          "splits": [
+            "test"
+          ]
+        }
+      ],
+      "config_count": 1,
+      "files": [
+        ".gitattributes",
+        "README.md",
+        "data/test-00000-of-00001.parquet",
+        "eval.yaml"
+      ],
+      "eval_files": [
+        "eval.yaml"
+      ],
+      "file_count": 4,
+      "description": "\n\n\n[!NOTE]\nIMPORTANT: Please help us protect the integrity of this benchmark by not publicly sharing, re-uploading, or d"
+    },
+    {
+      "dataset": "TIGER-Lab/MMLU-Pro",
+      "sha": "b189ec765aa7ed75c8acfea42df31fdae71f97be",
+      "gated": false,
+      "configs": [
+        {
+          "config": "default",
+          "fields": [
+            "question_id",
+            "question",
+            "options",
+            "answer",
+            "answer_index",
+            "cot_content",
+            "category",
+            "src"
+          ],
+          "splits": [
+            "validation",
+            "test"
+          ]
+        }
+      ],
+      "config_count": 1,
+      "files": [
+        ".gitattributes",
+        "README.md",
+        "data/test-00000-of-00001.parquet",
+        "data/validation-00000-of-00001.parquet",
+        "eval.yaml",
+        "run_claude3.py"
+      ],
+      "eval_files": [
+        "eval.yaml"
+      ],
+      "file_count": 7,
+      "description": "\n\t\n\t\t\n\t\n\t\n\t\tMMLU-Pro Dataset\n\t\n\nMMLU-Pro dataset is a more robust and challenging massive multi-task understanding datas"
+    },
+    {
+      "dataset": "MMMU/MMMU_Pro",
+      "sha": "0d7426df4ccb3d8704a992fe6850abee7c262127",
+      "gated": false,
+      "configs": [
+        {
+          "config": "standard (10 options)",
+          "fields": [
+            "id",
+            "question",
+            "options",
+            "explanation",
+            "image_1",
+            "image_2",
+            "image_3",
+            "image_4",
+            "image_5",
+            "image_6",
+            "image_7",
+            "img_type",
+            "answer",
+            "topic_difficulty",
+            "subject"
+          ],
+          "splits": [
+            "test"
+          ]
+        },
+        {
+          "config": "standard (4 options)",
+          "fields": [
+            "id",
+            "question",
+            "options",
+            "explanation",
+            "image_1",
+            "image_2",
+            "image_3",
+            "image_4",
+            "image_5",
+            "image_6",
+            "image_7",
+            "img_type",
+            "answer",
+            "topic_difficulty",
+            "subject"
+          ],
+          "splits": [
+            "test"
+          ]
+        },
+        {
+          "config": "vision",
+          "fields": [
+            "id",
+            "image",
+            "options",
+            "answer",
+            "subject"
+          ],
+          "splits": [
+            "test"
+          ]
+        }
+      ],
+      "config_count": 3,
+      "files": [
+        ".gitattributes",
+        "README.md",
+        "eval.yaml",
+        "standard (10 options)/test-00000-of-00002.parquet",
+        "standard (10 options)/test-00001-of-00002.parquet",
+        "standard (4 options)/test-00000-of-00002.parquet"
+      ],
+      "eval_files": [
+        "eval.yaml"
+      ],
+      "file_count": 11,
+      "description": "\n\t\n\t\t\n\t\n\t\n\t\tMMMU-Pro (A More Robust Multi-discipline Multimodal Understanding Benchmark)\n\t\n\n🌐 Homepage | 🏆 Leaderboard |"
+    },
+    {
+      "dataset": "MathArena/aime_2026",
+      "sha": "d2de22f3c656b4f56cf8981212186377d1e23bc3",
+      "gated": false,
+      "configs": [
+        {
+          "config": "default",
+          "fields": [
+            "problem_idx",
+            "answer",
+            "problem"
+          ],
+          "splits": [
+            "train"
+          ]
+        }
+      ],
+      "config_count": 1,
+      "files": [
+        ".gitattributes",
+        "README.md",
+        "data/train-00000-of-00001.parquet",
+        "eval.yaml"
+      ],
+      "eval_files": [
+        "eval.yaml"
+      ],
+      "file_count": 4,
+      "description": "\n\t\n\t\t\n\t\n\t\n\t\tHomepage and repository\n\t\n\n\nHomepage: https://matharena.ai/\nRepository: https://github.com/eth-sri/matharena"
+    },
+    {
+      "dataset": "llamaindex/ExtractBench",
+      "sha": "51bf3a03eb7feeaef8952be1fc2fc7f924ee72dc",
+      "gated": false,
+      "configs": [],
+      "config_count": 0,
+      "files": [
+        ".gitattributes",
+        "README.md",
+        "docs/long/dd1155_schedule_continuation_0011.pdf",
+        "docs/long/dd1155_schedule_continuation_0012.pdf",
+        "docs/long/gov_clin_schedule_0005.pdf",
+        "docs/long/gov_clin_schedule_0031.pdf"
+      ],
+      "eval_files": [
+        "eval.yaml"
+      ],
+      "file_count": 402,
+      "description": "\n\t\n\t\t\n\t\n\t\n\t\tExtractBench\n\t\n\n\nQuick links: [🌐 Website] [📜 Paper] [💻 Code]\nGiven a document and a schema, a system returns"
+    },
+    {
+      "dataset": "llamaindex/ParseBench",
+      "sha": "2805a1d940f95a203e0ae4b88be9934f7765b3fc",
+      "gated": false,
+      "configs": [],
+      "config_count": 0,
+      "files": [
+        ".gitattributes",
+        ".gitignore",
+        "README.md",
+        "chart.jsonl",
+        "docs/chart/(Web_version)_E-Government_Survey_2024_1392024_p101.pdf",
+        "docs/chart/(Web_version)_E-Government_Survey_2024_1392024_p102.pdf"
+      ],
+      "eval_files": [
+        "docs/chart/timevalue_p9.pdf",
+        "eval.yaml"
+      ],
+      "file_count": 2113,
+      "description": "\n\t\n\t\t\n\t\n\t\n\t\tParseBench\n\t\n\n\nQuick links: [🌐 Website] [📜 Paper] [💻 Code]\nParseBench is a benchmark for evaluating document"
+    },
+    {
+      "dataset": "livebench/livebench",
+      "error": "HTTP Error 401: Unauthorized"
+    },
+    {
+      "dataset": "livecodebench/code_generation_lite",
+      "sha": "0fe84c3912ea0c4d4a78037083943e8f0c4dd505",
+      "gated": false,
+      "configs": [],
+      "config_count": 0,
+      "files": [
+        ".gitattributes",
+        "README.md",
+        "code_generation_lite.py",
+        "images/lcb.png",
+        "test.jsonl",
+        "test2.jsonl"
+      ],
+      "eval_files": [],
+      "file_count": 10,
+      "description": "LiveCodeBench is a temporaly updating benchmark for code generation. Please check the homepage: https://livecodebench.gi"
+    }
+  ],
+  "arena_categories": {
+    "text_style_control": {
+      "category_count": 29,
+      "model_row_counts_by_category": {
+        "russian": 380,
+        "japanese": 280,
+        "industry_software_and_it_services": 416,
+        "multi_turn": 414,
+        "spanish": 301,
+        "hard_prompts_english": 414,
+        "industry_medicine_and_healthcare": 386,
+        "english": 416,
+        "polish": 236,
+        "industry_entertainment_and_sports_and_media": 414,
+        "instruction_following": 416,
+        "industry_life_and_physical_and_social_science": 414,
+        "coding": 411,
+        "industry_writing_and_literature_and_language": 415,
+        "chinese": 392,
+        "french": 297,
+        "expert": 366,
+        "german": 314,
+        "math": 400,
+        "industry_business_and_management_and_financial_operations": 409,
+        "hard_prompts": 416,
+        "korean": 284,
+        "industry_mathematical": 398,
+        "industry_legal_and_government": 388,
+        "creative_writing": 414,
+        "non_english": 416,
+        "longer_query": 394,
+        "exclude_ties": 416,
+        "overall": 416
+      },
+      "source_url": "https://datasets-server.huggingface.co/statistics?dataset=lmarena-ai%2Fleaderboard-dataset&config=text_style_control&split=latest",
+      "response_sha256": "66aa78aa19a21cfdd7d065f1ee7f7e6248f5b6b018fef0c5102ee66bd97ab19d"
+    },
+    "webdev": {
+      "category_count": 5,
+      "model_row_counts_by_category": {
+        "image_to_webdev": 63,
+        "webdev": 144,
+        "webdev-react": 128,
+        "overall": 144,
+        "webdev-html": 143
+      },
+      "source_url": "https://datasets-server.huggingface.co/statistics?dataset=lmarena-ai%2Fleaderboard-dataset&config=webdev&split=latest",
+      "response_sha256": "c2af77ee67fad88068cf5cc6ebef8d0feaefcd70b1b40063e1ef1e8a9887052e"
+    },
+    "document_style_control": {
+      "category_count": 1,
+      "model_row_counts_by_category": {
+        "overall": 44
+      },
+      "source_url": "https://datasets-server.huggingface.co/statistics?dataset=lmarena-ai%2Fleaderboard-dataset&config=document_style_control&split=latest",
+      "response_sha256": "1c28f28d373ecded67c26a53b2fa8e3c1193f35f1e1b690ecae45528df5c91f3"
+    },
+    "vision_style_control": {
+      "category_count": 11,
+      "model_row_counts_by_category": {
+        "creative_writing": 34,
+        "ocr": 121,
+        "captioning": 34,
+        "diagram": 121,
+        "homework": 116,
+        "chinese": 125,
+        "creative_writing_vision": 101,
+        "humor": 91,
+        "english": 165,
+        "overall": 165,
+        "entity_recognition": 51
+      },
+      "source_url": "https://datasets-server.huggingface.co/statistics?dataset=lmarena-ai%2Fleaderboard-dataset&config=vision_style_control&split=latest",
+      "response_sha256": "7ef5d18b8360d2c330a4fde40f5dfe0dcd73538355f05e1ed9ff3e87b1dd79a8"
+    }
+  },
+  "sample_shapes": [
+    {
+      "name": "llamaindex/ExtractBench/short.jsonl",
+      "row_shape": {
+        "id": "str",
+        "category": "str",
+        "pdf": "str",
+        "data_schema": "str",
+        "expected_output": "str",
+        "field_rules": "str",
+        "repeated_structure": "str",
+        "tags": {
+          "type": "list",
+          "length": 6,
+          "item": "str"
+        }
+      }
+    },
+    {
+      "name": "llamaindex/ExtractBench/long.jsonl",
+      "row_shape": {
+        "id": "str",
+        "category": "str",
+        "pdf": "str",
+        "data_schema": "str",
+        "expected_output": "str",
+        "field_rules": "str",
+        "repeated_structure": "str",
+        "tags": {
+          "type": "list",
+          "length": 5,
+          "item": "str"
+        }
+      }
+    },
+    {
+      "name": "llamaindex/ParseBench/table.jsonl",
+      "row_shape": {
+        "pdf": "str",
+        "category": "str",
+        "id": "str",
+        "type": "str",
+        "rule": "str",
+        "page": "NoneType",
+        "expected_markdown": "str",
+        "tags": {
+          "type": "list",
+          "length": 1,
+          "item": "str"
+        }
+      }
+    },
+    {
+      "name": "llamaindex/ParseBench/chart.jsonl",
+      "row_shape": {
+        "pdf": "str",
+        "category": "str",
+        "id": "str",
+        "type": "str",
+        "rule": "str",
+        "page": "NoneType",
+        "expected_markdown": "NoneType",
+        "tags": {
+          "type": "list",
+          "length": 0,
+          "item": null
+        }
+      }
+    },
+    {
+      "name": "SWE-bench/SWE-bench_Verified/default/sample",
+      "features": [
+        "base_commit",
+        "created_at",
+        "difficulty",
+        "environment_setup_commit",
+        "eval_type",
+        "image",
+        "instance_id",
+        "log_parser",
+        "repo",
+        "version",
+        "patch",
+        "test_patch",
+        "eval_script",
+        "problem_statement",
+        "hints_text",
+        "FAIL_TO_PASS",
+        "PASS_TO_PASS"
+      ],
+      "row_shape": {
+        "base_commit": "str",
+        "created_at": "str",
+        "difficulty": "str",
+        "environment_setup_commit": "str",
+        "eval_type": "str",
+        "image": "str",
+        "instance_id": "str",
+        "log_parser": "str",
+        "repo": "str",
+        "version": "str",
+        "patch": "str",
+        "test_patch": "str",
+        "eval_script": "str",
+        "problem_statement": "str",
+        "hints_text": "str",
+        "FAIL_TO_PASS": {
+          "type": "list",
+          "length": 2,
+          "item": "str"
+        },
+        "PASS_TO_PASS": {
+          "type": "list",
+          "length": 13,
+          "item": "str"
+        }
+      },
+      "num_rows_total": 500
+    },
+    {
+      "name": "ScaleAI/SWE-bench_Pro/default/sample",
+      "features": [
+        "repo",
+        "instance_id",
+        "base_commit",
+        "patch",
+        "test_patch",
+        "problem_statement",
+        "requirements",
+        "interface",
+        "repo_language",
+        "fail_to_pass",
+        "pass_to_pass",
+        "issue_specificity",
+        "issue_categories",
+        "before_repo_set_cmd",
+        "selected_test_files_to_run",
+        "dockerhub_tag",
+        "docker_image",
+        "hard",
+        "version"
+      ],
+      "row_shape": {
+        "repo": "str",
+        "instance_id": "str",
+        "base_commit": "str",
+        "patch": "str",
+        "test_patch": "str",
+        "problem_statement": "str",
+        "requirements": "str",
+        "interface": "str",
+        "repo_language": "str",
+        "fail_to_pass": "str",
+        "pass_to_pass": "str",
+        "issue_specificity": "str",
+        "issue_categories": "str",
+        "before_repo_set_cmd": "str",
+        "selected_test_files_to_run": "str",
+        "dockerhub_tag": "str",
+        "docker_image": "str",
+        "hard": "bool",
+        "version": "str"
+      },
+      "num_rows_total": 642
+    },
+    {
+      "name": "lmarena-ai/leaderboard-dataset/webdev/sample",
+      "features": [
+        "model_name",
+        "organization",
+        "license",
+        "rating",
+        "rating_lower",
+        "rating_upper",
+        "variance",
+        "vote_count",
+        "rank",
+        "category",
+        "leaderboard_publish_date"
+      ],
+      "row_shape": {
+        "model_name": "str",
+        "organization": "str",
+        "license": "str",
+        "rating": "float",
+        "rating_lower": "float",
+        "rating_upper": "float",
+        "variance": "float",
+        "vote_count": "int",
+        "rank": "int",
+        "category": "str",
+        "leaderboard_publish_date": "str"
+      },
+      "num_rows_total": 622
+    },
+    {
+      "name": "lmarena-ai/leaderboard-dataset/text_style_control/sample",
+      "features": [
+        "model_name",
+        "organization",
+        "license",
+        "rating",
+        "rating_lower",
+        "rating_upper",
+        "variance",
+        "vote_count",
+        "rank",
+        "category",
+        "leaderboard_publish_date"
+      ],
+      "row_shape": {
+        "model_name": "str",
+        "organization": "str",
+        "license": "str",
+        "rating": "float",
+        "rating_lower": "float",
+        "rating_upper": "float",
+        "variance": "float",
+        "vote_count": "float",
+        "rank": "int",
+        "category": "str",
+        "leaderboard_publish_date": "str"
+      },
+      "num_rows_total": 11033
+    },
+    {
+      "name": "lmarena-ai/leaderboard-dataset/document_style_control/sample",
+      "features": [
+        "model_name",
+        "organization",
+        "license",
+        "rating",
+        "rating_lower",
+        "rating_upper",
+        "variance",
+        "vote_count",
+        "rank",
+        "category",
+        "leaderboard_publish_date"
+      ],
+      "row_shape": {
+        "model_name": "str",
+        "organization": "str",
+        "license": "str",
+        "rating": "float",
+        "rating_lower": "float",
+        "rating_upper": "float",
+        "variance": "float",
+        "vote_count": "int",
+        "rank": "int",
+        "category": "str",
+        "leaderboard_publish_date": "str"
+      },
+      "num_rows_total": 44
+    }
+  ],
+  "case_shapes": [
+    {
+      "name": "ale_row",
+      "features": [
+        "task_id",
+        "title",
+        "summary",
+        "category",
+        "subdomain",
+        "task_split",
+        "task_prompt",
+        "agent_must_do",
+        "software",
+        "input_files",
+        "taxonomy",
+        "source_repo_path"
+      ],
+      "row_shape": {
+        "task_id": "str",
+        "title": "str",
+        "summary": "str",
+        "category": "str",
+        "subdomain": "str",
+        "task_split": "str",
+        "task_prompt": "str",
+        "agent_must_do": {
+          "type": "list",
+          "length": 5,
+          "item": "str"
+        },
+        "software": {
+          "type": "list",
+          "length": 7,
+          "item": "str"
+        },
+        "input_files": {
+          "type": "list",
+          "length": 3,
+          "item": {
+            "name": "str",
+            "format": "str",
+            "path": "str",
+            "description": "str"
+          }
+        },
+        "taxonomy": {
+          "domain_id": "str",
+          "domain_code": "str",
+          "subdomain_id": "str",
+          "subdomain_code": "str",
+          "subdomain_name": "str"
+        },
+        "source_repo_path": "str"
+      },
+      "num_rows_total": 150
+    },
+    {
+      "name": "livebench_math_row",
+      "features": [
+        "question_id",
+        "category",
+        "task",
+        "subtask",
+        "year",
+        "turns",
+        "ground_truth",
+        "hardness",
+        "expressions",
+        "livebench_release_date",
+        "livebench_removal_date",
+        "release_date"
+      ],
+      "row_shape": {
+        "question_id": "str",
+        "category": "str",
+        "task": "str",
+        "subtask": "str",
+        "year": "str",
+        "turns": {
+          "type": "list",
+          "length": 1,
+          "item": "str"
+        },
+        "ground_truth": "str",
+        "hardness": "float",
+        "expressions": "str",
+        "livebench_release_date": "str",
+        "livebench_removal_date": "str",
+        "release_date": "NoneType"
+      },
+      "num_rows_total": 368
+    },
+    {
+      "name": "toolathlon_task",
+      "shape": {
+        "needed_mcp_servers": {
+          "type": "list",
+          "length": 6,
+          "item": "str"
+        },
+        "needed_local_tools": {
+          "type": "list",
+          "length": 5,
+          "item": "str"
+        },
+        "meta": {}
+      }
+    },
+    {
+      "name": "toolathlon_task2",
+      "shape": {
+        "needed_mcp_servers": {
+          "type": "list",
+          "length": 2,
+          "item": "str"
+        },
+        "needed_local_tools": {
+          "type": "list",
+          "length": 5,
+          "item": "str"
+        },
+        "meta": {}
+      }
+    }
+  ],
+  "osworld_arc_shapes": [
+    {
+      "name": "osworld_task",
+      "shape": {
+        "id": "str",
+        "snapshot": "str",
+        "instruction": "str",
+        "source": "str",
+        "config": {
+          "type": "list",
+          "length": 2,
+          "item": {
+            "type": "str",
+            "parameters": "dict"
+          }
+        },
+        "trajectory": "str",
+        "related_apps": {
+          "type": "list",
+          "length": 1,
+          "item": "str"
+        },
+        "evaluator": {
+          "postconfig": {
+            "type": "list",
+            "length": 3,
+            "item": null
+          },
+          "func": "str",
+          "result": {
+            "type": "str"
+          },
+          "expected": {
+            "type": "str",
+            "rules": "dict"
+          }
+        },
+        "proxy": "bool",
+        "fixed_ip": "bool",
+        "possibility_of_env_change": "str"
+      }
+    },
+    {
+      "name": "arc_task",
+      "shape": {
+        "train": {
+          "type": "list",
+          "length": 4,
+          "item": {
+            "input": "list",
+            "output": "list"
+          }
+        },
+        "test": {
+          "type": "list",
+          "length": 1,
+          "item": {
+            "input": "list",
+            "output": "list"
+          }
+        }
+      }
+    }
+  ],
+  "hf_eval_manifests": [
+    {
+      "name": "SWE-bench/SWE-bench_Verified/eval.yaml",
+      "evaluation_framework": "swe-bench",
+      "tasks": [
+        {
+          "id": "swe_bench_%_resolved",
+          "config": "default",
+          "split": "test"
+        },
+        {
+          "id": "swe_bench_average_cost",
+          "config": "default",
+          "split": "test"
+        }
+      ]
+    },
+    {
+      "name": "ScaleAI/SWE-bench_Pro/eval.yaml",
+      "evaluation_framework": "swe-bench-pro",
+      "tasks": [
+        {
+          "id": "SWE_Bench_Pro",
+          "config": "default",
+          "split": "test"
+        },
+        {
+          "id": "SWE_Bench_Pro_hard",
+          "config": "hard",
+          "split": "test"
+        }
+      ]
+    },
+    {
+      "name": "harborframework/terminal-bench/eval.yaml",
+      "evaluation_framework": "harbor",
+      "tasks": [
+        {
+          "id": "terminalbench_4",
+          "config": "default",
+          "split": "test"
+        },
+        {
+          "id": "terminalbench_3",
+          "config": "default",
+          "split": "test"
+        }
+      ]
+    },
+    {
+      "name": "agents-last-exam/agents-last-exam/eval.yaml",
+      "evaluation_framework": null,
+      "tasks": [
+        {
+          "id": "overall-pass-rate",
+          "config": "default",
+          "split": "v1_1"
+        },
+        {
+          "id": "overall-score",
+          "config": "default",
+          "split": "v1_1"
+        },
+        {
+          "id": "ale-cli-pass-rate",
+          "config": "default",
+          "split": "v1_1"
+        },
+        {
+          "id": "ale-cli-score",
+          "config": "default",
+          "split": "v1_1"
+        },
+        {
+          "id": "near-term-pass-rate",
+          "config": "default",
+          "split": "v1_1"
+        },
+        {
+          "id": "near-term-score",
+          "config": "default",
+          "split": "v1_1"
+        },
+        {
+          "id": "full-spectrum-pass-rate",
+          "config": "default",
+          "split": "v1_1"
+        },
+        {
+          "id": "full-spectrum-score",
+          "config": "default",
+          "split": "v1_1"
+        },
+        {
+          "id": "last-exam-pass-rate",
+          "config": "default",
+          "split": "v1_1"
+        },
+        {
+          "id": "last-exam-score",
+          "config": "default",
+          "split": "v1_1"
+        }
+      ]
+    },
+    {
+      "name": "llamaindex/ExtractBench/eval.yaml",
+      "evaluation_framework": "extractbench",
+      "tasks": [
+        {
+          "id": "mean",
+          "config": "extract-bench",
+          "split": "mean"
+        },
+        {
+          "id": "short",
+          "config": "extract-bench",
+          "split": "short"
+        },
+        {
+          "id": "medium",
+          "config": "extract-bench",
+          "split": "medium"
+        },
+        {
+          "id": "long",
+          "config": "extract-bench",
+          "split": "long"
+        }
+      ]
+    },
+    {
+      "name": "llamaindex/ParseBench/eval.yaml",
+      "evaluation_framework": "parsebench",
+      "tasks": [
+        {
+          "id": "mean",
+          "config": "parse-bench",
+          "split": "mean"
+        },
+        {
+          "id": "table",
+          "config": "parse-bench",
+          "split": "table"
+        },
+        {
+          "id": "chart",
+          "config": "parse-bench",
+          "split": "chart"
+        },
+        {
+          "id": "text_content",
+          "config": "parse-bench",
+          "split": "text_content"
+        },
+        {
+          "id": "text_formatting",
+          "config": "parse-bench",
+          "split": "text_formatting"
+        },
+        {
+          "id": "layout",
+          "config": "parse-bench",
+          "split": "layout"
+        }
+      ]
+    },
+    {
+      "name": "TIGER-Lab/MMLU-Pro/eval.yaml",
+      "evaluation_framework": "inspect-ai",
+      "tasks": [
+        {
+          "id": "mmlu_pro",
+          "config": "default",
+          "split": "test"
+        }
+      ]
+    },
+    {
+      "name": "MathArena/aime_2026/eval.yaml",
+      "evaluation_framework": "math-arena",
+      "tasks": [
+        {
+          "id": "MathArena/aime_2026",
+          "config": "default",
+          "split": "train"
+        }
+      ]
+    },
+    {
+      "name": "MMMU/MMMU_Pro/eval.yaml",
+      "evaluation_framework": "mmmu",
+      "tasks": [
+        {
+          "id": "mmmu_pro_vision",
+          "config": "vision",
+          "split": "test"
+        },
+        {
+          "id": "mmmu_pro_standard_4_options",
+          "config": "standard (4 options)",
+          "split": "test"
+        },
+        {
+          "id": "mmmu_pro_standard_10_options",
+          "config": "standard (10 options)",
+          "split": "test"
+        }
+      ]
+    }
+  ],
+  "parsebench_result": {
+    "source_url": "https://huggingface.co/KDLAI/KDL-Frontier-Parser-nano/blob/main/.eval_results/parsebench.yaml",
+    "root_type": "list",
+    "entry_keys": [
+      "dataset",
+      "value",
+      "date",
+      "source",
+      "notes"
+    ],
+    "dataset_keys": [
+      "id",
+      "task_id"
+    ],
+    "task_ids": [
+      "mean",
+      "table",
+      "layout",
+      "text_content",
+      "text_formatting",
+      "chart"
+    ],
+    "note": "Pipeline result; does not establish equivalence to a raw LLM or a CLI agent profile."
+  },
+  "aa_openapi": {
+    "source_url": "https://artificialanalysis.ai/api/v2/openapi",
+    "response_sha256": "e66daecd874b80cf692429fc6b908d6e520d7cececde807f5ff108d23f735e33",
+    "schemas": {
+      "LLMModelsFreeResponse": {
+        "fields": [
+          "tier",
+          "intelligence_index_version",
+          "pagination",
+          "data"
+        ]
+      },
+      "FreeModelData": {
+        "fields": [
+          "id",
+          "name",
+          "slug",
+          "release_date",
+          "model_creator",
+          "evaluations",
+          "artificial_analysis_intelligence_index_cost",
+          "pricing",
+          "performance"
+        ]
+      },
+      "FreeEvaluations": {
+        "fields": [
+          "artificial_analysis_intelligence_index",
+          "artificial_analysis_coding_index",
+          "artificial_analysis_agentic_index",
+          "artificial_analysis_finance_and_accounting_index",
+          "artificial_analysis_strategy_and_ops_index",
+          "artificial_analysis_legal_index",
+          "artificial_analysis_healthcare_and_medical_index",
+          "artificial_analysis_engineering_index",
+          "artificial_analysis_economics_index"
+        ]
+      },
+      "Evaluations": {
+        "fields": [
+          "artificial_analysis_intelligence_index",
+          "artificial_analysis_coding_index",
+          "artificial_analysis_agentic_index",
+          "artificial_analysis_finance_and_accounting_index",
+          "artificial_analysis_strategy_and_ops_index",
+          "artificial_analysis_legal_index",
+          "artificial_analysis_healthcare_and_medical_index",
+          "artificial_analysis_engineering_index",
+          "artificial_analysis_economics_index",
+          "tau2_telecom",
+          "tau_banking",
+          "terminalbench_hard",
+          "terminalbench_v2_1",
+          "terminalbench_v4_0",
+          "terminalbench_science",
+          "aa_briefcase_elo",
+          "automationbench_aa",
+          "gdp_pdf",
+          "scicode",
+          "aa_lcr",
+          "aa_omniscience_index",
+          "aa_omniscience_accuracy",
+          "aa_omniscience_non_hallucination_rate",
+          "ifbench",
+          "hle",
+          "gpqa_diamond",
+          "critpt",
+          "gdpval_aa_elo",
+          "gdpval_aa_normalized",
+          "mmmu_pro",
+          "artificial_analysis_openness_index",
+          "artificial_analysis_multilingual_index",
+          "mlcr_overall"
+        ]
+      }
+    },
+    "authenticated_payload_fetched": false
+  },
+  "terminal_metadata_samples": [
+    {
+      "path": "harborframework/terminal-bench/tasks/atrx-vep-crispr/task.toml",
+      "root_fields": [
+        "artifacts",
+        "task",
+        "metadata",
+        "verifier",
+        "agent",
+        "environment"
+      ],
+      "classification": {
+        "category": "Science",
+        "subcategory": "Biology",
+        "tags": [
+          "genomics",
+          "ensembl-vep",
+          "hgvs",
+          "spcas9"
+        ],
+        "expert_time_estimate_hours": 7.0
+      },
+      "task_description_nonempty": false
+    },
+    {
+      "path": "harborframework/terminal-bench/tasks/batched-eval-parity/task.toml",
+      "root_fields": [
+        "schema_version",
+        "artifacts",
+        "task",
+        "metadata",
+        "verifier",
+        "agent",
+        "environment"
+      ],
+      "classification": {
+        "category": "ML",
+        "subcategory": "Evaluation",
+        "tags": [
+          "evaluation",
+          "batching",
+          "python",
+          "debugging"
+        ],
+        "expert_time_estimate_hours": 24.0
+      },
+      "task_description_nonempty": false
+    },
+    {
+      "path": "harborframework/terminal-bench-2.1/tasks/adaptive-rejection-sampler/task.toml",
+      "root_fields": [
+        "schema_version",
+        "artifacts",
+        "task",
+        "metadata",
+        "verifier",
+        "agent",
+        "environment",
+        "solution"
+      ],
+      "classification": {
+        "category": "scientific-computing",
+        "tags": [
+          "applied-statistics",
+          "adaptive-rejection-sampling",
+          "Bayesian-inference",
+          "simulation"
+        ],
+        "difficulty": "medium",
+        "expert_time_estimate_min": 180.0,
+        "junior_time_estimate_min": 480.0
+      },
+      "task_description_nonempty": true
+    }
+  ],
+  "hf_leaderboard_samples": [
+    {
+      "name": "llamaindex/ExtractBench__leaderboard",
+      "top_type": "list",
+      "rows": 11,
+      "all_fields": [
+        "author",
+        "filename",
+        "lower_is_better",
+        "modelId",
+        "notes",
+        "num_parameters",
+        "pullRequest",
+        "rank",
+        "source",
+        "value",
+        "verified"
+      ]
+    },
+    {
+      "name": "llamaindex/ParseBench__leaderboard",
+      "top_type": "list",
+      "rows": 33,
+      "all_fields": [
+        "author",
+        "filename",
+        "lower_is_better",
+        "modelId",
+        "notes",
+        "num_parameters",
+        "pullRequest",
+        "rank",
+        "source",
+        "value",
+        "verified"
+      ]
+    },
+    {
+      "name": "SWE-bench/SWE-bench_Verified__leaderboard",
+      "top_type": "list",
+      "rows": 68,
+      "all_fields": [
+        "author",
+        "filename",
+        "lower_is_better",
+        "modelId",
+        "notes",
+        "num_parameters",
+        "pullRequest",
+        "rank",
+        "source",
+        "value",
+        "verified"
+      ]
+    },
+    {
+      "name": "harborframework/terminal-bench__leaderboard",
+      "top_type": "list",
+      "rows": 6,
+      "all_fields": [
+        "author",
+        "filename",
+        "lower_is_better",
+        "modelId",
+        "notes",
+        "num_parameters",
+        "pullRequest",
+        "rank",
+        "source",
+        "value",
+        "verified"
+      ]
+    },
+    {
+      "name": "agents-last-exam/agents-last-exam__leaderboard",
+      "top_type": "list",
+      "rows": 8,
+      "all_fields": [
+        "author",
+        "filename",
+        "lower_is_better",
+        "modelId",
+        "notes",
+        "num_parameters",
+        "pullRequest",
+        "rank",
+        "source",
+        "value",
+        "verified"
+      ]
+    }
+  ],
+  "sample_source_urls": {
+    "SWE-bench/SWE-bench_Verified/default/sample": "https://datasets-server.huggingface.co/rows?dataset=SWE-bench%2FSWE-bench_Verified&config=default&split=test&offset=0&length=1",
+    "ScaleAI/SWE-bench_Pro/default/sample": "https://datasets-server.huggingface.co/rows?dataset=ScaleAI%2FSWE-bench_Pro&config=default&split=test&offset=0&length=1",
+    "ale_row": "https://datasets-server.huggingface.co/rows?dataset=agents-last-exam%2Fagents-last-exam&config=default&split=v1_1&offset=0&length=1",
+    "livebench_math_row": "https://datasets-server.huggingface.co/rows?dataset=livebench%2Fmath&config=default&split=test&offset=0&length=1",
+    "osworld_task": "https://github.com/xlang-ai/OSWorld-V2/blob/main/evaluation_examples/examples/chrome/030eeff7-b492-4218-b312-701ec99ee0cc.json",
+    "arc_task": "https://github.com/arcprize/ARC-AGI-2/blob/main/data/evaluation/0934a4d8.json",
+    "livecodebench_sample": "https://huggingface.co/datasets/livecodebench/code_generation_lite/blob/main/test.jsonl"
+  },
+  "livecodebench_case_fields": [
+    "question_title",
+    "question_content",
+    "platform",
+    "question_id",
+    "contest_id",
+    "contest_date",
+    "starter_code",
+    "difficulty",
+    "public_test_cases",
+    "private_test_cases",
+    "metadata"
+  ]
+}

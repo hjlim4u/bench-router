@@ -166,7 +166,8 @@ def _parse_time(v, name):
 # ---------- task.json (04 입력 계약) ----------
 
 TASK_REQUIRED = ("schema_version", "task_id", "round", "summary", "prompt", "cwd")
-TASK_OPTIONAL = ("context_files", "categories", "category_confidence", "constraints", "priority", "exclude_profiles")
+TASK_OPTIONAL = ("context_files", "categories", "category_confidence", "constraints", "priority", "exclude_profiles",
+                 "facets")
 CONSTRAINT_DEFAULTS = {"max_cost_tier": "high", "min_context_tokens": 0, "local_only": False,
                        "timeout_ms": 900000, "required_capabilities": []}
 TASK_MAX_BYTES = 1024 * 1024
@@ -463,6 +464,10 @@ def validate_task(raw):
     if t["priority"] not in PRIORITIES:
         raise InputError("task.priority: quality|balanced|cost")
     t["exclude_profiles"] = _str_list(raw.get("exclude_profiles", []), "task.exclude_profiles")
+    facets = raw.get("facets", {})  # Orchestrator가 직접 태그한 {axis: [values]}. 어휘 검증은 index가 있는 evidence에서
+    if not isinstance(facets, dict):
+        raise InputError("task.facets: object {axis: [values]} required")
+    t["facets"] = {a: _str_list(v, f"task.facets.{a}") for a, v in facets.items()}
     return t
 
 

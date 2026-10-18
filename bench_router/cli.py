@@ -13,6 +13,7 @@ EXIT = {"selected": 0, "completed": 0, "ok": 0, "recorded": 0, "blocked": 10, "t
         "delivery_uncertain": 11, "execution_failed": 12, "result_invalid": 12, "no_eligible_profile": 13,
         "conflict": 14, "stale_assessment": 14, "partial_failure": 16, "failed": 16}
 BUNDLED_CATEGORIES = Path(__file__).with_name("categories.toml")
+WIKI_VAULT = Path(__file__).resolve().parent.parent / "wiki"
 
 
 def _xdg(var, fallback):
@@ -108,11 +109,37 @@ def _refresh(args):
         import_doc = data.validate_import(r.load_json_strict(args.import_file, 16 * 1024 * 1024), args.source)
     elif args.source and args.source not in data.AUTO_SOURCES:
         raise r.InputError(f"--source must be one of {data.AUTO_SOURCES} (manual sources need --import)")
+    from . import wiki
+    try:  # Wiki 오류는 snapshot 갱신을 막지 않는다. 이전 index.json을 그대로 두고 그 수집 대상을 쓴다
+        idx = wiki.compile_wiki(args.vault)
+        wiki_status = {"status": "ok", **wiki.summary(idx)}
+    except r.InputError as e:
+        idx, wiki_status = wiki.load_index(args.cache_dir), {"status": "error", "error": {"code": "validation", "message": str(e)}}
     try:
-        return data.refresh(args.cache_dir, cfg, mapping, aliases, datetime.now(timezone.utc),
-                            only=args.source, force=args.force, import_doc=import_doc)
+        res = data.refresh(args.cache_dir, cfg, mapping, aliases, datetime.now(timezone.utc),
+                           only=args.source, force=args.force, import_doc=import_doc, index=idx)
     except data.LockBusy as e:
         return {"schema_version": r.SCHEMA_VERSION, "status": "conflict", "error": {"code": "lock", "message": str(e)}}
+    if wiki_status["status"] == "ok":
+        wiki.write_index(args.cache_dir, idx)
+    res["wiki_index"] = wiki_status
+    return res
+
+
+def _evidence(args):
+    from . import evidence
+    if args.max_units < 1:
+        raise r.InputError("--max-units must be >= 1")
+    t = r.validate_task(r.load_json_strict(args.task, r.TASK_MAX_BYTES))
+    return evidence.build(t, r.load_profiles(args.config_dir / "profiles.toml"), *r.load_snapshot(args.cache_dir),
+                          evidence.load_index(args.cache_dir), datetime.now(timezone.utc), args.max_units)
+
+
+def _wiki(args):
+    from . import wiki
+    idx = wiki.compile_wiki(args.vault)
+    path = None if args.check else str(wiki.write_index(args.cache_dir, idx))
+    return {"schema_version": r.SCHEMA_VERSION, "status": "ok", "written": path, **wiki.summary(idx)}
 
 
 def _status(args):
@@ -196,10 +223,19 @@ def main(argv=None):
     ep = sub.add_parser("explain", help="human-readable dry-run with all candidates")
     ep.add_argument("--task", required=True)
     ep.add_argument("--context", help="Orchestrator metrics: estimates, prices, signals (context JSON 1.0|2.0)")
+    xp = sub.add_parser("evidence", help="benchmark evidence for the task's facets, per profile; no selection")
+    xp.add_argument("--task", required=True)
+    xp.add_argument("--max-units", type=int, default=12)
+    xp.add_argument("--format", choices=["json", "table"], default="json")
     fp = sub.add_parser("refresh", help="fetch sources and publish the routing snapshot")
     fp.add_argument("--source")
     fp.add_argument("--force", action="store_true", help="ignore TTL")
     fp.add_argument("--import", dest="import_file", help="approved manual observations (swe/tb)")
+    fp.add_argument("--vault", type=Path, default=WIKI_VAULT, help="benchmark wiki compiled into index.json")
+    wp = sub.add_parser("wiki", help="compile reviewed benchmark wiki pages into index.json")
+    wp.add_argument("action", choices=["compile"])
+    wp.add_argument("--vault", type=Path, default=WIKI_VAULT)
+    wp.add_argument("--check", action="store_true", help="validate only; do not write index.json")
     sub.add_parser("status", help="source age, failures, unmatched models, snapshot/config state")
     pp = sub.add_parser("parallel", help="dispatch tasks × fanout agents concurrently, each in its own git worktree")
     pp.add_argument("--group", required=True)
@@ -228,7 +264,8 @@ def main(argv=None):
 
     try:
         res = {"refresh": _refresh, "status": _status, "collect": _collect, "resume": _resume, "feedback": _feedback,
-                "parallel": _parallel, "coordination": _coordination}.get(
+                "parallel": _parallel, "coordination": _coordination, "wiki": _wiki,
+                "evidence": _evidence}.get(
             args.cmd, _load)(args)
     except r.InputError as e:
         print(json.dumps({"schema_version": r.SCHEMA_VERSION, "status": "error",
@@ -239,6 +276,10 @@ def main(argv=None):
                           "error": {"code": "io", "message": str(e)}}, ensure_ascii=False))
         return 15
 
+    if args.cmd == "evidence" and args.format == "table":
+        from . import evidence
+        print(evidence.table(res))
+        return 0
     if args.cmd == "explain":
         print(explain_text(res))
         return EXIT[res["status"]]
