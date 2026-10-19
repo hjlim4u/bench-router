@@ -1,0 +1,71 @@
+{
+  "sources": {
+    "url:https://developers.openai.com/api/docs/guides/model-selection": {
+      "content_hash": "c45b29137ecc0c7aedd97965479177645bf97413e548c5073cff0192cc17fe08",
+      "last_ingested": "2026-10-19T01:57:12.910777+00:00",
+      "pages_produced": [
+        "references/sources/openai-model-selection.md",
+        "concepts/model-effort-selection.md",
+        "synthesis/vendor-guided-model-selection.md",
+        "projects/bench-router/synthesis/vendor-guided-routing-proposal.md"
+      ]
+    },
+    "url:https://platform.claude.com/docs/en/about-claude/models/choosing-a-model": {
+      "content_hash": "fcbad7eacf162990cc4bb77e67dd9b1f483f9f7c091178ee9588d2e3278c08b2",
+      "last_ingested": "2026-10-19T01:57:13.068919+00:00",
+      "pages_produced": [
+        "references/sources/anthropic-model-selection.md",
+        "concepts/model-effort-selection.md",
+        "synthesis/vendor-guided-model-selection.md",
+        "projects/bench-router/synthesis/vendor-guided-routing-proposal.md"
+      ]
+    },
+    "url:https://platform.claude.com/docs/en/build-with-claude/effort": {
+      "content_hash": "a273c84bceef6e1223a5b3bbd94d89de3425ba2f1c971bdff025b1370be4e277",
+      "last_ingested": "2026-10-19T01:57:13.209660+00:00",
+      "pages_produced": [
+        "references/sources/anthropic-effort.md",
+        "concepts/model-effort-selection.md",
+        "synthesis/vendor-guided-model-selection.md",
+        "projects/bench-router/synthesis/vendor-guided-routing-proposal.md"
+      ]
+    },
+    "url:https://ai.google.dev/gemini-api/docs/models": {
+      "content_hash": "30965fd02fba634223aa34fe79f80329ada6200d6f043469223f0fb492fec60d",
+      "last_ingested": "2026-10-19T01:57:13.350335+00:00",
+      "pages_produced": [
+        "references/sources/google-gemini-models.md",
+        "synthesis/vendor-guided-model-selection.md",
+        "projects/bench-router/synthesis/vendor-guided-routing-proposal.md"
+      ]
+    },
+    "url:https://ai.google.dev/gemini-api/docs/thinking": {
+      "content_hash": "ba0d06849832d34235d399fe812b28594c024f53b1bbdd282ac51fef9a70f2ce",
+      "last_ingested": "2026-10-19T01:57:13.494058+00:00",
+      "pages_produced": [
+        "references/sources/google-gemini-thinking.md",
+        "concepts/model-effort-selection.md",
+        "synthesis/vendor-guided-model-selection.md",
+        "projects/bench-router/synthesis/vendor-guided-routing-proposal.md"
+      ]
+    },
+    "repo:bench-router@d1a94b1c0164f9a129f37206812a077f70053a8b": {
+      "content_hash": "072981be0e06494f0cab288e781576d94bb83a3ef8a9756476ab7990bcd8f762",
+      "last_ingested": "2026-10-19T01:57:13.647062+00:00",
+      "pages_produced": [
+        "projects/bench-router/bench-router.md",
+        "projects/bench-router/synthesis/routing-selection-audit.md",
+        "projects/bench-router/synthesis/vendor-guided-routing-proposal.md"
+      ]
+    },
+    "conversation:2026-10-19": {
+      "content_hash": "a566745f4239034adbcf2a1d5712b29f684f41c75b3e1618f57b54fe2d11c74a",
+      "last_ingested": "2026-10-19T01:57:13.815292+00:00",
+      "pages_produced": [
+        "projects/bench-router/bench-router.md",
+        "synthesis/vendor-guided-model-selection.md",
+        "projects/bench-router/synthesis/vendor-guided-routing-proposal.md"
+      ]
+    }
+  }
+}

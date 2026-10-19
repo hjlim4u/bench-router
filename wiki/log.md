@@ -11,3 +11,4 @@
 - [2026-10-18T02:41:36Z] EVIDENCE cli evidence subcommand + bench_router/evidence.py added; task.facets optional field
 - [2026-10-18T02:51:08Z] REVIEW pages_reviewed=85 lifecycle=reviewed index=135units/43active/39postings checks=rules,arena_categories(55/55),source_figures(19/19),adoption_consistency fixed=score_columns_sentence(9 pages)
 - [2026-10-18T03:18:35Z] REFRESH aa=updated mg=updated arena=failed(HF /filter 500/timeouts, then 429) aliases=aa:3 adapter=4 arena_page_retries=4
+- [2026-10-19T01:57:16Z] CAPTURE type=synthesis page=synthesis/vendor-guided-model-selection.md title="Vendor-guided model selection" pages_created=10 pages_updated=1 source_captures=7 qmd=skipped_collection_unset

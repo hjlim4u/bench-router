@@ -11,6 +11,13 @@ Pages are written in English, the language of the original sources, so definitio
 | `concepts/facets/<axis>.md` | Allowed values (vocabulary) of one axis and how each is detected | `[[facet]]` array |
 | `entities/benchmarks/*.md`, `entities/benchmarks/{mg,hf}/*.md` | One benchmark and its leaderboard slices (units) | `[[unit]]` array |
 | `references/sources/*.md` | Public sources whose definitions are quoted | none |
+| `concepts/*.md` | General model-selection concepts, separate from the facet vocabulary | none |
+| `synthesis/*.md` | Comparisons and findings across sources | none |
+| `projects/bench-router/**/*.md` | Project overview, implementation findings, and explicitly labeled proposals | none |
+
+Model and effort guidance is reference knowledge, not a benchmark unit or a new facet. These pages do not have `## Index` blocks and do not change runtime routing. New pages follow the same `draft` review gate below. Their source dates and model versions must be explicit; vendor advice is not a cross-provider performance guarantee.
+
+Source captures under `_raw/_archived/` may contain a bounded verbatim excerpt rather than a complete document. Each capture declares its scope and canonical origin; never describe an excerpt as a full original. Keep captures immutable and save a new dated capture when evidence changes.
 
 Allowed axes: `task`, `lang`, `domain`, `difficulty`, `shape`, `agent_signal`.
 
