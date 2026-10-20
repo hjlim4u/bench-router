@@ -1,6 +1,7 @@
-"""bench-router v1 선택: 입력 검증 → 분류(L0/L1/general) → 제약 필터 → 점수 → 선택.
+"""Shared input validation, assessment, constraints and selection entry points.
 
-route 경로는 네트워크·herdr·파일 쓰기를 하지 않는다. 계산 정책은 03 문서, 계약은 04 문서.
+Vendor-guided decisions are the default; legacy scores require explicit opt-in.
+Network decisions are opt-in for live callers. This module never dispatches or writes files.
 """
 import contextlib
 import hashlib
@@ -838,7 +839,7 @@ def benchmark_evaluation(p, fp, a, snap, sources, warnings, priority):
     return ev
 
 
-def assess(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
+def assess(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None, *, benchmarks=True):
     """후보 평가 공통 경계: 사실 수집 → 필수 제약 → 평가기. 선택하지 않는다.
     candidates는 전 프로필(profile ID순). 평가기는 제약을 통과한 후보에만 돈다.
     availability=None이면 dry-run(미확인), live면 {profile_id: 제외 사유 또는 None}."""
@@ -866,7 +867,7 @@ def assess(t, cfg, mapping, snap, snap_warnings, now, availability=None, context
         c = {"profile": p["id"], "profile_fingerprint": profile_fingerprint(p), "cost_tier": p["cost_tier"],
              "eligible": all(f["passed"] for f in results), "constraints": results, "context_facts": facts,
              "metrics": metrics, "evaluations": {}}
-        if c["eligible"]:
+        if c["eligible"] and benchmarks:
             # ponytail: 평가기 1개라 직접 호출. 두 번째가 생기면 evaluations에 키 하나 추가.
             c["evaluations"]["benchmark"] = benchmark_evaluation(p, c["profile_fingerprint"], a, snap, sources,
                                                                  warnings, t["priority"])
@@ -895,7 +896,9 @@ def _complexity_v1(context):
 def _legacy_cands(asmt):
     """select()가 읽는 1.0 후보 형태. benchmark 결과를 그대로 펼친다."""
     return [{"profile": c["profile"], "profile_fingerprint": c["profile_fingerprint"], "cost_tier": c["cost_tier"],
-             "context_facts": c["context_facts"], **c["evaluations"]["benchmark"]}
+              "context_facts": c["context_facts"], **c["evaluations"].get("benchmark", {
+                  "quality": None, "coverage": 0, "exact_evidence_weight": 0,
+                  "score": None, "cost_proxy": None, "evidence": []})}
             for c in asmt["candidates"] if c["eligible"]]
 
 
@@ -922,7 +925,7 @@ def _result_v1(asmt, cands, status, selected, mode, warnings):
                 "max_estimated_cost_usd": context.get("max_estimated_cost_usd")} if context is not None else {})}
 
 
-def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
+def route_legacy(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
     """legacy 자동 선택 = assess + select. 같은 task/config/snapshot/availability/now면 결과가 동일하다."""
     asmt = assess(t, cfg, mapping, snap, snap_warnings, now, availability, context)
     cands = _legacy_cands(asmt)
@@ -945,6 +948,23 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
             warnings.append(warn("proxy_only", f"{pick}: model-proxy evidence only, no exact profile evaluation"))
     return {**_result_v1(asmt, cands, "selected" if pick else "no_eligible_profile", selected, mode, warnings),
             "selection": {"source": "router_legacy"}}
+
+
+def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None,
+          *, policy="vendor-guided", host=None, response=None, selection=None, index=None,
+          allow_network=False, env=None, check_digest=True, omit_profiles=(), decision_cache=None):
+    """Default: vendor-guided decision packet/validated choice. Legacy requires explicit opt-in."""
+    if policy == "legacy":
+        if response is not None or selection is not None:
+            raise InputError("legacy policy does not accept a decision response or vendor selection")
+        return route_legacy(t, cfg, mapping, snap, snap_warnings, now, availability, context)
+    if policy != "vendor-guided":
+        raise InputError("policy: vendor-guided|legacy required")
+    from . import decision
+    return decision.route(t, cfg, mapping, snap, snap_warnings, now, availability, context,
+                          host=host, response=response, selection=selection, index=index,
+                          allow_network=allow_network, env=env, check_digest=check_digest,
+                          omit_profiles=omit_profiles, decision_cache=decision_cache)
 
 
 def evaluate_v1(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
@@ -993,6 +1013,9 @@ SELECTION_KEYS = {"schema_version", "profile", "assessment_digest", "policy", "r
 
 def validate_selection(raw):
     """Orchestrator의 선택 기록: 무엇을(profile) 어떤 평가(assessment_digest)를 근거로 왜(policy, reason) 골랐나."""
+    if isinstance(raw, dict) and raw.get("schema_version") == "3.0":
+        from . import decision
+        return decision.validate_selection(raw)
     if not isinstance(raw, dict) or set(raw) != SELECTION_KEYS:
         raise InputError(f"selection: exactly {sorted(SELECTION_KEYS)} required")
     if raw["schema_version"] != EVALUATE_SCHEMA_VERSION:
@@ -1014,13 +1037,17 @@ def apply_selection(res, cfg, profile_id, selection=None, mode="orchestrator_pin
     profile_id만 오면(기록 없는 고정) 실행은 하되 selection_unrecorded로 알린다.
     check_digest=False는 호출자가 이미 같은 판단 입력으로 digest를 검사한 경우만(parallel worker)."""
     if selection is not None:
+        if selection.get("schema_version") == "3.0":
+            from . import decision
+            return decision.apply_record(res, cfg, selection, check_digest)
         if check_digest and selection["assessment_digest"] != res["assessment_digest"]:
             return {**res, "status": "stale_assessment", "selected": None,
                     "selection": {"source": "orchestrator", **selection},
                     "warnings": res["warnings"] + [warn("stale_assessment",
                         "task/config/snapshot/context changed since evaluate; re-evaluate and select again")]}
         out = pin_selection(res, cfg, selection["profile"], mode)
-        return {**out, "selection": {"source": "orchestrator", **selection}}
+        return {**out, "selection": {"source": "orchestrator", **selection},
+                "warnings": out["warnings"] + [warn("selection_legacy", "2.0 selection was not validated by vendor guidance")]}
     out = pin_selection(res, cfg, profile_id, mode)
     if mode == "orchestrator_pinned":
         out["warnings"] = out["warnings"] + [warn("selection_unrecorded",

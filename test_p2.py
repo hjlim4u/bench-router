@@ -13,7 +13,7 @@ from pathlib import Path
 
 from bench_router import herdr as hd
 from bench_router import routing as r
-from test_p0 import MAPPING, config, profile
+from test_p0 import MAPPING, config, profile, guided_reply, guided_responses, NOW
 
 
 def which(name):
@@ -182,10 +182,29 @@ class P2(unittest.TestCase):
 
     def run_(self, fake, t=None, w=which):
         fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
-        return hd.dispatch(t or self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=w)
+        return hd.dispatch(t or self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=w, decision_options={"policy": "legacy"})
 
     def receipt(self, out):
         return json.loads(Path(out["receipt_path"]).read_text("utf-8"))
+
+    def test_v76_guided_live_preflight_and_receipt_first_recovery(self):
+        from bench_router import decision
+        fake = FakeProjects(on_prompt=write_result())
+        fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
+        opts = {"host": "codex", "env": {}}
+        pending = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake,
+                              which=which, decision_options=opts)
+        self.assertEqual((pending["status"], fake.calls), ("decision_required", []))
+        self.assertFalse((Path(self.cwd) / ".bench-router").exists())
+        response = guided_responses(pending, lambda response: r.route(
+            self.task(), self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response), "a")
+        first = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake,
+                            which=which, decision_options={**opts, "response": response})
+        self.assertEqual((first["status"], first["selection"]["schema_version"]), ("completed", "3.0"))
+        with patch.object(decision, "load_guidelines", side_effect=AssertionError("must recover without new choice")):
+            again = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake,
+                                which=which, decision_options=opts)
+        self.assertEqual((again["reused_receipt"], len(fake.prompts)), (True, 1))
 
     def test_v35_pinned_profile_replay_and_retry_guidance(self):
         self.cfg = config([*self.cfg["profile"], profile("b", kind="claude", executable="claude")], default="a")

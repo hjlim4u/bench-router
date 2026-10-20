@@ -11,7 +11,8 @@ from . import routing as r
 
 EXIT = {"selected": 0, "completed": 0, "ok": 0, "recorded": 0, "blocked": 10, "timed_out": 11, "waiting": 11,
         "delivery_uncertain": 11, "execution_failed": 12, "result_invalid": 12, "no_eligible_profile": 13,
-        "conflict": 14, "stale_assessment": 14, "partial_failure": 16, "failed": 16}
+        "conflict": 14, "stale_assessment": 14, "partial_failure": 16, "failed": 16,
+        "decision_required": 17, "decision_unavailable": 17}
 BUNDLED_CATEGORIES = Path(__file__).with_name("categories.toml")
 WIKI_VAULT = Path(__file__).resolve().parent.parent / "wiki"
 
@@ -31,22 +32,35 @@ def _load(args):
     cfg, mapping = _config(args)
     context = (r.validate_context(r.load_json_strict(args.context, r.TASK_MAX_BYTES),
                                   [p["id"] for p in cfg["profile"]]) if args.context else None)
-    selection = (r.validate_selection(r.load_json_strict(args.selection, r.TASK_MAX_BYTES))
+    selection = (r.validate_selection(r.load_json_strict(args.selection, r.SNAPSHOT_MAX_BYTES))
                  if getattr(args, "selection", None) else None)
+    response = (r.load_json_strict(args.decision_response, r.SNAPSHOT_MAX_BYTES)
+                if getattr(args, "decision_response", None) else None)
+    from . import evidence
+    options = {"policy": getattr(args, "policy", "vendor-guided"), "host": getattr(args, "host", None),
+               "response": response, "index": evidence.load_index(args.cache_dir),
+               "env": r.env_with_dotenv(args.config_dir, task["cwd"])}
+    if options["policy"] == "legacy" and (response is not None or selection or getattr(args, "profile", None)):
+        raise r.InputError("--policy legacy cannot be combined with pinned choices or decision responses")
+    if response is not None and (selection or getattr(args, "profile", None)):
+        raise r.InputError("--decision-response cannot be combined with --selection or --profile")
     snap, snap_warnings = r.load_snapshot(args.cache_dir)
     if args.cmd == "route" and not args.dry_run:
         from . import herdr  # live 경로에서만
         return herdr.dispatch(task, cfg, mapping, snap, snap_warnings, args.herdr_session,
                               profile_id=args.profile, context=context, selection_mode="orchestrator_pinned",
-                              selection=selection)
+                              selection=selection, decision_options={**options, "allow_network": True})
     now = datetime.now(timezone.utc)
     if args.cmd == "evaluate":
         return (r.evaluate_v1 if args.format == "1" else r.evaluate)(task, cfg, mapping, snap, snap_warnings, now,
                                                                      context=context)
     if args.cmd == "route" and (args.profile or selection):
+        if selection and selection["schema_version"] == "3.0":
+            return r.route(task, cfg, mapping, snap, snap_warnings, now, context=context,
+                           selection=selection, **options)
         res = r.evaluate_v1(task, cfg, mapping, snap, snap_warnings, now, context=context)
         return r.apply_selection(res, cfg, args.profile, selection)
-    res = r.route(task, cfg, mapping, snap, snap_warnings, now, context=context)
+    res = r.route(task, cfg, mapping, snap, snap_warnings, now, context=context, **options)
     if args.cmd == "explain":  # 선택은 route, 사실·제약 근거는 evaluate 2.0에서
         res["assessment"] = r.evaluate(task, cfg, mapping, snap, snap_warnings, now, context=context)
     return res
@@ -57,7 +71,16 @@ def _parallel(args):
     g = parallel.validate_group(r.load_json_strict(args.group, r.TASK_MAX_BYTES * 16))
     cfg, mapping = _config(args)
     snap, snap_warnings = r.load_snapshot(args.cache_dir)
-    return parallel.run_group(g, cfg, mapping, snap, snap_warnings, args.herdr_session, dry_run=args.dry_run)
+    from . import evidence
+    responses = (r.load_json_strict(args.decision_response, r.SNAPSHOT_MAX_BYTES) if args.decision_response else {})
+    if not isinstance(responses, dict):
+        raise r.InputError("parallel decision response: object keyed by member label required")
+    return parallel.run_group(g, cfg, mapping, snap, snap_warnings, args.herdr_session, dry_run=args.dry_run,
+                              decision_options={"policy": args.policy, "host": args.host,
+                                                "index": evidence.load_index(args.cache_dir),
+                                                "allow_network": not args.dry_run,
+                                                "env": r.env_with_dotenv(args.config_dir, g["cwd"])},
+                              responses=responses)
 
 
 def _collect(args):
@@ -200,6 +223,10 @@ def explain_text(res):
                          f"src={e['source_id']}@{e['source_revision']} published={e['published_at'] or 'unknown'}"
                          + (" STALE" if e["stale"] else "") + (f" missing={e['missing_reason']}" if e["missing_reason"] else ""))
     lines += ["excluded:"] + [f"  {x['profile']}: {', '.join(x['reasons'])}" for x in res["excluded"]]
+    if res.get("decision"):
+        lines += ["decision: " + json.dumps(res["decision"], ensure_ascii=False)]
+    if res.get("selection"):
+        lines += ["selection: " + json.dumps(res["selection"], ensure_ascii=False)]
     if res.get("assessment"):
         lines += _assessment_lines(res["assessment"])
     lines += ["warnings:"] + [f"  {w['code']}: {w['message']}" + (f" [{w['source_id']}]" if w["source_id"] else "")
@@ -251,6 +278,11 @@ def main(argv=None):
     pp = sub.add_parser("parallel", help="dispatch tasks × fanout agents concurrently, each in its own git worktree")
     pp.add_argument("--group", required=True)
     pp.add_argument("--dry-run", action="store_true")
+    for parser in (rp, ep, pp):
+        parser.add_argument("--policy", choices=["vendor-guided", "legacy"], default="vendor-guided",
+                            help="selection policy (default: vendor-guided; legacy is explicit opt-in)")
+        parser.add_argument("--host", choices=["antigravity", "codex", "claude"], help="native decision agent host")
+        parser.add_argument("--decision-response", help="saved ordered stages array of responses (digest, provider, actual model, answers); parallel: keyed by member label")
     cp = sub.add_parser("collect", help="observe/collect an existing run; never re-sends the prompt")
     cp.add_argument("--run-id", required=True)
     cp.add_argument("--cwd", required=True)

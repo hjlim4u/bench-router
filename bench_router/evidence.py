@@ -9,6 +9,15 @@ INDEX_SCHEMA_VERSION = "1.0"
 BUNDLED_INDEX = Path(__file__).with_name("index.json")
 CODE_EXTS = (".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".c", ".cc", ".cpp", ".h", ".rb", ".php",
              ".cs", ".kt", ".swift", ".sh", ".sql")
+FACET_BOUNDARIES = {
+    "task:instruction_following": "1 only if explicit output constraints are the main challenge; ordinary requirements are 0.",
+    "difficulty:hard_prompts": "Most routine coding, writing or lookup tasks are 0, even when well specified.",
+    "domain:software_it": "1 if the subject is software/IT; 0 if code is only a tool for another subject.",
+    "task:math": "1 for mathematical derivation/calculation as the main work; incidental arithmetic is 0.",
+    "domain:mathematical": "1 only if the subject matter is mathematics.",
+    "task:ocr_parse": "1 for converting a scanned/photographed document's text into structured output.",
+    "task:vision_ocr": "1 only if an image is attached and its text is needed for the answer.",
+}
 # script → (유니코드 범위, 알파벳 문자 중 최소 비율)
 SCRIPTS = {"hangul": ((0xAC00, 0xD7A3), 0.2), "kana": ((0x3040, 0x30FF), 0.05), "cyrillic": ((0x0400, 0x04FF), 0.2),
            "han": ((0x4E00, 0x9FFF), 0.2)}
@@ -126,20 +135,26 @@ def _cell(p, uid, snap, sources, warned):
     reason = ("no_snapshot" if snap is None else "profile_not_in_snapshot" if sp is None
               else "stale_config" if stale_cfg else "no_observation" if e is None
               else "null_value" if e.get("normalized") is None
+              else "missing_conditions" if e.get("scope") == "exact_profile" and not e.get("conditions")
               else "max_stale_exceeded" if sources[e["source_id"]]["excluded"] else None)
     if reason:
         return {"raw": None, "normalized": None, "missing_reason": reason}
     effort = (e.get("conditions") or {}).get("reasoning_effort")
     known = effort and p["reasoning_effort"] != "unknown"
+    conditions = e.get("conditions") or {}
     return {"raw": e["raw"], "normalized": e["normalized"], "scope": e["scope"], "effort": effort,
             "effort_matches": (effort == p["reasoning_effort"]) if known else None,
+            "exact_profile": (e["scope"] == "exact_profile" and bool(known) and effort == p["reasoning_effort"]
+                              and conditions.get("agent_scaffold") == p["harness_id"]),
+            **{k: e.get(k) for k in ("conditions", "source_revision", "metric_version", "fetched_at", "published_at", "evaluated_at")},
             "stale": sources[e["source_id"]]["stale"], "source_id": e["source_id"], "cohort_id": e["cohort_id"],
             "missing_reason": None}
 
 
-def build(t, cfg, snap, snap_warnings, index, now, max_units=12):
+def build(t, cfg, snap, snap_warnings, index, now, max_units=12, profile_ids=None):
     warnings = list(snap_warnings)
-    profiles = sorted((p for p in cfg["profile"] if p["enabled"]), key=lambda p: p["id"])
+    profiles = sorted((p for p in cfg["profile"] if p["enabled"] and p["id"] not in t.get("exclude_profiles", [])
+                       and (profile_ids is None or p["id"] in profile_ids)), key=lambda p: p["id"])
     res = {"schema_version": r.SCHEMA_VERSION, "status": "ok", "task_id": t["task_id"], "round": t["round"],
            "snapshot_id": snap["snapshot_id"] if snap else None, "wiki_hash": (index or {}).get("wiki_hash"),
            "facets": [], "units": [], "omitted_units": 0, "withheld_units": [], "profiles": {p["id"]: {"reasoning_effort": p["reasoning_effort"]}

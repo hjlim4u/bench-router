@@ -343,7 +343,7 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
 
 def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
              profile_id=None, context=None, selection_mode="parallel_pinned",
-             selection=None, check_digest=True):
+              selection=None, check_digest=True, decision_options=None):
     from . import coordination as co
     key = co.key_for(t)
     try:
@@ -353,12 +353,22 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
                 raise co.Conflict("dispatch session differs from the recorded native run; use collect")
             if existing:
                 co.observe_receipt(existing[0])
+            if not existing and profile_id is None and selection is None:
+                availability = {p["id"]: probe(p, which) for p in cfg["profile"]}
+                choice = r.route(t, cfg, mapping, snap, snap_warnings, _now(), availability, context,
+                                 **(decision_options or {}))
+                if choice["status"] != "selected":
+                    return choice
+                if choice["selection"].get("schema_version") == "3.0":
+                    selection = {k: v for k, v in choice["selection"].items() if k != "source"}
+                    profile_id = selection["profile"]
+                    selection_mode = "vendor-guided"
             binding = existing[0].get("project_binding") if existing else project_binding(session, runner)
             rec, fresh = co.reserve(t, BACKEND, binding)
             if not fresh and not existing:
                 raise co.Conflict("recorded native submission has no receipt; inspect effects before resolving, never resend")
             result = _dispatch(t, cfg, mapping, snap, snap_warnings, session, runner, which,
-                               profile_id, context, selection_mode, selection, check_digest)
+                               profile_id, context, selection_mode, selection, check_digest, decision_options)
             if result.get("run_id"):
                 co.observe_receipt(load_receipt(t["cwd"], result["run_id"]))
             elif fresh:
@@ -370,39 +380,49 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
 
 def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
              profile_id=None, context=None, selection_mode="parallel_pinned",
-             selection=None, check_digest=True):
+              selection=None, check_digest=True, decision_options=None):
     """live route. 선택 → receipt → herdr 실행. 같은 (task_id, round)는 재전송 없이 collect.
     profile_id: 제약·가용성을 통과한 후보 중 이 프로필로 고정(parallel fanout).
     selection: Orchestrator 선택 기록(validate_selection). digest가 지금 입력과 다르면 실행하지 않는다(stale_assessment).
     같은 round 회수가 digest 검사보다 우선한다: 새 판단으로 다시 실행하려면 새 round."""
-    now = _now()
-    availability = {p["id"]: probe(p, which) for p in cfg["profile"]}
     if selection is not None:
         profile_id = selection["profile"]
-    res = (r.evaluate_v1(t, cfg, mapping, snap, snap_warnings, now, availability, context) if profile_id
-           else r.route(t, cfg, mapping, snap, snap_warnings, now, availability, context))
-    if profile_id:
-        res = r.apply_selection(res, cfg, profile_id, selection, selection_mode, check_digest)
+    # Recovery precedes new selection, including unavailable decision providers or changed guides.
+    res = {"schema_version": r.SCHEMA_VERSION, "task_id": t["task_id"], "round": t["round"],
+           "run_id": None, "selected": None, "candidates": [], "warnings": list(snap_warnings)}
     try:
         with dispatch_lock(t["cwd"]):
             existing = [x for x in receipts(t["cwd"]) if x["task_id"] == t["task_id"] and x["round"] == t["round"]]
             if existing:
                 rc = existing[0]
-                if rc["semantic_task_hash"] != res["task_hash"]:
-                    return {**res, "status": "conflict", "run_id": rc["run_id"],
-                            "warnings": res["warnings"] + [r.warn("task_round_conflict",
+                prior = r.load_json_strict(Path(rc["run_dir"]) / "decision.json", r.SNAPSHOT_MAX_BYTES)
+                if rc["semantic_task_hash"] != r.semantic_task_hash(t):
+                    return {**prior, "status": "conflict", "run_id": rc["run_id"],
+                            "warnings": prior["warnings"] + [r.warn("task_round_conflict",
                                                                   "same task_id/round with different content")]}
                 if profile_id and rc["profile"] != profile_id:
-                    return {**res, "status": "conflict", "run_id": rc["run_id"],
-                            "warnings": res["warnings"] + [r.warn("profile_round_conflict",
+                    return {**prior, "status": "conflict", "run_id": rc["run_id"],
+                            "warnings": prior["warnings"] + [r.warn("profile_round_conflict",
                                                                   "same task_id/round already uses another profile")]}
                 rc = collect(rc, t["constraints"]["timeout_ms"], session, runner)
-                prior = r.load_json_strict(Path(rc["run_dir"]) / "decision.json", r.SNAPSHOT_MAX_BYTES)
                 out = output(prior, rc, reused=True)
-                if selection is not None and prior.get("selection") != res["selection"]:
+                if selection is not None and any(prior.get("selection", {}).get(k) != v for k, v in selection.items()):
                     out["warnings"] = out.get("warnings", []) + [r.warn(
                         "selection_differs_from_recorded", "returning the recorded run; use a new round to act on a new selection")]
                 return out
+            now = _now()
+            availability = {p["id"]: probe(p, which) for p in cfg["profile"]}
+            if selection is not None and selection.get("schema_version") == "3.0":
+                opts = {**(decision_options or {}), "allow_network": False}
+                opts.pop("response", None)
+                res = r.route(t, cfg, mapping, snap, snap_warnings, now, availability, context,
+                              selection=selection, check_digest=check_digest, **opts)
+            elif profile_id:
+                res = r.evaluate_v1(t, cfg, mapping, snap, snap_warnings, now, availability, context)
+                res = r.apply_selection(res, cfg, profile_id, selection, selection_mode, check_digest)
+            else:
+                res = r.route(t, cfg, mapping, snap, snap_warnings, now, availability, context,
+                              **(decision_options or {}))
             if res["status"] != "selected":
                 return res
             profile = next(p for p in cfg["profile"] if p["id"] == res["selected"]["profile"])

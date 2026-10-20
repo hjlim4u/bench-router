@@ -28,6 +28,37 @@ def config(profiles, default=None, fallback=()):
     return {"schema_version": "1.0", "default_profile": default, "fallback_order": list(fallback), "profile": profiles}
 
 
+def guided_reply(packet, chosen, **overrides):
+    """Synthetic response to one stage, retaining the validated predecessor stages."""
+    request = packet["decision_request"]
+    answers = {}
+    for key, q in request["questions"].items():
+        if q["type"] == "noul":
+            answers[key] = {"type": "noul", "noul": overrides.get(key, 0)}
+            continue
+        choice = "unknown"
+        if key.startswith("fit:"):
+            pid = key[4:]
+            rules = [x for x in q["criteria"] if not x.startswith("__")]
+            choice = rules[0] if rules else "__provisional__"
+            if chosen not in ("__tie__", pid):
+                choice = "__unsuitable__"
+        elif key == "benchmark":
+            choice = "__tie__"
+        answers[key] = {"type": "choice", "choice": overrides.get(key, choice)}
+    response = {"request_digest": packet["assessment_digest"], "provider": "subagent", "model": "gpt-6-luna", "answers": answers}
+    return {"stages": [*packet.get("decision", {}).get("completed", []), response]}
+
+
+def guided_responses(packet, reroute, chosen, **overrides):
+    for _ in range(3):
+        response = guided_reply(packet, chosen, **overrides)
+        packet = reroute(response)
+        if packet["status"] != "decision_required":
+            return response
+    raise AssertionError("decision did not finish within three stages")
+
+
 def snapshot(evidence_by_profile, profiles, last_success="2026-10-11T00:00:00+00:00"):
     """evidence_by_profile: {pid: {evidence_id: normalized|None}} → 검증 가능한 snapshot."""
     fps = {p["id"]: r.profile_fingerprint(p) for p in profiles}
@@ -58,7 +89,7 @@ class P0(unittest.TestCase):
         return r.validate_task({k: v for k, v in raw.items() if v is not None})
 
     def run_route(self, t, profiles, ev, **cfg_kw):
-        return r.route(t, config(profiles, **cfg_kw), MAPPING, snapshot(ev, profiles), [], NOW)
+        return r.route_legacy(t, config(profiles, **cfg_kw), MAPPING, snapshot(ev, profiles), [], NOW)
 
     def test_v11_orchestrator_facts_and_budget(self):
         ps = [profile("a", context_tokens=8000), profile("b", context_tokens=0)]
@@ -99,7 +130,7 @@ class P0(unittest.TestCase):
         self.assertIsNone(asmt["candidates"][0]["evaluations"]["benchmark"]["quality"])
         self.assertEqual(asmt["candidates"][2]["evaluations"], {})
         # benchmark 없음 + default/fallback 없음: 자동 선택은 실패해도 평가는 유효 후보를 돌려준다
-        self.assertEqual(r.route(t, config(ps), MAPPING, None, [], NOW)["status"], "no_eligible_profile")
+        self.assertEqual(r.route_legacy(t, config(ps), MAPPING, None, [], NOW)["status"], "no_eligible_profile")
         self.assertEqual([c["profile"] for c in r.evaluate_v1(t, config(ps), MAPPING, None, [], NOW)["candidates"]],
                          ["a", "b"])
 
@@ -175,7 +206,7 @@ class P0(unittest.TestCase):
                          {"cost_tier_exceeds_max", "estimated_cost_unknown"})
         self.assertEqual(b["evaluations"], {})
         # legacy_score는 route 1.0의 score와 같다. 미등록 지표가 늘어도 benchmark 결과는 불변.
-        legacy = r.route(t, config(ps), MAPPING, snap, [], NOW, context=ctx)
+        legacy = r.route_legacy(t, config(ps), MAPPING, snap, [], NOW, context=ctx)
         self.assertEqual(a["evaluations"]["benchmark"]["status"], "ok")
         self.assertIsNotNone(a["evaluations"]["benchmark"]["legacy_score"])
         self.assertEqual(a["evaluations"]["benchmark"]["legacy_score"], legacy["candidates"][0]["score"])
@@ -351,11 +382,11 @@ class P0(unittest.TestCase):
         ev = {"a": {"aa_intelligence": 0.9}}
         t = self.task()
         s = snapshot(ev, ps, last_success="2026-10-01T00:00:00+00:00")  # 11일 > max_stale 7일
-        res = r.route(t, config(ps, default="dflt"), MAPPING, s, [], NOW)
+        res = r.route_legacy(t, config(ps, default="dflt"), MAPPING, s, [], NOW)
         self.assertEqual(res["selected"]["profile"], "dflt")
         self.assertIn("source_too_stale", [w["code"] for w in res["warnings"]])
         changed = [profile("a", args=["-m", "other"]), profile("dflt")]  # 설정 변경 → 기존 점수 무효
-        res = r.route(t, config(changed, default="dflt"), MAPPING, snapshot(ev, ps), [], NOW)
+        res = r.route_legacy(t, config(changed, default="dflt"), MAPPING, snapshot(ev, ps), [], NOW)
         self.assertEqual(res["selected"]["profile"], "dflt")
         self.assertIn("stale_config", [w["code"] for w in res["warnings"]])
         tampered = dict(snapshot(ev, ps), generated_at="x")
@@ -722,6 +753,340 @@ class P0Decision(unittest.TestCase):
             p = subprocess.run([sys.executable, str(copied / "scripts/cli.py"), "--cache-dir", tmp, "wiki", "facets"],
                                cwd=tmp, capture_output=True, text=True, check=True)
             self.assertEqual(json.loads(p.stdout)["status"], "ok")
+
+
+class P0VendorGuidance(unittest.TestCase):
+    def setUp(self):
+        from bench_router import decision
+        self.d = decision
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.task = r.validate_task({"schema_version": "1.0", "task_id": "guided", "round": 1,
+            "summary": "Fix one typo", "prompt": "Fix a typo in a comment.", "cwd": self.tmp.name})
+        self.ps = [profile("light", model_id="gpt-6-luna", reasoning_effort="low"),
+                   profile("strong", model_id="gpt-6-astra", reasoning_effort="xhigh")]
+        self.cfg = config(self.ps, default="strong", fallback=["light"])
+
+    def route(self, **kw):
+        return r.route(self.task, self.cfg, MAPPING, kw.pop("snap", None), [], kw.pop("now", NOW), host="codex", env={}, **kw)
+
+    def finish(self, chosen="light", **kw):
+        response = guided_responses(self.route(**kw), lambda x: self.route(response=x, **kw), chosen)
+        return self.route(response=response, **kw)
+
+    def fit_packet(self, **kw):
+        return self.route(response=guided_reply(self.route(**kw), "__tie__"), **kw)
+
+    def indexed(self, ids=("u/coding",)):
+        from copy import deepcopy
+        idx = index_fixture()
+        idx["units"] = {uid: deepcopy(idx["units"]["u/coding"]) for uid in ids}
+        idx["postings"] = {"task:coding": list(ids)}
+        self.task["facets"] = {"task": ["coding"]}
+        return idx
+
+    def exact(self, values):
+        snap = snapshot(values, self.ps)
+        for p in self.ps:
+            for row in snap["profiles"].get(p["id"], {}).get("evidence", {}).values():
+                row["scope"] = "exact_profile"
+                row["conditions"] = {k: "fixture" for k in self.d.PROTOCOL}
+                row["conditions"].update(direction="higher", agent_scaffold=p["harness_id"], reasoning_effort=p["reasoning_effort"])
+        snap["snapshot_id"] = r.snapshot_hash(snap)
+        return snap
+
+    def test_v67_offline_stages_exclude_unrelated_evidence(self):
+        from unittest.mock import patch
+        with patch("urllib.request.urlopen") as post, patch.object(r, "assess", wraps=r.assess) as assess:
+            packet = self.route()
+            self.assertEqual((packet["status"], packet["decision"]["stage"], assess.call_count), ("decision_required", "analysis", 1))
+            self.assertNotIn("candidates", packet["decision_request"]["state"])
+            fit = self.fit_packet()
+            self.assertEqual(fit["decision"]["stage"], "fit")
+            self.assertNotIn("observations", json.dumps(fit["decision_request"]))
+            self.assertNotIn("legacy_score", json.dumps(fit["decision_request"]))
+            self.assertTrue(all(c["score"] is None for c in packet["candidates"]))
+            self.cfg = config(self.ps[:1])
+            self.assertEqual(self.route()["status"], "decision_required")
+            post.assert_not_called()
+
+    def test_v68_selection_replays_all_stages_and_rechecks_constraints(self):
+        out = self.finish()
+        self.assertEqual((out["status"], out["selected"]["profile"]), ("selected", "light"))
+        selection = {k: v for k, v in out["selection"].items() if k != "source"}
+        self.assertEqual(selection["policy"], self.d.POLICY)
+        self.assertEqual([s["stage"] for s in selection["decision"]["stages"]], ["analysis", "fit"])
+        self.assertEqual(self.route(selection=selection)["selected"], out["selected"])
+        self.ps[0]["enabled"] = False
+        self.assertEqual(self.route(selection=selection)["status"], "stale_assessment")
+
+    def test_v69_wrong_rule_stage_digest_and_model_are_rejected(self):
+        from copy import deepcopy
+        fit = self.fit_packet()
+        for response in (guided_reply(fit, "light", **{"fit:light": "gpt-6-astra:xhigh"}),
+                         guided_reply(fit, "light", **{"fit:light": "invented"})):
+            with self.assertRaises(r.InputError):
+                self.route(response=response)
+        response = guided_reply(fit, "light")
+        bad = deepcopy(response)
+        bad["stages"][-1]["request_digest"] = "0" * 64
+        with self.assertRaises(r.InputError):
+            self.route(response=bad)
+        response["stages"][-1]["model"] = "substitution"
+        self.assertEqual(self.route(response=response)["status"], "decision_unavailable")
+
+    def test_v70_unknown_configuration_stays_provisional(self):
+        for key, value in (("model_id", "gpt-6-luna-new"), ("reasoning_effort", "unknown")):
+            old = self.ps[0][key]
+            self.ps[0][key] = value
+            out = self.finish()
+            self.assertIn("guidance_missing", out["selection"]["decision"]["uncertainty"])
+            self.ps[0][key] = old
+
+    def test_v71_workload_answers_change_the_next_request(self):
+        first = self.route()
+        a = self.route(response=guided_reply(first, "light", reasoning="bounded"))
+        b = self.route(response=guided_reply(first, "light", reasoning="demanding"))
+        self.assertNotEqual(a["assessment_digest"], b["assessment_digest"])
+        self.assertEqual(b["decision_request"]["state"]["analysis"]["workload"]["reasoning"], "demanding")
+        with self.assertRaises(r.InputError):
+            self.route(response={"stages": [*b["decision"]["completed"], guided_reply(a, "light")["stages"][-1]]})
+
+    def test_v72_cost_ties_abstention_and_missing_prices(self):
+        self.assertEqual(self.finish("__tie__")["selected"]["profile"], "strong")
+        self.assertEqual(self.finish("__abstain__")["status"], "decision_unavailable")
+        self.task["priority"] = "cost"
+        ctx = {"schema_version": "2.0", "profiles": {pid: {"metrics": {"cost.estimated_usd": {
+            "value": value, "unit": "usd", "source": "synthetic"}}} for pid, value in (("light", 0.01), ("strong", 0.1))}}
+        self.assertEqual(self.finish("__tie__", context=ctx)["selected"]["profile"], "light")
+        self.assertIn("cost_unknown", self.finish("__tie__")["selection"]["decision"]["uncertainty"])
+
+
+    def test_v73_jev_stages_preserve_usage_and_failure_is_native_handoff(self):
+        from unittest.mock import MagicMock, patch
+        def respond(request, **kwargs):
+            req = json.loads(request.data)
+            req.pop("model")
+            raw = guided_reply({"decision_request": req, "assessment_digest": r.canonical_hash(req)}, "light")["stages"][-1]
+            raw.update(model="jev-1.13.0", usage={"input_tokens": 100, "output_tokens": 10})
+            result = MagicMock()
+            result.__enter__.return_value.read.return_value = json.dumps(raw).encode()
+            return result
+        with patch("urllib.request.urlopen", side_effect=respond) as post:
+            out = r.route(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", allow_network=True, env={"JEV_API_KEY": "synthetic"})
+            self.assertEqual((out["status"], post.call_count), ("selected", 2))
+            self.assertEqual([s["usage"]["input_tokens"] for s in out["selection"]["decision"]["stages"]], [100, 100])
+        with patch("urllib.request.urlopen", side_effect=TimeoutError("secret")):
+            out = r.route(self.task, self.cfg, MAPPING, None, [], NOW, allow_network=True, env={"JEV_API_KEY": "synthetic"})
+            self.assertEqual(out["decision"]["reason"], "jev_unavailable")
+            self.assertNotIn("secret", json.dumps(out))
+
+    def test_v74_cli_and_copied_skill_use_the_same_staged_policy(self):
+        import shutil
+        import subprocess
+        import sys
+        root = Path(self.tmp.name)
+        cfg = root / "cfg"
+        cfg.mkdir()
+        (cfg / "profiles.toml").write_text((EX / "profiles.example.toml").read_text().replace("enabled = false", "enabled = true"))
+        task = root / "task.json"
+        task.write_text(json.dumps({"schema_version": "1.0", **self.task}))
+        argv = ["--config-dir", str(cfg), "--cache-dir", str(root / "cache"), "route", "--task", str(task), "--host", "codex", "--dry-run"]
+        response_path = root / "response.json"
+        def run(response=None):
+            extra = []
+            if response is not None:
+                response_path.write_text(json.dumps(response))
+                extra = ["--decision-response", str(response_path)]
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                cli.main([*argv, *extra])
+            return json.loads(out.getvalue())
+        packet = run()
+        pid = packet["candidates"][0]["profile"]
+        replies = guided_responses(packet, run, pid)
+        self.assertEqual(run(replies)["selected"]["profile"], pid)
+        copied = root / "copied"
+        shutil.copytree(Path(__file__).parent / "skills/bench-router", copied, symlinks=False)
+        proc = subprocess.run([sys.executable, str(copied / "scripts/cli.py"), *argv], capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 17, proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["assessment_digest"], packet["assessment_digest"])
+        self.assertEqual((copied / "bench_router/guidelines.toml").read_bytes(), self.d.GUIDELINES.read_bytes())
+
+    def test_v75_guidance_matches_only_exact_models_and_efforts(self):
+        for model, effort in (("claude-sonnet-5-5", "medium"), ("claude-opus-5-5", "medium"),
+                              ("gemini-3.8-flash", "high"), ("gemini-4-argon", "medium")):
+            self.cfg = config([profile("only", model_id=model, reasoning_effort=effort)])
+            packet = self.fit_packet()
+            self.assertEqual(packet["decision_request"]["state"]["candidates"][0]["rules"], [f"{model}:{effort}"])
+            self.assertEqual(self.finish("only")["status"], "selected")
+
+    def test_v78_freshness_and_profile_measurement_conditions_are_bound(self):
+        from datetime import timedelta
+        idx = self.indexed()
+        snap = self.exact({"light": {"u/coding": 0.8}})
+        out = self.finish(snap=snap, index=idx)
+        row = out["selection"]["decision"]["evaluation"]["observations"]["light"]["u/coding"]
+        self.assertTrue(row["exact_profile"])
+        selection = {k: v for k, v in out["selection"].items() if k != "source"}
+        self.assertEqual(self.route(selection=selection, snap=snap, index=idx, now=NOW + timedelta(hours=1))["status"], "stale_assessment")
+        snap["profiles"]["light"]["evidence"]["u/coding"]["conditions"]["reasoning_effort"] = "high"
+        changed = self.finish(snap=snap, index=idx)["selection"]["decision"]["evaluation"]
+        self.assertFalse(changed["observations"]["light"]["u/coding"]["exact_profile"])
+        self.assertFalse(changed["comparisons"])
+
+    def test_v79_tampered_selection_and_budget_changes_are_rejected(self):
+        from copy import deepcopy
+        out = self.finish()
+        selection = {k: v for k, v in out["selection"].items() if k != "source"}
+        bad = deepcopy(selection)
+        bad["decision"]["stages"].reverse()
+        with self.assertRaises(r.InputError):
+            self.d.validate_selection(bad)
+        ctx = {"schema_version": "2.0", "max_estimated_cost_usd": 0.01, "profiles": {"light": {"metrics": {
+            "cost.estimated_usd": {"value": 0.02, "unit": "usd", "source": "quote"}}}}}
+        self.assertEqual(self.route(context=ctx)["status"], "no_eligible_profile")
+        self.task["facets"] = {"difficulty": ["hard_prompts"]}
+        self.assertEqual(self.route(selection=selection)["status"], "stale_assessment")
+
+    def test_v80_excluded_profiles_cannot_displace_eligible_observations(self):
+        ids = [f"u/{i:02}" for i in range(12)] + ["u/z-only-eligible"]
+        idx = self.indexed(ids)
+        self.ps = [profile(f"p{i}", model_id="gpt-6-luna", reasoning_effort="low") for i in range(8)]
+        self.cfg = config(self.ps)
+        self.task["exclude_profiles"] = [p["id"] for p in self.ps[1:]]
+        snap = self.exact({"p0": {ids[-1]: 0.8}, **{p["id"]: {uid: 0.7 for uid in ids[:12]} for p in self.ps[1:]}})
+        evaluation = self.finish("p0", snap=snap, index=idx)["selection"]["decision"]["evaluation"]
+        self.assertIn(ids[-1], evaluation["observations"]["p0"])
+        self.assertEqual(set(evaluation["observations"]), {"p0"})
+        self.assertNotIn("aa_intelligence", evaluation["units"])
+
+    def test_v81_numeric_selection_uses_comparable_raw_scores(self):
+        idx = self.indexed()
+        snap = self.exact({"light": {"u/coding": 0.9}, "strong": {"u/coding": 0.6}})
+        for pid, normalized in (("light", 0), ("strong", 1)):
+            snap["profiles"][pid]["evidence"]["u/coding"].update(normalized=normalized, cohort_id=pid)
+        out = self.finish("__tie__", snap=snap, index=idx)
+        self.assertEqual(out["selected"]["profile"], "light")
+        self.assertEqual(len(out["selection"]["decision"]["stages"]), 2)
+        snap["profiles"]["strong"]["evidence"]["u/coding"]["conditions"]["dataset_revision"] = "different"
+        self.assertFalse(self.finish("__tie__", snap=snap, index=idx)["selection"]["decision"]["evaluation"]["comparisons"])
+
+    def test_v82_conditional_effort_requires_real_workflow_gain(self):
+        idx = self.indexed()
+        self.ps = [profile("light", model_id="claude-sonnet-5-5", reasoning_effort="medium"),
+                   profile("strong", model_id="claude-sonnet-5-5", reasoning_effort="xhigh")]
+        self.cfg = config(self.ps, default="strong")
+        proxy = snapshot({"strong": {"u/coding": 0.9}}, self.ps)
+        d = self.finish("strong", snap=proxy, index=idx)["selection"]["decision"]
+        self.assertIn("workflow_gain_unverified", d["uncertainty"])
+        self.assertEqual(d["evaluation"]["fits"]["strong"]["status"], "provisional")
+        exact = self.exact({"light": {"u/coding": 0.6}, "strong": {"u/coding": 0.9}})
+        d = self.finish("strong", snap=exact, index=idx)["selection"]["decision"]
+        self.assertNotIn("workflow_gain_unverified", d["uncertainty"])
+        self.assertEqual(d["evaluation"]["fits"]["strong"]["workflow_gain"]["baseline_profile"], "light")
+
+    def test_v83_conflicting_benchmarks_request_relevance_without_scores(self):
+        idx = self.indexed(("u/one", "u/two"))
+        snap = self.exact({"light": {"u/one": 0.9, "u/two": 0.5}, "strong": {"u/one": 0.5, "u/two": 0.9}})
+        fit = self.fit_packet(index=idx, snap=snap)
+        packet = self.route(index=idx, snap=snap, response=guided_reply(fit, "__tie__"))
+        self.assertEqual(packet["decision"]["stage"], "benchmark")
+        self.assertNotIn("raw", json.dumps(packet["decision_request"]))
+        self.assertNotIn("model_id", json.dumps(packet["decision_request"]))
+        out = self.route(index=idx, snap=snap, response=guided_reply(packet, "__tie__", benchmark="u/one"))
+        self.assertEqual(out["selected"]["profile"], "light")
+
+
+    def test_v84_model_proxy_can_inform_model_choice_without_effort_claim(self):
+        idx = self.indexed()
+        snap = self.exact({"light": {"u/coding": 0.9}, "strong": {"u/coding": 0.6}})
+        for sp in snap["profiles"].values():
+            row = sp["evidence"]["u/coding"]
+            row.update(scope="model_proxy", cohort_id="same-source-cohort")
+            row["conditions"].update(reasoning_effort=None, agent_scaffold=None)
+        out = self.finish("__tie__", index=idx, snap=snap)
+        self.assertEqual(out["selected"]["profile"], "light")
+        self.assertIn("model_proxy_comparison", out["selection"]["decision"]["uncertainty"])
+        self.assertIn("task_quality_unverified", out["selection"]["decision"]["uncertainty"])
+        snap["profiles"]["strong"]["evidence"]["u/coding"]["cohort_id"] = "other"
+        self.assertFalse(self.finish("__tie__", index=idx, snap=snap)["selection"]["decision"]["evaluation"]["comparisons"])
+
+    def test_v85_fanout_reuses_analysis_and_fit_without_provider_calls(self):
+        from unittest.mock import patch
+        cache = {}
+        self.finish("__tie__", decision_cache=cache)
+        with patch.object(self.d.provider, "decide", side_effect=AssertionError("must reuse analysis and fit")):
+            out = self.route(omit_profiles=["strong"], decision_cache=cache)
+        self.assertEqual(out["selected"]["profile"], "light")
+        self.assertEqual(len(cache), 2)
+        self.assertEqual(set(out["selection"]["decision"]["evaluation"]["fits"]), {"light"})
+
+    def test_v86_forged_observations_and_changed_guides_do_not_replay(self):
+        from copy import deepcopy
+        from unittest.mock import patch
+        out = self.finish()
+        selection = {k: v for k, v in out["selection"].items() if k != "source"}
+        forged = deepcopy(selection)
+        forged["decision"]["evaluation"]["comparisons"] = {"fake": ["light"]}
+        forged["assessment_digest"] = r.canonical_hash(forged["decision"])
+        self.assertEqual(self.route(selection=forged)["status"], "stale_assessment")
+        guide = self.d.load_guidelines()
+        with patch.object(self.d, "load_guidelines", return_value={**guide, "hash": "changed"}):
+            self.assertEqual(self.route(selection=selection)["status"], "stale_assessment")
+
+    def test_v87_semantic_facets_are_forwarded_and_uncertainty_is_retained(self):
+        idx = index_fixture()
+        first = self.route(index=idx)
+        fit = self.route(index=idx, response=guided_reply(first, "light", **{
+            "facet:task:repo_coding": 0.9, "facet:task:coding": 0.5}))
+        analysis = fit["decision_request"]["state"]["analysis"]
+        self.assertIn("task:coding", analysis["unresolved_facets"])
+        self.assertIn({"axis": "task", "value": "repo_coding", "origin": "semantic"}, analysis["facets"])
+        out = self.route(index=idx, response=guided_reply(fit, "light"))
+        self.assertIn("u/repo", out["selection"]["decision"]["evaluation"]["units"])
+
+    def test_v88_vendor_path_does_not_compute_legacy_benchmark_scores(self):
+        from unittest.mock import patch
+        with patch.object(r, "benchmark_evaluation", side_effect=AssertionError("legacy benchmark work")):
+            self.assertEqual(self.finish()["status"], "selected")
+
+    def test_v89_snapshot_change_reuses_semantics_but_recomputes_the_winner(self):
+        from unittest.mock import patch
+        idx = self.indexed()
+        snap = self.exact({"light": {"u/coding": 0.9}, "strong": {"u/coding": 0.6}})
+        cache = {}
+        first = self.finish("__tie__", index=idx, snap=snap, decision_cache=cache)
+        snap["profiles"]["strong"]["evidence"]["u/coding"]["raw"] = 0.99
+        snap["snapshot_id"] = r.snapshot_hash(snap)
+        with patch.object(self.d.provider, "decide", side_effect=AssertionError("semantics unchanged")):
+            second = self.route(index=idx, snap=snap, decision_cache=cache)
+        self.assertEqual((first["selected"]["profile"], second["selected"]["profile"]), ("light", "strong"))
+        self.assertNotEqual(first["assessment_digest"], second["assessment_digest"])
+
+
+    def test_v90_direction_and_meaningful_gap_use_raw_metric_units(self):
+        idx = self.indexed()
+        snap = self.exact({"light": {"u/coding": 0.6}, "strong": {"u/coding": 0.9}})
+        idx["units"]["u/coding"]["meaningful_gap"] = 0.3
+        out = self.finish("__tie__", snap=snap, index=idx)
+        self.assertEqual(out["selection"]["decision"]["evaluation"]["comparisons"]["u/coding"], ["light", "strong"])
+        idx["units"]["u/coding"]["meaningful_gap"] = 0
+        for sp in snap["profiles"].values():
+            sp["evidence"]["u/coding"]["conditions"]["direction"] = "lower"
+        self.assertEqual(self.finish("__tie__", snap=snap, index=idx)["selected"]["profile"], "light")
+
+    def test_v91_conditional_gain_cannot_use_mismatched_protocol_or_stale_control(self):
+        from datetime import timedelta
+        idx = self.indexed()
+        self.ps = [profile("light", model_id="claude-sonnet-5-5", reasoning_effort="medium"),
+                   profile("strong", model_id="claude-sonnet-5-5", reasoning_effort="xhigh")]
+        self.cfg = config(self.ps, default="strong")
+        snap = self.exact({"light": {"u/coding": 0.6}, "strong": {"u/coding": 0.9}})
+        snap["profiles"]["light"]["evidence"]["u/coding"]["conditions"]["dataset_revision"] = "different"
+        self.assertIn("workflow_gain_unverified", self.finish("strong", snap=snap, index=idx)["selection"]["decision"]["uncertainty"])
+        snap["profiles"]["light"]["evidence"]["u/coding"]["conditions"]["dataset_revision"] = "fixture"
+        self.assertIn("workflow_gain_unverified", self.finish("strong", snap=snap, index=idx, now=NOW + timedelta(hours=1))["selection"]["decision"]["uncertainty"])
 
 
 if __name__ == "__main__":

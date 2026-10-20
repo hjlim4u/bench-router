@@ -86,22 +86,51 @@ def validate_group(raw):
     return g
 
 
-def plan(g, cfg, mapping, snap, snap_warnings, availability):
+def plan(g, cfg, mapping, snap, snap_warnings, availability, decision_options=None, responses=None):
     """1.0(legacy): task마다 route 1회 → selected 다음 후보 순서로 서로 다른 프로필 fanout개.
     2.0: task마다 단건 route --selection과 같은 평가(evaluate_v1 + 제약 + digest)로 Orchestrator 선택을 검사한다.
     digest 기준은 group 수준 task(cwd=group.cwd, 원래 prompt) — Orchestrator도 그 task로 evaluate한다."""
     now = datetime.now(timezone.utc)
     members, warnings = [], []
+    options, responses = dict(decision_options or {}), responses or {}
+    # Request digests bind the actual dependencies; analysis is reusable across fanout.
+    options["decision_cache"] = {}
+    used_labels = set()
     for i, t in enumerate(g["tasks"]):
         if g["selections"] is not None:
             res = r.evaluate_v1(t, cfg, mapping, snap, snap_warnings, now, availability, g["contexts"][i])
             for k, sel in enumerate(g["selections"][i], 1):
-                chk = r.apply_selection(res, cfg, None, sel)
+                if sel["schema_version"] == "3.0":
+                    chk = r.route(t, cfg, mapping, snap, snap_warnings, now, availability, g["contexts"][i],
+                                  selection=sel, **options)
+                else:
+                    chk = r.apply_selection(res, cfg, None, sel)
                 members.append({"label": f"{t['task_id']}-{k}", "index": i, "task_id": t["task_id"],
                                 "profile": sel["profile"], "selection": sel, "rounds": [],
                                 "status": "planned" if chk["status"] == "selected" else chk["status"]})
             continue
-        res = r.route(t, cfg, mapping, snap, snap_warnings, now, availability)
+        if options.get("policy", "vendor-guided") == "vendor-guided":
+            picked = []
+            for k in range(1, g["fanout"] + 1):
+                label = f"{t['task_id']}-{k}"
+                used_labels.add(label)
+                res = r.route(t, cfg, mapping, snap, snap_warnings, now, availability,
+                              response=responses.get(label), omit_profiles=picked, **options)
+                if res["status"] == "no_eligible_profile" and picked:
+                    warnings.append(r.warn("fanout_reduced", f"{t['task_id']}: only {len(picked)} eligible profiles"))
+                    break
+                selected = res.get("selected")
+                sel = res.get("selection") if selected else None
+                members.append({"label": label, "index": i, "task_id": t["task_id"],
+                                "profile": selected["profile"] if selected else None,
+                                "selection": {key: val for key, val in sel.items() if key != "source"} if sel else None,
+                                "status": "planned" if selected else res["status"], "rounds": [],
+                                "decision": res.get("decision")})
+                if not selected:
+                    break  # Remaining choices depend on this one; generate their packets on the next invocation.
+                picked.append(selected["profile"])
+            continue
+        res = r.route(t, cfg, mapping, snap, snap_warnings, now, availability, **options)
         if res["status"] != "selected":
             members.append({"label": f"{t['task_id']}-1", "index": i, "task_id": t["task_id"], "profile": None,
                             "status": "no_eligible_profile", "rounds": []})
@@ -113,6 +142,8 @@ def plan(g, cfg, mapping, snap, snap_warnings, availability):
         for k, pid in enumerate(picks, 1):
             members.append({"label": f"{t['task_id']}-{k}", "index": i, "task_id": t["task_id"], "profile": pid,
                             "status": "planned", "rounds": []})
+    if set(responses) - used_labels:
+        raise r.InputError(f"parallel: unknown or not-yet-requested response labels {sorted(set(responses) - used_labels)}")
     return members, warnings
 
 
@@ -188,11 +219,40 @@ def tally(members, labels, shared):
 
 
 def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
-              dry_run=False):
+              dry_run=False, decision_options=None, responses=None):
     gdir = herdr.bench_dir(g["cwd"]) / "groups" / g["group_id"]
     shared = gdir / "shared"
     availability = None if dry_run else {p["id"]: herdr.probe(p, which) for p in cfg["profile"]}
-    members, warnings = plan(g, cfg, mapping, snap, snap_warnings, availability)
+    # Freeze the original input and selections once, then recover from this plan without new provider calls.
+    plan_path = gdir / "plan.json"
+    group_hash = r.canonical_hash(g)
+    if not dry_run and plan_path.exists():
+        saved = r.load_json_strict(plan_path, r.SNAPSHOT_MAX_BYTES)
+        if saved["group_hash"] != group_hash:
+            return {"schema_version": g["schema_version"], "group_id": g["group_id"], "status": "conflict",
+                    "warnings": [r.warn("group_conflict", "group inputs differ from the saved execution plan")]}
+        members, warnings = saved["members"], saved["warnings"]
+        # Existing receipts are recovered even after guide/config changes. Unstarted members must
+        # still pass one group-wide preflight, so stale choices cannot produce a partial new fanout.
+        for m in members:
+            i = m["index"]
+            wt = Path(g["cwd"]) / ".bench-router" / "worktrees" / g["group_id"] / m["label"]
+            if any(rc["task_id"] == g["tasks"][i]["task_id"] and rc["round"] == g["tasks"][i]["round"]
+                   for rc in herdr.receipts(wt)):
+                continue
+            sel = m.get("selection")
+            if sel and sel["schema_version"] == "3.0":
+                opts = {**(decision_options or {}), "allow_network": False, "policy": "vendor-guided"}
+                chk = r.route(g["tasks"][i], cfg, mapping, snap, snap_warnings, datetime.now(timezone.utc),
+                              availability, g["contexts"][i], selection=sel, **opts)
+            else:
+                chk = r.evaluate_v1(g["tasks"][i], cfg, mapping, snap, snap_warnings,
+                                    datetime.now(timezone.utc), availability, g["contexts"][i])
+                chk = r.apply_selection(chk, cfg, m["profile"], sel, mode="parallel_pinned")
+            if chk["status"] != "selected":
+                m["status"] = chk["status"]
+    else:
+        members, warnings = plan(g, cfg, mapping, snap, snap_warnings, availability, decision_options, responses)
     out = {"schema_version": g["schema_version"], "group_id": g["group_id"], "isolation": g["isolation"],
            "fanout": g["fanout"], "shared_dir": None if g["isolation"] == "isolated" else str(shared),
            "members": members, "consensus": None, "warnings": warnings}
@@ -203,6 +263,11 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
     if any(m["status"] == "stale_assessment" for m in members):  # 일부만 옛 판단으로 돌리지 않는다
         return {**out, "status": "stale_assessment", "warnings": warnings + [r.warn(
             "stale_assessment", "a selection's assessment_digest no longer matches; re-evaluate the group's tasks")]}
+    pending = next((m["status"] for m in members if m["status"] in ("decision_required", "decision_unavailable")), None)
+    if pending:
+        return {**out, "status": pending}
+    if any(m["status"] != "planned" for m in members):
+        return {**out, "status": "no_eligible_profile"}
     if dry_run:
         out["status"] = "selected" if labels else "no_eligible_profile"
         return out
@@ -226,7 +291,7 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                                  profile_id=m["profile"],
                                  context=g["contexts"][m["index"]], selection=sel,
                                  selection_mode="orchestrator_pinned" if sel else "parallel_pinned",
-                                 check_digest=False)
+                                 check_digest=False, decision_options=decision_options)
             rnd = {k: res.get(k) for k in ROUND_KEYS}
             rnd["round"] = t["round"]
             if res["status"] != "completed":
@@ -243,6 +308,14 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
 
     try:
         with locking.exclusive(gdir / "group.lock", herdr.Busy(f"group {g['group_id']} is already running")):
+            if plan_path.exists():
+                frozen = r.load_json_strict(plan_path, r.SNAPSHOT_MAX_BYTES)
+                if frozen["group_hash"] != group_hash or frozen["members"] != members:
+                    return {**out, "status": "conflict", "warnings": warnings + [r.warn(
+                        "group_plan_changed", "a different plan was saved concurrently; rerun to recover it")]}
+            else:
+                r.atomic_write(plan_path, json.dumps({"group_hash": group_hash, "members": members, "warnings": warnings},
+                                                    ensure_ascii=False).encode("utf-8"))
             run_all([m for m in members if m["status"] == "planned"], 0, lambda m: "")
             if g["isolation"] == "deliberate":
                 done = [m for m in members if m["status"] == "completed"]

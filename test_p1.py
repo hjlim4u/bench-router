@@ -311,11 +311,11 @@ class P1(unittest.TestCase):
             t = r.validate_task({"schema_version": "1.0", "task_id": "e2e", "round": 1, "summary": "fix the deploy",
                                  "prompt": "p", "cwd": cwd, "categories": {"terminal_ops": 1},
                                  "category_confidence": 0.9})
-            res = r.route(t, self.cfg, MAPPING, snap, warnings, NOW)
+            res = r.route_legacy(t, self.cfg, MAPPING, snap, warnings, NOW)
             legacy = json.loads(json.dumps(snap))
             legacy["profiles"]["a"]["evidence"]["terminal_exact"].pop("conditions")
             legacy["snapshot_id"] = r.snapshot_hash(legacy)
-            old = r.route(t, self.cfg, MAPPING, legacy, [], NOW)
+            old = r.route_legacy(t, self.cfg, MAPPING, legacy, [], NOW)
             invalid = json.loads(json.dumps(snap))
             invalid["profiles"]["a"]["evidence"]["terminal_exact"]["conditions"] = {"variant": "default"}
             invalid["snapshot_id"] = r.snapshot_hash(invalid)

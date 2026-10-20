@@ -12,7 +12,7 @@ from pathlib import Path
 
 from bench_router import parallel as pl
 from bench_router import routing as r
-from test_p0 import MAPPING, config, profile
+from test_p0 import MAPPING, config, profile, guided_reply
 from test_p2 import FakeProjects, which, write_result, projects_environment, cleanup_temp
 
 
@@ -60,7 +60,35 @@ class P3(unittest.TestCase):
 
     def run_(self, g, fake):
         fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
-        return pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which)
+        return pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which, decision_options={"policy": "legacy"})
+
+    def test_v77_guided_fanout_preflight_and_frozen_recovery(self):
+        from bench_router import decision
+        g = self.group(fanout=2, tasks=[{"schema_version": "1.0", "task_id": "t1", "round": 1,
+                                       "summary": "Fix typo", "prompt": "Fix a typo"}])
+        opts = {"host": "codex", "env": {}}
+        fake = FakeProjects(on_prompt=agent_act())
+        fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
+        first = pl.run_group(g, self.cfg, MAPPING, None, [], dry_run=True, decision_options=opts)
+        self.assertEqual(first["status"], "decision_required")
+        self.assertFalse((Path(self.cwd) / ".bench-router").exists())
+        responses, next_ = {}, first
+        for _ in range(6):
+            member = next(m for m in next_["members"] if m["status"] == "decision_required")
+            packet = {"decision_request": member["decision"]["request"], "decision": member["decision"],
+                      "assessment_digest": member["decision"]["request_digest"]}
+            responses[member["label"]] = guided_reply(packet, "__tie__")
+            next_ = pl.run_group(g, self.cfg, MAPPING, None, [], dry_run=True, decision_options=opts, responses=responses)
+            if next_["status"] != "decision_required":
+                break
+        self.assertEqual(next_["status"], "selected", next_)
+        out = pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which,
+                           decision_options=opts, responses=responses)
+        self.assertEqual((out["status"], [m["profile"] for m in out["members"]]), ("completed", ["a", "b"]), out)
+        with patch.object(decision, "load_guidelines", side_effect=AssertionError("must reuse frozen choices")):
+            again = pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which,
+                                 decision_options=opts)
+        self.assertEqual((again["status"], len(fake.prompts)), ("completed", 2), again)
 
     def test_v40_group_v2_orchestrator_selections(self):
         task = {"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "do it",
@@ -113,7 +141,7 @@ class P3(unittest.TestCase):
         self.assertEqual(out["status"], "completed", out)
         self.assertEqual(sorted(m["profile"] for m in out["members"]), ["a", "b"])
         g = self.group(fanout=3)
-        out = pl.run_group(g, self.cfg, MAPPING, None, [], dry_run=True)
+        out = pl.run_group(g, self.cfg, MAPPING, None, [], dry_run=True, decision_options={"policy": "legacy"})
         self.assertEqual(len(out["members"]), 4)
         self.assertIn("fanout_reduced", [w["code"] for w in out["warnings"]])
 
