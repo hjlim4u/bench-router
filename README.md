@@ -63,29 +63,32 @@ sequenceDiagram
 
 ## 핵심 개념과 선택 흐름
 
-bench-router는 두 가지 선택 방식을 모두 지원합니다.
-- **자동 선택 (`route`)**: 아래 다이어그램처럼 라우터가 내장된 카테고리 가중치(`categories.toml`)와 가격 등급(`cost_tier`) 공식으로 직접 1개 프로필을 고릅니다.
-- **Orchestrator 주도 선택 (`evaluate` + `evidence` → `route --selection`)**: 라우터는 하드 제약 통과 여부(`evaluate`)와 작업 facet에 맞는 세부 벤치마크 증거 표(`evidence --format table`)만 제공하고, 상위 Agent(또는 경량 의사결정 모델)가 최종 프로필을 골라 실행합니다.
+기본 정책은 **공식 가이드 기반 선택(`vendor-guided`)**입니다. Jev 또는 native `bench-decider`가 작업 특성 분석 후 정확한 모델·effort 권고로 후보를 정합니다. 코드는 남은 후보의 관련 평가를 검색하고 비교 가능한 raw 점수·비용으로 선택합니다. 평가가 상충할 때만 점수 없이 평가의 작업 관련성을 추가 판단합니다. `route`·`parallel`·Skill이 같은 정책을 사용합니다.
+
+- **기본 선택 (`route`)**: 작업에 충분한 가벼운 구성을 우선하며, 근거 부족은 잠정 선택으로 표시합니다. 판단 도구가 없으면 `decision_required`를 반환합니다.
+- **명시적 선택 (`route --selection` / `--profile`)**: 저장된 선택을 검증하거나 지정한 프로필을 실행합니다. 기존 2.0 기록과 수동 지정은 새 정책 검증과 구분됩니다.
+- **기존 점수식 (`--policy legacy`)**: 카테고리 가중치와 비용 등급으로 선택하는 이전 정책을 명시적으로 사용할 수 있습니다.
+
+사용법과 응답 형식은 [공식 가이드 기반 정책](docs/vendor-guided-routing.md)을 참고하세요.
 
 ```mermaid
 flowchart LR
-    T["task.json 입력"] --> C["1. 작업 카테고리 분류 (L0 자기보고 / L1 키워드 / L2 일반)"]
-    C --> F["2. 하드 제약 필터 (enabled, cost_tier, context, capabilities)"]
-    F --> E{"3. 벤치마크 근거 충분? (coverage ≥ 0.5)"}
-    E -- "충분 (sufficient)" --> S["4a. 점수 계산 (quality - λ · cost_proxy)"]
-    E -- "부족 (insufficient)" --> D["4b. 기본 프로필 선택 (default / fallback_order)"]
-    S --> R["선택 완료 (benchmark_score)"]
-    D --> R2["선택 완료 (default_insufficient_evidence)"]
+    T["task.json 입력"] --> F["필수 제약 검사"]
+    F --> A["facet·workload 분석"]
+    A --> G["모델·effort 적합성 판단"]
+    G --> E["남은 후보의 관련 평가 검색·비교"]
+    E --> V["선택·근거·digest 검증"]
+    V --> R["실행 전 제약 재검사 후 위임"]
 ```
 
 - **프로필(profile)**: "어떤 Agent CLI를, 어떤 모델과 설정으로 실행할지"의 묶음입니다. 예: `claude-opus-high` = Claude Code + Opus + high effort. 라우터는 프로필 단위로 고릅니다.
-- **근거(evidence)**: 벤치마크 점수입니다. 작업 종류마다 참고하는 벤치마크와 가중치가 다릅니다. 예를 들어 저장소 코드 수정에는 SWE-bench와 AA coding 점수를 봅니다.
-- **근거가 부족할 때**: 점수 데이터가 충분하지 않으면 무리하게 고르지 않고 미리 정한 기본 프로필로 갑니다.
+- **근거(evidence)**: 공식 가이드와 관련 평가의 관측값입니다. 벤치마크의 effort·harness·결측·최신성을 함께 검토하며 새 정책은 가중합 점수를 만들지 않습니다.
+- **근거가 부족할 때**: 잠정 선택과 불확실성을 기록합니다. 가이드 미등재 모델도 후보로 유지하고, 판단 agent가 기권하면 실행하지 않습니다.
 - **결과 계약**: Agent는 `result.md`(사람이 읽는 보고)와 `result.json`(상태·해시 등 기계용 요약)을 남겨야 합니다. 라우터는 두 파일이 규칙대로 작성됐는지만 확인합니다. `completed`는 "결과를 형식대로 받았다"는 뜻이지 "작업이 성공했다"는 뜻이 아닙니다.
 - **중복 전송 방지**: 같은 작업을 다시 요청해도 프롬프트를 두 번 보내지 않고, 이미 진행 중이거나 끝난 실행의 결과를 회수합니다.
 
 <details>
-<summary><b>📊 작업 카테고리별 벤치마크 가중치 매핑 보기 (<code>categories.toml</code>)</b></summary>
+<summary><b>📊 legacy 정책의 카테고리별 벤치마크 가중치 매핑 (<code>categories.toml</code>)</b></summary>
 
 | 카테고리 | 설명 | 반영 벤치마크 및 가중치 |
 |---|---|---|
@@ -232,14 +235,14 @@ set -a; [ -f ~/.config/bench-router/env ] && . ~/.config/bench-router/env; set +
 $BR refresh                                  # aa, arena, mg 전체 갱신
 $BR status                                   # 데이터 상태 및 미매칭 모델 확인
 
-# 3. 실행 없이 어떤 Agent가 선택되는지만 보기 (cwd를 현재 저장소 절대 경로로 치환)
+# 3. 실행 없이 판단 요청 보기 (cwd를 현재 저장소 절대 경로로 치환)
 sed "s|/ABSOLUTE/PATH/TO/SMOKE_PROJECT|$PWD|" examples/task.synthetic.json > task.json
-$BR route --task task.json --dry-run
+$BR route --task task.json --host codex --dry-run # decision_required: 판단 패킷 반환, exit 17
 $BR explain --task task.json                 # 선택 이유를 사람이 읽는 글로
 $BR evidence --task task.json --format table # 작업 성격(facet)에 맞는 프로필별 벤치마크 증거 표 보기
 ```
 
-`--dry-run`, `explain`, `evidence`는 네트워크·herdr·파일 쓰기 없이 동작하므로 처음 살펴볼 때 쓰기 좋습니다. snapshot이 없어도 제약을 통과한 기본 프로필을 선택할 수 있어, 데이터 수집 전에 동작부터 확인하려면 2단계를 건너뛸 수 있습니다.
+`--dry-run`, `explain`, `evidence`는 네트워크·herdr·파일 쓰기 없이 동작합니다. 기본 dry-run은 현재 단계의 판단 패킷을 반환합니다. `decision.completed`와 새 응답을 순서대로 담은 `{"stages": [...]}` 파일을 `--decision-response`로 다시 넣어 단계를 진행하고, 완료된 `--selection`은 오프라인 재검증합니다. snapshot이 없어도 잠정 선택을 위한 요청을 만들 수 있습니다. 이전 오프라인 자동 선택은 `--policy legacy`로 사용할 수 있습니다.
 
 <details>
 <summary><b>🔍 입력(<code>task.json</code>), <code>explain</code>, 증거 표(<code>evidence</code>), 결과 계약(<code>result.json</code>) 실제 입출력 예시 보기</b></summary>
@@ -268,7 +271,7 @@ $BR evidence --task task.json --format table # 작업 성격(facet)에 맞는 �
 }
 ```
 
-#### 2) `explain --task task.json` 출력 예시
+#### 2) `explain --task task.json --policy legacy` 출력 예시
 `priority: "balanced"`($\lambda=0.15$)에서 `claude-opus-high`(원점수 `0.904`, 고비용)와 `codex-sol-high`(원점수 `0.852`, 중비용)를 비교해 가성비가 높은 `codex-sol-high`(`score=0.777`)를 선택한 결과입니다.
 
 ```text
@@ -365,7 +368,7 @@ $BR feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success       # Orchestrat
 | **bench-router** (`balanced`) | **20 / 20** | **100%** | **38.2s** | **19.0** | **$4.35** | **$0.217** |
 
 - 오프라인 테스트와 AA·Arena·The Model Gap 실데이터 수집을 검증했습니다. Claude Code·Codex 실제 위임과 20개 과제 비교는 이전 직접 Herdr 실행 경로에서 검증한 기록입니다. 현재 Projects 1.2.1 실행 경로는 fake CLI와 실제 Git worktree를 사용하는 오프라인 테스트로 검증했으며, 이전 live 결과가 현재 경로의 검증을 뜻하지는 않습니다.
-- 최신 모델은 아직 벤치마크 데이터가 부족한 경우가 많습니다. 그래서 기본 자동 선택(`route`)에서는 코딩 작업이 대개 기본 프로필로 선택됩니다. 20개 과제 비교 결과는 [eval/results/v1.md](eval/results/v1.md)에 있습니다.
+- 위 20개 과제 비교는 이전 legacy 정책의 결과이며 새 공식 가이드 기반 정책의 품질·비용 검증 결과가 아닙니다. 새 정책도 작업별 평가가 없으면 품질을 보장하지 않습니다. 이전 비교 결과는 [eval/results/v1.md](eval/results/v1.md)에 있습니다.
 - 비용 등급(`cost_tier`)은 실측 요금이 아니라 정책상 상대값입니다.
 
 자세한 검증 기록과 한계 목록은 [상세 레퍼런스](docs/reference.md#검증-현황-2026-10-12)에 있습니다.

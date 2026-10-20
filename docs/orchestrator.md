@@ -1,5 +1,7 @@
 # Orchestrator integration
 
+Default profile decisions now use the shared [vendor-guided policy](vendor-guided-routing.md), including offline native handoff packets and 3.0 selection records. The manual 2.0 selection workflow below remains an explicit override; it is not vendor-guidance validation. Use `--policy legacy` only to request the old weighted automatic policy.
+
 The router reports benchmark evidence and checks whether a chosen profile can run. The Orchestrator owns task complexity, estimates, final selection, and fallback order.
 
 Create a normal `task.json`, then optionally supply `context.json` (schema 2.0; contract in [routing-contracts.md](routing-contracts.md) §2):

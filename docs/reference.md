@@ -1,5 +1,7 @@
 # bench-router 상세 레퍼런스
 
+기본 선택 정책은 [공식 가이드 기반 선택](vendor-guided-routing.md)입니다. `route`·`parallel`·Skill에 공통 적용되며, 이 문서의 기존 점수식은 `--policy legacy`에서만 사용합니다.
+
 설정 파일 형식, 명령과 종료 코드, 선택 공식, 데이터 수집, live 위임 계약, 병렬 위임, 검증 기록을 정리한 문서입니다. 프로젝트 개요는 [README](../README.md)를 먼저 보세요.
 
 ---
@@ -124,7 +126,7 @@ capabilities = ["filesystem_write"]
 | `wiki facets` | Orchestrator가 `task.facets`에 태그할 수 있는 어휘와 설명·판정 규칙 출력 |
 | `evidence --task FILE [--format json\|table] [--max-units N]` | 작업 facet에 맞는 벤치마크 증거를 프로필별로 출력(합산·순위 없음, 읽기 전용) |
 | `status` | source별 나이·실패 횟수·마지막 오류·미매칭 모델, snapshot/설정 일치 여부 |
-| `route --task FILE --dry-run` | 선택만 하고 부작용 없음(네트워크·herdr·파일 쓰기 없음) |
+| `route --task FILE --dry-run` | 오프라인 판단 패킷 생성. 저장된 응답·선택 기록이 있으면 검증(네트워크·herdr·파일 쓰기 없음) |
 | `explain --task FILE [--context FILE]` | dry-run의 전체 후보·근거·제외 사유와 제약 결과·지표를 텍스트로 출력 |
 | `evaluate --task FILE [--context FILE]` | 선택 없이 전 프로필의 지표·제약 결과·benchmark 평가와 `assessment_digest` (Orchestrator용, [docs/orchestrator.md](orchestrator.md)) |
 | `route --task FILE --selection FILE` | Orchestrator가 고른 프로필을 선택 근거와 함께 실행. 평가 후 입력이 바뀌었으면 `stale_assessment` |
@@ -165,6 +167,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 | 14 | `conflict` — 같은 task/round에 다른 내용, 미해결 run 존재, 또는 잠금 사용 중. `stale_assessment` — `evaluate` 이후 task·설정·snapshot·context가 바뀜 |
 | 15 | 내부 저장소·I/O 오류 |
 | 16 | refresh 대상 source 일부 또는 전체 실패(정상 데이터 last-good 유지) |
+| 17 | `decision_required` — native 판단 패킷 해결 필요 / `decision_unavailable` — 판단 불가·기권, 위임하지 않음 |
 
 ---
 
@@ -199,7 +202,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 
 ## 선택 방식
 
-아래는 `route`가 스스로 고르는 **legacy 자동 선택**입니다. 여러 지표(비용·지연 등)나 세부 벤치마크 증거 표(`evidence`)를 함께 따지는 선택은 Orchestrator가 `evaluate` 결과로 하고 `route --selection`으로 실행합니다. 계약은 [docs/routing-contracts.md](routing-contracts.md), 사용법은 [docs/orchestrator.md](orchestrator.md).
+아래는 `route --policy legacy`의 **기존 자동 선택**입니다. 기본 `vendor-guided` 정책의 우선순위·판단 응답·3.0 기록 계약은 [공식 가이드 기반 선택](vendor-guided-routing.md)에 있습니다. 기존 2.0 명시적 선택 계약은 [routing-contracts.md](routing-contracts.md), 사용법은 [orchestrator.md](orchestrator.md)에 있습니다.
 
 1. **분류**
    - L0: Orchestrator가 준 `categories`를 `category_confidence ≥ 0.6`일 때 정규화해 사용합니다.
@@ -251,7 +254,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 - **실패 시**: 페이지 하나라도 실패하거나 스키마가 다르면 그 source의 새 데이터를 게시하지 않고 last-good을 유지합니다. 원본이 같으면 `unchanged`로 확인 시각만 갱신합니다.
 - **저장**: SQLite(`bench-router.db`: sources / snapshots / observations)에 source별 원본을 최근 3개까지 보관합니다. 동시 refresh는 운영체제 파일 잠금으로 막습니다.
 - **게시**: `snapshot.json`은 임시 파일에 쓰고 fsync한 뒤 `os.replace`로 교체합니다. 직전 유효본은 `snapshot.last-good.json`으로 옮기고, 재현용 사본은 `snapshots/`에 30일간 보관합니다.
-- **route 쪽 처리**: snapshot이 없거나 손상됐으면 last-good을 쓰고, 그것도 없으면 근거 없이 제약을 통과한 default를 선택합니다. route는 refresh를 시작하지 않습니다.
+- **route 쪽 처리**: snapshot이 없거나 손상됐으면 last-good을 사용합니다. 그것도 없으면 기본 정책은 평가 결측을 표시해 잠정 판단을 요청합니다. `--policy legacy`만 제약을 통과한 default로 갑니다. route는 refresh를 시작하지 않습니다.
 - **Arena 중복 이름**: 원본에 같은 이름의 별개 항목이 있을 수 있습니다(실측 사례 있음). 이런 항목은 모집단에는 포함하되 `이름#rank=N`으로 구분해, 이름만으로 매칭되지 않게 합니다.
 
 수동 import 형식(`--import FILE`):
