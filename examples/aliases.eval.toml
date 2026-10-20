@@ -1,0 +1,51 @@
+# compare 평가에 쓴 aliases. 로컬 aliases.toml의 사본.
+# bench-router aliases (2026-10-18). Format: [source] "exact source model string" = "canonical model_id"
+# canonical ids match profiles.toml (config_revision v2). A source string must match exactly, including the effort suffix.
+# Rows at the profile's effort come first; rows at another effort are listed after and carry their effort in the snapshot (effort policy: vendors' guides say to pick the effort on your own evals).
+
+[arena]
+"Claude Opus 5.5 (High)" = "claude-opus-5-5"
+"claude-opus-5.5-high" = "claude-opus-5-5"
+
+# Effort differs from the profile. Kept because the effort is stored with each score (conditions.reasoning_effort),
+# so these read as upper or lower bounds, not as the profile's own result.
+"Claude Opus 5.5 (Max)" = "claude-opus-5-5"   # source effort max, profile high, seen in webdev
+"claude-opus-5.5-medium" = "claude-opus-5-5"   # source effort medium, profile high, seen in search_style_control
+"Gemini 4 Argon (High)" = "gemini-4-argon"   # source effort high, profile medium, seen in text_style_control
+"gpt-6.1-sol-max" = "gpt-6.1-sol"   # source effort max, profile high, seen in text_style_control
+"GPT-6.1 Sol (Max)" = "gpt-6.1-sol"   # source effort max, profile high, seen in webdev
+
+# The Model Gap ids. Rows may carry their own effort in conditions.reasoning_effort.
+[mg]
+"claude-opus-5-5" = "claude-opus-5-5"
+"gpt-6-1-sol" = "gpt-6.1-sol"
+"gemini-4-argon" = "gemini-4-argon"
+
+# Artificial Analysis slugs. AA publishes one slug per effort, so the profile's effort is matched exactly.
+# claude-opus-5-5 and gpt-6-1-sol have no aa_coding value yet (null stays missing, not zero).
+# gemini-4-argon is a single slug without an effort marker; AA does not say which effort it measured.
+[aa]
+"claude-opus-5-5-high" = "claude-opus-5-5"
+"gpt-6-1-sol-high" = "gpt-6.1-sol"
+"gemini-4-argon" = "gemini-4-argon"
+
+
+# --- evidence of how these were chosen (comments only) ---
+# text_style_control: claude-opus-5-5 -> 'Claude Opus 5.5 (High)' (effort high, same as the profile)
+# text_style_control: gpt-6.1-sol has no 'high' row; closest is 'gpt-6.1-sol-max' (effort max). Mapped at the other effort (see above)
+# text_style_control: gemini-4-argon has no 'medium' row; closest is 'Gemini 4 Argon (High)' (effort high). Mapped at the other effort (see above)
+# webdev: claude-opus-5-5 has no 'high' row; closest is 'Claude Opus 5.5 (Max)' (effort max). Mapped at the other effort (see above)
+# webdev: gpt-6.1-sol has no 'high' row; closest is 'GPT-6.1 Sol (Max)' (effort max). Mapped at the other effort (see above)
+# webdev: gemini-4-argon has no 'medium' row; closest is 'Gemini 4 Argon (High)' (effort high). Mapped at the other effort (see above)
+# document_style_control: claude-opus-5-5 not listed
+# document_style_control: gpt-6.1-sol not listed
+# document_style_control: gemini-4-argon not listed
+# vision_style_control: claude-opus-5-5 -> 'claude-opus-5.5-high' (effort high, same as the profile)
+# vision_style_control: gpt-6.1-sol has no 'high' row; closest is 'gpt-6.1-sol-max' (effort max). Mapped at the other effort (see above)
+# vision_style_control: gemini-4-argon not listed
+# search_style_control: claude-opus-5-5 has no 'high' row; closest is 'claude-opus-5.5-medium' (effort medium). Mapped at the other effort (see above)
+# search_style_control: gpt-6.1-sol has no 'high' row; closest is 'gpt-6.1-sol-max' (effort max). Mapped at the other effort (see above)
+# search_style_control: gemini-4-argon not listed
+# agent: claude-opus-5-5 has no 'high' row; closest is 'Claude Opus 5.5 (Max)' (effort max). Mapped at the other effort (see above)
+# agent: gpt-6.1-sol has no 'high' row; closest is 'GPT-6.1 Sol (Max)' (effort max). Mapped at the other effort (see above)
+# agent: gemini-4-argon has no 'medium' row; closest is 'Gemini 4 Argon (High)' (effort high). Mapped at the other effort (see above)
