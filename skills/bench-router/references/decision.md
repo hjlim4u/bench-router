@@ -1,4 +1,4 @@
-# Cheap decision provider
+# Vendor-guided decision provider
 
 Use the host Orchestrator's native subagent tool for fallback. This helper does not launch a worker or delegate the coding task.
 
@@ -21,20 +21,21 @@ These definitions are project-scoped. When using the linked Skill from another w
 
 ## Decision flow
 
-1. Get the task and `wiki facets` vocabulary. Reuse the vocabulary within the conversation while `wiki_hash` is unchanged. Automatic rules and explicit tags take precedence; ask the decision provider only about facets still requiring semantic judgment. Send the existing task summary, relevant requirements and context filenames; if insufficient, include the needed original prompt rather than guessing from a truncated summary. Finalize task facet tags before `evaluate`; preserve the original prompt and requirements.
-2. For facets, create a request with one `noul` question per relevant allowed facet. Multiple facets may fit. Include short descriptions and boundary cases in the questions; model IDs and benchmark IDs alone do not explain their meaning. Treat uncertain answers as unresolved, not absent. Retain baseline candidates or ask the caller when a required facet cannot be established.
-   - Ask in one batched call. Skip `rule:always` facets, facets a rule already set, and `rule:script(...)` language facets (script detection is decisive). Still ask other rule facets, because file-extension and keyword rules miss cases such as a React request without context files.
-   - Tag a facet when its `noul` is at least 0.8. Append these boundary cases to the matching questions; without them, a cheap model tags almost every prompt as instruction following:
-     - `task:instruction_following`: 1 only if the main challenge is obeying explicit output constraints (exact length, count, ordering, format, forbidden words); 0 for ordinary tasks that merely state requirements.
-     - `difficulty:hard_prompts`: most routine coding, writing, or lookup tasks are 0, even when well specified.
-     - `domain:software_it`: 1 only if the subject matter is software or IT itself; 0 when code is merely a tool for another subject.
-     - `task:math`: 1 only if the main work is mathematical derivation or calculation, not incidental arithmetic. `domain:mathematical`: 1 only if the subject matter is mathematics.
-     - `task:ocr_parse`: 1 only if the input is a scanned or photographed document whose text must be converted to structured output. `task:vision_ocr`: 1 only if an image is attached and the answer comes from text inside that image.
-   - Measured on 60 labeled prompts with Jev (`eval/retrieval.py`, `eval/results/retrieval-jev1.md`): facet F1 0.89 and hallucinated-facet rate 0.12, against F1 0.53 for rules alone. About 2.4k input tokens per task.
-3. Obtain `evaluate` and `evidence --format table` results. Only `eligible` profile IDs can be choices. With none, return `no_eligible_profile`; a single eligible profile needs no selection call. For several candidates, give the provider the task, relevant benchmark results, measured effort, missing/stale flags, and code-computed cost estimates. Ask one `choice` question with profile IDs plus `abstain`; express the task's quality/cost preference explicitly. Do not ask the model to calculate budgets, compare timestamps, invent missing scores, or treat a model's different-effort result as an exact profile measurement.
-4. Invoke `python scripts/decide.py --host HOST --request REQUEST.json` using the current host from the table above. For `subagent_required`, invoke that host's native `bench-decider` as described above. Require `{"answers": {"QUESTION_ID": {"type": "choice", "choice": "ALLOWED_ID"}}}` or `{"type": "noul", "noul": 0.0}` for each answer. The IDs, types, and values must correspond to the request. Validate its saved reply with `python scripts/decide.py --host HOST --request REQUEST.json --response REPLY.json` before using it. The helper's `model` identifies the requested model; record the actual model from host metadata separately.
-5. A confidence value is a signal, not an observed success rate. Subagent confidence is self-reported. For abstention, uncertain answers, or insufficient benchmark evidence, return to the caller rather than guessing a profile. Choose thresholds from representative task results; never use a probability as a new benchmark score.
-6. Build the existing selection record from the validated profile ID and current `assessment_digest`, with policy ID `bench-router-jev` or `bench-router-cheap-subagent`. Generate a short factual `reason` from selected evidence IDs and policy; neither Jev nor a cheap subagent needs to write an essay. Record model/version, facets, wiki/snapshot hashes, selected unit IDs and supplied answers alongside the selection. Recheck this evidence provenance before dispatch: the existing assessment digest does not include Wiki/facet evidence. If it changed, repeat the decision. Run normal `route --selection` with the same task/context; Router rechecks constraints and availability.
+1. Create a task with its original requirements and any explicit facets from `wiki facets`. Request `route --task TASK.json --host HOST --dry-run`. The shared router now batches unresolved semantic facets and workload analysis itself; do not call a separate facet pass first. Analysis sees task requirements and known facets, without model IDs, benchmark scores or file bodies. Preserve uncertain facets as unresolved.
+2. Resolve only the current `decision.request` using Jev or the native agent. The stages are `analysis`, then `fit`, then an optional `benchmark` relevance decision. Fit receives the preceding analysis, original requirements and exact model/effort guidance, without benchmark scores. Evaluation-only efforts remain conditional until code verifies a fresh exact workflow improvement against a lower effort of the same model/harness.
+3. Save `{"stages": [<entries from decision.completed>, <new response>]}` and rerun with `--decision-response RESPONSE.json --dry-run` until selected. Each new response must echo its own request_digest and include every current question. Attach provider and actual model from host metadata. Never edit predecessor records or invent the next request. If the host cannot honor the requested model, return decision_unavailable.
+4. The router retrieves evidence only for remaining candidates and task facets, preserving status, source, measurement conditions and missing data. It ranks comparable raw scores in code. Exact and model-proxy observations have separate comparison scopes; unrelated cohorts and percentiles cannot decide a winner. Conflicting evaluations trigger a score-blind benchmark relevance request. Missing measurements cause explicit uncertainty, not an extra model call to guess scores.
+5. Execute with the completed response file without `--dry-run`, or extract the 3.0 selection record without its output-only `source` and use `--selection`. Policy version 2 binds all stages, inputs, observed evaluations and the resolved outcome. Older vendor-guided policy-1 records require a new decision. Execution rechecks constraints and availability; existing receipts are recovered first. A changed snapshot can reuse valid analysis/fit responses while generating a new final record.
+6. Fanout reuses analysis and fit stages within the plan; picked profiles are removed from evidence retrieval and comparison. Unknown guidance remains provisional. Confidence is not measured success. Report the selected profile, evidence scope, unresolved conditions and recorded usage; reused stages are not additional provider calls.
+
+Native response envelope (the caller attaches model metadata):
+
+```json
+{"request_digest": "<copied from decision packet>", "provider": "subagent", "model": "<actual host model>",
+ "answers": {"<each supplied question ID>": {"type": "choice", "choice": "<supplied option>"}}}
+```
+
+`balanced` prefers a light configuration that plausibly meets the task, `cost` uses supplied estimated USD among suitable candidates, and `quality` prioritizes relevant evidence and documented task fit. Effort names are not shared vendor units. Unknown prices are not zero; missing guidance does not inherit from a similar model. Only registered model/effort combinations execute.
 
 Request example (both backends use the same shape):
 
@@ -46,6 +47,6 @@ Request example (both backends use the same shape):
  }}}
 ```
 
-Batch independent facet questions into one call. The final profile choice follows local evidence retrieval, so it may need a second call. Keep common benchmark details and all-missing rows summarized; expand them when relevant. Persist full evidence locally and give the parent only the decision, provenance, and unresolved issues. These provider calls belong to this Skill workflow; plain `route` keeps its existing offline automatic policy.
+For standalone bounded questions, `scripts/decide.py` retains the generic typed-answer interface. Routing stages and selection records come from the common CLI policy. Persist full evidence locally and give the parent the choice, provenance and unresolved issues. The same policy serves standalone CLI, copied Skill and parallel fanout. Use `--policy legacy` only for an explicitly requested old score-based choice.
 
 Official Jev request/response reference: <https://docs.typesafe.ai/api>. Model IDs and prices: <https://docs.typesafe.ai/models>.
