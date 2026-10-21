@@ -3,6 +3,7 @@
 refresh/import/status 전용. route는 이 모듈을 import하지 않는다(요청 경로 네트워크 0).
 """
 import contextlib
+import io
 import json
 import os
 import re
@@ -10,7 +11,6 @@ import sqlite3
 import sys
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 from datetime import datetime
 from pathlib import Path
@@ -32,7 +32,6 @@ AA_KEY_ENV = "ARTIFICIAL_ANALYSIS_API_KEY"
 AA_FIELDS = {"aa_intelligence": "artificial_analysis_intelligence_index",
              "aa_coding": "artificial_analysis_coding_index"}
 ARENA_DATASET = "lmarena-ai/leaderboard-dataset"
-ARENA_API = "https://datasets-server.huggingface.co/filter"
 ARENA_REVISION_URL = f"https://huggingface.co/api/datasets/{ARENA_DATASET}"
 # evidence → (subset, category). text/document/vision은 style-control subset으로 고정; webdev는 그 subset만 존재.
 ARENA_COHORTS = {"arena_text": ("text_style_control", "overall"),
@@ -49,9 +48,9 @@ EVIDENCE_IDS = sorted([*AA_FIELDS, *ARENA_COHORTS, *EXACT_PINS])
 SOURCES = {
     "aa": {"url": AA_URL, "ttl_hours": 24, "max_stale_hours": 168, "max_requests": 50,
            "attribution": "Artificial Analysis (artificialanalysis.ai)"},
-    # wiki unit(arena:*)을 더하면 text category당 약 5요청이 는다. 상한은 전체 등록 기준(약 160요청)에 여유를 둔 값
+    # revision 1 + config별 latest parquet 1개. wiki unit(arena:*)이 늘어도 config 수(현재 약 20)만큼만 는다
     "arena": {"url": f"https://huggingface.co/datasets/{ARENA_DATASET}", "ttl_hours": 24, "max_stale_hours": 168,
-              "max_requests": 300, "max_seconds": 600, "attribution": "LMArena leaderboard-dataset (CC BY 4.0)"},
+              "max_requests": 50, "attribution": "LMArena leaderboard-dataset (CC BY 4.0)"},
     "mg": {"url": MG_URL, "ttl_hours": 24, "max_stale_hours": 168, "max_requests": 4,
            "attribution": "The Model Gap (themodelgap.com, CC BY 4.0)"},
     "swe": {"url": "https://www.swebench.com/", "ttl_hours": 168, "max_stale_hours": 720, "manual": True,
@@ -87,6 +86,7 @@ def _left_s(budget):
 
 def http_get_json(url, headers=None, budget=None):
     """bounded GET. 401/403/429는 재시도 없음, 5xx/네트워크는 최대 HTTP_RETRIES회. 헤더(키)는 에러에 넣지 않는다.
+    URL이 .parquet이면 JSON 대신 행 dict 목록으로 디코드한다.
     budget: {"used", "max"} 요청 수 상한, 선택적으로 {"deadline"(monotonic), "max_seconds"} 전체 시간 상한."""
     for attempt in range(HTTP_RETRIES + 1):
         timeout = min(HTTP_TIMEOUT_S, _left_s(budget))
@@ -101,6 +101,8 @@ def http_get_json(url, headers=None, budget=None):
                 data = resp.read(HTTP_MAX_BYTES + 1)
             if len(data) > HTTP_MAX_BYTES:
                 raise SourceError("response too large")
+            if url.endswith(".parquet"):
+                return _parquet_rows(data)
             try:
                 return json.loads(data.decode("utf-8"), object_pairs_hook=r._no_dupes,
                                   parse_constant=r._reject_const)
@@ -121,6 +123,17 @@ def http_get_json(url, headers=None, budget=None):
             if attempt == HTTP_RETRIES:
                 raise SourceError(f"network error: {getattr(e, 'reason', e)}")
         time.sleep(min(2 ** attempt, _left_s(budget)))
+
+
+def _parquet_rows(data):
+    try:
+        import pyarrow.parquet as pq  # Arena refresh에만 필요한 의존성. 없으면 그 source만 실패하고 last-good 유지
+    except ImportError:
+        raise SourceError("pyarrow not installed (pip install pyarrow)")
+    try:
+        return pq.read_table(io.BytesIO(data)).to_pylist()
+    except (ValueError, OSError) as e:  # pyarrow ArrowInvalid/ArrowIOError
+        raise SourceError(f"invalid parquet response: {e}")
 
 
 # ---------- adapters: fetch → payload(원본) / parse(payload) → observations ----------
@@ -174,57 +187,38 @@ def parse_aa(payload):
 
 
 def fetch_arena(get_json, env, cohorts_spec=ARENA_COHORTS):
-    """cohorts_spec: {evidence_id: (config, category)}. 같은 (config, category)는 한 번만 요청한다."""
+    """cohorts_spec: {evidence_id: (config, category)}. config별 latest parquet를 revision sha에 고정해 한 번만 받고
+    category는 로컬에서 거른다(datasets-server /filter는 페이지당 20-60초에 5xx가 잦았다)."""
     info = get_json(ARENA_REVISION_URL, None)
     revision = info.get("sha") if isinstance(info, dict) else None
     if not isinstance(revision, str):
         raise SourceError("Arena: dataset revision missing")
+    files = [s.get("rfilename") for s in info.get("siblings") or [] if isinstance(s, dict)]
     cohorts, fetched, failed = {}, {}, {}
     for eid, (subset, category) in cohorts_spec.items():
-        if (subset, category) in fetched:
-            cohorts[eid] = fetched[subset, category]
-            continue
         try:
-            rows = _arena_rows(get_json, subset, category)
+            if subset not in fetched:
+                fetched[subset] = _arena_rows(get_json, revision, files, subset)
         except SourceError as e:
             if eid in ARENA_COHORTS:
                 raise
             failed[eid] = str(e)  # wiki 추가 조각의 일시 장애가 legacy evidence 수집 전체를 실패시키지 않게 한다
             continue
-        cohorts[eid] = fetched[subset, category] = rows
-    # ponytail: datasets-server는 변환본을 서비스한다. revision은 main sha로 기록하며 변환 지연 가능성은 남는다.
+        cohorts[eid] = [x for x in fetched[subset] if isinstance(x, dict) and x.get("category") == category]
     return {"revision": revision, "cohorts": cohorts, "failed": failed,
             "spec": {e: list(c) for e, c in cohorts_spec.items() if e in cohorts}}, revision, None
 
 
-ARENA_PAGE_RETRIES = 4   # datasets-server /filter answers 500 in bursts and recovers; http_get_json's own 2 retries are too short
-ARENA_RETRY_SLEEP_S = 5
-
-
-def _arena_page(get_json, url):
-    for i in range(ARENA_PAGE_RETRIES + 1):
-        try:
-            return get_json(url, None)
-        except SourceError as e:
-            if i == ARENA_PAGE_RETRIES or not str(e).startswith("HTTP 5"):  # budget/deadline/4xx errors are not retried
-                raise
-            time.sleep(ARENA_RETRY_SLEEP_S)
-
-
-def _arena_rows(get_json, subset, category):
-    rows, offset, total = [], 0, None
-    while total is None or offset < total:
-        q = urllib.parse.urlencode({"dataset": ARENA_DATASET, "config": subset, "split": "latest",
-                                    "where": f"\"category\"='{category}'", "offset": offset, "length": 100})
-        body = _arena_page(get_json, f"{ARENA_API}?{q}")
-        if not isinstance(body, dict) or type(body.get("num_rows_total")) is not int or not isinstance(body.get("rows"), list):
-            raise SourceError(f"Arena {subset}/{category}: unexpected response")
-        total = body["num_rows_total"]
-        page = [x.get("row") for x in body["rows"]]
-        if not page and offset < total:
-            raise SourceError(f"Arena {subset}/{category}: short page")
-        rows += page
-        offset += len(page)
+def _arena_rows(get_json, revision, files, subset):
+    shards = sorted(f for f in files if isinstance(f, str) and f.startswith(f"{subset}/latest-") and f.endswith(".parquet"))
+    if not shards:
+        raise SourceError(f"Arena {subset}: no latest parquet at {revision}")
+    rows = []
+    for f in shards:
+        body = get_json(f"https://huggingface.co/datasets/{ARENA_DATASET}/resolve/{revision}/{f}", None)
+        if not isinstance(body, list):
+            raise SourceError(f"Arena {f}: unexpected response")
+        rows += body
     return rows
 
 
@@ -493,8 +487,25 @@ def load_aliases(path):
     return data
 
 
+EFFORT_WORDS = r"(?:minimal|low|medium|high|xhigh|max|ultra)"
+
+
+def model_key(name):
+    """'Claude Opus 5.5 (High)', 'claude-opus-5.5-high', 'claude-opus-5-5' → 'claude-opus-5-5'. 구두점·대소문자를 같게 보고 effort 꼬리를 뗀다."""
+    norm = lambda x: re.sub(r"[^a-z0-9]+", "-", x.lower()).strip("-")
+    bare = re.sub(rf"(?i)(\s*\(\s*{EFFORT_WORDS}\s*\)|[-\s]{EFFORT_WORDS})$", "", name.strip())
+    return norm(name), norm(bare)
+
+
+def auto_canonical(cfg):
+    """프로필 model_id의 정규화 키 → model_id. aliases.toml에 없는 출처 모델을 새 프로필·새 출처 행에도 자동으로 잇는다.
+    shortcut: 하네스·컨텍스트 표기가 붙은 변형('(xHigh, Codex Harness)', '-preview')은 키가 달라 자동 매칭하지 않는다 — aliases.toml로 명시."""
+    return {model_key(m)[0]: m for m in {p["model_id"] for p in cfg["profile"]}}
+
+
 def build_snapshot(db, cfg, mapping, aliases, now):
     sources, cohorts, index, unmatched, ambiguous = {}, {}, {}, {}, []
+    auto = auto_canonical(cfg)
     rows = db.execute("SELECT s.id, s.last_success_at, sn.source_revision, sn.published_at, sn.fetched_at, sn.id AS snap "
                       "FROM sources s JOIN snapshots sn ON sn.id = s.current_snapshot ORDER BY s.id").fetchall()
     for x in rows:
@@ -514,7 +525,8 @@ def build_snapshot(db, cfg, mapping, aliases, now):
             if o["scope"] == "exact_profile":
                 canonical = o["source_model"]  # 수동 import는 canonical ID로 작성
             else:
-                canonical = aliases.get(x["id"], {}).get(o["source_model"])
+                canonical = aliases.get(x["id"], {}).get(o["source_model"]) or next(
+                    (auto[k] for k in model_key(o["source_model"]) if k in auto), None)  # 명시 alias가 우선
                 if canonical is None:
                     unmatched.setdefault(x["id"], set()).add(o["source_model"])
                     continue
@@ -529,6 +541,9 @@ def build_snapshot(db, cfg, mapping, aliases, now):
             if eid in EXACT_PINS:  # 이름만 같다고 exact가 아님: harness·effort까지 일치
                 found = [o for o in found if o["harness_id"] == p["harness_id"]
                          and o["reasoning_effort"] == p["reasoning_effort"] != "unknown"]
+            if len(found) > 1:  # 출처가 effort별 행을 따로 낼 때(AA slug 등): 프로필 effort 행, 없으면 effort 표기 없는 행 하나
+                found = ([o for o in found if o["reasoning_effort"] == p["reasoning_effort"]]
+                         or [o for o in found if o["reasoning_effort"] is None] or found)
             if len(found) > 1:
                 ambiguous.append({"profile": p["id"], "evidence_id": eid,
                                   "source_models": sorted(o["source_model"] for o in found)})

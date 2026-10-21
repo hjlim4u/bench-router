@@ -4,12 +4,14 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 from pathlib import Path
+from types import SimpleNamespace
 
 from bench_router import herdr as hd
 from bench_router import routing as r
@@ -61,6 +63,9 @@ class FakeProjects:
         self.version = "herdr-projects 1.2.1 (/fake/bin/herdr-projects)"
         self.tasks, self.gone, self.pending, self.updates, self.detail_updates = {}, False, False, {}, {}
         self.panes, self.closed, self.pane_error = {}, [], None
+        self.tells, self.tell_error = [], None
+        self.runs, self.reports, self.on_run = [], [], None  # headless: herdr pane run, board report
+        self.stopped = set()
         self.lock = __import__("threading").Lock()
 
     def _ok(self, obj):
@@ -76,6 +81,8 @@ class FakeProjects:
             stage, state, msg = "starting", "working", "Starting"
         if self.gone:
             stage, state, msg = "failed", "error", "The agent has exited"
+        if t["id"] in self.stopped:
+            stage, state, msg = "stopped", "idle", "Stopped"
         return {"id": t["id"], "state": state, "app": t["agent"], "title": t["title"], "msg": msg, "stage": stage,
                 **self.updates}
 
@@ -91,6 +98,27 @@ class FakeProjects:
         if argv == ["pane", "list"]:
             status = {"idle": "idle", "working": "working", "blocked": "blocked"}[self.status]
             return self._ok({"result": {"panes": [{**p, "agent_status": status} for p in self.panes.values()]}})
+        if argv[:2] == ["worktree", "create"]:
+            path, branch, repo = (argv[argv.index(f) + 1] for f in ("--path", "--branch", "--cwd"))
+            subprocess.run(["git", "-C", repo, "worktree", "add", "-q", "-b", branch, path, "HEAD"],
+                           check=True, capture_output=True)
+            pane = {"pane_id": f"h{len(self.panes) + 1}:p1", "workspace_id": f"h{len(self.panes) + 1}", "cwd": path,
+                    "agent": None, "agent_session": None}
+            self.panes[path] = pane
+            return self._ok({"result": {"root_pane": pane, "workspace": {"workspace_id": pane["pane_id"][:-3]},
+                                        "worktree": {"path": path, "branch": branch}}})
+        if argv[:2] == ["pane", "run"]:
+            self.runs.append(argv[3])
+            if self.on_run:
+                self.on_run(self, argv[3])
+            return self._ok({"result": {"type": "ok"}})
+        if argv[:2] == ["pane", "get"]:
+            if any(p["pane_id"] == argv[2] for p in self.panes.values()):
+                return self._ok({"result": {"pane": {"pane_id": argv[2]}}})
+            return subprocess.CompletedProcess([], 1, json.dumps({"error": {"code": "pane_not_found"}}), "")
+        if argv[:2] == ["workspace", "close"]:
+            self.panes = {k: p for k, p in self.panes.items() if p.get("workspace_id") != argv[2]}
+            return self._ok({"result": {"type": "ok"}})
         if argv[:2] == ["pane", "close"]:
             self.closed.append(argv[2])
             self.panes = {k: p for k, p in self.panes.items() if p["pane_id"] != argv[2]}
@@ -107,6 +135,19 @@ class FakeProjects:
         self.calls.append(argv[:2])
         if argv == ["version"]:
             return subprocess.CompletedProcess(cmd, 0, self.version + "\n", "")
+        if argv[0] == "add" and "--delegate" not in argv:  # headless: an agent-less board task, nothing starts
+            with self.lock:
+                tid = f"repo/{len(self.tasks) + 1}"
+                self.tasks[tid] = {"id": tid, "title": argv[1], "prompt": argv[argv.index("--desc") + 1],
+                                   "worktree": None, "branch": None, "agent": None}
+                self.adds.append(argv)
+            return self._ok({"id": tid, "state": "idle", "title": argv[1], "stage": "todo"})
+        if argv[0] == "stop":
+            self.stopped.add(argv[1])
+            return subprocess.CompletedProcess(cmd, 0, "stopped\n", "")
+        if argv[0] == "report":
+            self.reports.append(argv[argv.index("--state") + 1])
+            return subprocess.CompletedProcess(cmd, 0, "ok\n", "")
         if argv[0] == "add":
             title, prompt, repo = argv[1], argv[argv.index("--desc") + 1], argv[argv.index("--repo") + 1]
             wt = Path(repo) / ".bench-router" / "wt" / title
@@ -130,6 +171,11 @@ class FakeProjects:
         if argv[0] == "reopen":
             self._pane(self.tasks[argv[1]])
             return self._ok({"pane": self.panes[argv[1]]["pane_id"], "hasAgent": True})
+        if argv[0] == "tell":
+            if self.tell_error:
+                raise subprocess.TimeoutExpired(cmd, 15)
+            self.tells.append((argv[1], argv[2]))
+            return self._ok({"id": argv[1]})
         if argv[0] == "details":
             t = self.tasks[argv[1]]
             return self._ok({"task": {"id": t["id"], "title": t["title"], "stage": self._row(t)["stage"]},
@@ -140,6 +186,18 @@ class FakeProjects:
 def result_dir(fake, prompt):
     rel = re.search(r"결과 디렉터리\(현재 worktree 기준 상대 경로\): (.+)", prompt).group(1)
     return Path(fake.worktree_of(prompt)) / rel
+
+
+def headless_cli(exit_code=0, result=True):
+    """Stand-in for `herdr pane run`: what the typed one-shot CLI would leave behind."""
+    def act(fake, cmd):
+        script = shlex.split(cmd)[2]
+        wt = shlex.split(script.split(" && ")[0])[1]
+        rd = Path(re.search(r"cat (\S+)/input\.txt", script).group(1))
+        if result:
+            write_result()(SimpleNamespace(worktree_of=lambda prompt: wt), (rd / "input.txt").read_text("utf-8"))
+        (rd / "exit_code").write_text(f"{exit_code}\n", "utf-8")
+    return act
 
 
 def write_result(status="success", nonce=None, body="# 결과\n작업 완료\n", sha=None, run_id=None):
@@ -180,9 +238,10 @@ class P2(unittest.TestCase):
         raw.update(kw)
         return r.validate_task(raw)
 
-    def run_(self, fake, t=None, w=which):
+    def run_(self, fake, t=None, w=which, **kw):
         fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
-        return hd.dispatch(t or self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=w, decision_options={"policy": "legacy"})
+        return hd.dispatch(t or self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=w,
+                           decision_options={"policy": "legacy"}, **kw)
 
     def receipt(self, out):
         return json.loads(Path(out["receipt_path"]).read_text("utf-8"))
@@ -292,6 +351,117 @@ class P2(unittest.TestCase):
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "completed")
         self.assertEqual(fake.closed, ["w1:p1"])  # a resumed session is never closed again by the router
         self.assertEqual(len(fake.prompts), 1)  # resume sends nothing
+
+    def test_poll_near_deadline_keeps_call_budget(self):
+        fake = FakeProjects(after_status="working")
+        out = self.run_(fake)
+        fake.kwargs.clear()
+        res = hd.collect_run(self.cwd, out["run_id"], 1, runner=fake)  # the wait ends before the poll returns
+        self.assertEqual(res["status"], "timed_out")  # still working, not delivery_uncertain
+        self.assertEqual({kw["timeout"] for cmd, kw in fake.kwargs if cmd == "list"}, {hd.OBSERVE_FLOOR_S})
+
+    def test_wait_zero_returns_after_submission(self):
+        fake = FakeProjects(after_status="working", on_prompt=write_result())
+        out = self.run_(fake, wait_ms=0)
+        self.assertEqual((out["status"], len(fake.adds), out["thread_id"]), ("timed_out", 1, "repo/1"))
+        self.assertFalse([c for c in fake.calls if c[:1] == ["list"]])  # returned without waiting on the board
+        fake.status = "idle"
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "completed")
+
+    def test_tell_refuses_task_finished_on_board(self):
+        fake = FakeProjects(after_status="working", on_prompt=write_result())
+        out = self.run_(fake, wait_ms=0)
+        fake.status = "idle"  # the agent finished (approval) but nobody collected yet: the receipt still says timed_out
+        with self.assertRaisesRegex(r.InputError, "finished on the board"):
+            hd.tell_run(self.cwd, out["run_id"], "late", runner=fake)
+        self.assertEqual(fake.tells, [])
+
+    def test_headless_runs_one_shot_cli_in_a_pane(self):
+        fake = FakeProjects()
+        fake.on_run = headless_cli()
+        out = self.run_(fake, self.task(execution="headless"))
+        self.assertEqual((out["status"], out["task_outcome"]), ("completed", "success"), out)
+        self.assertNotIn("--delegate", fake.adds[0])  # the board task is a view; no board agent
+        cmd = shlex.split(fake.runs[0])[2]
+        self.assertIn("claude -p --model m --effort high --dangerously-skip-permissions", cmd)
+        self.assertNotIn("do the thing", cmd)  # the prompt reaches the CLI from input.txt only
+        self.assertEqual((fake.reports, len(fake.closed)), (["working", "done"], 1))
+        with self.assertRaisesRegex(r.InputError, "headless"):
+            hd.tell_run(self.cwd, out["run_id"], "hi", runner=fake)
+
+    def test_headless_running_then_pane_closed_is_failure(self):
+        fake = FakeProjects()  # no exit_code yet: the CLI is still running
+        out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        self.assertEqual(out["status"], "timed_out")
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "timed_out")
+        fake.panes.clear()  # closed by hand = stopped
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "execution_failed")
+        self.assertEqual(fake.reports[-1], "error")
+
+    def test_headless_failing_cli_without_result(self):
+        fake = FakeProjects()
+        fake.on_run = headless_cli(exit_code=1, result=False)
+        self.assertEqual(self.run_(fake, self.task(execution="headless"))["status"], "execution_failed")
+        self.cfg["profile"][0]["args"] = ["--weird"]  # nothing headless can express
+        out = self.run_(fake, self.task(task_id="t2", execution="headless"))
+        self.assertEqual((out["status"], len(fake.runs)), ("execution_failed", 1))
+        agy = hd.headless_argv(profile("g", kind="agy", args=["--model", "gemini-3.8-flash-low"]))
+        self.assertEqual(agy[-1], "-p")  # agy -p consumes the next argument as the prompt
+
+    def test_stop_ends_live_runs_and_frees_the_workspace(self):
+        fake = FakeProjects(after_status="working")
+        out = self.run_(fake, wait_ms=0)
+        self.assertEqual(hd.stop_run(self.cwd, None, runner=fake)["status"], "stop_sent")  # board stop
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "execution_failed")
+        with self.assertRaisesRegex(r.InputError, "already settled"):
+            hd.stop_run(self.cwd, out["run_id"], runner=fake)
+        hl = self.run_(fake, self.task(task_id="t2", execution="headless"), wait_ms=0)  # the stop freed the cwd
+        self.assertEqual(hl["status"], "timed_out", hl)
+        hd.stop_run(self.cwd, hl["run_id"], runner=fake)  # headless: closes its whole workspace
+        self.assertEqual(hd.collect_run(self.cwd, hl["run_id"], 0, runner=fake)["status"], "execution_failed")
+        log = [json.loads(x)["state"] for x in Path(hl["receipt_path"]).with_name("messages.jsonl").read_text().splitlines()]
+        self.assertEqual(log, ["stop_attempted", "stop_sent"])
+
+    def test_collect_many_any_then_all(self):
+        other = tempfile.TemporaryDirectory()
+        self.addCleanup(cleanup_temp, other)
+        cwd2 = os.path.realpath(other.name)
+        git_repo(cwd2)
+        fake = FakeProjects(after_status="working", on_prompt=write_result())
+        a = self.run_(fake, wait_ms=0)
+        b = self.run_(fake, self.task(cwd=cwd2, execution="headless"), wait_ms=0)  # no exit_code: still running
+        runs = [(self.cwd, a["run_id"]), (cwd2, b["run_id"])]
+        self.assertEqual(hd.collect_many(runs, 0, "any", runner=fake)["status"], "timed_out")
+        fake.status = "idle"  # a finishes on the board
+        res = hd.collect_many(runs, 0, "any", runner=fake)
+        self.assertEqual((res["status"], res["ready"]), ("ok", [a["run_id"]]))
+        self.assertEqual([x["status"] for x in res["runs"]], ["completed", "timed_out"])
+        self.assertEqual(hd.collect_many(runs, 0, "all", runner=fake)["status"], "timed_out")  # b still running
+
+    def test_tell_relays_explicit_message(self):
+        fake = FakeProjects(after_status="working")
+        out = self.run_(fake)
+        self.assertEqual(out["status"], "timed_out")
+        res = hd.tell_run(self.cwd, None, "use the v2 API", runner=fake)  # the only live run under cwd
+        self.assertEqual((res["status"], fake.tells), ("sent", [("repo/1", "use the v2 API")]))
+        log = [json.loads(x) for x in Path(res["messages_path"]).read_text("utf-8").splitlines()]
+        self.assertEqual([x["state"] for x in log], ["attempted", "sent"])
+        self.assertEqual(log[0]["text"], "use the v2 API")
+        fake.tell_error = True
+        self.assertEqual(hd.tell_run(self.cwd, out["run_id"], "again", runner=fake)["status"], "delivery_uncertain")
+        with self.assertRaises(r.InputError):
+            hd.tell_run(self.cwd, out["run_id"], "x" * (hd.MAX_PROMPT_ARG_BYTES + 1), runner=fake)
+        rc = self.receipt(out)
+        rc["status"] = "completed"
+        hd.save(rc)
+        with self.assertRaisesRegex(r.InputError, "settled"):  # tell on a finished task would start a new agent
+            hd.tell_run(self.cwd, out["run_id"], "late", runner=fake)
+        with self.assertRaisesRegex(r.InputError, "0 unsettled"):
+            hd.tell_run(self.cwd, None, "late", runner=fake)
+        rc["resumed"] = {"at": "t"}
+        hd.save(rc)
+        fake.tell_error = None
+        self.assertEqual(hd.tell_run(self.cwd, out["run_id"], "after resume", runner=fake)["status"], "sent")
 
     def test_only_settled_completed_agents_are_released(self):
         for i, (status, kw) in enumerate((("working", {}), ("blocked", {}), ("idle", {"on_prompt": None}))):

@@ -1,4 +1,4 @@
-"""P3 병렬 위임 V30–V34: worktree 격리, fanout, shared scratchpad, deliberate 투표, 재실행 멱등.
+"""P3 병렬 위임 V30–V34: worktree 격리, fanout, shared scratchpad, 재실행 멱등.
 herdr-projects는 member마다 board task를 만드는 test_p2.FakeProjects. 실행: python3 -m unittest -v test_p3"""
 import json
 import os
@@ -14,17 +14,6 @@ from bench_router import parallel as pl
 from bench_router import routing as r
 from test_p0 import MAPPING, config, profile, guided_reply
 from test_p2 import FakeProjects, which, write_result, projects_environment, cleanup_temp
-
-
-def agent_act(vote="t1-1"):
-    result = write_result()
-
-    def act(fake, prompt):
-        result(fake, prompt)
-        m = re.search(r"(\S+\.vote\.json) 에", prompt)
-        if m:
-            Path(m.group(1)).write_text(json.dumps({"best": vote, "reason": "r"}), "utf-8")
-    return act
 
 
 @unittest.skipUnless(shutil.which("git"), "git required")
@@ -58,16 +47,17 @@ class P3(unittest.TestCase):
         raw.update(kw)
         return pl.validate_group(raw)
 
-    def run_(self, g, fake):
+    def run_(self, g, fake, **kw):
         fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
-        return pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which, decision_options={"policy": "legacy"})
+        return pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which,
+                            decision_options={"policy": "legacy"}, **kw)
 
     def test_v77_guided_fanout_preflight_and_frozen_recovery(self):
         from bench_router import decision
         g = self.group(fanout=2, tasks=[{"schema_version": "1.0", "task_id": "t1", "round": 1,
                                        "summary": "Fix typo", "prompt": "Fix a typo"}])
         opts = {"host": "codex", "env": {}}
-        fake = FakeProjects(on_prompt=agent_act())
+        fake = FakeProjects(on_prompt=write_result())
         fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
         first = pl.run_group(g, self.cfg, MAPPING, None, [], dry_run=True, decision_options=opts)
         self.assertEqual(first["status"], "decision_required")
@@ -100,20 +90,19 @@ class P3(unittest.TestCase):
                             pl.datetime.now(pl.timezone.utc), context=context)["assessment_digest"]
         sel = lambda pid: {"schema_version": "2.0", "profile": pid, "assessment_digest": digest,
                            "policy": {"id": "orch-diverse", "version": "1"}, "reason": f"{pid} for diversity"}
-        raw = {"schema_version": "2.0", "group_id": "g2", "cwd": self.cwd, "isolation": "deliberate",
+        raw = {"schema_version": "2.0", "group_id": "g2", "cwd": self.cwd, "isolation": "shared",
                "tasks": [{"task": task, "context": context, "selections": [sel("b"), sel("a")]}]}
-        fake = FakeProjects(on_prompt=agent_act())
+        fake = FakeProjects(on_prompt=write_result())
         out = self.run_(pl.validate_group(raw), fake)
         self.assertEqual((out["status"], out["schema_version"], out["fanout"]), ("completed", "2.0", 2), out)
         self.assertEqual([m["profile"] for m in out["members"]], ["b", "a"])  # router 순위가 아닌 Orchestrator 선택
-        self.assertIn("estimate_round1_only", [w["code"] for w in out["warnings"]])
         decision = json.loads((Path(out["members"][0]["rounds"][0]["receipt_path"]).parent / "decision.json")
                               .read_text("utf-8"))
         self.assertEqual((decision["selection"]["reason"], decision["decision_context"]["profiles"]["b"]["metrics"]
                           ["cost.estimated_usd"]["value"]), ("b for diversity", 0.01))
         # 평가 후 설정 변경 → 그룹 전체 실행 안 함
         self.cfg = config([*self.cfg["profile"], profile("c")], default="a")
-        stale_fake = FakeProjects(on_prompt=agent_act())
+        stale_fake = FakeProjects(on_prompt=write_result())
         stale = self.run_(pl.validate_group({**raw, "group_id": "g3"}), stale_fake)
         self.assertEqual((stale["status"], stale_fake.prompts), ("stale_assessment", []))
         for bad in ({**raw, "fanout": 2},
@@ -123,7 +112,7 @@ class P3(unittest.TestCase):
                 pl.validate_group(bad)
 
     def test_v30_isolated_worktrees(self):
-        fake = FakeProjects(on_prompt=agent_act())
+        fake = FakeProjects(on_prompt=write_result())
         out = self.run_(self.group(), fake)
         self.assertEqual(out["status"], "completed", out)
         routed = sorted(str(Path(self.cwd, ".bench-router/worktrees/g1", m["label"])) for m in out["members"])
@@ -137,7 +126,7 @@ class P3(unittest.TestCase):
 
     def test_v31_fanout_distinct_profiles(self):
         one = [{"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "p"}]
-        out = self.run_(self.group(fanout=2, tasks=one), FakeProjects(on_prompt=agent_act()))
+        out = self.run_(self.group(fanout=2, tasks=one), FakeProjects(on_prompt=write_result()))
         self.assertEqual(out["status"], "completed", out)
         self.assertEqual(sorted(m["profile"] for m in out["members"]), ["a", "b"])
         g = self.group(fanout=3)
@@ -146,29 +135,29 @@ class P3(unittest.TestCase):
         self.assertIn("fanout_reduced", [w["code"] for w in out["warnings"]])
 
     def test_v32_shared_scratchpad(self):
-        fake = FakeProjects(on_prompt=agent_act())
+        fake = FakeProjects(on_prompt=write_result())
         out = self.run_(self.group(isolation="shared"), fake)
         self.assertEqual(out["status"], "completed", out)
         shared = out["shared_dir"]
         self.assertTrue(any(f"{shared}/t1-1.md" in p for p in fake.prompts))
 
-    def test_v33_deliberate_round_and_vote(self):
-        fake = FakeProjects(on_prompt=agent_act(vote="t2-1"))
-        out = self.run_(self.group(isolation="deliberate"), fake)
-        self.assertEqual(out["status"], "completed", out)
-        self.assertEqual([len(m["rounds"]) for m in out["members"]], [2, 2])
-        self.assertEqual(out["members"][0]["rounds"][1]["round"], 2)
-        self.assertTrue(Path(out["shared_dir"], "t1-1.result.md").exists())
-        self.assertEqual(out["consensus"], {"votes": {"t1-1": 0, "t2-1": 2}, "winner": "t2-1"})
-
     def test_v34_rerun_does_not_resend(self):
         g = self.group(isolation="shared")
-        fake = FakeProjects(on_prompt=agent_act())
+        fake = FakeProjects(on_prompt=write_result())
         self.run_(g, fake)
         sent = len(fake.prompts)
         out = self.run_(g, fake)
         self.assertEqual(out["status"], "completed", out)
         self.assertEqual(len(fake.prompts), sent)
+
+    def test_wait_zero_starts_members_then_rerun_collects(self):
+        g = self.group(isolation="shared")
+        fake = FakeProjects(on_prompt=write_result())
+        out = self.run_(g, fake, wait_ms=0)  # every member submitted, nobody waited on
+        self.assertEqual([m["rounds"][0]["status"] for m in out["members"]], ["timed_out", "timed_out"], out)
+        self.assertEqual(out["status"], "partial_failure")
+        again = self.run_(g, fake)
+        self.assertEqual((again["status"], len(fake.prompts)), ("completed", 2), again)
 
     def test_group_validation(self):
         for bad in ({"isolation": "open"}, {"fanout": 0},

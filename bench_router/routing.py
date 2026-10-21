@@ -189,7 +189,8 @@ def _parse_time(v, name):
 
 TASK_REQUIRED = ("schema_version", "task_id", "round", "summary", "prompt", "cwd")
 TASK_OPTIONAL = ("context_files", "categories", "category_confidence", "constraints", "priority", "exclude_profiles",
-                 "facets")
+                 "facets", "execution")
+EXECUTIONS = ("interactive", "headless")
 CONSTRAINT_DEFAULTS = {"max_cost_tier": "high", "min_context_tokens": 0, "local_only": False,
                        "timeout_ms": 900000, "required_capabilities": []}
 TASK_MAX_BYTES = 1024 * 1024
@@ -486,6 +487,9 @@ def validate_task(raw):
     if t["priority"] not in PRIORITIES:
         raise InputError("task.priority: quality|balanced|cost")
     t["exclude_profiles"] = _str_list(raw.get("exclude_profiles", []), "task.exclude_profiles")
+    t["execution"] = raw.get("execution", "interactive")  # board agent, or a one-shot CLI run in a herdr pane
+    if t["execution"] not in EXECUTIONS:
+        raise InputError("task.execution: " + "|".join(EXECUTIONS))
     facets = raw.get("facets", {})  # Orchestrator가 직접 태그한 {axis: [values]}. 어휘 검증은 index가 있는 evidence에서
     if not isinstance(facets, dict):
         raise InputError("task.facets: object {axis: [values]} required")
@@ -495,7 +499,8 @@ def validate_task(raw):
 
 def semantic_task_hash(t):
     keys = ("prompt", "summary", "constraints", "priority", "categories", "cwd", "context_files", "exclude_profiles")
-    return canonical_hash({k: t[k] for k in keys})
+    extra = {"execution": t["execution"]} if t.get("execution", "interactive") != "interactive" else {}  # keeps old hashes
+    return canonical_hash({**{k: t[k] for k in keys}, **extra})
 
 
 # ---------- 설정 ----------

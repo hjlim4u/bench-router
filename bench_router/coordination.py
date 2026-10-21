@@ -127,7 +127,8 @@ def observe_receipt(rc):
         rec.update(status=rc["status"], reference={"cwd": rc["cwd"], "run_id": rc["run_id"]},
                    profile=rc["profile"], profile_fingerprint=rc["profile_fingerprint"],
                    active=not rec.get("released", False) and (rc["status"] not in {"completed", "result_invalid", "execution_failed"}
-                           or (rc["status"] == "execution_failed" and rc["delivery_state"] != "not_attempted")))
+                           or (rc["status"] == "execution_failed" and rc["delivery_state"] != "not_attempted"
+                               and not rc.get("process_exited"))))  # a headless CLI's exit is proof it stopped
         _save(rec)
 
 
