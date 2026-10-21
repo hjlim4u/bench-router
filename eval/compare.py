@@ -105,7 +105,7 @@ def decide(t, pol, args, ctx):
     ev = d.get("evaluation") or {}
     return {"task": t[0], "policy": pol, "status": res["status"], "profile": sel.get("profile"),
             "mode": res.get("selection_mode"), "stages": len(st), "uncertainty": d.get("uncertainty"), **usage(st),
-            "benchmark": ev.get("selected_benchmark"),
+            "benchmark": ev.get("benchmark_relevance"),
             "fits": {p: f.get("status") for p, f in (ev.get("fits") or {}).items()}}
 
 

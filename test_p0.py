@@ -994,8 +994,25 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertEqual(packet["decision"]["stage"], "benchmark")
         self.assertNotIn("raw", json.dumps(packet["decision_request"]))
         self.assertNotIn("model_id", json.dumps(packet["decision_request"]))
-        out = self.route(index=idx, snap=snap, response=guided_reply(packet, "__tie__", benchmark="u/one"))
+        out = self.route(index=idx, snap=snap, response=guided_reply(packet, "__tie__", **{"relevance:u/one": 1}))
         self.assertEqual(out["selected"]["profile"], "light")
+        self.assertEqual(self.route(index=idx, snap=snap, response=guided_reply(packet, "__tie__"))["status"], "decision_unavailable")
+
+    def test_v93_relevance_weights_combine_benchmarks_and_suites_share_a_vote(self):
+        ids = ("u/a", "u/b", "u/c", "u/d")
+        idx = self.indexed(ids)
+        snap = self.exact({"light": {"u/a": 0.5, "u/b": 0.5, "u/c": 0.9, "u/d": 0.9},
+                           "strong": {"u/a": 0.9, "u/b": 0.9, "u/c": 0.5, "u/d": 0.5}})
+        for uid, suite in zip(ids, ("x", "x", "y", "z")):
+            for sp in snap["profiles"].values():
+                sp["evidence"][uid]["conditions"]["suite"] = suite
+        packet = self.route(index=idx, snap=snap, response=guided_reply(self.fit_packet(index=idx, snap=snap), "__tie__"))
+        self.assertEqual(packet["decision"]["stage"], "benchmark")
+        ones = {f"relevance:{uid}": 1 for uid in ids}
+        out = self.route(index=idx, snap=snap, response=guided_reply(packet, "__tie__", **ones))
+        # Ungrouped this would be a 2:2 tie resolved to the default "strong".
+        self.assertEqual(out["selected"]["profile"], "light")
+        self.assertEqual(out["selection"]["decision"]["evaluation"]["benchmark_relevance"]["u/a"], 1)
 
 
     def test_v84_model_proxy_can_inform_model_choice_without_effort_claim(self):
@@ -1087,6 +1104,16 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertIn("workflow_gain_unverified", self.finish("strong", snap=snap, index=idx)["selection"]["decision"]["uncertainty"])
         snap["profiles"]["light"]["evidence"]["u/coding"]["conditions"]["dataset_revision"] = "fixture"
         self.assertIn("workflow_gain_unverified", self.finish("strong", snap=snap, index=idx, now=NOW + timedelta(hours=1))["selection"]["decision"]["uncertainty"])
+
+    def test_v92_majority_winner_skips_benchmark_stage(self):
+        ids = ("u/one", "u/two", "u/three")
+        idx = self.indexed(ids)
+        snap = self.exact({"light": {"u/one": 0.9, "u/two": 0.9, "u/three": 0.5},
+                           "strong": {"u/one": 0.5, "u/two": 0.5, "u/three": 0.9}})
+        out = self.route(index=idx, snap=snap, response=guided_reply(self.fit_packet(index=idx, snap=snap), "__tie__"))
+        self.assertEqual(out["selected"]["profile"], "light")
+        self.assertEqual(len(out["selection"]["decision"]["stages"]), 2)
+        self.assertIsNone(out["selection"]["decision"]["evaluation"]["benchmark_relevance"])
 
 
 if __name__ == "__main__":
