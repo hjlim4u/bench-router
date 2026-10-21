@@ -24,6 +24,9 @@ SHORT_CALL_S = 15
 OBSERVE_FLOOR_S = 2  # one list/details round trip; keeps calls inside a 5s task budget
 START_CALL_S = 60  # add --delegate starts the agent before it answers
 MAX_PROMPT_ARG_BYTES = 120 * 1024  # the prompt is one argv entry (--desc); Linux caps one at 128 KiB
+_LOCAL_CODEBURN_BIN = Path(__file__).resolve().parents[1] / ".bench-router" / "codeburn" / "node_modules" / ".bin" / "codeburn"
+CODEBURN_BIN = os.environ.get("BENCH_ROUTER_CODEBURN", str(_LOCAL_CODEBURN_BIN) if _LOCAL_CODEBURN_BIN.exists() else "codeburn")
+CODEBURN_KIND = {"claude": "claude", "codex": "codex", "agy": "antigravity"}
 RESULT_REL = Path(".bench-router") / "runs"  # agent writes results here, relative to its board worktree
 # One agent run per receipt: no review rounds, attempts, plan gate or merge. worker.access stays the board's setting.
 WORK_SETTINGS = ["--workspace.from", "here", "--workspace.cleanup", "false", "--review.when", "never",
@@ -124,6 +127,37 @@ def probe(p, which=shutil.which):
     if p["executable"] != p["kind"]:
         return "executable_kind_mismatch"
     return None if which(p["executable"]) else "executable_not_found"
+
+
+def probe_profiles(profiles, which=shutil.which, runner=subprocess.run):
+    """CLI preflight plus optional CodeBurn account/quota preflight."""
+    out = {p["id"]: probe(p, which) for p in profiles}
+    if not shutil.which(CODEBURN_BIN):
+        return out
+    try:
+        res = runner([CODEBURN_BIN, "quota", "--format", "json"], capture_output=True, text=True,
+                     encoding="utf-8", errors="replace", timeout=SHORT_CALL_S, shell=False)
+        raw = json.loads(res.stdout) if res.returncode == 0 else {}
+        providers = raw.get("providers", []) if isinstance(raw, dict) else []
+        providers = {p["id"]: p for p in providers if isinstance(p, dict) and isinstance(p.get("id"), str)}
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return out
+    for p in profiles:
+        if out[p["id"]]:
+            continue
+        provider = providers.get(CODEBURN_KIND.get(p["kind"]))
+        if provider is None:
+            continue
+        if provider.get("available") is False:
+            out[p["id"]] = "codeburn_provider_unavailable"
+            continue
+        windows = provider.get("windows", [])
+        exhausted = [w for w in windows if isinstance(w, dict) and isinstance(w.get("usedPct"), (int, float))
+                     and not isinstance(w["usedPct"], bool) and w["usedPct"] >= 100] if isinstance(windows, list) else []
+        # ponytail: all-window check avoids model-limit false exclusions; add a profile-to-window map when CodeBurn exposes one.
+        if windows and len(exhausted) == len(windows):
+            out[p["id"]] = "codeburn_quota_exhausted"
+    return out
 
 
 # ---------- receipt ----------
@@ -464,7 +498,7 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
 
 def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
              profile_id=None, context=None, selection_mode="parallel_pinned",
-              selection=None, check_digest=True, decision_options=None, wait_ms=None):
+              selection=None, check_digest=True, decision_options=None, wait_ms=None, availability=None):
     """wait_ms: how long to wait after submission (None = until the task deadline; 0 = return at once)."""
     from . import coordination as co
     key = co.key_for(t)
@@ -475,8 +509,8 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
                 raise co.Conflict("dispatch session differs from the recorded native run; use collect")
             if existing:
                 co.observe_receipt(existing[0])
+            availability = availability if availability is not None else probe_profiles(cfg["profile"], which)
             if not existing and profile_id is None and selection is None:
-                availability = {p["id"]: probe(p, which) for p in cfg["profile"]}
                 choice = r.route(t, cfg, mapping, snap, snap_warnings, _now(), availability, context,
                                  **(decision_options or {}))
                 if choice["status"] != "selected":
@@ -490,7 +524,8 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
             if not fresh and not existing:
                 raise co.Conflict("recorded native submission has no receipt; inspect effects before resolving, never resend")
             result = _dispatch(t, cfg, mapping, snap, snap_warnings, session, runner, which,
-                               profile_id, context, selection_mode, selection, check_digest, decision_options, wait_ms)
+                               profile_id, context, selection_mode, selection, check_digest, decision_options, wait_ms,
+                               availability)
             if result.get("run_id"):
                 co.observe_receipt(load_receipt(t["cwd"], result["run_id"]))
             elif fresh:
@@ -502,7 +537,7 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
 
 def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
              profile_id=None, context=None, selection_mode="parallel_pinned",
-              selection=None, check_digest=True, decision_options=None, wait_ms=None):
+              selection=None, check_digest=True, decision_options=None, wait_ms=None, availability=None):
     """live route. 선택 → receipt → herdr 실행. 같은 (task_id, round)는 재전송 없이 collect.
     profile_id: 제약·가용성을 통과한 후보 중 이 프로필로 고정(parallel fanout).
     selection: Orchestrator 선택 기록(validate_selection). digest가 지금 입력과 다르면 실행하지 않는다(stale_assessment).
@@ -533,7 +568,7 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                         "selection_differs_from_recorded", "returning the recorded run; use a new round to act on a new selection")]
                 return out
             now = _now()
-            availability = {p["id"]: probe(p, which) for p in cfg["profile"]}
+            availability = availability if availability is not None else probe_profiles(cfg["profile"], which)
             if selection is not None and selection.get("schema_version") == "3.0":
                 opts = {**(decision_options or {}), "allow_network": False}
                 opts.pop("response", None)

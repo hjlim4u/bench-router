@@ -20,7 +20,7 @@
 - 소스별 refresh 전체 상한 `SOURCE_MAX_SECONDS=180`: 요청·재시도·대기를 모두 포함하고, 요청별 timeout과 재시도 대기는 남은 시간으로 줄인다. 넘으면 해당 소스는 실패 처리되고 last-good을 유지한다. (HF datasets-server가 느릴 때 refresh가 25분까지 늘어질 수 있던 빈틈을 막음.)
 
 ### P2 — herdr 위임 (fixture + live smoke 통과)
-- `bench_router/herdr.py`: herdr CLI argv 호출, live 가용성 probe(herdr kind — 설치된 herdr의 `agent start --help`에서 읽음 / executable PATH), cwd별 dispatch lock, receipt(`<cwd>/.bench-router/runs/<run_id>/receipt.json`), 새 workspace → `agent start` → `agent get` 확인 → `submission_attempted` fsync → `agent prompt --wait` 1회 → 결과 계약 검사. collect/feedback.
+- `bench_router/herdr.py`: herdr CLI argv 호출, live 가용성 probe(CodeBurn quota가 있으면 Claude/Codex/Antigravity 계정·quota까지, 없으면 executable PATH), cwd별 dispatch lock, receipt(`<cwd>/.bench-router/runs/<run_id>/receipt.json`), 새 workspace → `agent start` → `agent get` 확인 → `submission_attempted` fsync → `agent prompt --wait` 1회 → 결과 계약 검사. collect/feedback.
 - CLI: `route`(live), `collect --run-id --cwd [--wait-ms]`, `feedback --run-id --cwd --outcome`, 전역 `--herdr-session`(또는 `BENCH_ROUTER_HERDR_SESSION`). herdr 경로 지정은 `BENCH_ROUTER_HERDR`.
 - 실행 디렉터리: `receipt.json`, `decision.json`(선택 근거), `result.md`/`result.json`(Agent 작성), `feedback.jsonl`.
 
@@ -82,7 +82,7 @@ herdr는 `~/.local/bin/herdr`(0.9.3). 비로그인 셸에서는 PATH에 없으�
 - `agent prompt --wait`은 비작업 상태에서 5초 안에 working/blocked가 관찰되지 않으면 `agent_prompt_stalled`. turn 단위 추적이 아니다. 프롬프트는 positional 인자로만 받는다 → argv 길이 제한(120 KiB) 적용.
 
 ## P2에서 정한 것 (문서에 없던 세부)
-- 프로필의 `executable`은 `kind`와 같아야 한다(herdr가 canonical executable을 실행). 로그인/모델 접근은 probe하지 않고 `auth_unverified` 경고만 낸다.
+- 프로필의 `executable`은 `kind`와 같아야 한다(herdr가 canonical executable을 실행). `codeburn quota --format json`을 쓸 수 있으면 Claude/Codex/Antigravity의 provider 준비 상태와 모든 quota window가 소진됐는지를 검사하며, CodeBurn이 없거나 실패하면 PATH probe만 한다.
 - 지원 kind는 코드에 목록을 두지 않고 live dispatch마다 `herdr agent start --help`의 `[possible values: ...]`에서 읽는다(2026-10-12 변경, `17dfbd1`). 하드코딩 목록은 herdr 업그레이드 때마다 낡았다. 단순 삭제는 하지 않았다: 03 문서 하드 제약(지원 kind)을 지키지 못하고, 미지원 kind가 `agent start`에서야 실패해 fallback 없이 workspace가 남기 때문이다. 도움말을 읽지 못하면 kind 검사만 생략한다(오류는 `agent start`에서 드러남). 비용: dispatch당 herdr 호출 1회.
 - herdr 오류 매핑: start `agent_not_ready` → blocked, 그 외 start 실패 → execution_failed(pane 마지막 20줄을 `diagnostic_tail`로 반환). prompt `agent_blocked` → blocked(전송 안 됨), `timeout` → timed_out, 그 외 → delivery_uncertain. 어느 경우에도 재전송하지 않는다.
 - settled(새 dispatch를 막지 않음)는 completed / result_invalid / execution_failed. 나머지 상태는 collect로 정리해야 다음 live dispatch가 가능하다. prompt를 보낸 적 없는 run을 collect하면 execution_failed로 정리된다.

@@ -83,8 +83,7 @@ class P0(unittest.TestCase):
 
     def task(self, **kw):
         raw = {"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "general question",
-               "prompt": "p; rm -rf / $(whoami)", "cwd": self.cwd,
-               "categories": {"general": 1}, "category_confidence": 0.9}
+               "prompt": "p; rm -rf / $(whoami)", "cwd": self.cwd}
         raw.update(kw)
         return r.validate_task({k: v for k, v in raw.items() if v is not None})
 
@@ -183,7 +182,7 @@ class P0(unittest.TestCase):
     def test_v38_evaluate_v2_reports_facts_constraints_and_benchmark(self):
         ps = [profile("b", "high"), profile("a")]
         ev = {"b": {"swe_verified_exact": 0.9, "aa_coding": 0.9}, "a": {"swe_verified_exact": 0.4, "aa_coding": 0.6}}
-        t = self.task(categories={"coding_repo": 1}, constraints={"max_cost_tier": "medium"})
+        t = self.task(summary="Fix a repository bug", constraints={"max_cost_tier": "medium"})
         fresh = "2026-10-11T00:00:00+00:00"
         ctx = {"schema_version": "2.0", "max_estimated_cost_usd": 0.01, "profiles": {"a": {"metrics": {
             "tokens.estimated_input": {"value": 1000, "unit": "tokens", "source": "o"},
@@ -325,7 +324,7 @@ class P0(unittest.TestCase):
     def test_v07_low_coverage_uses_default(self):
         # analysis = aa_intelligence 0.6 + arena_text 0.4; arena_text만 관측 → C=0.4
         ps = [profile("a"), profile("dflt")]
-        t = self.task(categories={"analysis": 1})
+        t = self.task(summary="Analyze and research metrics")
         res = self.run_route(t, ps, {"a": {"arena_text": 1.0}}, default="dflt")
         self.assertEqual((res["selected"]["profile"], res["selection_mode"]), ("dflt", "default_insufficient_evidence"))
         a = next(c for c in res["candidates"] if c["profile"] == "a")
@@ -333,18 +332,14 @@ class P0(unittest.TestCase):
         self.assertIn("insufficient_evidence", [w["code"] for w in res["warnings"]])
 
     def test_v08_input_validation(self):
-        t = self.task(categories={"analysis": 2, "writing": 2})
-        self.assertEqual(r.classify(t)["categories"], {"analysis": 0.5, "writing": 0.5})
-        bad = [dict(categories={"cooking": 1}), dict(categories={"general": -1}), dict(categories={"general": 0}),
-               dict(unknown_field=1), dict(constraints={"budget_usd": 5}), dict(priority="fast"),
+        bad = [dict(categories={"analysis": 1}), dict(category_confidence=0.9), dict(unknown_field=1),
+               dict(constraints={"budget_usd": 5}), dict(priority="fast"),
                dict(round=0), dict(round=True), dict(task_id="../x"), dict(cwd="relative"),
                dict(context_files=["../outside.txt"]), dict(summary=""),
                dict(constraints={"timeout_ms": 999})]
         for kw in bad:
             with self.assertRaises(r.InputError, msg=str(kw)):
                 self.task(**kw)
-        with self.assertRaises(r.InputError):
-            self.task(category_confidence=None)  # categories 있으면 confidence 필수
         f = Path(self.cwd) / "t.json"
         for text in ('{"a": NaN}', '{"a": 1, "a": 2}', '{"a": Infinity}'):
             f.write_text(text, "utf-8")
@@ -355,16 +350,15 @@ class P0(unittest.TestCase):
             r.load_json_strict(f, r.TASK_MAX_BYTES)
 
     def test_v09_l1_rules(self):
-        low = dict(category_confidence=0.3)
-        cls = r.classify(self.task(summary="Fix the bug in the React frontend", **low))
+        cls = r.classify(self.task(summary="Fix the bug in the React frontend"))
         self.assertEqual((cls["stage"], cls["fallback_reason"]), ("fallback", "rule_conflict"))
-        cls = r.classify(self.task(summary="Run pytest", **low))
+        cls = r.classify(self.task(summary="Run pytest"))
         self.assertEqual((cls["stage"], cls["fallback_reason"]), ("fallback", "no_rule_match"))
-        cls = r.classify(self.task(summary="Refactor the repository module", context_files=["src/a.py"], **low))
+        cls = r.classify(self.task(summary="Refactor the repository module", context_files=["src/a.py"]))
         self.assertEqual((cls["stage"], cls["categories"]), ("L1", {"coding_repo": 1.0}))
-        cls = r.classify(self.task(summary="저장소의 버그를 고쳐줘", categories=None, category_confidence=None))
+        cls = r.classify(self.task(summary="저장소의 버그를 고쳐줘"))
         self.assertEqual(cls["categories"], {"coding_repo": 1.0})
-        cls = r.classify(self.task(summary="SQL", **low))
+        cls = r.classify(self.task(summary="SQL"))
         self.assertEqual(cls["stage"], "fallback")
 
     def test_v10_near_tie_boundary(self):

@@ -334,9 +334,8 @@ class P1(unittest.TestCase):
                   import_doc=d.validate_import(tb_import(), "tb"), env=ENV)
         snap, warnings = r.load_snapshot(self.cache)
         with tempfile.TemporaryDirectory() as cwd:
-            t = r.validate_task({"schema_version": "1.0", "task_id": "e2e", "round": 1, "summary": "fix the deploy",
-                                 "prompt": "p", "cwd": cwd, "categories": {"terminal_ops": 1},
-                                 "category_confidence": 0.9})
+            t = r.validate_task({"schema_version": "1.0", "task_id": "e2e", "round": 1,
+                                 "summary": "fix the deploy shell", "prompt": "p", "cwd": cwd})
             res = r.route_legacy(t, self.cfg, MAPPING, snap, warnings, NOW)
             legacy = json.loads(json.dumps(snap))
             legacy["profiles"]["a"]["evidence"]["terminal_exact"].pop("conditions")

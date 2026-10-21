@@ -241,7 +241,7 @@ def _assessment_lines(a):
 def explain_text(res):
     cls = res["classification"]
     lines = [f"task {res['task_id']} round {res['round']} · policy {res['policy_version']} · snapshot {res['snapshot_id']}",
-             f"classification: {cls['stage']} {cls['categories']} confidence={cls['self_reported_confidence']}"
+             f"classification: {cls['stage']} {cls['categories']}"
              + (f" fallback={cls['fallback_reason']}" if cls["fallback_reason"] else "")
              + (f" rules={cls['matched_rules']}" if cls["matched_rules"] else ""),
              f"selected: {res['selected']['profile'] if res['selected'] else '-'} ({res['selection_mode']})",

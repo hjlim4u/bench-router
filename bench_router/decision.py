@@ -350,8 +350,8 @@ def apply_record(base, cfg, selection, check_digest=True):
     out.pop("resolved_profile", None)
     out.update(assessment_digest=selection["assessment_digest"], selection={"source": "vendor-guided", **selection})
     out["warnings"] += [r.warn(code, f"{selection['profile']}: {code}") for code in expected["uncertainty"]]
-    out["warnings"].append(r.warn("auth_unverified" if base["availability_verified"] else "availability_unverified",
-                                "CLI/model account access is not established by model selection"))
+    out["warnings"].append(r.warn("availability_checked" if base["availability_verified"] else "availability_unverified",
+                                "live preflight does not guarantee provider execution"))
     return out
 
 

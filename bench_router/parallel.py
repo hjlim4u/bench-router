@@ -195,7 +195,7 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
               dry_run=False, decision_options=None, responses=None, wait_ms=None):
     gdir = herdr.bench_dir(g["cwd"]) / "groups" / g["group_id"]
     shared = gdir / "shared"
-    availability = None if dry_run else {p["id"]: herdr.probe(p, which) for p in cfg["profile"]}
+    availability = None if dry_run else herdr.probe_profiles(cfg["profile"], which)
     # Freeze the original input and selections once, then recover from this plan without new provider calls.
     plan_path = gdir / "plan.json"
     group_hash = r.canonical_hash(g)
@@ -261,7 +261,8 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                                  profile_id=m["profile"],
                                  context=g["contexts"][m["index"]], selection=sel,
                                  selection_mode="orchestrator_pinned" if sel else "parallel_pinned",
-                                 check_digest=False, decision_options=decision_options, wait_ms=wait_ms)
+                                  check_digest=False, decision_options=decision_options, wait_ms=wait_ms,
+                                  availability=availability)
             rnd = {k: res.get(k) for k in ROUND_KEYS}
             rnd["round"] = t["round"]
             if res["status"] != "completed":

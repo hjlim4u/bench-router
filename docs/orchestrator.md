@@ -57,7 +57,7 @@ python3 -m bench_router.cli route --task task.json --context context.json --prof
 
 `evaluate --format 1` keeps the previous candidate/excluded shape for one release.
 
-`evaluate` does not probe live executable availability; live `route` probes again before dispatch. The Orchestrator chooses a profile from the eligible entries. The normal `route` command without `--profile` continues to make the router's benchmark-based selection. `explain` prints that selection plus the same constraint results and facts.
+`evaluate` does not probe live availability; live `route` probes again before dispatch. When `codeburn` is installed, the probe also rejects a configured Claude, Codex, or Antigravity profile whose CodeBurn provider is unavailable or has every reported quota window exhausted; otherwise it falls back to the executable PATH probe. The Orchestrator chooses a profile from the eligible entries. The normal `route` command without `--profile` continues to make the router's benchmark-based selection. `explain` prints that selection plus the same constraint results and facts.
 
 To record why a profile was chosen, pass a selection instead of `--profile`:
 

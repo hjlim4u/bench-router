@@ -257,8 +257,6 @@ $BR evidence --task task.json --format table # 작업 성격(facet)에 맞는 �
   "prompt": "합성 smoke test입니다. 저장소 코드를 변경하지 말고, 결과 디렉터리에 bench-router 실행 계약에 맞는 짧은 설명 결과를 작성하세요.",
   "cwd": "/ABSOLUTE/PATH/TO/SMOKE_PROJECT",
   "context_files": [],
-  "categories": { "analysis": 1 },
-  "category_confidence": 0.9,
   "constraints": {
     "max_cost_tier": "high",
     "min_context_tokens": 0,
@@ -276,7 +274,7 @@ $BR evidence --task task.json --format table # 작업 성격(facet)에 맞는 �
 
 ```text
 task synthetic-smoke-001 round 1 · policy 1.0 · snapshot 3fbd7f5524570e61ab661b75db55f15e1cc0b8f21d9fb6ff4017145db4dd4eac
-classification: L0 {'analysis': 1.0} confidence=0.9
+classification: fallback {'general': 1.0} fallback=no_rule_match
 selected: codex-sol-high (benchmark_score)
 candidates:
   codex-sol-high: score=0.777 quality=0.852 coverage=1.0 (sufficient) exact=0 cost_proxy=0.5

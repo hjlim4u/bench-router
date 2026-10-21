@@ -97,6 +97,8 @@ capabilities = ["filesystem_write"]
 
 권한은 Projects의 `worker.access`(`full` | `ask`) 설정을 따릅니다. 변경이 필요하면 `herdr-projects set worker.access ask [--repo NAME]`처럼 Projects에서 설정하세요. `ask`에서는 Claude의 편집이나 Codex의 worktree 밖 쓰기에 승인이 필요해 `blocked`가 될 수 있습니다. 자세한 내용은 [Projects 프로필과 권한](projects.md#프로필과-권한)을 보세요.
 
+live `route`와 `parallel`은 `codeburn quota --format json`을 실행할 수 있으면 Claude, Codex, Antigravity 프로필의 로그인 상태와 모든 quota window가 소진됐는지를 가용성 제약으로 사용합니다. 프로젝트의 `.bench-router/codeburn` 설치본을 자동으로 찾고, PATH의 `codeburn` 또는 `BENCH_ROUTER_CODEBURN`으로 이를 대체할 수 있습니다. CodeBurn이 없거나 조회에 실패하면 기존 executable PATH 검사만 수행합니다.
+
 ### aliases.toml
 
 출처마다 모델 이름이 다르므로 **정확한 문자열 → canonical ID**를 지정할 수 있습니다. 이 표는 필요할 때만 쓰는 예외 처리입니다.
@@ -189,8 +191,6 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
   "prompt": "pager.py의 paginate(...)가 첫 페이지를 빠뜨립니다. 고치세요.",
   "cwd": "/home/me/project",
   "context_files": ["pager.py"],
-  "categories": {"coding_repo": 1},
-  "category_confidence": 0.9,
   "constraints": {"max_cost_tier": "high", "min_context_tokens": 0, "local_only": false,
                   "timeout_ms": 900000, "required_capabilities": ["filesystem_write"]},
   "priority": "balanced",
@@ -199,7 +199,6 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 ```
 
 - 필수: `schema_version`, `task_id`(`[A-Za-z0-9][A-Za-z0-9_-]{0,63}`), `round`(≥1), `summary`(≤4000자), `prompt`(≤256 KiB), `cwd`(존재하는 절대 경로).
-- `categories`가 있으면 `category_confidence`도 있어야 합니다. 카테고리 값: `coding_repo`, `terminal_ops`, `code_gen`, `webdev`, `math_reasoning`, `analysis`, `writing`, `vision_doc`, `general`.
 - 선택: `facets`(`{axis: [value]}`). `wiki facets`에 등록된 작업 성격을 Orchestrator가 직접 태그할 때 사용하며, `evidence` 표 조회에 반영됩니다.
 - 모르는 필드, NaN/Infinity, 중복 JSON 키, 잘못된 UTF-8, cwd 밖을 가리키는 `context_files`는 모두 오류(exit 2)입니다.
 - live 위임 시 프롬프트와 실행 계약 문구를 합쳐 120 KiB를 넘으면 거부합니다. herdr가 프롬프트를 argv 인자로만 받기 때문입니다.
@@ -212,8 +211,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 아래는 `route --policy legacy`의 **기존 자동 선택**입니다. 기본 `vendor-guided` 정책의 우선순위·판단 응답·3.0 기록 계약은 [공식 가이드 기반 선택](vendor-guided-routing.md)에 있습니다. 기존 2.0 명시적 선택 계약은 [routing-contracts.md](routing-contracts.md), 사용법은 [orchestrator.md](orchestrator.md)에 있습니다.
 
 1. **분류**
-   - L0: Orchestrator가 준 `categories`를 `category_confidence ≥ 0.6`일 때 정규화해 사용합니다.
-   - L1: 그 외에는 summary 키워드와 `context_files` 확장자 규칙을 씁니다. 한 카테고리에서만 서로 다른 규칙이 2개 이상 맞아야 채택합니다.
+   - summary 키워드와 `context_files` 확장자 규칙을 씁니다. 한 카테고리에서만 서로 다른 규칙이 2개 이상 맞아야 채택합니다.
    - 나머지는 `general`로 분류하고 `fallback_reason`을 남깁니다.
 2. **하드 제약**: `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, `local_only`를 적용합니다. context가 있으면 `tokens.required_context`와 `max_estimated_cost_usd`도 적용합니다(`routing.CONSTRAINTS`). live에서는 herdr kind 지원 여부와 실행 파일 존재도 확인합니다. default 프로필에도 같은 제약을 적용합니다.
 3. **근거와 점수**

@@ -17,7 +17,7 @@ from pathlib import Path
 
 SCHEMA_VERSION = "1.0"
 POLICY_VERSION = "1.0"
-CLASSIFIER_VERSION = "l1-rules-1"
+CLASSIFIER_VERSION = "l1-rules-2"
 EPS = 1e-9
 
 CATEGORIES = ("coding_repo", "terminal_ops", "code_gen", "webdev", "math_reasoning",
@@ -34,7 +34,6 @@ POLICY = {
     "near_tie_epsilon": 0.02,
     "tier_proxy": {"low": 0.0, "medium": 0.5, "high": 1.0},
     "lambda_cost": {"quality": 0.0, "balanced": 0.15, "cost": 0.30},
-    "l0_min_confidence": 0.6,
 }
 
 # L1: summary 키워드와 context_files 확장자. 한 카테고리에서 서로 다른 규칙 2개 이상이 맞아야 채택.
@@ -188,8 +187,7 @@ def _parse_time(v, name):
 # ---------- task.json (04 입력 계약) ----------
 
 TASK_REQUIRED = ("schema_version", "task_id", "round", "summary", "prompt", "cwd")
-TASK_OPTIONAL = ("context_files", "categories", "category_confidence", "constraints", "priority", "exclude_profiles",
-                 "facets", "execution")
+TASK_OPTIONAL = ("context_files", "constraints", "priority", "exclude_profiles", "facets", "execution")
 EXECUTIONS = ("interactive", "headless")
 CONSTRAINT_DEFAULTS = {"max_cost_tier": "high", "min_context_tokens": 0, "local_only": False,
                        "timeout_ms": 900000, "required_capabilities": []}
@@ -452,22 +450,6 @@ def validate_task(raw):
         if not inside:
             raise InputError(f"task.context_files: path escapes cwd: {f}")
 
-    cats = raw.get("categories")
-    if cats is not None:
-        if not isinstance(cats, dict) or not cats:
-            raise InputError("task.categories: non-empty object required")
-        for k, v in cats.items():
-            if k not in CATEGORIES:
-                raise InputError(f"task.categories: unknown category {k!r}")
-            _num(v, f"task.categories.{k}", lo=0)
-        if sum(cats.values()) <= 0:
-            raise InputError("task.categories: sum must be > 0")
-        if "category_confidence" not in raw:
-            raise InputError("task.category_confidence: required when categories is present")
-    t["categories"] = cats
-    conf = raw.get("category_confidence")
-    t["category_confidence"] = None if conf is None else _num(conf, "task.category_confidence", 0, 1)
-
     cons = raw.get("constraints", {})
     if not isinstance(cons, dict):
         raise InputError("task.constraints: object required")
@@ -498,7 +480,7 @@ def validate_task(raw):
 
 
 def semantic_task_hash(t):
-    keys = ("prompt", "summary", "constraints", "priority", "categories", "cwd", "context_files", "exclude_profiles")
+    keys = ("prompt", "summary", "constraints", "priority", "cwd", "context_files", "exclude_profiles")
     extra = {"execution": t["execution"]} if t.get("execution", "interactive") != "interactive" else {}  # keeps old hashes
     return canonical_hash({**{k: t[k] for k in keys}, **extra})
 
@@ -659,13 +641,7 @@ def _kw_match(kw, text):
 
 
 def classify(t):
-    conf = t["category_confidence"]
-    base = {"self_reported_confidence": conf, "classifier_version": CLASSIFIER_VERSION}
-    if t["categories"] and conf >= POLICY["l0_min_confidence"]:
-        total = sum(t["categories"].values())
-        cats = {k: v / total for k, v in sorted(t["categories"].items()) if v > 0}
-        return {"stage": "L0", "categories": cats, "matched_rules": [], "fallback_reason": None, **base}
-
+    base = {"classifier_version": CLASSIFIER_VERSION}
     hits = {}
     for cat, (kws, exts) in L1_RULES.items():
         m = [f"{cat}:kw:{k}" for k in kws if _kw_match(k, t["summary"])]
@@ -943,7 +919,7 @@ def route_legacy(t, cfg, mapping, snap, snap_warnings, now, availability=None, c
         if availability is None:
             warnings.append(warn("availability_unverified", "dry-run: CLI/auth readiness not probed"))
         else:
-            warnings.append(warn("auth_unverified", "executable found; model access/login not probed"))
+            warnings.append(warn("availability_checked", "live preflight passed; provider may still reject execution"))
         if mode != "benchmark_score":
             warnings.append(warn("insufficient_evidence", f"no candidate with coverage >= "
                                  f"{POLICY['coverage_threshold']}; {mode}, not a benchmark-optimal choice"))

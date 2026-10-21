@@ -40,8 +40,7 @@ class P3(unittest.TestCase):
         cleanup_temp(self.tmp)
 
     def group(self, **kw):
-        task = {"schema_version": "1.0", "round": 1, "summary": "s", "prompt": "do it",
-                "categories": {"general": 1}, "category_confidence": 0.9}
+        task = {"schema_version": "1.0", "round": 1, "summary": "s", "prompt": "do it"}
         raw = {"schema_version": "1.0", "group_id": "g1", "cwd": self.cwd,
                "tasks": [{**task, "task_id": "t1"}, {**task, "task_id": "t2"}]}
         raw.update(kw)
@@ -81,8 +80,7 @@ class P3(unittest.TestCase):
         self.assertEqual((again["status"], len(fake.prompts)), ("completed", 2), again)
 
     def test_v40_group_v2_orchestrator_selections(self):
-        task = {"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "do it",
-                "categories": {"general": 1}, "category_confidence": 0.9}
+        task = {"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "do it"}
         context = {"schema_version": "2.0", "profiles": {p: {"metrics": {
             "cost.estimated_usd": {"value": 0.01, "unit": "usd", "source": "quote@1"}}} for p in ("a", "b")}}
         # Orchestrator는 group 수준 task(cwd=group.cwd)로 evaluate해서 digest를 얻는다

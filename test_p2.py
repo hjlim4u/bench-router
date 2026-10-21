@@ -233,7 +233,7 @@ class P2(unittest.TestCase):
 
     def task(self, **kw):
         raw = {"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "do the thing",
-               "cwd": self.cwd, "categories": {"general": 1}, "category_confidence": 0.9,
+               "cwd": self.cwd,
                "constraints": {"timeout_ms": 5000}}
         raw.update(kw)
         return r.validate_task(raw)
