@@ -80,7 +80,7 @@
 
 근거: [validate_group](../bench_router/parallel.py#L29), [plan](../bench_router/parallel.py#L70), [run_group](../bench_router/parallel.py#L161).
 
-그룹 입력에는 context나 외부 선택 목록이 없다. `plan()`은 기존 `route()`의 선택과 후보 순서로 fanout을 정하고, 각 dispatch에도 context를 전달하지 않는다. 단건에서는 표현 가능한 가격·용량 제약을 같은 형태로 병렬 경로에 적용할 수 없다. deliberate의 후속 round에는 프롬프트도 추가된다.
+그룹 입력에는 context나 외부 선택 목록이 없다. `plan()`은 기존 `route()`의 선택과 후보 순서로 fanout을 정하고, 각 dispatch에도 context를 전달하지 않는다. 단건에서는 표현 가능한 가격·용량 제약을 같은 형태로 병렬 경로에 적용할 수 없다.
 
 권고:
 

@@ -353,7 +353,7 @@ $BR feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success       # Orchestrat
   - `completed`된 작업의 Agent 터미널 pane은 자원 반환을 위해 자동으로 닫힙니다. 같은 대화 맥락을 이어서 작업하려면 `resume --run-id <RUN_ID> --cwd <DIR>`로 세션을 다시 엽니다.
   - 실패하거나 전달이 불확실한 실행이 동시 실행 제한(최대 4개)을 점유할 때는 작업 정지를 확인한 뒤 `coordination release --key <KEY> --confirmed-stopped --note "..."`로 해제합니다.
 - **병렬 위임 (`parallel`)**:
-  - 여러 하위 작업을 동시에 맡기거나, 같은 작업을 상위 N개 Agent에게 각자 격리된 worktree로 맡겨 결과를 비교합니다(`isolated` / `shared` 스크래치패드 공유 / `deliberate` 상호 검토 및 투표). → [상세 레퍼런스](docs/reference.md#병렬-위임과-협업-수준)
+  - 여러 하위 작업을 동시에 맡기거나, 같은 작업을 상위 N개 Agent에게 각자 격리된 worktree로 맡겨 결과를 비교합니다(`isolated` / `shared` 스크래치패드 공유). → [상세 레퍼런스](docs/reference.md#병렬-위임과-협업-수준)
 - **여러 Agent에서 Skill로 사용**:
   - `npx skills add hjlim4u/bench-router -g` 한 줄로 [`skills/bench-router`](skills/bench-router/SKILL.md)를 모든 에이전트에 설치하면, 어떤 프로젝트 경로에서든 호스트의 경량 서브에이전트(`bench-decider`)나 Jev API를 활용한 의사결정 워크플로우([`decision.md`](skills/bench-router/references/decision.md))까지 바로 사용할 수 있습니다. → [설정 방법](docs/reference.md#여러-agent에서-skill-사용-글로벌-또는-프로젝트별-설치)
 

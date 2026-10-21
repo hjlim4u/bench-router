@@ -5,6 +5,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import shutil
 import subprocess
 import time
@@ -20,6 +21,7 @@ HERDR_BIN = os.environ.get("BENCH_ROUTER_HERDR", "herdr")
 BACKEND = "projects-1.2"
 PROJECTS_VERSION_RE = re.compile(r"herdr-projects 1\.2\.1(?:[ +].*)?")
 SHORT_CALL_S = 15
+OBSERVE_FLOOR_S = 2  # one list/details round trip; keeps calls inside a 5s task budget
 START_CALL_S = 60  # add --delegate starts the agent before it answers
 MAX_PROMPT_ARG_BYTES = 120 * 1024  # the prompt is one argv entry (--desc); Linux caps one at 128 KiB
 RESULT_REL = Path(".bench-router") / "runs"  # agent writes results here, relative to its board worktree
@@ -73,8 +75,8 @@ def project_binding(session=None, runner=subprocess.run):
     return {"projects_version": version.split(" (")[0], "session": session}
 
 
-def worker_settings(profile):
-    """Router profile args → Projects work settings. Only a model and an effort can be expressed; else None."""
+def model_effort(profile):
+    """Profile args → (model, effort); None when the args hold anything else."""
     args, model, effort, i = profile["args"], None, None, 0
     while i < len(args) - 1:
         flag, value = args[i], args[i + 1]
@@ -87,10 +89,35 @@ def worker_settings(profile):
         else:
             return None
         i += 2
-    if i != len(args):
+    return (model, effort) if i == len(args) else None
+
+
+def worker_settings(profile):
+    """Router profile args → Projects work settings. Only a model and an effort can be expressed; else None."""
+    me = model_effort(profile)
+    if me is None:
         return None
+    model, effort = me
     return (["--worker.agent", profile["kind"] + (f"/{model}" if model else "")]
             + (["--worker.effort", effort] if effort else []))
+
+
+def headless_argv(profile):
+    """Profile → one-shot CLI argv (the prompt is appended). Approvals are off: nobody can answer them headless."""
+    me = model_effort(profile)
+    if me is None:
+        return None
+    model, effort = me
+    opt = lambda flag, v: [flag, v] if v else []
+    if profile["kind"] == "claude":
+        return ["claude", "-p", *opt("--model", model), *opt("--effort", effort), "--dangerously-skip-permissions"]
+    if profile["kind"] == "codex":
+        return ["codex", "exec", *opt("-m", model), *opt("-c", effort and f'model_reasoning_effort="{effort}"'),
+                "--dangerously-bypass-approvals-and-sandbox"]
+    if profile["kind"] == "agy":
+        # agy's -p takes the prompt as its value, so it must come last, right before the appended prompt
+        return ["agy", *opt("--model", model), *opt("--effort", effort), "--dangerously-skip-permissions", "-p"]
+    return None
 
 
 def probe(p, which=shutil.which):
@@ -244,7 +271,70 @@ def settle(rc, state):
     return rc
 
 
-def execute(rc, prompt, profile, session=None, runner=subprocess.run):
+def _wait(rc, wait_ms):
+    """Post-submission wait: the task deadline, or less when the caller asked to return early."""
+    remaining = max(0, (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds() * 1000)
+    return remaining if wait_ms is None else min(remaining, wait_ms)
+
+
+def _report(rc, state, msg, runner):
+    """Mirror a headless run on its agent-less board task; the board is a view, so a failure is only noted."""
+    if rc.get("thread_id"):
+        _, err = project_call(["report", rc["thread_id"], "--state", state, "--msg", msg], runner, raw=True)
+        if err:
+            _observe(rc, rc.get("herdr_state"), error=err, note=f"board report {state} failed")
+
+
+def _execute_headless(rc, prompt, profile, session, runner, wait_ms):
+    """Board task (no agent) for visibility + a one-shot CLI in its own herdr worktree pane. The prompt reaches
+    the CLI from input.txt, never through the typed command line."""
+    argv = headless_argv(profile)
+    if argv is None:
+        rc["status"] = "execution_failed"
+        _observe(rc, note=f"headless: no one-shot CLI for kind {profile['kind']!r} or args beyond model/effort")
+        save(rc)
+        return rc
+    rd, wt = Path(rc["run_dir"]), bench_dir(rc["cwd"]) / "worktrees" / "runs" / rc["run_id"]
+    obj, err = project_call(["worktree", "create", "--cwd", rc["cwd"], "--branch", f"br/{rc['run_id']}",
+                             "--path", str(wt), "--label", f"bench-router {rc['task_id']} r{rc['round']}", "--no-focus"],
+                            runner, timeout_s=START_CALL_S, exe=HERDR_BIN)
+    res = (obj or {}).get("result") if isinstance(obj, dict) else None
+    try:
+        rc.update(pane_id=res["root_pane"]["pane_id"], workspace_id=res["workspace"]["workspace_id"],
+                  worktree=res["worktree"]["path"], branch=res["worktree"]["branch"])
+    except (KeyError, TypeError):
+        rc["status"] = "execution_failed"
+        _observe(rc, error=err, note="headless: herdr worktree create failed or returned an unexpected shape")
+        save(rc)
+        return rc
+    save(rc)
+    obj, err = project_call(["add", "br-" + rc["run_id"], "--desc", prompt, "--repo", rc["cwd"], "--json"],
+                            runner, timeout_s=SHORT_CALL_S)
+    if not err and isinstance(obj, dict) and re.fullmatch(r"[^/\s]+/[0-9]+", str(obj.get("id", ""))):
+        rc["thread_id"] = obj["id"]  # agent-less board task: a view of this run, never delegated
+    else:
+        _observe(rc, error=err, note="headless: board task not created; the run continues without it")
+    _report(rc, "working", "headless run", runner)
+    q = shlex.quote
+    script = (f"cd {q(rc['worktree'])} && {shlex.join(argv)} \"$(cat {q(str(rd / 'input.txt'))})\"; "
+              f"echo $? > {q(str(rd / 'exit_code.tmp'))} && mv {q(str(rd / 'exit_code.tmp'))} {q(str(rd / 'exit_code'))}")
+    rc["delivery_state"] = "submission_attempted"
+    save(rc)  # Persist before typing the command: a lost response must never start a second CLI.
+    _, err = project_call(["pane", "run", rc["pane_id"], shlex.join(["sh", "-c", script])], runner, raw=True, exe=HERDR_BIN)
+    if err:
+        rc.update(status="delivery_uncertain", delivery_state="uncertain")
+        _observe(rc, error=err, note="headless: pane run unconfirmed; inspect the pane, never rerun")
+        save(rc)
+        return rc
+    return collect(rc, _wait(rc, wait_ms), session, runner)
+
+
+def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=None):
+    if rc.get("execution") == "headless":
+        if project_binding(session, runner) != rc["project_binding"]:
+            raise r.InputError("Projects version changed before submission")
+        r.atomic_write(Path(rc["run_dir"]) / "input.txt", prompt.encode("utf-8"))
+        return _execute_headless(rc, prompt, profile, session, runner, wait_ms)
     settings = worker_settings(profile)
     if settings is None:
         rc["status"] = "execution_failed"
@@ -271,12 +361,37 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run):
         return rc
     rc["thread_id"] = obj["id"]  # the board task id (repo/N)
     save(rc)
-    remaining = max(0, (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds() * 1000)
+    remaining = _wait(rc, wait_ms)
     if remaining <= 0:
         rc["status"] = "timed_out"
         save(rc)
         return rc
     return collect(rc, remaining, session, runner)
+
+
+def _poll_headless(rc, runner, timeout_s):
+    """One observation of a headless run: its exit_code file, else whether its pane still exists."""
+    code = Path(rc["run_dir"]) / "exit_code"
+    if code.exists():
+        rc.update(exit_code=code.read_text("utf-8").strip(), delivery_state="activity_observed", process_exited=True)
+        settle(rc, "done")
+        if rc["status"] == "result_invalid" and rc["exit_code"] != "0":
+            rc["status"] = "execution_failed"
+            _observe(rc, "done", note=f"headless CLI exited {rc['exit_code']} without a valid result")
+        if rc["status"] == "completed":
+            release(rc, runner)
+        _report(rc, "done" if rc["status"] == "completed" else "error", rc["status"], runner)
+        return
+    obj, err = project_call(["pane", "get", rc["pane_id"]], runner, timeout_s=timeout_s, exe=HERDR_BIN)
+    if "pane_not_found" in json.dumps(err or obj or {}):  # closed by hand = stopped
+        rc.update(status="execution_failed", process_exited=True)  # closing the pane ends its shell and CLI
+        _observe(rc, note="headless pane closed before the CLI finished")
+        _report(rc, "error", "pane closed", runner)
+    elif err:
+        raise r.InputError(err["message"])
+    else:
+        rc["status"] = "timed_out"
+        _observe(rc, "working", note="headless CLI still running")
 
 
 def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
@@ -290,48 +405,54 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
         return rc
     if rc["delivery_state"] == "not_attempted":
         return rc
-    if not rc.get("thread_id"):
+    headless = rc.get("execution") == "headless"
+    if not headless and not rc.get("thread_id"):
         rc.update(status="delivery_uncertain", delivery_state="uncertain")
         save(rc)
         return rc
     deadline = time.monotonic() + wait_ms / 1000
-    timeout = lambda: min(SHORT_CALL_S, max(0.001, deadline - time.monotonic())) if wait_ms > 0 else SHORT_CALL_S
+    # Calls stay within the wait budget, but never below a floor: a near-zero budget made the last poll time out
+    # and misreported a working agent as delivery_uncertain.
+    timeout = lambda: min(SHORT_CALL_S, max(OBSERVE_FLOOR_S, deadline - time.monotonic())) if wait_ms > 0 else SHORT_CALL_S
     while True:
         try:
-            if project_binding(session, runner) != rc["project_binding"]:
+            if headless:
+                _poll_headless(rc, runner, timeout())
+            elif project_binding(session, runner) != rc["project_binding"]:
                 raise r.InputError("Projects version or session changed; inspect the recorded worker")
-            rows, err = project_call(["list", "--all", "--json"], runner, timeout_s=timeout())
-            if err:
-                raise r.InputError(err["message"])
-            row = next((x for x in rows if isinstance(x, dict) and x.get("id") == rc["thread_id"]), None) \
-                if isinstance(rows, list) else None
-            if not row or row.get("title") != "br-" + rc["run_id"]:
-                raise r.InputError("Projects task is missing or its title differs from the receipt")
-            stage, state = row.get("stage"), row.get("state")
-            if stage in AT_REST_STAGES:  # the board took the agent's finish; its work is in the task worktree
-                det, err = project_call(["details", rc["thread_id"], "--json"], runner, timeout_s=timeout())
-                if err or not isinstance(det, dict) or (det.get("task") or {}).get("id") != rc["thread_id"] \
-                        or not det.get("worktree") or not str(det.get("agent", "")).startswith(rc["kind"]):
-                    raise r.InputError("Projects task details differ from the receipt")
-                rc.update(worktree=det["worktree"], branch=det.get("branch"), delivery_state="activity_observed")
-                settle(rc, "done")
-                if rc["status"] == "completed":
-                    release(rc, runner)
-            elif state == "blocked":
-                rc["status"] = "blocked"
-                rc["diagnostic_tail"] = row.get("msg")
-                if stage not in PENDING_STAGES:
-                    rc["delivery_state"] = "activity_observed"
-                _observe(rc, state, note=f"Projects stage {stage}: {row.get('msg') or ''}")
-            elif state == "error" or stage in FAILED_STAGES:
-                rc["status"] = "execution_failed"
-                _observe(rc, state, note=f"Projects stage {stage}: {row.get('msg') or ''}")
-            elif stage in PENDING_STAGES:
-                rc["status"] = "timed_out"
-                _observe(rc, state, note="Projects has not started the agent yet")
             else:
-                rc.update(status="timed_out", delivery_state="activity_observed")
-                _observe(rc, state, note=f"Projects stage {stage}")
+                rows, err = project_call(["list", "--all", "--json"], runner, timeout_s=timeout())
+                if err:
+                    raise r.InputError(err["message"])
+                row = next((x for x in rows if isinstance(x, dict) and x.get("id") == rc["thread_id"]), None) \
+                    if isinstance(rows, list) else None
+                if not row or row.get("title") != "br-" + rc["run_id"]:
+                    raise r.InputError("Projects task is missing or its title differs from the receipt")
+                stage, state = row.get("stage"), row.get("state")
+                if stage in AT_REST_STAGES:  # the board took the agent's finish; its work is in the task worktree
+                    det, err = project_call(["details", rc["thread_id"], "--json"], runner, timeout_s=timeout())
+                    if err or not isinstance(det, dict) or (det.get("task") or {}).get("id") != rc["thread_id"] \
+                            or not det.get("worktree") or not str(det.get("agent", "")).startswith(rc["kind"]):
+                        raise r.InputError("Projects task details differ from the receipt")
+                    rc.update(worktree=det["worktree"], branch=det.get("branch"), delivery_state="activity_observed")
+                    settle(rc, "done")
+                    if rc["status"] == "completed":
+                        release(rc, runner)
+                elif state == "blocked":
+                    rc["status"] = "blocked"
+                    rc["diagnostic_tail"] = row.get("msg")
+                    if stage not in PENDING_STAGES:
+                        rc["delivery_state"] = "activity_observed"
+                    _observe(rc, state, note=f"Projects stage {stage}: {row.get('msg') or ''}")
+                elif state == "error" or stage in FAILED_STAGES:
+                    rc.update(status="execution_failed", process_exited=stage == "stopped" or rc.get("process_exited", False))
+                    _observe(rc, state, note=f"Projects stage {stage}: {row.get('msg') or ''}")
+                elif stage in PENDING_STAGES:
+                    rc["status"] = "timed_out"
+                    _observe(rc, state, note="Projects has not started the agent yet")
+                else:
+                    rc.update(status="timed_out", delivery_state="activity_observed")
+                    _observe(rc, state, note=f"Projects stage {stage}")
         except (r.InputError, OSError) as e:
             rc.update(status="delivery_uncertain", delivery_state="uncertain")
             _observe(rc, note=str(e))
@@ -343,7 +464,8 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
 
 def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
              profile_id=None, context=None, selection_mode="parallel_pinned",
-              selection=None, check_digest=True, decision_options=None):
+              selection=None, check_digest=True, decision_options=None, wait_ms=None):
+    """wait_ms: how long to wait after submission (None = until the task deadline; 0 = return at once)."""
     from . import coordination as co
     key = co.key_for(t)
     try:
@@ -368,7 +490,7 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
             if not fresh and not existing:
                 raise co.Conflict("recorded native submission has no receipt; inspect effects before resolving, never resend")
             result = _dispatch(t, cfg, mapping, snap, snap_warnings, session, runner, which,
-                               profile_id, context, selection_mode, selection, check_digest, decision_options)
+                               profile_id, context, selection_mode, selection, check_digest, decision_options, wait_ms)
             if result.get("run_id"):
                 co.observe_receipt(load_receipt(t["cwd"], result["run_id"]))
             elif fresh:
@@ -380,7 +502,7 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
 
 def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
              profile_id=None, context=None, selection_mode="parallel_pinned",
-              selection=None, check_digest=True, decision_options=None):
+              selection=None, check_digest=True, decision_options=None, wait_ms=None):
     """live route. 선택 → receipt → herdr 실행. 같은 (task_id, round)는 재전송 없이 collect.
     profile_id: 제약·가용성을 통과한 후보 중 이 프로필로 고정(parallel fanout).
     selection: Orchestrator 선택 기록(validate_selection). digest가 지금 입력과 다르면 실행하지 않는다(stale_assessment).
@@ -404,7 +526,7 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                     return {**prior, "status": "conflict", "run_id": rc["run_id"],
                             "warnings": prior["warnings"] + [r.warn("profile_round_conflict",
                                                                   "same task_id/round already uses another profile")]}
-                rc = collect(rc, t["constraints"]["timeout_ms"], session, runner)
+                rc = collect(rc, t["constraints"]["timeout_ms"] if wait_ms is None else wait_ms, session, runner)
                 out = output(prior, rc, reused=True)
                 if selection is not None and any(prior.get("selection", {}).get(k) != v for k, v in selection.items()):
                     out["warnings"] = out.get("warnings", []) + [r.warn(
@@ -434,7 +556,7 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
             rc = {"schema_version": r.SCHEMA_VERSION, "task_id": t["task_id"], "round": t["round"],
                   "semantic_task_hash": res["task_hash"], "run_id": run_id, "nonce": secrets.token_hex(16),
                   "backend": BACKEND, "project_binding": project_binding(session, runner),
-                  "kind": profile["kind"], "thread_id": None,
+                  "kind": profile["kind"], "thread_id": None, "execution": t["execution"],
                   "profile": profile["id"], "profile_fingerprint": res["selected"]["profile_fingerprint"],
                   "cwd": t["cwd"], "run_dir": str(run_dir(t["cwd"], run_id)),
                   "worktree": None, "branch": None,
@@ -457,7 +579,7 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
             r.atomic_write(Path(rc["run_dir"]) / "decision.json",
                            json.dumps({**res, "assessment": assessment}, ensure_ascii=False).encode("utf-8"))
             save(rc)  # receipt 저장 실패 시 예외 → 전송하지 않음
-            return output(res, execute(rc, prompt, profile, session, runner))
+            return output(res, execute(rc, prompt, profile, session, runner, wait_ms))
     except Busy as e:
         return {**res, "status": "conflict", "warnings": res["warnings"] + [r.warn("dispatch_lock", str(e))]}
 
@@ -508,6 +630,78 @@ def resume_run(cwd, run_id, runner=subprocess.run):
     return {**output(None, rc), "resumed": rc["resumed"]}
 
 
+def tell_run(cwd, run_id, text, runner=subprocess.run):
+    """Relay one explicit orchestrator message to a run's live agent. Never automatic; logged before sending."""
+    cwd = os.path.realpath(cwd)
+    if not isinstance(text, str) or not text.strip() or len(text.encode("utf-8")) > MAX_PROMPT_ARG_BYTES:
+        raise r.InputError(f"message: nonempty text up to {MAX_PROMPT_ARG_BYTES} bytes required")
+    rc = _target(cwd, run_id)
+    if rc.get("execution") == "headless":
+        raise r.InputError("headless runs take no messages; use the shared scratchpad or a new round")
+    if rc.get("backend") != BACKEND or not rc.get("thread_id"):
+        raise r.InputError("only a Projects 1.2.1 run with a board task can receive a message")
+    if rc["status"] in SETTLED_STATUSES and not rc.get("resumed"):
+        raise r.InputError("run is settled; `resume` it first (tell on a finished board task starts a new agent)")
+    if project_binding(rc["herdr_session"], runner) != rc["project_binding"]:
+        raise r.InputError("Projects version or session changed; inspect the recorded worker")
+    if not rc.get("resumed"):  # the receipt lags until collect: ask the board whether the agent already finished
+        rows, err = project_call(["list", "--all", "--json"], runner)
+        row = next((x for x in rows if isinstance(x, dict) and x.get("id") == rc["thread_id"]), None) \
+            if isinstance(rows, list) else None
+        if err or row is None:
+            raise r.InputError(f"board task {rc['thread_id']} not observable; inspect it before sending")
+        if row.get("stage") in AT_REST_STAGES | FAILED_STAGES:
+            raise r.InputError(f"task finished on the board (stage {row.get('stage')}); collect first")
+    # No dispatch lock or receipt write: a blocking parallel/collect on this cwd must not stall the message.
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    _log_event(rc, {"sha256": digest, "state": "attempted", "bytes": len(text.encode("utf-8")), "text": text})
+    obj, err = project_call(["tell", rc["thread_id"], text, "--json"], runner)
+    log = _log_event(rc, {"sha256": digest, "state": "uncertain" if err else "sent", "error": err})
+    return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain" if err else "sent",
+            "run_id": rc["run_id"], "thread_id": rc["thread_id"], "sha256": digest, "messages_path": str(log),
+            **({"error": err} if err else {})}
+
+
+def stop_run(cwd, run_id, runner=subprocess.run):
+    """Stop one live run: the board stops its agent, or a headless run's workspace is closed (ending its CLI).
+    The next collect records it as execution_failed. Never automatic; logged like a message."""
+    rc = _target(os.path.realpath(cwd), run_id)
+    if rc["status"] in SETTLED_STATUSES:
+        raise r.InputError(f"run is already settled ({rc['status']}); nothing to stop")
+    if rc.get("execution") == "headless":
+        if not rc.get("workspace_id"):
+            raise r.InputError("headless run has no recorded workspace; inspect it before stopping")
+        argv, exe = ["workspace", "close", rc["workspace_id"]], HERDR_BIN  # every pane, not just the CLI's
+    else:
+        if rc.get("backend") != BACKEND or not rc.get("thread_id"):
+            raise r.InputError("only a Projects 1.2.1 run with a board task can be stopped")
+        argv, exe = ["stop", rc["thread_id"]], None
+    _log_event(rc, {"state": "stop_attempted"})
+    _, err = project_call(argv, runner, raw=True, exe=exe)
+    log = _log_event(rc, {"state": "stop_uncertain" if err else "stop_sent", "error": err})
+    return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain" if err else "stop_sent",
+            "run_id": rc["run_id"], "thread_id": rc.get("thread_id"), "messages_path": str(log),
+            **({"error": err} if err else {})}
+
+
+def _target(cwd, run_id):
+    """The run a control command acts on: the given run, else the only unsettled one under cwd."""
+    if run_id:
+        return load_receipt(cwd, run_id)
+    live = [x for x in receipts(cwd) if x["status"] not in SETTLED_STATUSES]
+    if len(live) != 1:  # one active run per workspace (overlap guard), so a parallel member's worktree identifies it
+        raise r.InputError(f"--run-id required: {len(live)} unsettled runs under {cwd}")
+    return live[0]
+
+
+def _log_event(rc, entry):
+    """Append one control event (message, stop) to the run's messages.jsonl; returns the log path."""
+    log = Path(rc["run_dir"]) / "messages.jsonl"
+    with open(log, "a", encoding="utf-8") as f:  # shortcut: one O_APPEND write per line; lock if senders get concurrent
+        f.write(json.dumps({"at": _iso(_now()), **entry}, ensure_ascii=False) + "\n")
+    return log
+
+
 def collect_run(cwd, run_id, wait_ms, session=None, runner=subprocess.run):
     from . import coordination as co
     cwd = os.path.realpath(cwd)
@@ -523,6 +717,23 @@ def collect_run(cwd, run_id, wait_ms, session=None, runner=subprocess.run):
         return {"schema_version": r.SCHEMA_VERSION, "status": "conflict", "run_id": run_id,
                 "warnings": [r.warn("dispatch_lock", str(e))]}
     return {**output(None, rc), "coordination_key": co.key_for(rc)}
+
+
+def collect_many(runs, wait_ms, until="any", session=None, runner=subprocess.run):
+    """Poll several runs (cwd, run_id) with collect_run until any or all of them need the caller:
+    settled or blocked. A utility over collect; choosing among the runs stays with the caller."""
+    if until not in ("any", "all") or not runs:
+        raise r.InputError("collect: one or more runs and until any|all required")
+    deadline, outs = time.monotonic() + wait_ms / 1000, {}
+    while True:
+        for cwd, run_id in runs:
+            if outs.get(run_id, {}).get("status") not in SETTLED_STATUSES:
+                outs[run_id] = collect_run(cwd, run_id, 0, session, runner)
+        ready = [k for k, o in outs.items() if o["status"] in SETTLED_STATUSES | {"blocked"}]
+        if (ready and until == "any") or len(ready) == len(runs) or time.monotonic() >= deadline:
+            return {"schema_version": r.SCHEMA_VERSION, "status": "ok" if ready and (until == "any" or len(ready) == len(runs))
+                    else "timed_out", "until": until, "ready": ready, "runs": [outs[k] for _, k in runs]}
+        time.sleep(min(1, max(0, deadline - time.monotonic())))
 
 
 def feedback(cwd, run_id, outcome, evaluator=None, note=None):

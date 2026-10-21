@@ -57,10 +57,15 @@ Router는 입력과 결과 계약을 `input.txt`로 원자 저장하고 제출 �
 
 - 결과 파일은 agent worktree의 `.bench-router/runs/RUN_ID/`에 쓰이고, 검사를 통과하면 `<cwd>/.bench-router/runs/RUN_ID/`로 복사된다. 출력의 `worktree`/`branch`가 agent 작업 위치다. board는 완료 시 작업을 그 브랜치에 커밋하고 `approval`에서 기다린다. 병합(`approve`)은 사람이 결정한다.
 - 자원 반환: `completed`가 되면 task worktree 안의 herdr pane(agent)을 닫는다(`herdr pane list` → `pane close`, 마지막 pane이면 space도 사라진다). 그 안의 agent가 `working`/`blocked`이면 닫지 않고 다음 collect에서 다시 시도한다. 닫은 pane과 agent session은 receipt·출력의 `release`에 남는다. `completed`가 아닌 실행은 닫지 않는다.
-- 이어서 작업: `resume --cwd CWD --run-id RUN`이 board의 `reopen ID`를 호출해 space를 다시 열고 같은 대화로 agent를 재시작한다(아무것도 보내지 않음). 재개한 session은 Router가 다시 닫지 않는다. 그다음 지시는 board에서 `herdr-projects tell ID "..."`로 한다.
+- 이어서 작업: `resume --cwd CWD --run-id RUN`이 board의 `reopen ID`를 호출해 space를 다시 열고 같은 대화로 agent를 재시작한다(아무것도 보내지 않음). 재개한 session은 Router가 다시 닫지 않는다. 그다음 지시는 `tell --cwd CWD --run-id RUN --message "..."`로 보낸다.
 - 응답 유실: 같은 task/round는 재제출하지 않는다. task ID를 잃으면 board에서 `br-RUN_ID` 제목으로 효과를 점검한 뒤 명시적으로 해결한다.
 - 실행 중·질문 대기: `collect --cwd CWD --run-id RUN --wait-ms N`으로 같은 실행을 관찰한다. 질문·권한은 board(`herdr-projects details ID`)에서 기존 사용자 승인 절차로 처리한다.
 - 후속 검토·수정: 상위 agent가 이전 결과와 검토 내용을 새 task round에 명시한다. 자동 retry·tell·재귀 위임은 하지 않는다.
+- 기다리지 않는 시작: `route`/`parallel`의 `--wait-ms N`은 제출(`add`) 뒤의 대기만 줄인다. 제출 자체는 계속 task의 `timeout_ms` 예산을 쓴다. `0`이면 제출 직후 `timed_out`을 돌려주고, 회수는 `collect`나 같은 group 재실행으로 한다.
+- 비대화형 실행: task `execution: headless`는 board agent를 쓰지 않는다. herdr worktree pane에서 one-shot CLI를 실행하고, board에는 agent 없는 task로 상태만 `report`한다. 자세한 흐름은 [reference](reference.md#비대화형-실행).
+- 중단: `stop --cwd CWD [--run-id RUN]`이 board `stop ID`(비대화형은 `herdr workspace close`)를 호출하고 `messages.jsonl`에 기록한다. 상위 agent가 명시적으로 호출할 때만 멈춘다. board가 `stopped`를 보고하거나 비대화형 workspace가 닫히면 agent가 멈춘 것이 확인되므로, 다음 `collect`가 `execution_failed`로 기록하고 동시 실행 자리를 반납한다(`coordination release` 불필요).
+- 여러 run 대기: `collect --run CWD RUN_ID --run … --until any|all --wait-ms N`은 run마다 `collect`를 반복해, 하나 또는 전부가 settle·`blocked`가 되면 반환한다. 어떤 결과를 채택할지는 상위 agent가 정한다.
+- 실행 중 지시: `tell --cwd CWD [--run-id RUN] --message TEXT | --message-file F`가 board `tell ID TEXT`로 그 run의 agent에 메시지 하나를 전달한다. Router가 스스로 보내지 않고 상위 agent가 명시적으로 호출할 때만 보낸다. 보내기 전후를 `runs/RUN_ID/messages.jsonl`에 기록하고(`attempted` → `sent`/`uncertain`), 응답이 유실되면 재전송 전에 board에서 확인한다. settle된 run은 board가 agent를 새로 시작하므로 `resume` 뒤에만 받는다. receipt는 `collect` 때 갱신되므로, 보내기 전에 board stage를 다시 보고 이미 끝난 task(approval·done·failed 등)면 거부한다. 비대화형(`execution: headless`) run은 받지 않는다. dispatch 잠금을 잡지 않아 같은 cwd에서 `collect`·`parallel`이 기다리는 중에도 보낼 수 있다. `--run-id`를 생략하면 cwd의 유일한 미완료 run을 쓴다.
 - `completed`는 run ID·nonce·프로필 지문·결과 경로·크기·SHA-256 검사를 통과한 수신 상태다. 작업 성공은 `task_outcome`, 결과 채택은 별도 `coordination feedback`으로 기록한다.
 - 실패나 전달 불확실 실행은 worker 정지와 부분 효과를 확인할 때까지 합산 4개 제한을 점유한다. `coordination release --key KEY --confirmed-stopped --note "..."`로 해제한다.
 - board에서 직접 만든 task는 Router의 실행 제한에 포함되지 않는다.
@@ -69,9 +74,8 @@ Router는 입력과 결과 계약을 `input.txt`로 원자 저장하고 제출 �
 
 `parallel`은 member마다 `<cwd>/.bench-router/worktrees/GROUP/LABEL` router worktree를 만들어 receipt 공간과 board task의 `--repo`로 쓴다.
 board가 그 HEAD에서 다시 agent worktree를 만들므로, member의 `worktree`/`branch`는 board가 보고한 위치로 바뀐다.
-`deliberate` 2차 라운드 전에는 1차 board 브랜치를 router worktree에 `merge --ff-only`해 agent가 자기 1차 결과에서 이어가게 한다.
-`shared`/`deliberate` scratchpad는 agent worktree 밖이므로 `worker.access ask`에서는 쓰기마다 승인이 필요하다.
-worktree의 비교·병합·제거는 상위 agent가 담당한다. fanout, stale assessment 일괄 거부, 부분 실패 보존, 협의 라운드와 투표 계약은 유지한다.
+`shared` scratchpad는 agent worktree 밖이므로 `worker.access ask`에서는 쓰기마다 승인이 필요하다.
+worktree의 비교·병합·제거는 상위 agent가 담당한다. fanout, stale assessment 일괄 거부, 부분 실패 보존 계약은 유지한다.
 
 ## 검증
 

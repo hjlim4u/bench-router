@@ -29,7 +29,7 @@
 - `routing.assess()`: 후보 평가 공통 경계. 이름 붙은 `CONSTRAINTS`(통과·실패 결과에 관측값·기준값), `benchmark_evaluation()`. `route` = assess + legacy `select`, `evaluate` = assess(2.0 출력).
 - context 2.0: `METRICS` 정의표(대상·타입·단위·수명), `observed_at`/`expires_at`/`status: missing`, 미등록 지표는 전달만, 공급자 견적(`cost.estimated_usd`) 우선. context 1.0은 변환해서 받음.
 - `assessment_digest` + `route --selection` + `stale_assessment`(exit 14). `decision.json`에 선택 근거와 evaluate 2.0 전체.
-- group 2.0: task별 context·selections, plan 시점 digest 검사, stale이면 그룹 전체 미실행, deliberate `estimate_round1_only`.
+- group 2.0: task별 context·selections, plan 시점 digest 검사, stale이면 그룹 전체 미실행. `deliberate` 모드는 제거(후속 라운드·투표는 Orchestrator 몫).
 - 실환경 herdr로는 이 변경을 검증하지 않았다(fake herdr fixture만).
 
 ## 재현
@@ -68,7 +68,7 @@ herdr는 `~/.local/bin/herdr`(0.9.3). 비로그인 셸에서는 PATH에 없으�
   - run: `~/br-smoke/.bench-router/runs/02c537a0-5e05-476b-a512-0860b83ca2dc/`
 
 ## 실측으로 확인된 사실 (E1 → E2)
-- Arena는 parquet이지만 HF datasets-server `/filter` JSON(100행/요청)으로 같은 행을 받음 → pyarrow 불필요. 컬럼: model_name, organization, license, rating, rating_lower/upper, variance, vote_count, rank, category, leaderboard_publish_date. license CC BY 4.0.
+- Arena는 revision sha에 고정한 config별 `latest` parquet를 받아 pyarrow로 디코드하고 category는 로컬에서 거른다(2026-10-21, `/filter` JSON 대체: 26요청·600초 deadline·wiki unit 47개 누락 → 14요청·14초·누락 0). 컬럼: model_name, organization, license, rating, rating_lower/upper, variance, vote_count, rank, category, leaderboard_publish_date. license CC BY 4.0.
 - text subset에 `math` category 존재(→ `arena_text_math` 사용 가능). webdev 카테고리: overall/webdev/webdev-html/webdev-react/image_to_webdev.
 - **원본에 같은 model_name의 별개 항목 존재**(webdev/overall `gpt-5.3-codex (codex-harness)`, rank 86/101). 처리: 모집단 유지, `name#rank=N`으로 구분해 이름만으로 매칭 안 됨.
 - Windows Python에서는 HF TLS 검증 실패(사내 인증서 추정). WSL에서는 정상.

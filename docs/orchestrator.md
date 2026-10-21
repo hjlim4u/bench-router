@@ -87,7 +87,7 @@ The run response includes `delivery_state` and `reassignment`. `safe_to_retry` m
 `parallel --group group.json` accepts schema 2.0. Each task carries its own context and the profiles the Orchestrator chose; fanout is the number of selections:
 
 ```json
-{"schema_version": "2.0", "group_id": "g1", "cwd": "/repo", "isolation": "deliberate", "max_parallel": 4,
+{"schema_version": "2.0", "group_id": "g1", "cwd": "/repo", "isolation": "shared", "max_parallel": 4,
  "tasks": [{"task": {"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "...", "prompt": "..."},
             "context": {"schema_version": "2.0", "profiles": {"...": {"metrics": {}}}},
             "selections": [{"schema_version": "2.0", "profile": "b", "assessment_digest": "...",
@@ -97,6 +97,5 @@ The run response includes `delivery_state` and `reassignment`. `safe_to_retry` m
 - Obtain each `assessment_digest` by running `evaluate` on the task with `cwd` set to the group `cwd` and the original prompt. Workers run in their own worktrees with collaboration text appended, so their tasks differ by design. The digest is checked once at planning time. Each worker dispatch re-checks context, constraints, and availability.
 - If any selection is stale, the whole group returns `stale_assessment` and nothing runs.
 - Each worker's `max_estimated_cost_usd` is a per-call allowance. The group total, and how a remaining budget is split across workers, are the Orchestrator's responsibility.
-- In `deliberate` mode the second round has a longer prompt. The router does not re-estimate it and warns `estimate_round1_only`.
 
 Schema 1.0 groups keep the legacy behaviour: the router's own `route` choice plus the next candidates, up to `fanout`.
