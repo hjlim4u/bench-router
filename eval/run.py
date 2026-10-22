@@ -39,9 +39,9 @@ def cli(*args, timeout=None):
 
 
 def task_json(t, cwd, exclude):
-    tid, cat, summary, prompt = t[:4]
+    tid, _, summary, prompt = t[:4]
     return {"schema_version": "1.0", "task_id": tid, "round": 1, "summary": summary, "prompt": prompt, "cwd": str(cwd),
-            "categories": {cat: 1}, "category_confidence": 0.9, "priority": "balanced",
+            "priority": "balanced",
             "constraints": {"timeout_ms": 600000, "required_capabilities": ["filesystem_write"]},
             "exclude_profiles": exclude}
 

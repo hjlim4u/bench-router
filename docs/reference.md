@@ -97,9 +97,15 @@ capabilities = ["filesystem_write"]
 
 권한은 Projects의 `worker.access`(`full` | `ask`) 설정을 따릅니다. 변경이 필요하면 `herdr-projects set worker.access ask [--repo NAME]`처럼 Projects에서 설정하세요. `ask`에서는 Claude의 편집이나 Codex의 worktree 밖 쓰기에 승인이 필요해 `blocked`가 될 수 있습니다. 자세한 내용은 [Projects 프로필과 권한](projects.md#프로필과-권한)을 보세요.
 
+live `route`와 `parallel`은 `codeburn quota --format json`을 실행할 수 있으면 Claude, Codex, Antigravity 프로필의 로그인 상태와 모든 quota window가 소진됐는지를 가용성 제약으로 사용합니다. 프로젝트의 `.bench-router/codeburn` 설치본을 자동으로 찾고, PATH의 `codeburn` 또는 `BENCH_ROUTER_CODEBURN`으로 이를 대체할 수 있습니다. CodeBurn이 없거나 조회에 실패하면 기존 executable PATH 검사만 수행합니다.
+
 ### aliases.toml
 
-출처마다 모델 이름이 다르므로, **정확한 문자열 → canonical ID**를 수동으로 관리합니다. reasoning effort가 다른 변형은 별개 모델로 취급합니다. 프로필의 effort와 같은 변형만 연결하세요.
+출처마다 모델 이름이 다르므로 **정확한 문자열 → canonical ID**를 지정할 수 있습니다. 이 표는 필요할 때만 쓰는 예외 처리입니다.
+
+alias가 없어도 refresh가 출처 모델명을 정규화해 프로필 `model_id`에 자동으로 잇습니다: 대소문자·`.`/공백/`-` 차이를 같게 보고, 끝의 effort 표기(`(High)`, `-high`)를 뗍니다. 예를 들어 `Claude Opus 5.5 (High)`, `claude-opus-5.5-high`, `claude-opus-5-5`는 모두 `claude-opus-5-5` 프로필에 붙습니다. 새 모델 프로필을 추가하면 다음 refresh에서 별도 설정 없이 연결됩니다. 명시 alias가 있으면 그쪽이 우선합니다.
+
+자동 매칭하지 않는 것: `-preview`, `(xHigh, Codex Harness)`처럼 이름이 달라지는 변형, 프로필에 없는 모델. 필요하면 아래처럼 직접 연결하세요. effort별 행은 프로필 effort와 같은 행이 우선하고 없으면 effort 표기가 없는 행을 씁니다.
 
 ```toml
 [arena]
@@ -130,10 +136,13 @@ capabilities = ["filesystem_write"]
 | `explain --task FILE [--context FILE]` | dry-run의 전체 후보·근거·제외 사유와 제약 결과·지표를 텍스트로 출력 |
 | `evaluate --task FILE [--context FILE]` | 선택 없이 전 프로필의 지표·제약 결과·benchmark 평가와 `assessment_digest` (Orchestrator용, [docs/orchestrator.md](orchestrator.md)) |
 | `route --task FILE --selection FILE` | Orchestrator가 고른 프로필을 선택 근거와 함께 실행. 평가 후 입력이 바뀌었으면 `stale_assessment` |
-| `route --task FILE` | 선택 후 herdr로 위임하고, 유한한 시간 안에 대기·회수 |
+| `route --task FILE [--wait-ms N]` | 선택 후 herdr로 위임하고, 유한한 시간 안에 대기·회수. `--wait-ms 0`은 제출 직후 반환 |
 | `parallel --group FILE [--dry-run]` | 여러 agent를 각자 worktree에서 병렬 위임 ([병렬 위임](#병렬-위임과-협업-수준)) |
 | `collect --run-id ID --cwd DIR [--wait-ms N]` | 기존 run을 관찰·회수. **프롬프트를 다시 보내지 않음** |
+| `collect --run CWD ID [--run …] --until any\|all [--wait-ms N]` | 여러 run을 하나라도(any) 또는 전부(all) 끝날 때까지 관찰 |
+| `stop --cwd DIR [--run-id ID]` | 실행 중인 run 중단(board stop, 비대화형은 workspace 닫기). 다음 collect에서 `execution_failed` |
 | `resume --run-id ID --cwd DIR` | 완료되어 닫힌 run의 board task와 agent 대화를 같은 세션으로 재개(프롬프트 전송 없음) |
+| `tell --cwd DIR [--run-id ID] --message TEXT \| --message-file F` | 실행 중(또는 resume한) run의 agent에 메시지 하나를 전달. `runs/ID/messages.jsonl`에 기록. 자동으로는 보내지 않음 |
 | `feedback --run-id ID --cwd DIR --outcome success\|partial\|fail [--evaluator X] [--note Y]` | Orchestrator의 검증 결과 기록 |
 | `coordination status\|release\|feedback` | 합산 활성 실행(최대 4개) 조회, worker 정지 확인 후 슬롯 해제(`release`), 채택 결과 기록 |
 
@@ -182,8 +191,6 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
   "prompt": "pager.py의 paginate(...)가 첫 페이지를 빠뜨립니다. 고치세요.",
   "cwd": "/home/me/project",
   "context_files": ["pager.py"],
-  "categories": {"coding_repo": 1},
-  "category_confidence": 0.9,
   "constraints": {"max_cost_tier": "high", "min_context_tokens": 0, "local_only": false,
                   "timeout_ms": 900000, "required_capabilities": ["filesystem_write"]},
   "priority": "balanced",
@@ -192,7 +199,6 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 ```
 
 - 필수: `schema_version`, `task_id`(`[A-Za-z0-9][A-Za-z0-9_-]{0,63}`), `round`(≥1), `summary`(≤4000자), `prompt`(≤256 KiB), `cwd`(존재하는 절대 경로).
-- `categories`가 있으면 `category_confidence`도 있어야 합니다. 카테고리 값: `coding_repo`, `terminal_ops`, `code_gen`, `webdev`, `math_reasoning`, `analysis`, `writing`, `vision_doc`, `general`.
 - 선택: `facets`(`{axis: [value]}`). `wiki facets`에 등록된 작업 성격을 Orchestrator가 직접 태그할 때 사용하며, `evidence` 표 조회에 반영됩니다.
 - 모르는 필드, NaN/Infinity, 중복 JSON 키, 잘못된 UTF-8, cwd 밖을 가리키는 `context_files`는 모두 오류(exit 2)입니다.
 - live 위임 시 프롬프트와 실행 계약 문구를 합쳐 120 KiB를 넘으면 거부합니다. herdr가 프롬프트를 argv 인자로만 받기 때문입니다.
@@ -205,8 +211,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 아래는 `route --policy legacy`의 **기존 자동 선택**입니다. 기본 `vendor-guided` 정책의 우선순위·판단 응답·3.0 기록 계약은 [공식 가이드 기반 선택](vendor-guided-routing.md)에 있습니다. 기존 2.0 명시적 선택 계약은 [routing-contracts.md](routing-contracts.md), 사용법은 [orchestrator.md](orchestrator.md)에 있습니다.
 
 1. **분류**
-   - L0: Orchestrator가 준 `categories`를 `category_confidence ≥ 0.6`일 때 정규화해 사용합니다.
-   - L1: 그 외에는 summary 키워드와 `context_files` 확장자 규칙을 씁니다. 한 카테고리에서만 서로 다른 규칙이 2개 이상 맞아야 채택합니다.
+   - summary 키워드와 `context_files` 확장자 규칙을 씁니다. 한 카테고리에서만 서로 다른 규칙이 2개 이상 맞아야 채택합니다.
    - 나머지는 `general`로 분류하고 `fallback_reason`을 남깁니다.
 2. **하드 제약**: `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, `local_only`를 적용합니다. context가 있으면 `tokens.required_context`와 `max_estimated_cost_usd`도 적용합니다(`routing.CONSTRAINTS`). live에서는 herdr kind 지원 여부와 실행 파일 존재도 확인합니다. default 프로필에도 같은 제약을 적용합니다.
 3. **근거와 점수**
@@ -244,7 +249,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 | source | 방식 | evidence | TTL / 최대 허용 경과 |
 |---|---|---|---|
 | `aa` | Artificial Analysis Free API, 전체 페이지 순회 | `aa_intelligence`, `aa_coding` 및 활성 wiki unit(`aa:*`) | 24h / 7d |
-| `arena` | LMArena `leaderboard-dataset`(CC BY 4.0), HF datasets-server `/filter` JSON | `arena_text`, `arena_text_math`, `arena_webdev`, `arena_document`, `arena_vision` 및 활성 wiki unit(`arena:*`) | 24h / 7d |
+| `arena` | LMArena `leaderboard-dataset`(CC BY 4.0), revision sha에 고정한 config별 `latest` parquet(pyarrow로 디코드, category는 로컬 필터) | `arena_text`, `arena_text_math`, `arena_webdev`, `arena_document`, `arena_vision` 및 활성 wiki unit(`arena:*`) | 24h / 7d |
 | `mg` | The Model Gap(`themodelgap.com/data`, CC BY 4.0) JSON | 활성 wiki unit(`mg:*`) | 24h / 7d |
 | `swe` | `--import` 수동 결과, SWE-bench Verified로 고정 | `swe_verified_exact` | 168h / 30d |
 | `tb` | `--import` 수동 결과, Terminal-Bench 4.0으로 고정 | `terminal_exact` | 168h / 30d |
@@ -351,9 +356,44 @@ run 디렉터리에는 `receipt.json`, `decision.json`, `input.txt`, `result.md`
 |---|---|
 | `isolated` (기본) | worktree 격리만. 서로의 존재를 모름 |
 | `shared` | 공용 scratchpad `<cwd>/.bench-router/groups/<group_id>/shared/`. agent는 자기 `<label>.md`·`<label>/`에만 쓰고 동료 노트를 읽어, 실패한 접근·발견·중간 실험 결과를 공유합니다. scratchpad는 agent worktree 밖이므로 board의 `worker.access`가 `ask`이면 쓰기마다 승인(`blocked`)이 필요합니다 |
-| `deliberate` | `shared` + 협의 라운드. 1차 `completed` member가 2명 이상이면 각 `result.md`를 `shared/<label>.result.md`로 복사하고, 1차 board 브랜치를 router worktree에 fast-forward한 뒤 같은 프로필로 `round+1`을 보냅니다. 각 agent는 동료 결과를 검토해 자기 안을 고치고 `shared/<label>.vote.json`(`{"best": label, "reason": ...}`)을 씁니다. 라우터는 다수결로 `consensus.winner`를 냅니다(동률이면 `null`) |
 
-출력은 member별 `profile`, `worktree`, `branch`, `rounds[]`(status, run_id, result_path, task_outcome, worktree, branch)와 `consensus`이며, `groups/<group_id>/group.json`에도 남습니다. 전부 `completed`면 exit 0, 아니면 `partial_failure`(16), 같은 group이 이미 실행 중이면 `conflict`(14)입니다. 2차 라운드는 새 agent라서 1차 대화 맥락은 없습니다. 상태는 worktree와 scratchpad로 이어집니다.
+출력은 member별 `profile`, `worktree`, `branch`, `rounds[]`(status, run_id, result_path, task_outcome, worktree, branch)이며, `groups/<group_id>/group.json`에도 남습니다. 전부 `completed`면 exit 0, 아니면 `partial_failure`(16), 같은 group이 이미 실행 중이면 `conflict`(14)입니다.
+
+### agent 간 통신
+
+Router는 multi-agent 패턴을 구현하지 않습니다. 패턴에 공통으로 나오는 통신 블록만 제공하고, 조합은 Orchestrator가 맡습니다.
+
+| 블록 | 방향 | 명령 |
+|---|---|---|
+| 작업 전달 | Orchestrator → agent, 시작 | `route` / `parallel`. `--wait-ms 0`이면 제출 직후 `timed_out`(실행 중)과 run_id를 돌려줌 |
+| 결과 회수 | agent → Orchestrator, 끝 | `collect --cwd --run-id [--wait-ms]`, 결과 계약 검사. parallel은 같은 group 재실행 |
+| 실행 중 지시 | Orchestrator → agent, 실행 중 | `tell` (대화형 실행만) |
+| 공유 상태 | agent ↔ agent, 실행 중 | `isolation: shared` 공용 scratchpad |
+| 중간 보고·질문 | agent → Orchestrator, 실행 중 | `collect`의 `blocked`·board 상태, 공유 노트 |
+
+여기에 패턴에서 자주 쓰는 기초 제어 두 가지를 유틸리티로 제공합니다. 어느 run을 고르고 언제 멈출지는 여전히 Orchestrator가 정합니다.
+
+| 유틸리티 | 명령 | 동작 |
+|---|---|---|
+| 여러 run 대기 | `collect --run CWD RUN_ID [--run …] --until any\|all [--wait-ms N]` | 각 run을 `collect`로 관찰. `any`는 하나라도, `all`은 전부 settle 또는 `blocked`가 되면 `ok`와 `ready`(run_id 목록)를 반환. 시간이 다 되면 `timed_out` |
+| 중단 | `stop --cwd CWD [--run-id RUN]` | 대화형은 board `stop`, 비대화형은 그 workspace를 닫아 CLI를 끝냄. `messages.jsonl`에 기록. 다음 `collect`에서 `execution_failed`가 되고 그 cwd의 동시 실행 자리를 반납 |
+
+예: best-of-N은 `--wait-ms 0`으로 N개를 시작하고, `collect --run … --until any`로 먼저 끝난 결과를 검토하고, 나머지는 `stop`합니다. 투표·라운드 진행은 이전 산출물을 넣은 새 `route` round로 합니다.
+
+member의 router worktree는 `<cwd>/.bench-router/worktrees/<group_id>/<label>`이며 `--dry-run` 출력에도 나옵니다. 그 안의 미완료 run은 하나뿐이라 `tell`을 `--run-id` 없이 보낼 수 있습니다.
+
+### 비대화형 실행
+
+task에 `"execution": "headless"`를 주면 board agent 대신 one-shot CLI로 실행합니다. 기본값은 `interactive`(board agent)입니다.
+
+1. `herdr worktree create`로 `<cwd>/.bench-router/worktrees/runs/<run_id>` worktree(브랜치 `br/<run_id>`)와 pane을 만듭니다.
+2. board에 agent 없는 task(`br-<run_id>`)를 추가하고 `report`로 working → done/error를 표시합니다. board task는 보기 전용이며 실패해도 실행은 계속됩니다.
+3. pane에서 `claude -p` / `codex exec` / `agy -p`를 프로필의 model·effort로 실행합니다. 프롬프트는 명령줄이 아니라 `runs/<run_id>/input.txt`로 전달합니다. 종료 코드는 `runs/<run_id>/exit_code`에 남습니다.
+4. `collect`는 board stage가 아니라 `exit_code`와 결과 계약으로 판정합니다. 실행 중이면 `timed_out`, pane이 닫혔으면 `execution_failed`입니다. 완료되면 pane을 닫습니다.
+
+- 지원 kind는 claude·codex·agy이고, 프로필 args는 model·effort뿐이어야 합니다(대화형과 같음).
+- **권한 확인을 끄고 실행합니다.** 답할 사람이 없기 때문입니다(`--dangerously-skip-permissions`, codex는 `--dangerously-bypass-approvals-and-sandbox`). 신뢰할 수 있는 저장소에만 쓰세요.
+- 실행 중 메시지는 받지 않습니다(`tell` 거부). 통신은 시작 입력, 결과, 공유 scratchpad뿐입니다.
 
 ---
 
@@ -367,7 +407,7 @@ python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination
 |---|---|
 | `test_p0.py` | 선택·입력 계약(V01–V10): 합성 기대값, 결측과 측정된 0, percentile, 결정성, 제약, near-tie 경계 |
 | `test_p1.py` | 수집·캐시(V11–V18): 페이지 순회, 부분 실패 시 last-good, 해시 동일 시 no-op, HTTP 오류와 시간 상한, 잠금과 원자 게시, alias와 버전 cohort |
-| `test_p3.py` | 병렬 위임(V30–V34): worktree 격리, fanout, shared scratchpad, deliberate 투표, 재실행 시 재전송 없음 (git 필요) |
+| `test_p3.py` | 병렬 위임(V30–V34): worktree 격리, fanout, shared scratchpad, 재실행 시 재전송 없음 (git 필요) |
 | `test_p2.py` | 위임(V19–V29): argv 전달, 반환 ID 사용, 시작 실패, 전송 직전 상태, 결과 계약·경로 공격, timeout 후 재전송 없음, crash 복구, 충돌·잠금 |
 
 현재 실행 테스트는 Projects 1.2.1 CLI(`src/cli/tasks.rs`)의 JSON 형태를 따르는 fake를 사용하며, task마다 실제 `git worktree`를 만듭니다. 아래의 직접 Herdr smoke 결과는 이전 실행 경로의 기록이며 Projects live 검증을 의미하지 않습니다. 실측 근거는 `docs/evidence/`에 있습니다(herdr help·API schema·skill, claude/codex `--help`).
@@ -383,7 +423,7 @@ python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination
 | Arena 실호출 | 성공 (revision `e16f9023…`). HF 장애 중에는 180초 상한에서 실패 처리되고 last-good 유지됨 |
 | herdr + Claude Code / Codex live 위임 | 성공. 미해결 run 차단, 재전송 없음, 결과 해시 일치, 정리 뒤 collect 확인 |
 | 두 후보를 점수로 비교한 live 선택 | general/balanced 작업에서 codex 선택 후 completed |
-| `parallel` live (2026-10-13, deliberate, fanout 2: claude + codex) | 두 worktree에서 동시 실행, 2라운드 모두 completed, scratchpad 노트 공유·투표 확인(서로에게 1표씩 → `winner=null`), 메인 작업 트리 깨끗. 약 2분 |
+| `parallel` live (2026-10-13, 현재는 제거된 deliberate 모드, fanout 2: claude + codex) | 두 worktree에서 동시 실행, 2라운드 모두 completed, scratchpad 노트 공유·투표 확인(서로에게 1표씩 → `winner=null`), 메인 작업 트리 깨끗. 약 2분 |
 | 작업군 비교 v1 (20 과제 × 2 프로필) | [eval/results/v1.md](../eval/results/v1.md), 비용: [v1-cost.md](../eval/results/v1-cost.md) |
 
 작업군 비교 v1의 요약은 다음과 같습니다. 과제당 1회 실행이므로 통계적 결론은 아닙니다.
@@ -422,7 +462,7 @@ python3 eval/cost.py --tag T       # 실행별 토큰·API 환산 비용
 |---|---|---|
 | 결과 계약: `result.json`을 원자적으로 기록 | "마지막에 한 번에 작성, `sha256sum` 사용" | 원자적 쓰기 지시 때문에 Agent가 `mv`·검증 스크립트를 시도하다 승인 대기에 걸렸습니다. 라우터는 Agent가 끝난 뒤에만 검사하고 해시도 확인하므로 원자성은 실익이 없습니다 |
 | 결정·feedback을 SQLite에 저장 | run 디렉터리의 `decision.json`, `feedback.jsonl` | 집계 요구가 생기기 전까지 파일로 충분합니다 |
-| Arena parquet 처리용 의존성 허용 | HF datasets-server JSON API 사용 | 같은 행을 표준 라이브러리만으로 받을 수 있습니다 |
+| Arena parquet 처리용 의존성 허용 | pyarrow로 원본 parquet 직접 디코드 | datasets-server `/filter`가 페이지당 20-60초에 5xx가 잦아 wiki unit을 다 받지 못했습니다(2026-10-21). pyarrow가 없으면 arena만 실패하고 last-good을 유지합니다 |
 | conditional GET(304) | 원본 해시가 같으면 `unchanged` 처리 | AA/HF 문서에 ETag 관련 언급이 없습니다 |
 | refresh 재시도 상한만 규정 | source별 전체 180초 상한 추가 | HF 장애 때 한 번의 refresh가 25분까지 늘어질 수 있었습니다 |
 

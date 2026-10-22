@@ -1,7 +1,7 @@
 ---
 title: Hot Cache
-updated: 2026-10-19T01:57:16Z
-pages: 95
+updated: 2026-10-22T07:41:21Z
+pages: 96
 generated_by: obsidian-wiki memory hot
 ---
 
@@ -11,17 +11,19 @@ generated_by: obsidian-wiki memory hot
 
 ## Recent Activity
 
-- [2026-10-18] REVIEW pages_reviewed=85 lifecycle=reviewed index=135units/43active/39postings ...
-- [2026-10-18] REFRESH aa=updated mg=updated arena=failed(HF ...
 - [2026-10-19] CAPTURE type=synthesis page=synthesis/vendor-guided-model-selection.md title=Vendor-guided model selection ...
+- [2026-10-22] CAPTURE type=synthesis page=projects/bench-router/synthesis/multi-agent-pattern-selecti... title=Multi-agent pattern selection and benchmark evidence ...
+- [2026-10-22] CAPTURE type=synthesis page=projects/bench-router/synthesis/multi-agent-pattern-selecti... title=Multi-agent pattern selection and benchmark evidence ...
 
 ## Active Threads
 
 - **t1** Open design question: define representative quality evaluations and exact CLI model/effort mappings before ad... — projects/bench-router/synthesis/vendor-guided-routing-proposal.md (touched 2026-10-19)
+- **t2** Define representative task families and matched single-agent versus multi-agent workflow evaluations before e... — projects/bench-router/synthesis/multi-agent-pattern-selection.md (touched 2026-10-22)
+- **t3** Record benchmark uncertainty (stderr/CI) so the near-tie threshold that triggers collaboration reflects measu... — projects/bench-router/synthesis/multi-agent-pattern-selection.md (touched 2026-10-22)
 
 ## Key Takeaways
 
-Official vendor recommendations are dated starting points, not a shared cross-provider score. The current bench-router audit and an unimplemented routing proposal are recorded separately. New research pages remain draft; source records preserve bounded excerpts and origins.
+Official vendor guidance supplies dated starting points. Multi-agent pattern candidates follow task structure; final pattern, role-specific model/effort assignments, and aggregation need workflow evidence before dispatch. Near-equal model scores alone do not establish ensemble benefit. The original routing audit remains dated 2026-10-19; current policy documentation uses vendor-guided by default. The multi-agent extension remains an unimplemented draft proposal.
 
 ## Flagged Contradictions
 

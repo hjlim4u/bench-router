@@ -286,7 +286,7 @@ bench-router route --task task.json --context context.json --selection selection
 
 ### 5.1 기본 경로 결정
 
-**권장: 다중 기준 선택이 필요한 병렬화는 Orchestrator가 단건 `route --selection`을 여러 번 호출해 수행한다.** group 경로는 worktree 격리·collab 텍스트·deliberate 투표 기능 때문에 유지하되, 선택은 두 모드만 지원:
+**권장: 다중 기준 선택이 필요한 병렬화는 Orchestrator가 단건 `route --selection`을 여러 번 호출해 수행한다.** group 경로는 worktree 격리·collab 텍스트 기능 때문에 유지하되, 선택은 두 모드만 지원:
 
 | group 입력 | 동작 |
 |---|---|
@@ -303,7 +303,6 @@ bench-router route --task task.json --context context.json --selection selection
 ### 5.2 예산
 
 - 각 worker의 `max_estimated_cost_usd`는 그 호출의 allowance다. 같은 잔여 예산을 모든 worker에 그대로 주면 총합 제한이 안 된다 — 분배는 Orchestrator 책임 (문서에 명시).
-- deliberate 후속 round는 프롬프트가 늘어 견적이 바뀐다. Router는 재견적하지 않는다: 후속 round에 `estimate_round1_only` 경고. 정확한 비용 관리가 필요하면 Orchestrator가 round를 직접 진행.
 
 ponytail: 예약→실행→정산 원장 없음. 전체 예산 준수를 Router가 보장해야 하는 요구가 생기면 그때 별도 설계 (보고서 §3 조건 유지).
 
@@ -396,7 +395,6 @@ CONSTRAINTS["latency"] = lambda p, t, f, ctx: None if "max_latency_p50_ms" not i
 | 같은 round 재호출, 다른 selection 같은 profile | 회수 + `selection_differs_from_recorded` | test_p2 |
 | decision.json | assessment + selection + digest 기록 | test_p2 |
 | group selections + context | 지정 프로필 fanout, 각 dispatch에 context 전달 | test_p3 |
-| deliberate 후속 round | `estimate_round1_only` 경고 | test_p3 |
 
 전체 예산(동시 예약·정산) 검증은 해당 기능을 만들 때 추가.
 

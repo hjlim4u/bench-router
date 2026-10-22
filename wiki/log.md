@@ -12,3 +12,5 @@
 - [2026-10-18T02:51:08Z] REVIEW pages_reviewed=85 lifecycle=reviewed index=135units/43active/39postings checks=rules,arena_categories(55/55),source_figures(19/19),adoption_consistency fixed=score_columns_sentence(9 pages)
 - [2026-10-18T03:18:35Z] REFRESH aa=updated mg=updated arena=failed(HF /filter 500/timeouts, then 429) aliases=aa:3 adapter=4 arena_page_retries=4
 - [2026-10-19T01:57:16Z] CAPTURE type=synthesis page=synthesis/vendor-guided-model-selection.md title="Vendor-guided model selection" pages_created=10 pages_updated=1 source_captures=7 qmd=skipped_collection_unset
+- [2026-10-22T07:24:06Z] CAPTURE type=synthesis page=projects/bench-router/synthesis/multi-agent-pattern-selection.md title="Multi-agent pattern selection and benchmark evidence" pages_created=1 pages_updated=3
+- [2026-10-22T07:41:21Z] CAPTURE type=synthesis page=projects/bench-router/synthesis/multi-agent-pattern-selection.md title="Multi-agent pattern selection and benchmark evidence" pages_created=0 pages_updated=1 qmd=skipped_collection_unset

@@ -53,8 +53,6 @@ refresh/status가 정상 종료하면 0이다. completed는 산출물 수신의 
 - summary: 비어 있지 않은 문자열, 최대 4,000자. prompt: 비어 있지 않은 문자열, UTF-8 최대 256 KiB.
 - cwd: 현장 존재하는 절대 디렉터리. symlink 해석한 실제 경로를 receipt에 기록한다.
 - context_files: 선택, cwd 내부 상대 경로/디렉터리 목록. 파일 내용 자동 복사·외부 전송은 안 한다. 경로 탈출은 거부한다.
-- categories: 선택, 03의 enum → finite nonnegative number. 존재할 때 category_confidence 필수.
-- category_confidence: 0~1. 자체 보고 신뢰도이며 검증된 확률이 아님.
 - constraints: 선택; max_cost_tier=low|medium|high(default high), min_context_tokens>=0(default 0), local_only=false, timeout_ms=900000, required_capabilities=[].
 - timeout_ms: 1,000~3,600,000의 integer. 전체 위임 deadline이며 start/prompt/collect에 남은 예산을 나눠 사용한다.
 - priority: quality|balanced|cost(default balanced).

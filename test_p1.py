@@ -53,12 +53,10 @@ class FakeHTTP:
                 raise d.SourceError("HTTP 503")
             return self.pages[page - 1]
         if url == d.ARENA_REVISION_URL:
-            return {"sha": "rev1"}
-        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
-        offset = int(q["offset"][0])
-        rows = [{"row": {"model_name": f"arena-{i}", "rating": 1000 + i, "category": "x",
-                         "leaderboard_publish_date": "2026-10-08T00:00:00"}} for i in range(150)]
-        return {"num_rows_total": 150, "rows": rows[offset:offset + 100]}
+            return {"sha": "rev1", "siblings": [{"rfilename": f"{s}/latest-00000-of-00001.parquet"} for s in
+                                                ("text_style_control", "webdev", "document_style_control", "vision_style_control", "agent")]}
+        return [{"model_name": f"arena-{i}", "rating": 1000 + i, "category": c, "leaderboard_publish_date": "2026-10-08T00:00:00"}
+                for c in ("overall", "math") for i in range(150)]
 
 
 def tb_import(**kw):
@@ -113,7 +111,8 @@ class P1(unittest.TestCase):
         self.aliases = {"arena": {"arena-149": "model-a"}}
         http = FakeHTTP()
         res = self.refresh(http, only="arena")
-        self.assertEqual(res["sources"]["arena"]["requests"], 1 + 2 * len(d.ARENA_COHORTS))  # revision + 150행/100
+        self.assertEqual(res["sources"]["arena"]["requests"], 1 + 4)  # revision + config별 parquet 1개(text는 overall/math 공유)
+        self.assertTrue(all("/resolve/rev1/" in u for u in http.calls[1:]))  # 파일은 기록한 revision에 고정
         ev = self.snap()["profiles"]["a"]["evidence"]
         self.assertEqual(sorted(ev), sorted(d.ARENA_COHORTS))
         self.assertEqual((ev["arena_text_math"]["normalized"], ev["arena_text_math"]["published_at"]), (1.0, "2026-10-08"))
@@ -267,6 +266,33 @@ class P1(unittest.TestCase):
         self.refresh(force=True, now=NOW + timedelta(minutes=1))
         self.assertNotIn("terminal_exact", self.snap()["profiles"]["a"]["evidence"])
 
+    def test_v18_effort_rows_pick_profile_effort(self):
+        pages = aa_pages()
+        pages[0]["data"][0]["slug"], pages[0]["data"][1]["slug"] = "m-a-high", "m-a"
+        self.cfg = config([profile("a", model_id="model-a", reasoning_effort="high"),
+                           profile("lo", model_id="model-a", reasoning_effort="low"), profile("dflt")], default="dflt")
+        self.aliases = {"aa": {"m-a-high": "model-a", "m-a": "model-a"}}
+        self.refresh(http=FakeHTTP(pages))
+        snap = self.snap()
+        a, lo = (snap["profiles"][p]["evidence"]["aa_intelligence"] for p in ("a", "lo"))
+        self.assertEqual((a["raw"], lo["raw"]), (50, 30))  # 프로필 effort 행, 없으면 effort 표기 없는 행
+        self.assertEqual(snap["ambiguous"], [])
+
+    def test_v18_auto_alias_matches_profile_model_names(self):
+        k = d.model_key
+        self.assertEqual({k(n)[1] for n in ("Claude Opus 5.5 (High)", "claude-opus-5.5-high", "claude-opus-5-5")}, {"claude-opus-5-5"})
+        self.assertEqual(k("GPT-6 Luna (xHigh, Codex Harness)")[1], "gpt-6-luna-xhigh-codex-harness")  # 변형은 자동 매칭 안 함
+        pages = aa_pages()
+        pages[0]["data"][0]["slug"], pages[0]["data"][1]["slug"] = "Model-A-High", "model-b"
+        self.cfg = config([profile("a", model_id="model-a", reasoning_effort="high"), profile("dflt")], default="dflt")
+        self.aliases = {}
+        res = self.refresh(http=FakeHTTP(pages))
+        self.assertEqual(self.snap()["profiles"]["a"]["evidence"]["aa_intelligence"]["raw"], 50)  # alias 없이 연결
+        self.assertEqual(res["unmatched_counts"]["aa"], 2)  # model-b, m-c는 프로필이 없어 미매칭
+        self.aliases = {"aa": {"Model-A-High": "dflt"}}  # 명시 alias가 자동 매칭보다 우선
+        self.refresh(http=FakeHTTP(pages), force=True, now=NOW + timedelta(minutes=1))
+        self.assertEqual(self.snap()["profiles"]["dflt"]["evidence"]["aa_intelligence"]["raw"], 50)
+
     def test_v19_import_conditions_separate_cohorts(self):
         doc = tb_import(rows=[{"model_id": "model-a", "harness_id": "codex-cli",
                                "reasoning_effort": "high", "raw": 0.6},
@@ -308,9 +334,8 @@ class P1(unittest.TestCase):
                   import_doc=d.validate_import(tb_import(), "tb"), env=ENV)
         snap, warnings = r.load_snapshot(self.cache)
         with tempfile.TemporaryDirectory() as cwd:
-            t = r.validate_task({"schema_version": "1.0", "task_id": "e2e", "round": 1, "summary": "fix the deploy",
-                                 "prompt": "p", "cwd": cwd, "categories": {"terminal_ops": 1},
-                                 "category_confidence": 0.9})
+            t = r.validate_task({"schema_version": "1.0", "task_id": "e2e", "round": 1,
+                                 "summary": "fix the deploy shell", "prompt": "p", "cwd": cwd})
             res = r.route_legacy(t, self.cfg, MAPPING, snap, warnings, NOW)
             legacy = json.loads(json.dumps(snap))
             legacy["profiles"]["a"]["evidence"]["terminal_exact"].pop("conditions")
@@ -348,9 +373,8 @@ class FakeHTTP2(FakeHTTP):
                 budget["used"] += 1
             return MG_BENCH if url.endswith("benchmarks.json") else MG_SCORES
         body = super().__call__(url, headers, budget)
-        if "config=agent" in url:
-            body = {**body, "rows": [{"row": {k if k != "rating" else "score": (v / 10000 if k == "rating" else v)
-                                              for k, v in x["row"].items()}} for x in body["rows"]]}
+        if "/agent/latest-" in url:
+            body = [{k if k != "rating" else "score": (v / 10000 if k == "rating" else v) for k, v in x.items()} for x in body]
         return body
 
 
@@ -388,8 +412,8 @@ class P1Sources(unittest.TestCase):
         http = FakeHTTP2()
         res = d.refresh(self.cache, self.cfg, MAPPING, {"arena": {"arena-149": "model-a", "arena-0": "model-b"}}, NOW,
                         only="arena", get_json=http, env=ENV, index={"units": units})
-        # revision + (legacy 5 + agent 1) × 2페이지. text math는 legacy arena_text_math와 같은 조각이라 재요청 없음, excluded는 수집 안 함
-        self.assertEqual(res["sources"]["arena"]["requests"], 1 + 2 * (len(d.ARENA_COHORTS) + 1))
+        # revision + config(legacy 4 + agent 1)별 parquet 1개. text math는 legacy와 같은 config라 재요청 없음, excluded는 수집 안 함
+        self.assertEqual(res["sources"]["arena"]["requests"], 1 + 5)
         self.assertFalse([u for u in http.calls if "text_to_image" in u])
         ev = json.loads((self.cache / "snapshot.json").read_text("utf-8"))["profiles"]["a"]["evidence"]
         self.assertEqual(ev["arena:agent/overall"]["conditions"]["metric"], "score")
@@ -409,36 +433,25 @@ class P1Sources(unittest.TestCase):
                for o in d.parse_arena(payload) if o["evidence_id"] == "arena_text"}
         self.assertEqual(got, {n: (e, e) for n, e in names.items()})  # column and conditions agree, so snapshots show the effort
 
-    def test_v62_arena_page_retries_5xx_only(self):
-        calls = []
+    def test_v62_arena_parquet_decode(self):
+        try:
+            import pyarrow as pa, pyarrow.parquet as pq
+        except ImportError:
+            self.skipTest("pyarrow not installed")
+        buf = io.BytesIO()
+        pq.write_table(pa.Table.from_pylist([{"model_name": "m", "rating": 1.5, "rank": 1, "category": "overall"}]), buf)
+        self.assertEqual(d._parquet_rows(buf.getvalue()), [{"model_name": "m", "rating": 1.5, "rank": 1, "category": "overall"}])
+        with self.assertRaisesRegex(d.SourceError, "invalid parquet"):
+            d._parquet_rows(b"not parquet")
+        with self.assertRaisesRegex(d.SourceError, "no latest parquet"):  # 목록에 없는 config는 요청 없이 실패
+            d._arena_rows(lambda *a: self.fail("requested"), "rev1", ["webdev/full-00000-of-00001.parquet"], "webdev")
 
-        def flaky(n_fail, err):
-            def get(url, headers, budget=None):
-                calls.append(url)
-                if len(calls) <= n_fail:
-                    raise d.SourceError(err)
-                return {"num_rows_total": 1, "rows": [{"row": {"model_name": "m", "rating": 1, "rank": 1,
-                                                               "leaderboard_publish_date": "2026-10-08"}}]}
-            return get
-        with mock.patch.object(d, "ARENA_RETRY_SLEEP_S", 0):
-            self.assertEqual(len(d._arena_rows(flaky(3, "HTTP 500"), "webdev", "overall")), 1)  # recovers after 3 failures
-            self.assertEqual(len(calls), 4)
-            calls.clear()
-            with self.assertRaises(d.SourceError):  # a persistent outage still fails, after the bounded retries
-                d._arena_rows(flaky(99, "HTTP 500"), "webdev", "overall")
-            self.assertEqual(len(calls), d.ARENA_PAGE_RETRIES + 1)
-            calls.clear()
-            with self.assertRaises(d.SourceError):  # 4xx / budget are not retried
-                d._arena_rows(flaky(99, "HTTP 404"), "webdev", "overall")
-            self.assertEqual(len(calls), 1)
-
-    @mock.patch.object(d, "ARENA_RETRY_SLEEP_S", 0)
     def test_v62_wiki_arena_unit_failure_is_isolated(self):
         def flaky(fail_config):
             http = FakeHTTP2()
             base = http.__call__
             def call(url, headers, budget=None):
-                if f"config={fail_config}&" in url:
+                if f"/{fail_config}/latest-" in url:
                     raise d.SourceError("HTTP 500")
                 return base(url, headers, budget)
             return call

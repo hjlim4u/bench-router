@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import routing as r
 
-EXIT = {"selected": 0, "completed": 0, "ok": 0, "recorded": 0, "blocked": 10, "timed_out": 11, "waiting": 11,
+EXIT = {"selected": 0, "completed": 0, "ok": 0, "recorded": 0, "sent": 0, "stop_sent": 0, "blocked": 10, "timed_out": 11, "waiting": 11,
         "delivery_uncertain": 11, "execution_failed": 12, "result_invalid": 12, "no_eligible_profile": 13,
         "conflict": 14, "stale_assessment": 14, "partial_failure": 16, "failed": 16,
         "decision_required": 17, "decision_unavailable": 17}
@@ -49,7 +49,8 @@ def _load(args):
         from . import herdr  # live 경로에서만
         return herdr.dispatch(task, cfg, mapping, snap, snap_warnings, args.herdr_session,
                               profile_id=args.profile, context=context, selection_mode="orchestrator_pinned",
-                              selection=selection, decision_options={**options, "allow_network": True})
+                              selection=selection, decision_options={**options, "allow_network": True},
+                              wait_ms=args.wait_ms)
     now = datetime.now(timezone.utc)
     if args.cmd == "evaluate":
         return (r.evaluate_v1 if args.format == "1" else r.evaluate)(task, cfg, mapping, snap, snap_warnings, now,
@@ -75,7 +76,7 @@ def _parallel(args):
     responses = (r.load_json_strict(args.decision_response, r.SNAPSHOT_MAX_BYTES) if args.decision_response else {})
     if not isinstance(responses, dict):
         raise r.InputError("parallel decision response: object keyed by member label required")
-    return parallel.run_group(g, cfg, mapping, snap, snap_warnings, args.herdr_session, dry_run=args.dry_run,
+    return parallel.run_group(g, cfg, mapping, snap, snap_warnings, args.herdr_session, dry_run=args.dry_run, wait_ms=args.wait_ms,
                               decision_options={"policy": args.policy, "host": args.host,
                                                 "index": evidence.load_index(args.cache_dir),
                                                 "allow_network": not args.dry_run,
@@ -85,7 +86,37 @@ def _parallel(args):
 
 def _collect(args):
     from . import herdr
+    if args.run:
+        if args.cwd or args.run_id:
+            raise r.InputError("collect: use either --cwd/--run-id or repeated --run CWD RUN_ID")
+        return herdr.collect_many([tuple(x) for x in args.run], args.wait_ms, args.until, args.herdr_session)
+    if not (args.cwd and args.run_id):
+        raise r.InputError("collect: --cwd and --run-id required (or repeated --run CWD RUN_ID)")
     return herdr.collect_run(args.cwd, args.run_id, args.wait_ms, args.herdr_session)
+
+
+def _stop(args):
+    from . import herdr
+    return herdr.stop_run(args.cwd, args.run_id)
+
+
+def _wait_ms(v):
+    if int(v) < 0:
+        raise argparse.ArgumentTypeError("must be >= 0")
+    return int(v)
+
+
+def _tell(args):
+    from . import herdr
+    if (args.message is None) == (args.message_file is None):
+        raise r.InputError("tell: exactly one of --message or --message-file required")
+    text = args.message
+    if text is None:
+        path = Path(args.message_file)
+        if path.stat().st_size > herdr.MAX_PROMPT_ARG_BYTES:
+            raise r.InputError(f"message file over {herdr.MAX_PROMPT_ARG_BYTES} bytes")
+        text = path.read_text("utf-8")
+    return herdr.tell_run(args.cwd, args.run_id, text)
 
 
 def _resume(args):
@@ -210,7 +241,7 @@ def _assessment_lines(a):
 def explain_text(res):
     cls = res["classification"]
     lines = [f"task {res['task_id']} round {res['round']} · policy {res['policy_version']} · snapshot {res['snapshot_id']}",
-             f"classification: {cls['stage']} {cls['categories']} confidence={cls['self_reported_confidence']}"
+             f"classification: {cls['stage']} {cls['categories']}"
              + (f" fallback={cls['fallback_reason']}" if cls["fallback_reason"] else "")
              + (f" rules={cls['matched_rules']}" if cls["matched_rules"] else ""),
              f"selected: {res['selected']['profile'] if res['selected'] else '-'} ({res['selection_mode']})",
@@ -253,6 +284,7 @@ def main(argv=None):
     pin.add_argument("--selection", help="Orchestrator selection record (JSON: profile, assessment_digest, policy, reason)")
     pin.add_argument("--profile", help="execute this eligible profile without a selection record (warns)")
     rp.add_argument("--dry-run", action="store_true")
+    rp.add_argument("--wait-ms", type=_wait_ms, help="after submission, wait at most this long (0: return at once; collect later)")
     vp = sub.add_parser("evaluate", help="report facts, constraint results and evaluations for every profile; no selection")
     vp.add_argument("--task", required=True)
     vp.add_argument("--context", help="Orchestrator metrics: estimates, prices, signals (context JSON 1.0|2.0)")
@@ -278,18 +310,30 @@ def main(argv=None):
     pp = sub.add_parser("parallel", help="dispatch tasks × fanout agents concurrently, each in its own git worktree")
     pp.add_argument("--group", required=True)
     pp.add_argument("--dry-run", action="store_true")
+    pp.add_argument("--wait-ms", type=_wait_ms, help="per member, wait at most this long after submission; rerun the group to collect")
     for parser in (rp, ep, pp):
         parser.add_argument("--policy", choices=["vendor-guided", "legacy"], default="vendor-guided",
                             help="selection policy (default: vendor-guided; legacy is explicit opt-in)")
         parser.add_argument("--host", choices=["antigravity", "codex", "claude"], help="native decision agent host")
         parser.add_argument("--decision-response", help="saved ordered stages array of responses (digest, provider, actual model, answers); parallel: keyed by member label")
     cp = sub.add_parser("collect", help="observe/collect an existing run; never re-sends the prompt")
-    cp.add_argument("--run-id", required=True)
-    cp.add_argument("--cwd", required=True)
-    cp.add_argument("--wait-ms", type=int, default=0, help="wait while the agent is still working")
+    cp.add_argument("--run-id")
+    cp.add_argument("--cwd")
+    cp.add_argument("--run", nargs=2, action="append", metavar=("CWD", "RUN_ID"),
+                    help="repeatable: collect several runs, returning when --until is met")
+    cp.add_argument("--until", choices=["any", "all"], default="any", help="with --run: first settled/blocked, or all")
+    cp.add_argument("--wait-ms", type=_wait_ms, default=0, help="wait while the agent is still working")
+    stp = sub.add_parser("stop", help="stop a live run: board stop, or close a headless run's pane; logged, never automatic")
+    stp.add_argument("--cwd", required=True, help="run cwd; a parallel member's router worktree when --run-id is omitted")
+    stp.add_argument("--run-id", help="defaults to the only unsettled run under --cwd")
     sp = sub.add_parser("resume", help="reopen a completed run's agent in the same conversation; sends nothing")
     sp.add_argument("--run-id", required=True)
     sp.add_argument("--cwd", required=True)
+    tp = sub.add_parser("tell", help="relay one explicit message to a live run's agent (board tell); logged, never automatic")
+    tp.add_argument("--cwd", required=True, help="run cwd; a parallel member's worktree when --run-id is omitted")
+    tp.add_argument("--run-id", help="defaults to the only unsettled run under --cwd")
+    tp.add_argument("--message")
+    tp.add_argument("--message-file")
     bp = sub.add_parser("feedback", help="record the orchestrator's verified outcome")
     bp.add_argument("--run-id", required=True)
     bp.add_argument("--cwd", required=True)
@@ -306,7 +350,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     try:
-        res = {"refresh": _refresh, "status": _status, "collect": _collect, "resume": _resume, "feedback": _feedback,
+        res = {"refresh": _refresh, "status": _status, "collect": _collect, "resume": _resume, "tell": _tell, "stop": _stop, "feedback": _feedback,
                 "parallel": _parallel, "coordination": _coordination, "wiki": _wiki,
                 "evidence": _evidence}.get(
             args.cmd, _load)(args)

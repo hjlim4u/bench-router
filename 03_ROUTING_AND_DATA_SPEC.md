@@ -87,8 +87,6 @@ fallback에서도 설치 여부, local_only, capability, exclude, context, cost 
 
 카테고리 enum: coding_repo, terminal_ops, code_gen, webdev, math_reasoning, analysis, writing, vision_doc, general.
 
-L0: Orchestrator가 준 categories를 검증한다. 값은 finite, 0 이상, 총합 > 0, key는 enum이다. 합계를 1로 정규화한다. category_confidence는 0~1이며 **자기 보고 신뢰도**다. 기본 0.6 이상이면 사용한다. 값이 누락되거나 그보다 낮으면 L1으로 넘어간다. enum 밖 값/NaN 등 잘못된 구조는 입력 오류로 종료한다.
-
 L1: orchestrator summary의 명시 패턴·파일 확장자·context_files로 분류한다. 파일 내용을 열거나 전체 prompt를 LLM으로 해석하지 않는다. 규칙 버전과 matched rule을 기록한다. 서로 다른 영역의 규칙이 충돌하면 고정 우선순위를 숨겨 쓰지 않고 general로 abstain한다. SQL/pytest 같은 문자열 하나만으로 고확신 의미 판단을 하지 않는다.
 
 Fallback: general. 이 경우 fallback_reason을 반환한다. 분류 결과의 categories는 정책 가중치이지 통계적으로 보정된 성공확률이 아니다.
