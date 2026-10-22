@@ -137,6 +137,8 @@ These evidence boundaries are routing-design interpretations. ^[inferred]
 
 ## Proposed integration with bench-router
 
+> [!note] A later draft, [[projects/bench-router/synthesis/router-orchestrator-boundary]], proposes moving steps 1, 4, and 5 below into the calling layer and keeping the router pattern-agnostic. The steps are unchanged here until that boundary is reviewed.
+
 The inspected documentation on 2026-10-22 makes `vendor-guided` the default and retains weighted scoring under explicit `legacy` policy. The older [[projects/bench-router/synthesis/routing-selection-audit]] and [[projects/bench-router/synthesis/vendor-guided-routing-proposal]] retain their 2026-10-19 evidence scope; use the repository's current policy documentation for implemented behavior.
 
 The proposed sequence is task/environment analysis, candidate patterns and roles, role-specific suitability and evidence retrieval, comparison of complete execution plans, plan freeze, dispatch, and bounded verification. It does not require running a new benchmark for every request: request-time selection can consume previously measured workflow evidence. ^[inferred]

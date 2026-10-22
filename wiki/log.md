@@ -14,3 +14,4 @@
 - [2026-10-19T01:57:16Z] CAPTURE type=synthesis page=synthesis/vendor-guided-model-selection.md title="Vendor-guided model selection" pages_created=10 pages_updated=1 source_captures=7 qmd=skipped_collection_unset
 - [2026-10-22T07:24:06Z] CAPTURE type=synthesis page=projects/bench-router/synthesis/multi-agent-pattern-selection.md title="Multi-agent pattern selection and benchmark evidence" pages_created=1 pages_updated=3
 - [2026-10-22T07:41:21Z] CAPTURE type=synthesis page=projects/bench-router/synthesis/multi-agent-pattern-selection.md title="Multi-agent pattern selection and benchmark evidence" pages_created=0 pages_updated=1 qmd=skipped_collection_unset
+- [2026-10-22T22:23:18Z] CAPTURE type=synthesis page=projects/bench-router/synthesis/router-orchestrator-boundary.md title="Router and orchestration-layer responsibility boundary" pages_created=1 pages_updated=2 qmd=skipped_collection_unset

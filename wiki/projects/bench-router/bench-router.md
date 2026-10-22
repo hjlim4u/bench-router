@@ -36,6 +36,7 @@ Bench-router assesses configured agent profiles, checks mandatory constraints, a
 - [[synthesis/vendor-guided-model-selection]] connects the project findings to five official source notes.
 - [[concepts/model-effort-selection]] explains the model/effort distinction.
 - [[projects/bench-router/synthesis/multi-agent-pattern-selection]] owns the proposed timing, information requirements, and workflow evidence for choosing collaboration patterns.
+- [[projects/bench-router/synthesis/router-orchestrator-boundary]] owns the proposed split between pattern decisions in the calling layer and pattern-agnostic single-task assignment in the router.
 
 ## Knowledge and runtime boundary
 
