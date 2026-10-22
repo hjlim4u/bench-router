@@ -10,9 +10,10 @@ sources:
   - "url:https://ai.google.dev/gemini-api/docs/models"
   - "url:https://ai.google.dev/gemini-api/docs/thinking"
   - "conversation:2026-10-19"
+  - "conversation:2026-10-22"
 created: 2026-10-19T01:52:29Z
-updated: 2026-10-19T01:52:29Z
-as_of: 2026-10-19
+updated: 2026-10-22T07:20:11Z
+as_of: 2026-10-22
 summary: >-
   Entry point for official vendor guidance, the current bench-router policy audit, and a proposed approach to selecting model/effort configurations.
 provenance:
@@ -34,7 +35,7 @@ snapshots:
 
 # Vendor-guided model selection — research map
 
-Official guidance supplies starting recommendations. Bench-router's existing numeric policy and a proposed replacement have different evidence and status.
+Official guidance supplies starting recommendations. The routing audit and original proposal retain their 2026-10-19 evidence scope. The project overview links current policy documentation; a separate multi-agent proposal covers pattern selection and workflow evidence.
 
 ## Read by question
 
@@ -48,6 +49,7 @@ Official guidance supplies starting recommendations. Bench-router's existing num
 | Why separate model and effort decisions? | [[concepts/model-effort-selection]] |
 | What does bench-router currently calculate? | [[projects/bench-router/synthesis/routing-selection-audit]] |
 | How could the findings inform routing? | [[projects/bench-router/synthesis/vendor-guided-routing-proposal]] |
+| When should collaboration patterns be selected, and which benchmark evidence matters? | [[projects/bench-router/synthesis/multi-agent-pattern-selection]] |
 
 ## Findings
 

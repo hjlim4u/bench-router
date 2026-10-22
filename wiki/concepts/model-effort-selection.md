@@ -8,9 +8,10 @@ sources:
   - "url:https://platform.claude.com/docs/en/about-claude/models/choosing-a-model"
   - "url:https://platform.claude.com/docs/en/build-with-claude/effort"
   - "url:https://ai.google.dev/gemini-api/docs/thinking"
+  - "conversation:2026-10-22"
 created: 2026-10-19T01:52:29Z
-updated: 2026-10-19T01:52:29Z
-as_of: 2026-10-19
+updated: 2026-10-22T07:20:11Z
+as_of: 2026-10-22
 summary: >-
   Model choice, reasoning effort, feasibility constraints, and measured workflow quality are distinct inputs to agent selection.
 provenance:
@@ -49,6 +50,10 @@ Use [[references/sources/openai-model-selection|OpenAI's combinations]], [[refer
 
 Record workload attributes such as clarity, ambiguity, reasoning demands, tool-use duration, expected polish, deadline, and spending limit. These attributes describe the request; assigning them numeric weights requires separate evidence. ^[inferred]
 
+## Pattern and role assignments
+
+In a multi-agent workflow, model and effort choices also interact with the collaboration pattern. Propose patterns from task structure, then compare role-specific configurations and aggregation using workflow evidence before finalizing the plan. The best generator need not be the best checker, and a small gap between individual scores does not establish an ensemble gain. This is a project design inference, developed in [[projects/bench-router/synthesis/multi-agent-pattern-selection]]. ^[inferred]
+
 ## Limits
 
 A benchmark's difficulty label is not automatically a vendor's effort recommendation. For example, the Arena `hard_prompts` facet has its own tagging criteria in [[concepts/facets/difficulty]]. A configured reasoning level can differ from the level used to measure a benchmark; that mismatch belongs in the evidence record. ^[inferred]
@@ -59,6 +64,7 @@ A benchmark's difficulty label is not automatically a vendor's effort recommenda
 - [[concepts/facets/agent_signal]]
 - [[synthesis/vendor-guided-model-selection]]
 - [[projects/bench-router/synthesis/routing-selection-audit]]
+- [[projects/bench-router/synthesis/multi-agent-pattern-selection]]
 
 ## Sources
 

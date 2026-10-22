@@ -217,5 +217,6 @@ Benchmark knowledge for bench-router. Schema: [[AGENTS]]. Compiled into `index.j
 ## Projects
 
 - [[projects/bench-router/synthesis/routing-selection-audit]] — Current automatic and external-choice paths, exact legacy scoring rules, optional cost constraints, and the limits of their empirical grounding. ( #agentic #coding #reasoning)
-- [[projects/bench-router/bench-router]] — Project map separating observed routing behavior from proposed use of official vendor model and effort guidance. ( #agentic #coding)
+- [[projects/bench-router/bench-router]] — Project map separating dated routing audits, current policy documentation, model/effort guidance, and multi-agent planning proposals. ( #agentic #coding)
+- [[projects/bench-router/synthesis/multi-agent-pattern-selection]] — Propose pattern candidates after task analysis, then choose the pattern, role assignments, and aggregation together using workflow evidence before dispatch. ( #agentic #reasoning #coding)
 - [[projects/bench-router/synthesis/vendor-guided-routing-proposal]] — Unimplemented proposal: use official workload/configuration advice to narrow eligible profiles, then compare quality evidence and explicit cost constraints. ( #agentic #reasoning #coding)
