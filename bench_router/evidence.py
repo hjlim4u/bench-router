@@ -104,12 +104,12 @@ def rule_hit(rule, t):
     return None
 
 
-def task_facets(t, index):
+def task_facets(t, index, *, infer_rules=True):
     """규칙으로 판정되는 facet + Orchestrator가 task.facets에 직접 태그한 값. 어휘 밖의 값은 거부."""
     vocab, out, warnings = index["facets"], {}, []
     for axis, values in sorted(vocab.items()):
         for value, f in sorted(values.items()):
-            if f["detect"] == "self":
+            if not infer_rules or f["detect"] == "self":
                 continue
             hit = rule_hit(f["detect"].removeprefix("rule:"), t)
             if hit is None:
@@ -151,7 +151,7 @@ def _cell(p, uid, snap, sources, warned):
             "missing_reason": None}
 
 
-def build(t, cfg, snap, snap_warnings, index, now, max_units=12, profile_ids=None):
+def build(t, cfg, snap, snap_warnings, index, now, max_units=12, profile_ids=None, *, infer_rules=True):
     warnings = list(snap_warnings)
     profiles = sorted((p for p in cfg["profile"] if p["enabled"] and p["id"] not in t.get("exclude_profiles", [])
                        and (profile_ids is None or p["id"] in profile_ids)), key=lambda p: p["id"])
@@ -162,7 +162,7 @@ def build(t, cfg, snap, snap_warnings, index, now, max_units=12, profile_ids=Non
     if index is None:
         warnings.append(r.warn("wiki_index_missing", "no index.json; run `wiki compile` (needs reviewed wiki pages)"))
         return res
-    res["facets"], rule_warnings = task_facets(t, index)
+    res["facets"], rule_warnings = task_facets(t, index, infer_rules=infer_rules)
     warnings += rule_warnings
     if not index["units"]:
         warnings.append(r.warn("wiki_index_empty", "index.json has no units; wiki pages are not reviewed yet"))
@@ -187,7 +187,7 @@ def build(t, cfg, snap, snap_warnings, index, now, max_units=12, profile_ids=Non
             continue
         cells = {p["id"]: _cell(p, uid, snap, sources, warned) for p in profiles}
         rows.append({"id": uid, "desc": u["desc"], "metric": u["metric"], "status": u["status"], "page": u["page"],
-                     "matched_facets": facets, "profiles": cells,
+                     "facets": u["facets"], "matched_facets": facets, "profiles": cells,
                      **{k: u[k] for k in ("meaningful_gap", "trust_grade") if k in u}})
     # 표시 순서(순위가 아니다): 작업 유형 일치 → 보조 facet 일치 → 전체 일치 → 점수가 있는 프로필 수 → id.
     # rule:always facet(agent_signal 등)은 모든 작업에 켜지므로 작업 특화 unit을 밀어내지 않게 뒤로 둔다.
@@ -201,7 +201,8 @@ def build(t, cfg, snap, snap_warnings, index, now, max_units=12, profile_ids=Non
     rows.sort(key=lambda x: (-sum(f.startswith("task:") and f not in always for f in x["matched_facets"]),
                              -len([f for f in x["matched_facets"] if f not in always]), -len(x["matched_facets"]),
                              -sum(c["normalized"] is not None for c in x["profiles"].values()), x["id"]))
-    res["omitted_units"], res["units"] = max(0, len(rows) - max_units), rows[:max_units]
+    res["omitted_units"] = 0 if max_units is None else max(0, len(rows) - max_units)
+    res["units"] = rows if max_units is None else rows[:max_units]
     for pid in sorted(warned):
         warnings.append(r.warn("stale_config", f"{pid}: profile config changed since snapshot; evidence ignored"))
     return res

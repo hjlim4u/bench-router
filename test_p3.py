@@ -70,16 +70,25 @@ class P3(unittest.TestCase):
             next_ = pl.run_group(g, self.cfg, MAPPING, None, [], dry_run=True, decision_options=opts, responses=responses)
             if next_["status"] != "decision_required":
                 break
-        self.assertEqual(next_["status"], "selected", next_)
+        self.assertEqual(next_["status"], "decision_unavailable", next_)
+        self.assertIn("upstream_selection_required", next_["members"][0]["decision"]["uncertainty"])
+        self.assertFalse((Path(self.cwd) / ".bench-router").exists())
+        assessment = decision.evaluate(g["tasks"][0], self.cfg, MAPPING, None, [], NOW,
+                                       response=responses["t1-1"], **opts)
+        selections = [decision.bind(assessment, pid, {"id": "team", "version": "1"}, "explicit fanout", True)
+                      for pid in ("a", "b")]
+        g = self.group(schema_version="2.0", tasks=[{"task": g["raw_tasks"][0], "selections": selections}])
+        self.assertEqual(pl.run_group(g, self.cfg, MAPPING, None, [], dry_run=True,
+                                     decision_options=opts)["status"], "selected")
         out = pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which,
-                           decision_options=opts, responses=responses)
+                           decision_options=opts)
         self.assertEqual((out["status"], [m["profile"] for m in out["members"]]), ("completed", ["a", "b"]), out)
         with patch.object(decision, "load_guidelines", side_effect=AssertionError("must reuse frozen choices")):
             again = pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which,
                                  decision_options=opts)
         self.assertEqual((again["status"], len(fake.prompts)), ("completed", 2), again)
 
-        # Explicit 3.0 selections may repeat the same profile, unlike automatic fanout.
+        # Upstream 4.0 selections may repeat the same profile.
         repeated = self.group(schema_version="2.0", group_id="repeat",
                               tasks=[{"task": g["raw_tasks"][0],
                                       "selections": [out["members"][0]["selection"]] * 2}])

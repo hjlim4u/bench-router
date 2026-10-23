@@ -369,6 +369,7 @@ CONSTRAINTS["latency"] = lambda p, t, f, ctx: None if "max_latency_p50_ms" not i
 
 7단계 구현에서 확정된 세부:
 - `evaluate --format 3`은 vendor-guided의 analysis·fit·비교 근거를 선택 없이 공개한다. 후보는 ID순이며, hard 제약·semantic suitability·후보별 diagnostics와 공유 evidence를 구분해 반환한다.
+- 정책 버전 4는 `evidence.relevance`에 관련도·직접 측정하는 요구의 facet·요구 설명·짧은 판단 이유·비교 범위·출처 페이지·판단 요청 digest를 공개한다. `prefiltered_units`는 사전 제외 이유, `auxiliary_units`는 공통 에이전트 신뢰성, `benchmark_relevance`는 거부된 unit을 0으로 표시한 관련도다. unit별 결과는 투표·합산하지 않는다. 복수 적합 후보 또는 workflow 검증이 필요한 effort는 `upstream_selection_required`로 상위 선택에 맡긴다. 후자는 벤치마크 우세가 있어도 provisional·`workflow_gain_unverified`를 유지한다. 상위 계층의 4.0 선택에도 이 근거가 그대로 포함되어 실행 시 재생 검증된다.
 - `select`는 완료된 format 3 assessment에서 selection 4.0을 만든다. 상위 정책은 라우터 추천과 다른 documented 후보를 고를 수 있고, provisional 후보는 `accept_provisional=true`을 명시해야 한다. unsuitable·미평가 후보와 hard 제약 실패는 선택할 수 없다.
 - 4.0 선택은 실행 시 기록된 판단을 재생하고 현재 제약·가용성을 다시 확인한다. 입력이 달라지면 `stale_assessment`이며, 이미 제출한 같은 task/round는 선택 재평가보다 receipt 회수가 우선한다. 2.0 override와 3.0 vendor-guided 선택의 의미는 변경하지 않는다.
 - group member 결과는 단건 실행의 `delivery_state`와 `reassignment`를 보존한다. 이 필드는 전송 불확실 시 자동 재시도 대신 `collect_first` 결정을 지원한다.

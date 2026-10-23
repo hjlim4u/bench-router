@@ -255,7 +255,8 @@ class P2(unittest.TestCase):
         def evaluate(response=None):
             return decision.evaluate(t, self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response)
         assessment = evaluate(guided_responses(evaluate(), evaluate, "__tie__"))
-        self.assertEqual(assessment["recommendation"]["profile"], "a")
+        self.assertIsNone(assessment["recommendation"]["profile"])
+        self.assertIn("upstream_selection_required", assessment["recommendation"]["diagnostics"])
         selection = decision.bind(assessment, "b", {"id": "team", "version": "1"}, "specialist", True)
         fake = FakeProjects(on_prompt=write_result(), profiles={p["id"]: p for p in self.cfg["profile"]})
         def dispatch():
