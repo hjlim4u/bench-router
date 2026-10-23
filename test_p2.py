@@ -46,6 +46,8 @@ def git_repo(path):
 def projects_environment(case, base):
     case.enterContext(patch.dict(os.environ, {"BENCH_ROUTER_HERDR_SESSION": "brtest",
                                             "BENCH_ROUTER_COORDINATION_DIR": str(Path(base) / "admission")}))
+    case.enterContext(patch.object(hd, "probe_profiles", side_effect=lambda profiles, which=hd.shutil.which:
+                                  {p["id"]: hd.probe(p, which) for p in profiles}))
     # No real waiting in offline state-transition tests.
     import itertools
     from types import SimpleNamespace
@@ -245,6 +247,26 @@ class P2(unittest.TestCase):
 
     def receipt(self, out):
         return json.loads(Path(out["receipt_path"]).read_text("utf-8"))
+
+    def test_v98_external_selection_dispatch_and_receipt_first_recovery(self):
+        from bench_router import decision
+        self.cfg = config([*self.cfg["profile"], profile("b")], default="a")
+        t = self.task()
+        def evaluate(response=None):
+            return decision.evaluate(t, self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response)
+        assessment = evaluate(guided_responses(evaluate(), evaluate, "__tie__"))
+        self.assertEqual(assessment["recommendation"]["profile"], "a")
+        selection = decision.bind(assessment, "b", {"id": "team", "version": "1"}, "specialist", True)
+        fake = FakeProjects(on_prompt=write_result(), profiles={p["id"]: p for p in self.cfg["profile"]})
+        def dispatch():
+            return hd.dispatch(t, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which,
+                               selection=selection, decision_options={"host": "codex", "env": {}})
+        out = dispatch()
+        self.assertEqual((out["status"], out["selected"]["profile"], out["selection"]["schema_version"]),
+                         ("completed", "b", "4.0"))
+        with patch.object(decision, "load_guidelines", side_effect=AssertionError("must collect saved run")):
+            again = dispatch()
+        self.assertEqual((again["run_id"], len(fake.prompts)), (out["run_id"], 1))
 
     def test_v76_guided_live_preflight_and_receipt_first_recovery(self):
         from bench_router import decision

@@ -53,10 +53,15 @@ def _load(args):
                               wait_ms=args.wait_ms)
     now = datetime.now(timezone.utc)
     if args.cmd == "evaluate":
+        if args.format == "3":
+            from . import decision
+            return decision.evaluate(task, cfg, mapping, snap, snap_warnings, now, context=context, **options)
+        if response is not None:
+            raise r.InputError("--decision-response requires evaluate --format 3")
         return (r.evaluate_v1 if args.format == "1" else r.evaluate)(task, cfg, mapping, snap, snap_warnings, now,
                                                                      context=context)
     if args.cmd == "route" and (args.profile or selection):
-        if selection and selection["schema_version"] == "3.0":
+        if selection and selection["schema_version"] in ("3.0", "4.0"):
             return r.route(task, cfg, mapping, snap, snap_warnings, now, context=context,
                            selection=selection, **options)
         res = r.evaluate_v1(task, cfg, mapping, snap, snap_warnings, now, context=context)
@@ -65,6 +70,14 @@ def _load(args):
     if args.cmd == "explain":  # 선택은 route, 사실·제약 근거는 evaluate 2.0에서
         res["assessment"] = r.evaluate(task, cfg, mapping, snap, snap_warnings, now, context=context)
     return res
+
+
+def _select(args):
+    from . import decision
+    assessment = r.load_json_strict(args.assessment, r.SNAPSHOT_MAX_BYTES)
+    selection = decision.bind(assessment, args.profile, {"id": args.policy_id, "version": args.policy_version},
+                              args.reason, args.accept_provisional)
+    return {"schema_version": r.SCHEMA_VERSION, "status": "ok", "selection": selection}
 
 
 def _parallel(args):
@@ -288,8 +301,15 @@ def main(argv=None):
     vp = sub.add_parser("evaluate", help="report facts, constraint results and evaluations for every profile; no selection")
     vp.add_argument("--task", required=True)
     vp.add_argument("--context", help="Orchestrator metrics: estimates, prices, signals (context JSON 1.0|2.0)")
-    vp.add_argument("--format", choices=["1", "2"], default="2",
-                    help="output schema; 1 = legacy candidate list (deprecated)")
+    vp.add_argument("--format", choices=["1", "2", "3"], default="2",
+                    help="output schema; 3 = staged vendor-guided candidate assessment (offline)")
+    selp = sub.add_parser("select", help="record an upstream choice from an evaluate --format 3 assessment; no dispatch")
+    selp.add_argument("--assessment", required=True)
+    selp.add_argument("--profile", required=True)
+    selp.add_argument("--policy-id", required=True)
+    selp.add_argument("--policy-version", required=True)
+    selp.add_argument("--reason", required=True)
+    selp.add_argument("--accept-provisional", action="store_true")
     ep = sub.add_parser("explain", help="human-readable dry-run with all candidates")
     ep.add_argument("--task", required=True)
     ep.add_argument("--context", help="Orchestrator metrics: estimates, prices, signals (context JSON 1.0|2.0)")
@@ -311,7 +331,7 @@ def main(argv=None):
     pp.add_argument("--group", required=True)
     pp.add_argument("--dry-run", action="store_true")
     pp.add_argument("--wait-ms", type=_wait_ms, help="per member, wait at most this long after submission; rerun the group to collect")
-    for parser in (rp, ep, pp):
+    for parser in (rp, ep, pp, vp):
         parser.add_argument("--policy", choices=["vendor-guided", "legacy"], default="vendor-guided",
                             help="selection policy (default: vendor-guided; legacy is explicit opt-in)")
         parser.add_argument("--host", choices=["antigravity", "codex", "claude"], help="native decision agent host")
@@ -351,7 +371,7 @@ def main(argv=None):
 
     try:
         res = {"refresh": _refresh, "status": _status, "collect": _collect, "resume": _resume, "tell": _tell, "stop": _stop, "feedback": _feedback,
-                "parallel": _parallel, "coordination": _coordination, "wiki": _wiki,
+                "parallel": _parallel, "select": _select, "coordination": _coordination, "wiki": _wiki,
                 "evidence": _evidence}.get(
             args.cmd, _load)(args)
     except r.InputError as e:

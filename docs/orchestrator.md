@@ -6,6 +6,39 @@ For the consolidated design cross-checked against both proposals and the impleme
 
 The router reports benchmark evidence and checks whether a chosen profile can run. The Orchestrator owns task complexity, estimates, final selection, and fallback order.
 
+## Vendor-guided candidate assessments and upstream choices
+
+`evaluate --format 3` reports a versioned candidate assessment using the same staged analysis, suitability rules, and comparable evidence as automatic routing. Formats 1 and 2 retain their existing meaning; the default remains 2. Format 3 is offline: it never dispatches workers, makes network calls, or writes files, even when Jev credentials are configured.
+
+```bash
+python3 -m bench_router.cli evaluate --format 3 --task task.json --host codex
+python3 -m bench_router.cli evaluate --format 3 --task task.json --host codex --decision-response responses.json
+python3 -m bench_router.cli select --assessment assessment.json --profile specialist \
+  --policy-id team-policy --policy-version 1 --reason "assign this specialist to the review step" --accept-provisional
+python3 -m bench_router.cli route --task task.json --selection selection.json --dry-run
+```
+
+Use the same `--context` for assessment and execution when supplying metrics. Resolve each `decision_required` packet using the [existing stage response contract](vendor-guided-routing.md#cli와-오프라인-응답), preserving `decision.completed`. Pending responses use `decision.request_digest`; their final `assessment_digest` is null. Save the completed `status: "ok"` result as `assessment.json`. `select` returns `{"status":"ok", "schema_version":"1.0", "selection":{...}}`; save only its `selection` object as `selection.json`. Removing `--dry-run` from the last command requests live execution.
+
+Assessment schema 3.0 exposes the following fields:
+
+| Field | Contract |
+|---|---|
+| `candidates` | All configured profiles in ID order, with hard `eligible`/`constraints`, metric `facts`, semantic `suitability`, sparse `observations`/`missing`, and candidate-local `diagnostics`. Order is not a ranking. Hard-excluded or not-yet-assessed profiles have suitability `not_evaluated`. |
+| `evidence` | Shared unit definitions, actual comparable-unit winners and exact/model-proxy comparison scopes, `omitted_units` from the retrieval limit, and evidence warnings. `inputs.index_hash` identifies the retrieval index. |
+| `compared_profiles` | The candidate set used to check comparability; a unit enters `evidence.comparisons` only when its measurements are comparable for that set. |
+| `diagnostics` | Assessment-wide `comparable_evaluation_missing` and `workload_unresolved` where applicable. |
+| `recommendation` | The existing policy's separate recommendation and diagnostics. `status: "abstained"` with a null profile is possible after completed judgments; this does not make unsuitable candidates selectable. Before judgments complete, the whole field is null. |
+| `decision` / `assessment_digest` | Replayable staged evidence and a hash of `{"schema_version":"3.0","decision":...}`. Inputs bind task/context, configuration, guidance, snapshot, index, exclusions, and selection policy. Projections are informational; execution revalidates the embedded decision. |
+
+`select` creates selection schema **4.0** with `profile`, `assessment_digest`, external `policy: {id, version}`, `reason`, `decision`, and the boolean `accept_provisional`. It accepts any hard-eligible candidate whose recorded fit is documented, or provisional with explicit acceptance. It rejects unsuitable and unassessed candidates. A provisional candidate's pending conditions remain visible; acceptance does not establish measured quality. An upstream policy can use its own criterion even when the router abstains from a recommendation, provided the chosen candidate passed suitability assessment.
+
+`route --selection` and group 2.0 accept 4.0 records, replay the same evidence without new judgment-provider calls, and check current constraints and availability. The chosen profile need not equal the router's recommendation. Changed decision inputs return `stale_assessment`; an already submitted run is collected first. Selection 2.0 remains an explicit semantic override, and 3.0 still requires the router's resolved profile. No existing selection version is reinterpreted.
+
+Candidate diagnostics include `provisional_suitability`, `guidance_missing`, `guidance_fit_unresolved`, `workflow_gain_unverified`, `cost_unknown`, `task_quality_unverified`, and `task_specific_evaluation_missing`. Recommendation diagnostics retain the existing tie, cost-pool, comparison-scope, and selected-profile uncertainties. Preserve unknown diagnostic codes without triggering extra workers or retries; reject unsupported contract versions and required states. These records do not reserve quota, freeze artifact contents, or choose a multi-agent pattern. Workflow evaluation evidence and team budgets remain upstream.
+
+## Existing facts and override workflow
+
 Create a normal `task.json`, then optionally supply `context.json` (schema 2.0; contract in [routing-contracts.md](routing-contracts.md) §2):
 
 ```json
@@ -99,5 +132,7 @@ The run response includes `delivery_state` and `reassignment`. `safe_to_retry` m
 - Obtain each `assessment_digest` by running `evaluate` on the task with `cwd` set to the group `cwd` and the original prompt. Workers run in their own worktrees with collaboration text appended, so their tasks differ by design. The digest is checked once at planning time. Each worker dispatch re-checks context, constraints, and availability.
 - If any selection is stale, the whole group returns `stale_assessment` and nothing runs.
 - Each worker's `max_estimated_cost_usd` is a per-call allowance. The group total, and how a remaining budget is split across workers, are the Orchestrator's responsibility.
+- `selections` is an ordered list of execution instances, so the same profile may appear more than once (with 2.0, 3.0, or 4.0 selection records). Each entry gets its own label, worktree, and receipt; repeats count toward the per-task limit of 8 and group limit of 16. Reusing the same group input collects those runs without resubmitting them.
+- Each member's `rounds` carries `delivery_state` and `reassignment` from the single-run response, including `collect_first` for an uncertain or unfinished delivery. These fields may be absent or null when dispatch produced no receipt; inspect the returned status, warnings, and errors before choosing a next action.
 
 Schema 1.0 groups keep the legacy behaviour: the router's own `route` choice plus the next candidates, up to `fanout`.

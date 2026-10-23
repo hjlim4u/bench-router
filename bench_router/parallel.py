@@ -21,7 +21,8 @@ ISOLATION = ("isolated", "shared")
 GROUP_KEYS = ("schema_version", "group_id", "cwd", "isolation", "fanout", "max_parallel", "tasks")
 GROUP_SCHEMA_VERSION = "2.0"  # tasks[i] = {task, context?, selections[]}: Orchestrator가 고른 프로필로 fanout
 MAX_AGENTS = 16
-ROUND_KEYS = ("status", "round", "run_id", "result_path", "task_outcome", "worktree", "branch", "receipt_path")
+ROUND_KEYS = ("status", "round", "run_id", "result_path", "task_outcome", "worktree", "branch", "receipt_path",
+              "delivery_state", "reassignment")
 
 
 def validate_group(raw):
@@ -62,8 +63,6 @@ def validate_group(raw):
             if not isinstance(sels, list) or not 1 <= len(sels) <= 8:
                 raise r.InputError(f"group.tasks[{i}].selections: 1..8 selections required")
             sels = [r.validate_selection(x) for x in sels]
-            if len({x["profile"] for x in sels}) != len(sels):
-                raise r.InputError(f"group.tasks[{i}].selections: duplicate profile")
             g["selections"].append(sels)
             g["contexts"].append(rt.get("context"))
             rt = rt["task"]
@@ -98,7 +97,7 @@ def plan(g, cfg, mapping, snap, snap_warnings, availability, decision_options=No
         if g["selections"] is not None:
             res = r.evaluate_v1(t, cfg, mapping, snap, snap_warnings, now, availability, g["contexts"][i])
             for k, sel in enumerate(g["selections"][i], 1):
-                if sel["schema_version"] == "3.0":
+                if sel["schema_version"] in ("3.0", "4.0"):
                     chk = r.route(t, cfg, mapping, snap, snap_warnings, now, availability, g["contexts"][i],
                                   selection=sel, **options)
                 else:
@@ -214,7 +213,7 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                    for rc in herdr.receipts(wt)):
                 continue
             sel = m.get("selection")
-            if sel and sel["schema_version"] == "3.0":
+            if sel and sel["schema_version"] in ("3.0", "4.0"):
                 opts = {**(decision_options or {}), "allow_network": False, "policy": "vendor-guided"}
                 chk = r.route(g["tasks"][i], cfg, mapping, snap, snap_warnings, datetime.now(timezone.utc),
                               availability, g["contexts"][i], selection=sel, **opts)

@@ -55,12 +55,15 @@ live `route`는 설정된 Jev를 호출할 수 있으며, 키가 없거나 호�
 
 ## 선택 기록과 호환성
 
-새 `selection` 스키마는 `3.0`이며 기존 profile/digest/policy/reason에 `decision`을 추가합니다.
-정책 버전은 `2`입니다. `decision`은 `inputs`, 원래 `task`, 순서가 있는 `stages`, `evaluation`, provider/model, uncertainty를 보관합니다. 각 stage는 request/digest/answers, 실제 provider/model, 보고된 usage와 elapsed_ms(있는 경우)를 보존합니다. `evaluation`에는 공유 unit 정의, 후보별 sparse 관측·결측, 조건부 적합성 검증과 실제 비교 범위가 있습니다.
+상위 계층이 후보 평가를 받은 뒤 자체 정책으로 프로필을 선택하려면 `evaluate --format 3` → `select` → `route --selection`을 사용합니다. 이 경로의 선택 기록은 **4.0**이며 적합 후보 중 기본 추천과 다른 프로필을 고를 수 있습니다. 잠정 적합성은 `--accept-provisional`로 수용해야 하고, 부적합 후보나 필수 제약 실패는 우회하지 못합니다. [공개 평가·외부 선택 계약](orchestrator.md#vendor-guided-candidate-assessments-and-upstream-choices)을 참조하세요. 기존 2.0 override와 기본 자동 선택의 3.0 재현 의미는 유지합니다.
+
+vendor-guided 자동 선택 기록은 `3.0`이며 기존 profile/digest/policy/reason에 `decision`을 추가합니다. 상위가 format 3 후보 평가에서 선택한 기록은 `4.0`이고, 같은 `decision`에 `accept_provisional`을 추가합니다. 두 형식 모두 정책 버전 `2`의 평가 근거를 보존하지만, 3.0은 라우터가 해결한 profile에 고정되고 4.0은 검증된 외부 정책의 선택을 기록합니다.
+`decision`은 `inputs`, 원래 `task`, 순서가 있는 `stages`, `evaluation`, provider/model, uncertainty를 보관합니다. 각 stage는 request/digest/answers, 실제 provider/model, 보고된 usage와 elapsed_ms(있는 경우)를 보존합니다. `evaluation`에는 공유 unit 정의, 후보별 sparse 관측·결측, 조건부 적합성 검증과 실제 비교 범위가 있습니다.
 최종 digest는 이 decision 전체를 묶습니다. 단계별 request digest는 각 요청 내용만 묶으므로 작업 분석을 무관한 snapshot 변경 때문에 다시 호출하지 않습니다.
 지나간 시간 수치 자체는 제외하지만 근거·견적이 만료되면 freshness 변경으로 재판단합니다.
 `route --selection`에 출력된 기록을 넘길 때 출력 전용 `source`는 제거합니다.
 `2.0` 선택 기록과 `--profile`은 기존의 명시적 선택으로 지원하고 새 정책 검증과 구분해 경고합니다.
+`4.0`은 `evaluate --format 3` → `select`가 만든 기록만 허용합니다. 기존 2.0·3.0 기록을 4.0으로 임의 변환하거나, 3.0의 profile만 바꿔 재사용할 수 없습니다.
 정책 버전 `1`의 기존 vendor-guided 선택은 새 결정에 재사용하지 않고 다시 판단해야 합니다. 이미 제출한 실행의 receipt 회수는 정책 변경과 무관하게 우선합니다.
 기존 실행 회수는 저장된 선택을 사용합니다. 새 가이드나 판단 API 장애 때문에 같은 작업을 재전송하지 않습니다.
 
@@ -71,6 +74,7 @@ live `route`는 설정된 Jev를 호출할 수 있으며, 키가 없거나 호�
 모든 선택이 완료되기 전에는 worktree·그룹 파일·worker를 만들지 않습니다.
 실행 시작 시 `plan.json`에 선택과 그룹 입력을 저장합니다. 동일 그룹 재실행은 이 선택과 기존 receipts를 회수합니다.
 변경된 그룹 입력은 conflict이며, 실행하지 않은 member의 오래된 선택은 전체 사전 검증에서 거부합니다.
+group 2.0의 `selections`는 순서 있는 실행 인스턴스 목록이므로 동일 profile을 반복할 수 있습니다. 반복 항목도 별도 label·worktree·receipt를 가지며 task당 8개와 group 전체 16개 한도에 포함됩니다. member `rounds`에는 `delivery_state`와 `reassignment`가 보존되므로, 불확실하거나 미완료인 실행은 재배정 전에 `collect_first`를 따릅니다.
 
 ## 가이드 갱신
 

@@ -32,7 +32,8 @@ class CoordinationTests(unittest.TestCase):
 
     def run_(self, fake, t=None):
         fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
-        return herdr.dispatch(t or self.task(), self.cfg, MAPPING, None, [], runner=fake, which=which)
+        return herdr.dispatch(t or self.task(), self.cfg, MAPPING, None, [], runner=fake, which=which,
+                              decision_options={"policy": "legacy"})
 
     def test_v44_repeat_observes_and_backend_is_immutable(self):
         fake = FakeProjects(on_prompt=write_result())

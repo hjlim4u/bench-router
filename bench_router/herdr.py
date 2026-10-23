@@ -569,7 +569,7 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                 return out
             now = _now()
             availability = availability if availability is not None else probe_profiles(cfg["profile"], which)
-            if selection is not None and selection.get("schema_version") == "3.0":
+            if selection is not None and selection.get("schema_version") in ("3.0", "4.0"):
                 opts = {**(decision_options or {}), "allow_network": False}
                 opts.pop("response", None)
                 res = r.route(t, cfg, mapping, snap, snap_warnings, now, availability, context,

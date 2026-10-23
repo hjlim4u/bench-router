@@ -46,7 +46,8 @@ def guided_reply(packet, chosen, **overrides):
         elif key == "benchmark":
             choice = "__tie__"
         answers[key] = {"type": "choice", "choice": overrides.get(key, choice)}
-    response = {"request_digest": packet["assessment_digest"], "provider": "subagent", "model": "gpt-6-luna", "answers": answers}
+    response = {"request_digest": packet.get("decision", {}).get("request_digest") or packet["assessment_digest"],
+                "provider": "subagent", "model": "gpt-6-luna", "answers": answers}
     return {"stages": [*packet.get("decision", {}).get("completed", []), response]}
 
 
@@ -1098,6 +1099,122 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertIn("workflow_gain_unverified", self.finish("strong", snap=snap, index=idx)["selection"]["decision"]["uncertainty"])
         snap["profiles"]["light"]["evidence"]["u/coding"]["conditions"]["dataset_revision"] = "fixture"
         self.assertIn("workflow_gain_unverified", self.finish("strong", snap=snap, index=idx, now=NOW + timedelta(hours=1))["selection"]["decision"]["uncertainty"])
+
+    def test_v94_public_assessment_and_external_choice(self):
+        from unittest.mock import patch
+        self.ps.append(profile("disabled", enabled=False))
+        self.cfg = config(self.ps, default="strong", fallback=["light"])
+        first = self.d.evaluate(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", env={})
+        self.assertEqual((first["schema_version"], first["status"], first["assessment_digest"]),
+                         ("3.0", "decision_required", None))
+        response = guided_reply({**first, "assessment_digest": first["decision"]["request_digest"]}, "__tie__")
+        fit = self.d.evaluate(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response)
+        response = guided_reply({**fit, "assessment_digest": fit["decision"]["request_digest"]}, "__tie__")
+        assessment = self.d.evaluate(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response)
+        self.assertEqual(assessment["status"], "ok")
+        self.assertEqual([c["profile"] for c in assessment["candidates"]], ["disabled", "light", "strong"])
+        self.assertFalse(assessment["candidates"][0]["eligible"])
+        self.assertEqual(assessment["recommendation"]["profile"], "strong")
+        self.assertNotIn("tie_resolved_by_configuration", assessment["candidates"][1]["diagnostics"])
+        self.assertIn("comparable_evaluation_missing", assessment["diagnostics"])
+        selection = self.d.bind(assessment, "light", {"id": "team", "version": "1"}, "reserve strong for another role",
+                                accept_provisional=True)
+        with patch.object(self.d.provider, "decide", side_effect=AssertionError("must replay without calls")):
+            out = self.route(selection=selection)
+        self.assertEqual((selection["schema_version"], out["status"], out["selected"]["profile"]),
+                         ("4.0", "selected", "light"))
+        self.assertEqual(out["selection_mode"], "orchestrator_assessed")
+        self.assertEqual(self.route(selection=selection, availability={"light": "quota_exhausted"})["status"],
+                         "stale_assessment")
+        with self.assertRaises(r.InputError):
+            self.d.bind(assessment, "disabled", {"id": "team", "version": "1"}, "no")
+        self.task["prompt"] += " Changed requirements."
+        self.assertEqual(self.route(selection=selection)["status"], "stale_assessment")
+
+    def test_v95_provisional_and_unsuitable_external_choices(self):
+        from copy import deepcopy
+        self.ps[0]["model_id"] = "unlisted-model"
+        decision = self.finish("__tie__")["selection"]["decision"]
+        # Projection is informational: changing it cannot override the embedded fit proof.
+        assessment = {"schema_version": "3.0", "status": "ok", "decision": decision,
+                      "assessment_digest": self.d.assessment_digest(decision)}
+        for pid in decision["evaluation"]["fits"]:
+            fit = decision["evaluation"]["fits"][pid]
+            if fit["status"] == "provisional":
+                with self.assertRaisesRegex(r.InputError, "accept_provisional"):
+                    self.d.bind(assessment, pid, {"id": "team", "version": "1"}, "pending")
+                self.assertEqual(self.d.bind(assessment, pid, {"id": "team", "version": "1"}, "accepted", True)
+                                 ["schema_version"], "4.0")
+        unsuitable = self.finish("light")["selection"]["decision"]
+        assessment.update(decision=unsuitable, assessment_digest=self.d.assessment_digest(unsuitable))
+        with self.assertRaisesRegex(r.InputError, "suitable"):
+            self.d.bind(assessment, "strong", {"id": "team", "version": "1"}, "no", True)
+        selection = self.d.bind(assessment, "light", {"id": "team", "version": "1"}, "yes", True)
+        changed = deepcopy(selection)
+        changed["decision"]["evaluation"]["fits"]["strong"]["status"] = "documented"
+        with self.assertRaisesRegex(r.InputError, "digest"):
+            r.validate_selection(changed)
+        changed["assessment_digest"] = self.d.assessment_digest(changed["decision"])
+        self.assertEqual(self.route(selection=changed)["status"], "stale_assessment")
+        selection["schema_version"] = "5.0"
+        with self.assertRaises(r.InputError):
+            r.validate_selection(selection)
+
+    def test_v96_assessment_with_no_recommendation_retains_candidates(self):
+        idx = self.indexed(("u/one", "u/two"))
+        snap = self.exact({"light": {"u/one": 0.9, "u/two": 0.5},
+                           "strong": {"u/one": 0.5, "u/two": 0.9}})
+        packet = self.fit_packet(index=idx, snap=snap)
+        packet = self.route(index=idx, snap=snap, response=guided_reply(packet, "__tie__"))
+        response = guided_reply(packet, "__tie__")  # all relevance answers are zero
+        assessment = self.d.evaluate(self.task, self.cfg, MAPPING, snap, [], NOW, host="codex", env={},
+                                     index=idx, response=response)
+        self.assertEqual((assessment["status"], assessment["recommendation"]["status"]), ("ok", "abstained"))
+        self.assertEqual(assessment["compared_profiles"], ["light", "strong"])
+        self.assertEqual(set(assessment["evidence"]["comparisons"]), {"u/one", "u/two"})
+        selection = self.d.bind(assessment, "light", {"id": "team", "version": "1"}, "external criterion", True)
+        self.assertEqual(self.route(index=idx, snap=snap, selection=selection)["selected"]["profile"], "light")
+
+    def test_v97_cli_assessment_selection_and_offline_execution_check(self):
+        from unittest.mock import patch
+        root = Path(self.tmp.name)
+        cfg = root / "cfg"
+        cfg.mkdir()
+        (cfg / "profiles.toml").write_text((EX / "profiles.example.toml").read_text().replace("enabled = false", "enabled = true"))
+        task = root / "task.json"
+        task.write_text(json.dumps({"schema_version": "1.0", **self.task}))
+        response_path = root / "response.json"
+        args = ["--config-dir", str(cfg), "--cache-dir", str(root / "cache")]
+        def run(command):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = cli.main([*args, *command])
+            return code, json.loads(out.getvalue())
+        command = ["evaluate", "--format", "3", "--task", str(task), "--host", "codex"]
+        with patch.object(r, "env_with_dotenv", return_value={}), patch("urllib.request.urlopen") as network, \
+                patch("bench_router.herdr.dispatch") as dispatch, patch.object(r, "atomic_write") as writes:
+            code, assessment = run(command)
+            self.assertEqual(code, 17)
+            for _ in range(3):
+                response_path.write_text(json.dumps(guided_reply(assessment, "__tie__")))
+                code, assessment = run([*command, "--decision-response", str(response_path)])
+                if code != 17:
+                    break
+            self.assertEqual((code, assessment["status"]), (0, "ok"))
+            path = root / "assessment.json"
+            path.write_text(json.dumps(assessment))
+            pid = next(c["profile"] for c in assessment["candidates"] if c["eligible"])
+            code, result = run(["select", "--assessment", str(path), "--profile", pid, "--policy-id", "team",
+                                "--policy-version", "1", "--reason", "role assignment", "--accept-provisional"])
+            self.assertEqual((code, result["selection"]["schema_version"]), (0, "4.0"))
+            path = root / "selection.json"
+            path.write_text(json.dumps(result["selection"]))
+            code, result = run(["route", "--task", str(task), "--selection", str(path), "--dry-run"])
+            self.assertEqual((code, result["selected"]["profile"]), (0, pid))
+            network.assert_not_called()
+            dispatch.assert_not_called()
+            writes.assert_not_called()
+            self.assertFalse((root / "cache").exists())
 
     def test_v92_majority_winner_skips_benchmark_stage(self):
         ids = ("u/one", "u/two", "u/three")

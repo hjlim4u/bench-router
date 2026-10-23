@@ -348,7 +348,7 @@ CONSTRAINTS["latency"] = lambda p, t, f, ctx: None if "max_latency_p50_ms" not i
 
 각 단계는 독립 커밋, 단계마다 `python3 -m unittest test_p0 test_p1 test_p2 test_p3` 통과.
 
-진행: 1–6단계 완료 (2026-10-13, test_v36–v40). 남은 일: 실환경 herdr smoke, `evaluate --format 1` 제거 시점 결정.
+진행: 1–7단계 완료. 1–6단계는 2026-10-13에 완료했고, 7단계는 공개 후보 평가·외부 선택 계약으로 확장했다. 남은 일: 실환경 herdr smoke, `evaluate --format 1` 제거 시점 결정.
 
 3단계 구현에서 확정된 세부:
 - evaluate 2.0의 `assessment_digest`는 4단계에서 추가. 3단계 출력은 그 재료인 `inputs`만 포함.
@@ -365,7 +365,13 @@ CONSTRAINTS["latency"] = lambda p, t, f, ctx: None if "max_latency_p50_ms" not i
 5단계 구현에서 확정된 세부:
 - group 2.0의 digest는 group 수준 task(cwd=group.cwd, 원래 prompt) 기준으로 plan 시점에 한 번 검사. worker task는 worktree cwd·협업 안내로 구조상 달라 `check_digest=False`로 dispatch (context·제약·가용성은 재검사).
 - 선택 하나라도 stale이면 그룹 전체를 실행하지 않는다 (`stale_assessment`).
-- group 2.0에서 `fanout` 키는 금지 (선택 수가 곧 fanout). task당 선택 1–8개, 프로필 중복 금지.
+- group 2.0에서 `fanout` 키는 금지 (선택 수가 곧 fanout). task당 선택 1–8개이며 `selections`는 순서 있는 실행 인스턴스 목록이다. 같은 프로필을 반복할 수 있고 각 항목은 별도 label·worktree·receipt를 받는다. 반복도 task당 8개 및 group 전체 16개 한도에 포함한다.
+
+7단계 구현에서 확정된 세부:
+- `evaluate --format 3`은 vendor-guided의 analysis·fit·비교 근거를 선택 없이 공개한다. 후보는 ID순이며, hard 제약·semantic suitability·후보별 diagnostics와 공유 evidence를 구분해 반환한다.
+- `select`는 완료된 format 3 assessment에서 selection 4.0을 만든다. 상위 정책은 라우터 추천과 다른 documented 후보를 고를 수 있고, provisional 후보는 `accept_provisional=true`을 명시해야 한다. unsuitable·미평가 후보와 hard 제약 실패는 선택할 수 없다.
+- 4.0 선택은 실행 시 기록된 판단을 재생하고 현재 제약·가용성을 다시 확인한다. 입력이 달라지면 `stale_assessment`이며, 이미 제출한 같은 task/round는 선택 재평가보다 receipt 회수가 우선한다. 2.0 override와 3.0 vendor-guided 선택의 의미는 변경하지 않는다.
+- group member 결과는 단건 실행의 `delivery_state`와 `reassignment`를 보존한다. 이 필드는 전송 불확실 시 자동 재시도 대신 `collect_first` 결정을 지원한다.
 
 1. **assess 추출** (`routing.py`): `route()` 루프를 `assess` + `benchmark_evaluation` + `CONSTRAINTS`로 분리, `route`/`evaluate`(1.0 형식) 재구성. 기존 테스트 무수정 통과가 완료 조건.
 2. **context 2.0 + METRICS** (`routing.py`): 검증·freshness·1.0 변환·비용 결정 순서.
@@ -373,6 +379,7 @@ CONSTRAINTS["latency"] = lambda p, t, f, ctx: None if "max_latency_p50_ms" not i
 4. **digest + selection + decision 2.0** (`routing.py`, `herdr.py`, `cli.py`).
 5. **group 2.0** (`parallel.py`).
 6. **문서** (§6).
+7. **공개 후보 평가와 외부 선택** (`decision.py`, `cli.py`, `herdr.py`, `parallel.py`).
 
 ## 9. 검증 사례
 

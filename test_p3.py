@@ -12,7 +12,7 @@ from pathlib import Path
 
 from bench_router import parallel as pl
 from bench_router import routing as r
-from test_p0 import MAPPING, config, profile, guided_reply
+from test_p0 import MAPPING, config, profile, guided_reply, guided_responses, NOW
 from test_p2 import FakeProjects, which, write_result, projects_environment, cleanup_temp
 
 
@@ -79,6 +79,43 @@ class P3(unittest.TestCase):
                                  decision_options=opts)
         self.assertEqual((again["status"], len(fake.prompts)), ("completed", 2), again)
 
+        # Explicit 3.0 selections may repeat the same profile, unlike automatic fanout.
+        repeated = self.group(schema_version="2.0", group_id="repeat",
+                              tasks=[{"task": g["raw_tasks"][0],
+                                      "selections": [out["members"][0]["selection"]] * 2}])
+        out = pl.run_group(repeated, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which,
+                           decision_options=opts)
+        self.assertEqual((out["status"], [m["profile"] for m in out["members"]]), ("completed", ["a", "a"]))
+        for key in ("label", "worktree"):
+            self.assertEqual(len({m[key] for m in out["members"]}), 2)
+        self.assertEqual(len({m["rounds"][0]["run_id"] for m in out["members"]}), 2)
+        again = pl.run_group(repeated, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which,
+                             decision_options=opts)
+        self.assertEqual((again["status"], len(fake.prompts)), ("completed", 4))
+
+    def test_v99_group_external_selection_repeats_and_stale_preflight(self):
+        from bench_router import decision
+        task = {"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "do it"}
+        t = r.validate_task({**task, "cwd": self.cwd})
+        def evaluate(response=None):
+            return decision.evaluate(t, self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response)
+        assessment = evaluate(guided_responses(evaluate(), evaluate, "__tie__"))
+        selection = decision.bind(assessment, "b", {"id": "team", "version": "1"}, "repeat specialist", True)
+        raw = {"schema_version": "2.0", "group_id": "external", "cwd": self.cwd,
+               "tasks": [{"task": task, "selections": [selection, selection]}]}
+        fake = FakeProjects(on_prompt=write_result(), profiles={p["id"]: p for p in self.cfg["profile"]})
+        def run(raw, runner):
+            return pl.run_group(pl.validate_group(raw), self.cfg, MAPPING, None, [], session="brtest",
+                                runner=runner, which=which, decision_options={"host": "codex", "env": {}})
+        out = run(raw, fake)
+        self.assertEqual((out["status"], [m["profile"] for m in out["members"]]), ("completed", ["b", "b"]))
+        self.assertEqual(len({m["rounds"][0]["run_id"] for m in out["members"]}), 2)
+        self.assertEqual((run(raw, fake)["status"], len(fake.prompts)), ("completed", 2))
+        self.cfg = config([*self.cfg["profile"], profile("c")], default="a")
+        stale_fake = FakeProjects()
+        self.assertEqual(run({**raw, "group_id": "stale-external"}, stale_fake)["status"], "stale_assessment")
+        self.assertEqual(stale_fake.prompts, [])
+
     def test_v40_group_v2_orchestrator_selections(self):
         task = {"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "do it"}
         context = {"schema_version": "2.0", "profiles": {p: {"metrics": {
@@ -89,11 +126,27 @@ class P3(unittest.TestCase):
         sel = lambda pid: {"schema_version": "2.0", "profile": pid, "assessment_digest": digest,
                            "policy": {"id": "orch-diverse", "version": "1"}, "reason": f"{pid} for diversity"}
         raw = {"schema_version": "2.0", "group_id": "g2", "cwd": self.cwd, "isolation": "shared",
-               "tasks": [{"task": task, "context": context, "selections": [sel("b"), sel("a")]}]}
+               "tasks": [{"task": task, "context": context, "selections": [sel("b"), sel("a"), sel("b")]}]}
         fake = FakeProjects(on_prompt=write_result())
         out = self.run_(pl.validate_group(raw), fake)
-        self.assertEqual((out["status"], out["schema_version"], out["fanout"]), ("completed", "2.0", 2), out)
-        self.assertEqual([m["profile"] for m in out["members"]], ["b", "a"])  # router 순위가 아닌 Orchestrator 선택
+        self.assertEqual((out["status"], out["schema_version"], out["fanout"]), ("completed", "2.0", 3), out)
+        self.assertEqual([m["profile"] for m in out["members"]], ["b", "a", "b"])  # ordered execution instances
+        for key in ("label", "worktree"):
+            self.assertEqual(len({m[key] for m in out["members"]}), 3)
+        self.assertEqual(len({m["rounds"][0]["run_id"] for m in out["members"]}), 3)
+        for member in out["members"]:
+            self.assertEqual((member["rounds"][0]["delivery_state"], member["rounds"][0]["reassignment"]),
+                             ("activity_observed", "review_result"))
+        again = self.run_(pl.validate_group(raw), fake)
+        self.assertEqual((again["status"], len(fake.prompts)), ("completed", 3))
+        reordered = {**raw, "tasks": [{**raw["tasks"][0], "selections": [sel("a"), sel("b"), sel("b")]}]}
+        self.assertEqual(self.run_(pl.validate_group(reordered), fake)["status"], "conflict")
+        self.assertEqual(len(fake.prompts), 3)
+        stale_member = {**raw, "group_id": "stale-member", "tasks": [{**raw["tasks"][0],
+                        "selections": [sel("b"), {**sel("b"), "assessment_digest": "0" * 64}]}]}
+        stale_fake = FakeProjects(on_prompt=write_result())
+        stale = self.run_(pl.validate_group(stale_member), stale_fake)
+        self.assertEqual((stale["status"], stale_fake.prompts), ("stale_assessment", []))
         decision = json.loads((Path(out["members"][0]["rounds"][0]["receipt_path"]).parent / "decision.json")
                               .read_text("utf-8"))
         self.assertEqual((decision["selection"]["reason"], decision["decision_context"]["profiles"]["b"]["metrics"]
@@ -104,10 +157,26 @@ class P3(unittest.TestCase):
         stale = self.run_(pl.validate_group({**raw, "group_id": "g3"}), stale_fake)
         self.assertEqual((stale["status"], stale_fake.prompts), ("stale_assessment", []))
         for bad in ({**raw, "fanout": 2},
-                    {**raw, "tasks": [{"task": task, "selections": [sel("a"), sel("a")]}]},
+                    {**raw, "tasks": [{"task": task, "selections": [sel("a")] * 9}]},
+                    {**raw, "tasks": [{"task": task, "selections":
+                                       [sel("a"), {**sel("a"), "assessment_digest": "bad"}]}]},
                     {**raw, "tasks": [{"task": task, "selections": []}]}):
             with self.subTest(bad=bad), self.assertRaises(r.InputError):
                 pl.validate_group(bad)
+
+    def test_v41_partial_failure_preserves_reassignment(self):
+        self.cfg["profile"][1]["args"] = ["--add-dir", "/unsupported"]
+        fake = FakeProjects(on_prompt=write_result())
+        g = self.group(fanout=2, tasks=[{"schema_version": "1.0", "task_id": "t1", "round": 1,
+                                       "summary": "s", "prompt": "do it"}])
+        out = self.run_(g, fake)
+        self.assertEqual(out["status"], "partial_failure")
+        self.assertEqual([(m["status"], m["rounds"][0]["delivery_state"], m["rounds"][0]["reassignment"])
+                          for m in out["members"]],
+                         [("completed", "activity_observed", "review_result"),
+                          ("execution_failed", "not_attempted", "safe_to_retry")])
+        again = self.run_(g, fake)
+        self.assertEqual((again["status"], len(fake.prompts)), ("partial_failure", 1))
 
     def test_v30_isolated_worktrees(self):
         fake = FakeProjects(on_prompt=write_result())
@@ -154,6 +223,9 @@ class P3(unittest.TestCase):
         out = self.run_(g, fake, wait_ms=0)  # every member submitted, nobody waited on
         self.assertEqual([m["rounds"][0]["status"] for m in out["members"]], ["timed_out", "timed_out"], out)
         self.assertEqual(out["status"], "partial_failure")
+        for member in out["members"]:
+            self.assertEqual((member["rounds"][0]["delivery_state"], member["rounds"][0]["reassignment"]),
+                             ("submission_attempted", "collect_first"))
         again = self.run_(g, fake)
         self.assertEqual((again["status"], len(fake.prompts)), ("completed", 2), again)
 
@@ -166,6 +238,13 @@ class P3(unittest.TestCase):
         t = {"schema_version": "1.0", "task_id": "x", "round": 1, "summary": "s", "prompt": "p"}
         with self.assertRaises(r.InputError):
             self.group(tasks=[t, t])
+        sel = {"schema_version": "2.0", "profile": "a", "assessment_digest": "0" * 64,
+               "policy": {"id": "repeat", "version": "1"}, "reason": "repeat one profile"}
+        entries = [{"task": {**t, "task_id": f"t{i}"}, "selections": [sel] * n}
+                   for i, n in enumerate((8, 8, 1))]
+        self.assertEqual(self.group(schema_version="2.0", tasks=entries[:2])["fanout"], 8)
+        with self.assertRaisesRegex(r.InputError, "total agents"):
+            self.group(schema_version="2.0", tasks=entries)
 
 
 if __name__ == "__main__":

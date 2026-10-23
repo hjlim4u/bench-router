@@ -9,6 +9,8 @@ from . import routing as r
 
 POLICY = {"id": "vendor-guided", "version": "2"}
 SELECTION_VERSION = "3.0"
+ASSESSMENT_VERSION = "3.0"
+EXTERNAL_SELECTION_VERSION = "4.0"
 GUIDELINES = Path(__file__).with_name("guidelines.toml")
 WORKLOADS = {
     "clarity": {"clear": "Explicit requirements and acceptance conditions.",
@@ -306,12 +308,15 @@ def _stage_response(request, raw, host, env, verify_model=True):
 
 
 def validate_selection(raw):
-    if not isinstance(raw, dict) or set(raw) != r.SELECTION_KEYS | {"decision"} or raw.get("schema_version") != SELECTION_VERSION:
-        raise r.InputError("selection 3.0: profile, assessment_digest, policy, reason and decision required")
+    external = isinstance(raw, dict) and raw.get("schema_version") == EXTERNAL_SELECTION_VERSION
+    extra = {"accept_provisional"} if external else set()
+    if (not isinstance(raw, dict) or set(raw) != r.SELECTION_KEYS | {"decision"} | extra
+            or raw.get("schema_version") not in (SELECTION_VERSION, EXTERNAL_SELECTION_VERSION)):
+        raise r.InputError("selection 3.0/4.0: profile, assessment_digest, policy, reason and decision required; 4.0 also needs accept_provisional")
     old = r.validate_selection({**{k: raw[k] for k in r.SELECTION_KEYS}, "schema_version": "2.0"})
     d = raw["decision"]
     keys = {"inputs", "task", "stages", "evaluation", "uncertainty", "provider", "model"}
-    if not isinstance(d, dict) or set(d) != keys or raw["policy"] != POLICY:
+    if not isinstance(d, dict) or set(d) != keys or (not external and raw["policy"] != POLICY):
         raise r.InputError("selection: staged vendor-guided policy 2 required; repeat the decision")
     if (not isinstance(d["inputs"], dict) or not isinstance(d["task"], dict) or not isinstance(d["evaluation"], dict)
             or not isinstance(d["stages"], list) or not 2 <= len(d["stages"]) <= 3):
@@ -331,26 +336,40 @@ def validate_selection(raw):
             raise r.InputError("selection: malformed stage record")
     if (d["provider"], d["model"]) != (d["stages"][-1]["provider"], d["stages"][-1]["model"]):
         raise r.InputError("selection: provider/model differs from recorded execution")
-    if old["assessment_digest"] != r.canonical_hash(d):
+    if old["assessment_digest"] != (assessment_digest(d) if external else r.canonical_hash(d)):
         raise r.InputError("selection: decision digest mismatch")
-    return {**old, "schema_version": SELECTION_VERSION, "decision": d}
+    if external:
+        if d["inputs"].get("policy") != POLICY:
+            raise r.InputError("selection: assessment must use the current vendor-guided policy")
+        r._bool(raw["accept_provisional"], "selection.accept_provisional")
+        fits = d["evaluation"].get("fits")
+        fit = fits.get(old["profile"]) if isinstance(fits, dict) else None
+        if not isinstance(fit, dict) or fit.get("status") not in ("documented", "provisional"):
+            raise r.InputError("selection: profile must be an eligible, suitable assessment candidate")
+        if fit["status"] == "provisional" and not raw["accept_provisional"]:
+            raise r.InputError("selection: provisional suitability requires accept_provisional=true")
+    return {**old, "schema_version": raw["schema_version"], "decision": d,
+            **({"accept_provisional": raw["accept_provisional"]} if external else {})}
 
 
 def apply_record(base, cfg, selection, check_digest=True):
     selection = validate_selection(selection)
+    external = selection["schema_version"] == EXTERNAL_SELECTION_VERSION
     expected, actual = selection["decision"], base.get("validated_decision")
     if not check_digest and actual is not None:
         # Only worker prompt/cwd may differ after the group request was validated.
         actual = {**actual, "inputs": {**actual["inputs"], "assessment": {
             **actual["inputs"]["assessment"], "task_hash": expected["inputs"]["assessment"]["task_hash"]}}}
-    if actual != expected or base.get("resolved_profile") != selection["profile"]:
+    if actual != expected or (not external and base.get("resolved_profile") != selection["profile"]):
         return {**base, "status": "stale_assessment", "selected": None,
                 "warnings": base["warnings"] + [r.warn("stale_assessment", "decision inputs changed; repeat selection")]}
-    out = r.pin_selection(base, cfg, selection["profile"], "vendor-guided")
+    mode = "orchestrator_assessed" if external else "vendor-guided"
+    out = r.pin_selection(base, cfg, selection["profile"], mode)
     out.pop("validated_decision", None)
     out.pop("resolved_profile", None)
-    out.update(assessment_digest=selection["assessment_digest"], selection={"source": "vendor-guided", **selection})
-    out["warnings"] += [r.warn(code, f"{selection['profile']}: {code}") for code in expected["uncertainty"]]
+    out.update(assessment_digest=selection["assessment_digest"], selection={"source": mode, **selection})
+    codes = candidate_diagnostics(expected, selection["profile"], base["candidate_facts"]) if external else expected["uncertainty"]
+    out["warnings"] += [r.warn(code, f"{selection['profile']}: {code}") for code in codes]
     out["warnings"].append(r.warn("availability_checked" if base["availability_verified"] else "availability_unverified",
                                 "live preflight does not guarantee provider execution"))
     return out
@@ -358,7 +377,7 @@ def apply_record(base, cfg, selection, check_digest=True):
 
 def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None,
           *, host=None, response=None, selection=None, index=None, allow_network=False, env=None, check_digest=True,
-          omit_profiles=(), decision_cache=None):
+          omit_profiles=(), decision_cache=None, assessment_only=False):
     if selection is not None:
         selection = validate_selection(selection)
         omit_profiles = selection["decision"]["inputs"].get("omitted_profiles", [])
@@ -432,16 +451,21 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
         if cursor != len(supplied):
             raise r.InputError("decision response: unused stage responses")
         pid, uncertainty = resolve(evaluation, analysis, cfg, base["candidate_facts"], t["priority"], relevance)
-        if pid is None:
+        external = selection is not None and selection["schema_version"] == EXTERNAL_SELECTION_VERSION
+        if pid is None and not assessment_only and not external:
             return {**base, "status": "decision_unavailable", "decision": {"completed": completed, "uncertainty": uncertainty}}
         evaluation.update(benchmark_relevance=relevance, analysis=analysis)
         d = deepcopy({"inputs": base["decision_inputs"], "task": semantic_task, "stages": completed, "evaluation": evaluation,
                       "uncertainty": uncertainty, "provider": completed[-1]["provider"], "model": completed[-1]["model"]})
+        if assessment_only:
+            return {**base, "status": "ok", "validated_decision": d, "resolved_profile": pid}
+        base.update(validated_decision=d, resolved_profile=pid)
+        if selection is not None:
+            return apply_record(base, cfg, selection, check_digest)
         record = {"schema_version": SELECTION_VERSION, "profile": pid, "assessment_digest": r.canonical_hash(d),
                   "policy": POLICY, "reason": f"{pid}: suitability={fits[pid]['rule']}; benchmark_relevance={relevance}; priority={t['priority']}",
                   "decision": d}
-        base.update(validated_decision=d, resolved_profile=pid)
-        return apply_record(base, cfg, selection or record, check_digest)
+        return apply_record(base, cfg, record, check_digest)
     except r.InputError as exc:
         if selection is not None:
             return {**base, "status": "stale_assessment", "selected": None,
@@ -449,3 +473,76 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
         if str(exc) == "native_model_unverified":
             return {**base, "status": "decision_unavailable", "decision": {"reason": str(exc)}}
         raise
+
+
+def assessment_digest(decision):
+    return r.canonical_hash({"schema_version": ASSESSMENT_VERSION, "decision": decision})
+
+
+def candidate_diagnostics(decision, pid, facts):
+    ev = decision["evaluation"]
+    fit = ev["fits"].get(pid, {})
+    if fit.get("status") not in ("documented", "provisional"):
+        return []
+    codes = list(fit.get("pending_conditions", []))
+    if fit.get("status") == "provisional":
+        codes.append("provisional_suitability")
+    if fit.get("rule") == "__provisional__":
+        codes.append("guidance_missing" if not fit.get("rules") else "guidance_fit_unresolved")
+    if fit.get("status") in ("documented", "provisional"):
+        if not any(row.get("exact_profile") and not row.get("stale") for row in ev["observations"].get(pid, {}).values()):
+            codes.append("task_quality_unverified")
+        codes.append("task_specific_evaluation_missing")
+    if facts.get(pid, {}).get("cost.estimated_usd", {}).get("freshness") != "fresh":
+        codes.append("cost_unknown")
+    return codes
+
+
+def evaluate(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None, **options):
+    """Public candidate assessment; never dispatches, writes, or selects an execution profile."""
+    if options.pop("policy", "vendor-guided") != "vendor-guided":
+        raise r.InputError("evaluate format 3 requires vendor-guided policy")
+    result = route(t, cfg, mapping, snap, snap_warnings, now, availability, context,
+                   assessment_only=True, **options)
+    facts = r.assess(t, cfg, mapping, snap, snap_warnings, now, availability, context, benchmarks=False)
+    d = result.get("validated_decision")
+    ev = d["evaluation"] if d else {}
+    candidates = []
+    for c in facts["candidates"]:
+        pid = c["profile"]
+        fit = ev.get("fits", {}).get(pid, {"status": "not_evaluated"})
+        candidates.append({"profile": pid, "profile_fingerprint": c["profile_fingerprint"],
+            "eligible": c["eligible"], "constraints": c["constraints"], "facts": _stable(c["metrics"]),
+            "suitability": fit, "observations": ev.get("observations", {}).get(pid, {}),
+            "missing": ev.get("missing", {}).get(pid, {}),
+            "diagnostics": candidate_diagnostics(d, pid, result["candidate_facts"]) if d else []})
+    diagnostics = []
+    if d:
+        if not ev["comparisons"]:
+            diagnostics.append("comparable_evaluation_missing")
+        analysis = ev["analysis"]
+        if analysis["unresolved_facets"] or "unknown" in analysis["workload"].values():
+            diagnostics.append("workload_unresolved")
+    return {"schema_version": ASSESSMENT_VERSION, "status": result["status"],
+        "task_id": t["task_id"], "round": t["round"], "assessment_digest": assessment_digest(d) if d else None,
+        "inputs": d["inputs"] if d else result.get("decision_inputs"), "candidates": candidates,
+        "evidence": {**{k: ev.get(k, {} if k != "omitted_units" else 0)
+                        for k in ("units", "comparisons", "comparison_scopes", "omitted_units")},
+                     "warnings": ev.get("warnings", [])},
+        "compared_profiles": sorted(ev.get("observations", {})), "diagnostics": diagnostics,
+        "recommendation": {"status": "selected" if result.get("resolved_profile") else "abstained",
+                           "profile": result.get("resolved_profile"), "policy": dict(POLICY),
+                           "diagnostics": d["uncertainty"]} if d else None,
+        "decision": d if d else result.get("decision"),
+        **({"decision_request": result["decision_request"]} if "decision_request" in result else {}),
+        "warnings": result["warnings"], "availability_verified": result["availability_verified"]}
+
+
+def bind(assessment, profile, policy, reason, accept_provisional=False):
+    """Record an upstream choice; execution replays and checks the embedded evidence."""
+    if (not isinstance(assessment, dict) or assessment.get("schema_version") != ASSESSMENT_VERSION
+            or assessment.get("status") != "ok" or not isinstance(assessment.get("decision"), dict)):
+        raise r.InputError("select: completed evaluate format 3 assessment required")
+    return validate_selection({"schema_version": EXTERNAL_SELECTION_VERSION, "profile": profile,
+        "assessment_digest": assessment.get("assessment_digest"), "decision": deepcopy(assessment["decision"]),
+        "policy": policy, "reason": reason, "accept_provisional": accept_provisional})
