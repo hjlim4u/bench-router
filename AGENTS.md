@@ -8,6 +8,8 @@
 
 Use Python 3.11+ on Linux or WSL2. Run commands from the repository root; there is no installation or build step.
 
+Core commands need only the standard library. For Arena refresh (`pyarrow`) and the CodeBurn CLI, `mise install && mise run setup` installs them (uv, `.venv/`); `mise run test` and `mise run refresh` wrap the commands below.
+
 ```bash
 python3 -m bench_router.cli --help
 python3 -m bench_router.cli status

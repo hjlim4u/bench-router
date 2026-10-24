@@ -1,0 +1,20 @@
+[tools]
+uv = "latest"
+node = "lts"
+"npm:codeburn" = "latest"  # eval/codeburn.py shells out to the codeburn CLI
+
+[tasks.setup]
+description = "install Arena refresh deps (pyarrow) into .venv"
+run = "uv sync --extra arena"
+
+[tasks.test]
+description = "offline test suite"
+run = "uv run python -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn"
+
+[tasks.refresh]
+description = "fetch all sources and publish the routing snapshot"
+depends = ["setup"]
+run = "uv run python -m bench_router.cli refresh --force"
+
+[tasks.status]
+run = "uv run python -m bench_router.cli status"

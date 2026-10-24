@@ -1,0 +1,12 @@
+[project]
+name = "bench-router"
+version = "0.0.0"
+description = "Benchmark-evidence router for coding-agent profiles"
+requires-python = ">=3.11"
+dependencies = []  # core path is stdlib only
+
+[project.optional-dependencies]
+arena = ["pyarrow"]  # needed only for `refresh --source arena`
+
+[tool.uv]
+package = false  # run from the repo root; nothing to build or install
