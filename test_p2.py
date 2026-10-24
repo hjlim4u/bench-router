@@ -257,12 +257,37 @@ class P2(unittest.TestCase):
             if cmd[0] == "agy":
                 return SimpleNamespace(returncode=0, stdout="gemini-4-argon-high\tGemini 4 Argon (High)\n", stderr="")
             return SimpleNamespace(returncode=0, stdout=json.dumps(rows if cmd[1] == "models" else quota), stderr="")
-        profiles = hd.discover_profiles(which=lambda name: None if name == "claude" else "/usr/bin/tool", runner=runner)
+        no_cache = Path(self.tmp.name) / "missing.json"
+        profiles = hd.discover_profiles(which=lambda name: None if name == "claude" else "/usr/bin/tool", runner=runner,
+                                        codex_cache=no_cache, claude_models=[])
         self.assertEqual([p["id"] for p in profiles], ["agy-gemini-4-argon-high", "codex-gpt-6-1-sol-high",
                                                           "codex-gpt-6-1-sol-low", "codex-gpt-6-1-sol-medium",
                                                           "codex-gpt-6-1-sol-xhigh"])
         self.assertEqual(profiles[1]["args"], ["-m", "gpt-6.1-sol", "-c", 'model_reasoning_effort="high"'])
         self.assertEqual(r.load_profiles(self._write_profiles(profiles))["profile"], profiles)
+
+    def test_v108_discovers_unused_models_from_codex_cache_and_claude_guidance(self):
+        cache = Path(self.tmp.name) / "models_cache.json"
+        cache.write_text(json.dumps({"models": [
+            {"slug": "gpt-6-astra", "visibility": "list", "supported_reasoning_levels": [{"effort": "low"}, {"effort": "ultra"}]},
+            {"slug": "gpt-6.1-sol", "visibility": "list", "supported_reasoning_levels": [{"effort": "medium"}]},
+            {"slug": "codex-auto-review", "visibility": "hide", "supported_reasoning_levels": [{"effort": "low"}]}]}), "utf-8")
+        def runner(cmd, **kw):
+            if cmd[0] == "claude":
+                return SimpleNamespace(returncode=0, stdout="  --effort <level>  Effort level (low, max)\n", stderr="")
+            rows = [{"provider": "codex", "model": "gpt-6.1-sol"}, {"provider": "claude", "model": "claude-opus-5-5"}]
+            return SimpleNamespace(returncode=0 if cmd[0] != "agy" else 1, stdout=json.dumps(rows), stderr="")
+        profiles = hd.discover_profiles(which=lambda name: "/usr/bin/tool", runner=runner, codex_cache=cache,
+                                        claude_models=["claude-haiku-5-5", "claude-opus-5-5"])
+        by_id = {p["id"]: p for p in profiles}
+        self.assertEqual(sorted(by_id), ["claude-claude-haiku-5-5-low", "claude-claude-haiku-5-5-max",
+                                         "claude-claude-opus-5-5-low", "claude-claude-opus-5-5-max",
+                                         "codex-gpt-6-1-sol-medium", "codex-gpt-6-astra-low", "codex-gpt-6-astra-ultra"])
+        # the cache's own efforts replace the default list; hidden internal models are not registered
+        self.assertEqual(by_id["codex-gpt-6-1-sol-medium"]["config_revision"], "codex-models-cache")
+        self.assertEqual(by_id["claude-claude-haiku-5-5-max"]["args"], ["--model", "claude-haiku-5-5", "--effort", "max"])
+        self.assertEqual(by_id["claude-claude-opus-5-5-low"]["config_revision"], "codeburn-discovery")
+        self.assertEqual(hd.codex_models(Path(self.tmp.name) / "missing.json"), {})
 
     def _write_profiles(self, profiles):
         path = Path(self.tmp.name) / "profiles.toml"

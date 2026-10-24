@@ -281,6 +281,16 @@ class P1(unittest.TestCase):
         self.assertEqual((a["raw"], lo["raw"]), (50, 30))  # 프로필 effort 행, 없으면 effort 표기 없는 행
         self.assertEqual(snap["ambiguous"], [])
 
+    def test_v18_nearest_effort_row_when_profile_effort_missing(self):
+        row = lambda e: {"reasoning_effort": e, "source_model": f"m ({e})"}
+        lo, hi, mx = row("low"), row("high"), row("max")
+        self.assertIs(d.nearest_effort([lo, mx], "high"), mx)  # high: max 2칸, low 2칸 → 동률이면 상위 effort
+        self.assertIs(d.nearest_effort([lo, mx], "medium"), lo)
+        self.assertIs(d.nearest_effort([lo, hi], "xhigh"), hi)
+        self.assertIsNone(d.nearest_effort([lo, mx], "unknown"))  # 순위 없는 effort는 ambiguous 유지
+        self.assertIsNone(d.nearest_effort([row(None), row(None)], "high"))
+        self.assertIsNone(d.nearest_effort([row("max"), row("max")], "high"))  # 같은 effort 행 둘
+
     def test_v18_auto_alias_matches_profile_model_names(self):
         k = d.model_key
         self.assertEqual({k(n)[1] for n in ("Claude Opus 5.5 (High)", "claude-opus-5.5-high", "claude-opus-5-5")}, {"claude-opus-5-5"})

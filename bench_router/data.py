@@ -488,7 +488,21 @@ def load_aliases(path):
     return data
 
 
-EFFORT_WORDS = r"(?:minimal|low|medium|high|xhigh|max|ultra)"
+EFFORT_ORDER = r.EFFORT_ORDER
+EFFORT_WORDS = f"(?:{'|'.join(EFFORT_ORDER)})"
+
+
+def nearest_effort(found, effort):
+    """effort가 다른 행만 여럿일 때: 가장 가까운 effort 행, 동률이면 상위 effort. 순위를 못 매기면 None(ambiguous)."""
+    if effort not in EFFORT_ORDER:
+        return None
+    ranked = [o for o in found if o["reasoning_effort"] in EFFORT_ORDER]
+    if not ranked:
+        return None
+    i = EFFORT_ORDER.index(effort)
+    key = lambda o: (abs(EFFORT_ORDER.index(o["reasoning_effort"]) - i), -EFFORT_ORDER.index(o["reasoning_effort"]))
+    best = [o for o in ranked if key(o) == min(map(key, ranked))]
+    return best[0] if len(best) == 1 else None
 
 
 def model_key(name):
@@ -545,6 +559,9 @@ def build_snapshot(db, cfg, mapping, aliases, now):
             if len(found) > 1:  # 출처가 effort별 행을 따로 낼 때(AA slug 등): 프로필 effort 행, 없으면 effort 표기 없는 행 하나
                 found = ([o for o in found if o["reasoning_effort"] == p["reasoning_effort"]]
                          or [o for o in found if o["reasoning_effort"] is None] or found)
+            if len(found) > 1 and (o := nearest_effort(found, p["reasoning_effort"])):
+                # 다른 effort 대리값: 행이 하나일 때처럼 쓰고, 표시가 effort 차이를 보이도록 conditions에 effort를 남긴다
+                found = [{**o, "conditions": {**(o["conditions"] or {}), "reasoning_effort": o["reasoning_effort"]}}]
             if len(found) > 1:
                 ambiguous.append({"profile": p["id"], "evidence_id": eid,
                                   "source_models": sorted(o["source_model"] for o in found)})

@@ -25,6 +25,7 @@ CATEGORIES = ("coding_repo", "terminal_ops", "code_gen", "webdev", "math_reasoni
 TIERS = {"low": 0, "medium": 1, "high": 2}
 PRIORITIES = ("quality", "balanced", "cost")
 SCOPES = ("exact_profile", "model_proxy")
+EFFORT_ORDER = ("minimal", "low", "medium", "high", "xhigh", "max", "ultra")  # ascending; names are not shared vendor units
 GUIDED_SELECTIONS = ("5.0", "6.0")  # internal, external vendor-guided selection records
 
 # P: 초기 정책. 값을 바꾸면 POLICY_VERSION을 올린다.
@@ -755,17 +756,25 @@ EVIDENCE_FIELDS = ("raw", "normalized", "scope", "cohort_id", "metric_version", 
                    "fetched_at", "published_at", "evaluated_at")
 
 
+def unobserved_reason(snap, pid, eid):
+    """소스에 행이 없음(no_observation)과 effort가 다른 행이 여럿이라 고르지 못함(ambiguous)을 구분한다."""
+    return ("ambiguous" if any(x["profile"] == pid and x["evidence_id"] == eid for x in snap.get("ambiguous", []))
+            else "no_observation")
+
+
 def benchmark_evaluation(p, fp, a, snap, sources, warnings):
     """benchmark 평가기. coverage는 benchmark 근거 충족도일 뿐, 전체 판단 정보의 충족도가 아니다."""
     sp = snap["profiles"].get(p["id"]) if snap else None
     stale_cfg = sp is not None and sp["fingerprint"] != fp
     if stale_cfg:
         warnings.append(warn("stale_config", f"{p['id']}: profile config changed since snapshot; evidence ignored"))
+    elif snap and sp is None:
+        warnings.append(warn("profile_not_in_snapshot", f"{p['id']}: profile absent from snapshot; run refresh"))
     rows, normalized = [], {}
     for b, w in a.items():
         e = sp.get("evidence", {}).get(b) if sp and not stale_cfg else None
         reason = ("no_snapshot" if snap is None else "profile_not_in_snapshot" if sp is None
-                  else "stale_config" if stale_cfg else "no_observation" if e is None
+                  else "stale_config" if stale_cfg else unobserved_reason(snap, p["id"], b) if e is None
                   else "null_value" if e.get("normalized") is None
                   else "missing_conditions" if e.get("scope") == "exact_profile" and not e.get("conditions")
                   else "max_stale_exceeded" if sources[e["source_id"]]["excluded"] else None)

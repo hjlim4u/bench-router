@@ -29,6 +29,8 @@ CODEBURN_BIN = os.environ.get("BENCH_ROUTER_CODEBURN", str(_LOCAL_CODEBURN_BIN) 
 CODEBURN_KIND = {"claude": "claude", "codex": "codex", "agy": "antigravity"}
 DISCOVERED_KIND = {"claude": ("claude", "claude-code", "--model"),
                    "codex": ("codex", "codex-cli", "-m")}
+# Codex keeps the models its -m accepts, with each model's efforts; "hide" marks internal models.
+CODEX_MODELS_CACHE = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "models_cache.json"
 RESULT_REL = Path(".bench-router") / "runs"  # agent writes results here, relative to its board worktree
 # One agent run per receipt: no review rounds, attempts, plan gate or merge. worker.access stays the board's setting.
 WORK_SETTINGS = ["--workspace.from", "here", "--workspace.cleanup", "false", "--review.when", "never",
@@ -187,8 +189,22 @@ def probe_profiles(profiles, which=shutil.which, runner=subprocess.run):
     return out
 
 
-def discover_profiles(which=shutil.which, runner=subprocess.run):
-    """Turn CodeBurn's locally observed model ids into currently usable profiles."""
+def codex_models(path=CODEX_MODELS_CACHE):
+    """{model: efforts} for every listed model in Codex's model cache; {} when absent or unreadable."""
+    try:
+        models = json.loads(Path(path).read_text("utf-8")).get("models", [])
+        return {m["slug"]: tuple(level["effort"] for level in m.get("supported_reasoning_levels", []))
+                for m in models if m.get("visibility") == "list" and isinstance(m.get("slug"), str) and m["slug"]}
+    except (OSError, ValueError, AttributeError, KeyError, TypeError):
+        return {}
+
+
+def discover_profiles(which=shutil.which, runner=subprocess.run, codex_cache=CODEX_MODELS_CACHE, claude_models=None):
+    """Profiles for every model each CLI's model flag accepts: CodeBurn's observed models, Codex's listed
+    models and, since the Claude CLI cannot list models, the Claude models in the vendor guidance."""
+    if claude_models is None:
+        from . import decision  # the guidance file is the only local list of current Claude models
+        claude_models = [m for m, x in decision.load_guidelines()["models"].items() if x["vendor"] == "claude"]
     rows = []
     if which(CODEBURN_BIN):
         try:
@@ -199,25 +215,30 @@ def discover_profiles(which=shutil.which, runner=subprocess.run):
             pass
     if not isinstance(rows, list):
         rows = []
-    profiles = []
+    listed = codex_models(codex_cache)
+    candidates = {}  # (provider, model) -> (efforts or None for the CLI default list, config_revision)
     for row in rows:
-        if not isinstance(row, dict) or not isinstance(row.get("provider"), str) or not isinstance(row.get("model"), str):
-            continue
-        spec = DISCOVERED_KIND.get(row["provider"])
-        if spec is None or not row["model"]:
+        if isinstance(row, dict) and isinstance(row.get("provider"), str) and isinstance(row.get("model"), str) and row["model"]:
+            candidates[row["provider"], row["model"]] = (None, "codeburn-discovery")
+    candidates.update({("codex", m): (efforts or None, "codex-models-cache") for m, efforts in listed.items()})
+    candidates.update({("claude", m): (None, "claude-guidance") for m in claude_models if ("claude", m) not in candidates})
+    profiles = []
+    for (provider, model), (efforts, revision) in sorted(candidates.items()):
+        spec = DISCOVERED_KIND.get(provider)
+        if spec is None:
             continue
         kind, harness_id, model_flag = spec
-        efforts = claude_efforts(runner) if kind == "claude" else ("low", "medium", "high", "xhigh")
+        efforts = efforts or (claude_efforts(runner) if kind == "claude" else ("low", "medium", "high", "xhigh"))
         for effort in efforts or ("unknown",):
-            profile_id = re.sub(r"[^a-z0-9_-]", "-", f"{kind}-{row['model'].lower()}-{effort}")[:48].rstrip("-")
+            profile_id = re.sub(r"[^a-z0-9_-]", "-", f"{kind}-{model.lower()}-{effort}")[:48].rstrip("-")
             if not profile_id or any(p["id"] == profile_id for p in profiles):
                 continue
-            args = [model_flag, row["model"]]
+            args = [model_flag, model]
             args += ["--effort", effort] if kind == "claude" and effort != "unknown" else []
             args += ["-c", f'model_reasoning_effort="{effort}"'] if kind == "codex" else []
             profiles.append({"id": profile_id, "enabled": True, "kind": kind, "executable": kind,
-                             "args": args, "model_id": row["model"], "harness_id": harness_id,
-                             "reasoning_effort": effort, "config_revision": "codeburn-discovery",
+                             "args": args, "model_id": model, "harness_id": harness_id,
+                             "reasoning_effort": effort, "config_revision": revision,
                              "cost_tier": "high", "inference_local": False, "context_tokens": 0,
                              "capabilities": ["filesystem_write"]})
     profiles = [p for p in profiles if probe(p, which) is None]

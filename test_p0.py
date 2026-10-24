@@ -17,11 +17,16 @@ NOW = datetime(2026, 10, 12, tzinfo=timezone.utc)
 MAPPING = r.load_categories(cli.BUNDLED_CATEGORIES)
 
 
+# Guidance requests carry no profile IDs; the synthetic responder maps a chosen profile to its guide option through this.
+PROFILES = {}
+
+
 def profile(pid, tier="medium", **kw):
     p = {"id": pid, "enabled": True, "kind": "codex", "executable": "codex", "args": ["-m", pid],
          "model_id": pid, "harness_id": "codex-cli", "reasoning_effort": "unknown", "config_revision": "t",
          "cost_tier": tier, "inference_local": False, "context_tokens": 0, "capabilities": ["filesystem_write"]}
-    return {**p, **kw}
+    PROFILES[pid] = {**p, **kw}
+    return PROFILES[pid]
 
 
 def config(profiles):
@@ -37,24 +42,8 @@ def guided_reply(packet, chosen, **overrides):
             answers[key] = {"type": "noul", "noul": overrides.get(key, 0)}
             continue
         choice = "unknown"
-        if key.startswith("model_fit:"):
-            pid = key[10:]
-            rules = [x for x in q["criteria"] if x.startswith("model:")]
-            choice = rules[0] if rules else "__provisional__"
-            if chosen not in ("__tie__", pid):
-                choice = "__unsuitable__"
-        elif key.startswith("effort_fit:"):
-            pid = key[11:]
-            rules = [x for x in q["criteria"] if not x.startswith("__")]
-            choice = rules[0] if rules else "__provisional__"
-            if chosen not in ("__tie__", pid):
-                choice = "__unsuitable__"
-        elif key.startswith("fit:"):
-            pid = key[4:]
-            rules = [x for x in q["criteria"] if not x.startswith("__")]
-            choice = rules[0] if rules else "__provisional__"
-            if chosen not in ("__tie__", pid):
-                choice = "__unsuitable__"
+        if key.startswith("guidance:"):
+            choice = guided_choice(key, q, packet, chosen)
         elif key == "benchmark":
             choice = "__tie__"
         elif key.startswith("basis:"):
@@ -64,6 +53,30 @@ def guided_reply(packet, chosen, **overrides):
     response = {"request_digest": packet.get("decision", {}).get("request_digest") or packet["assessment_digest"],
                 "provider": "subagent", "model": "gpt-6-luna", "answers": answers}
     return {"stages": [*packet.get("decision", {}).get("completed", []), response]}
+
+
+def guided_choice(key, q, packet, chosen):
+    """Guide option that documents `chosen`; __tie__: one documented profile per vendor; otherwise __none__."""
+    from bench_router import decision
+    guide = decision.load_guidelines()
+    vendor, part = (key.split(":") + [None])[1:3]
+    ids = [chosen] if chosen != "__tie__" else sorted(packet.get("fit_profiles") or [c["profile"] for c in packet["candidates"]])
+    for pid in ids:
+        p = PROFILES.get(pid)
+        if not p or guide["models"].get(p["model_id"], {}).get("vendor") != vendor:
+            continue
+        if part == "model":
+            return f"model:{p['model_id']}"
+        levels = guide["vendors"][vendor].get("levels", {}).get(p["model_id"], {})
+        option = (next((f"effort:{c}" for c, level in levels.items() if level == p["reasoning_effort"]), None) if part == "effort"
+                  else f"{p['model_id']}:{p['reasoning_effort']}")
+        if option in q["criteria"]:
+            return option
+    return "__unknown__" if part == "effort" else "__none__"
+
+
+for _p in r.load_profiles(EX / "profiles.example.toml")["profile"]:
+    PROFILES.setdefault(_p["id"], _p)
 
 
 def guided_responses(packet, reroute, chosen, **overrides):
@@ -351,6 +364,9 @@ class P0(unittest.TestCase):
         changed = [profile("a", args=["-m", "other"]), profile("dflt")]  # 설정 변경 → 기존 점수 무효
         res = r.evaluate_v1(t, config(changed), MAPPING, snapshot(ev, ps), [], NOW)
         self.assertIn("stale_config", [w["code"] for w in res["warnings"]])
+        renamed = [profile("a2"), profile("dflt")]  # 새 ID 체계로 재생성된 profiles.toml → refresh 전까지 근거 없음
+        res = r.evaluate_v1(t, config(renamed), MAPPING, snapshot(ev, ps), [], NOW)
+        self.assertIn("a2: profile absent from snapshot; run refresh", [w["message"] for w in res["warnings"]])
         tampered = dict(snapshot(ev, ps), generated_at="x")
         with self.assertRaises(r.InputError):
             r.validate_snapshot(tampered)
@@ -448,6 +464,9 @@ class P0Evidence(unittest.TestCase):
         both = res["units"][0]["profiles"]
         self.assertEqual((both["a"]["effort_matches"], both["b"]["effort_matches"], res["units"][1]["profiles"]["b"]["missing_reason"]),
                          (True, False, "no_observation"))
+        amb = dict(snap, ambiguous=[{"profile": "b", "evidence_id": "u/coding", "source_models": ["m (Low)", "m (Max)"]}])
+        res_amb = ev.build(self.t(prompt="```x```", facets={"task": ["repo_coding"]}), config(ps), amb, [], index_fixture(), NOW)
+        self.assertEqual(res_amb["units"][1]["profiles"]["b"]["missing_reason"], "ambiguous")  # 소스에 없음과 구분
         self.assertNotIn("score", json.dumps(res))
         text = ev.table(res)
         self.assertIn("1300 p20 max≠high", text)
@@ -468,6 +487,9 @@ class P0Evidence(unittest.TestCase):
         res = ev.build(self.t(), config(changed), snap, [], index_fixture(), NOW)
         self.assertEqual(res["units"][0]["profiles"]["a"]["missing_reason"], "stale_config")
         self.assertIn("stale_config", [w["code"] for w in res["warnings"]])
+        res = ev.build(self.t(), config([profile("a2")]), snap, [], index_fixture(), NOW)
+        self.assertEqual(res["units"][0]["profiles"]["a2"]["missing_reason"], "profile_not_in_snapshot")
+        self.assertIn("profile_not_in_snapshot", [w["code"] for w in res["warnings"]])
 
     def test_v63_task_match_precedes_auxiliary_facets_and_requires_matching_type(self):
         from bench_router import evidence as ev
@@ -726,7 +748,7 @@ class P0VendorGuidance(unittest.TestCase):
         self.task = r.validate_task({"schema_version": "1.0", "task_id": "guided", "round": 1,
             "summary": "Fix one typo", "prompt": "Fix a typo in a comment.", "cwd": self.tmp.name})
         self.ps = [profile("light", model_id="gpt-6-luna", reasoning_effort="low"),
-                   profile("strong", model_id="gpt-6-astra", reasoning_effort="xhigh")]
+                   profile("strong", model_id="claude-opus-5-5", reasoning_effort="medium")]  # another vendor: both can be documented
         self.cfg = config(self.ps)
 
     def route(self, **kw):
@@ -766,7 +788,7 @@ class P0VendorGuidance(unittest.TestCase):
             self.assertEqual((packet["status"], packet["decision"]["stage"], assess.call_count), ("decision_required", "analysis", 1))
             self.assertNotIn("candidates", packet["decision_request"]["state"])
             fit = self.fit_packet()
-            self.assertEqual(fit["decision"]["stage"], "effort_fit")
+            self.assertEqual((fit["decision"]["stage"], fit["decision_request"]["state"]["vendor"]), ("guidance", "openai"))
             self.assertNotIn("observations", json.dumps(fit["decision_request"]))
             self.assertNotIn("legacy_score", json.dumps(fit["decision_request"]))
             self.assertTrue(all("score" not in c for c in packet["candidates"]))
@@ -779,7 +801,7 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertEqual((out["status"], out["selected"]["profile"]), ("selected", "light"))
         selection = {k: v for k, v in out["selection"].items() if k != "source"}
         self.assertEqual(selection["policy"], self.d.POLICY)
-        self.assertEqual([s["stage"] for s in selection["decision"]["stages"]], ["analysis", "model_fit", "effort_fit"])
+        self.assertEqual([s["stage"] for s in selection["decision"]["stages"]], ["analysis", "guidance", "guidance"])
         self.assertEqual(self.route(selection=selection)["selected"], out["selected"])
         self.ps[0]["enabled"] = False
         self.assertEqual(self.route(selection=selection)["status"], "stale_assessment")
@@ -787,8 +809,8 @@ class P0VendorGuidance(unittest.TestCase):
     def test_v69_wrong_rule_stage_digest_and_model_are_rejected(self):
         from copy import deepcopy
         fit = self.fit_packet()
-        for response in (guided_reply(fit, "light", **{"effort_fit:light": "gpt-6-astra:xhigh"}),
-                         guided_reply(fit, "light", **{"effort_fit:light": "invented"})):
+        for response in (guided_reply(fit, "light", **{"guidance:openai": "claude-opus-5-5:medium"}),  # another vendor's row
+                         guided_reply(fit, "light", **{"guidance:openai": "invented"})):
             with self.assertRaises(r.InputError):
                 self.route(response=response)
         response = guided_reply(fit, "light")
@@ -875,7 +897,10 @@ class P0VendorGuidance(unittest.TestCase):
         packet = run()
         pid = packet["candidates"][0]["profile"]
         replies = guided_responses(packet, run, pid)
-        self.assertEqual(run(replies)["selected"]["profile"], pid)
+        out = run(replies)  # example profiles carry no guided model/effort: both stay provisional, the caller chooses
+        self.assertEqual((out["status"], out["selected"]), ("decision_unavailable", None))
+        self.assertIn("upstream_selection_required", out["decision"]["uncertainty"])
+        self.assertTrue(all(f["diagnostics"] == ["guidance_missing"] for f in out["decision"]["evaluation"]["fits"].values()))
         copied = root / "copied"
         shutil.copytree(Path(__file__).parent / "skills/bench-router", copied, symlinks=False)
         proc = subprocess.run([sys.executable, str(copied / "scripts/cli.py"), *argv], capture_output=True, text=True)
@@ -886,10 +911,15 @@ class P0VendorGuidance(unittest.TestCase):
     def test_v75_guidance_matches_only_exact_models_and_efforts(self):
         for model, effort in (("claude-sonnet-5-5", "medium"), ("claude-opus-5-5", "medium"),
                               ("gemini-3.8-flash", "high"), ("gemini-4-argon", "medium")):
-            self.cfg = config([profile("only", model_id=model, reasoning_effort=effort)])
-            packet = self.fit_packet()
-            self.assertEqual(packet["decision_request"]["state"]["candidates"][0]["rules"], [f"{model}:{effort}"])
-            self.assertEqual(self.finish("only")["status"], "selected")
+            with self.subTest(model=model, effort=effort):
+                self.cfg = config([profile("only", model_id=model, reasoning_effort=effort)])
+                out = self.finish("only")
+                self.assertEqual(out["status"], "selected")
+                fit = out["selection"]["decision"]["evaluation"]["fits"]["only"]
+                self.assertEqual((fit["status"], fit["guided"]), ("documented", f"{model}:{effort}"))
+        self.cfg = config([profile("only", model_id="claude-sonnet-5-5-preview", reasoning_effort="medium")])
+        fit = self.finish("only")["selection"]["decision"]["evaluation"]["fits"]["only"]  # no prefix matching
+        self.assertEqual((fit["status"], fit["diagnostics"]), ("provisional", ["guidance_missing"]))
 
     def test_v78_freshness_and_profile_measurement_conditions_are_bound(self):
         from datetime import timedelta
@@ -943,20 +973,19 @@ class P0VendorGuidance(unittest.TestCase):
         snap["profiles"]["strong"]["evidence"]["u/coding"]["conditions"]["dataset_revision"] = "different"
         self.assertFalse(self.finish("__tie__", snap=snap, index=idx)["decision"]["evaluation"]["comparisons"])
 
-    def test_v82_conditional_effort_stays_provisional_even_with_benchmark_gain(self):
+    def test_v82_evaluation_gated_effort_stays_alternative_even_with_benchmark_gain(self):
         idx = self.indexed()
         self.ps = [profile("light", model_id="claude-sonnet-5-5", reasoning_effort="medium"),
                    profile("strong", model_id="claude-sonnet-5-5", reasoning_effort="xhigh")]
         self.cfg = config(self.ps)
-        proxy = snapshot({"strong": {"u/coding": 0.9}}, self.ps)
-        d = self.finish("strong", snap=proxy, index=idx)["decision"]
-        self.assertIn("upstream_selection_required", d["uncertainty"])
-        self.assertEqual(d["evaluation"]["fits"]["strong"]["status"], "provisional")
         exact = self.exact({"light": {"u/coding": 0.6}, "strong": {"u/coding": 0.9}})
-        d = self.finish("strong", snap=exact, index=idx)["decision"]
-        self.assertIn("workflow_gain_unverified", d["evaluation"]["fits"]["strong"]["pending_conditions"])
-        self.assertEqual(d["evaluation"]["fits"]["strong"]["status"], "provisional")
-        self.assertIsNone(d["evaluation"]["fits"]["strong"]["workflow_gain"])
+        out = self.finish("light", snap=exact, index=idx)
+        self.assertEqual(out["selected"]["profile"], "light")  # the guide's starting point, not the higher score
+        d = out["selection"]["decision"]
+        strong = d["evaluation"]["fits"]["strong"]
+        self.assertEqual((strong["status"], strong["workflow_gain"], strong["pending_conditions"]),
+                         ("alternative", None, ["workflow_gain_unverified"]))
+        self.assertNotIn("strong", d["evaluation"]["observations"])  # alternatives are not searched or compared
         assessment = self.d.evaluate(self.task, self.cfg, MAPPING, exact, [], NOW, host="codex", env={},
                                      index=idx, response={"stages": d["stages"]})
         with self.assertRaisesRegex(r.InputError, "accept_provisional"):
@@ -964,7 +993,9 @@ class P0VendorGuidance(unittest.TestCase):
         selection = self.d.bind(assessment, "strong", {"id": "upstream", "version": "1"}, "accept pending evidence", True)
         out = self.route(index=idx, snap=exact, selection=selection)
         self.assertEqual(out["selected"]["profile"], "strong")
-        self.assertIn("workflow_gain_unverified", [w["code"] for w in out["warnings"]])
+        codes = [w["code"] for w in out["warnings"]]
+        self.assertIn("workflow_gain_unverified", codes)
+        self.assertIn("not_guided_starting_point", codes)
 
     def test_v83_conflicting_benchmarks_request_relevance_without_scores(self):
         idx = self.indexed(("u/one", "u/two"))
@@ -1316,28 +1347,88 @@ class P0VendorGuidance(unittest.TestCase):
                    profile("strong", model_id="claude-sonnet-5-5", reasoning_effort="xhigh")]
         self.cfg = config(self.ps)
         snap = self.exact({"light": {"u/coding": 0.6}, "strong": {"u/coding": 0.9}})
-        fit = self.fit_packet(index=idx, snap=snap)
-        packet = self.route(index=idx, snap=snap, response=guided_reply(fit, "strong"))
-        self.assertEqual(packet["decision"]["stage"], "benchmark")
-        response = guided_reply(packet, "strong", **{"relevance:u/coding": 1, "basis:u/coding": "__supporting__"})
+        kw = {"index": idx, "snap": snap}
+        response = guided_responses(self.route(**kw), lambda x: self.route(response=x, **kw), "__tie__",
+                                    **{"basis:u/coding": "__supporting__"})
         assessment = self.d.evaluate(self.task, self.cfg, MAPPING, snap, [], NOW, host="codex", env={}, index=idx, response=response)
-        strong = next(c for c in assessment["candidates"] if c["profile"] == "strong")
-        self.assertEqual(strong["suitability"]["status"], "provisional")
+        self.assertEqual([s["stage"] for s in assessment["decision"]["stages"]], ["analysis", "guidance", "benchmark"])
+        light, strong = (next(c for c in assessment["candidates"] if c["profile"] == pid) for pid in ("light", "strong"))
+        self.assertEqual((light["suitability"]["status"], strong["suitability"]["status"]), ("documented", "alternative"))
         self.assertIsNone(strong["suitability"]["workflow_gain"])
         self.assertIn("workflow_gain_unverified", strong["diagnostics"])
-        self.assertIn("task_quality_unverified", strong["diagnostics"])
+        self.assertIn("task_quality_unverified", light["diagnostics"])  # rejected relevance, whatever the priority
+        self.assertEqual(assessment["recommendation"]["status"], "abstained")
 
     def test_v105_model_revision_and_vendor_guidance_are_isolated(self):
         guide = self.d.load_guidelines()
-        profiles = [profile("openai", model_id="gpt-6-luna", reasoning_effort="low"),
-                    profile("claude", model_id="claude-haiku-5-5", reasoning_effort="low")]
+        profiles = [profile("p-luna", model_id="gpt-6-luna", reasoning_effort="low"),
+                    profile("p-haiku", model_id="claude-haiku-5-5", reasoning_effort="low"),
+                    profile("p-new", model_id="gpt-7-new", reasoning_effort="low")]
         groups = self.d._guidance_groups(profiles, guide)
-        requests = [self.d.model_fit_request({}, group, guide) for group in groups]
+        self.assertEqual([(vendor, [p["id"] for p in ps]) for vendor, ps in groups],
+                         [("claude", ["p-haiku"]), ("openai", ["p-luna"]), (None, ["p-new"])])
+        requests = [self.d.guidance_request({}, vendor, guide) for vendor in ("claude", "openai")]
         self.assertEqual([set(req["state"]["sources"]) for req in requests], [{"claude_models", "claude_effort"}, {"openai"}])
-        self.assertTrue(all("candidates" not in req["state"] for req in requests))
-        effort = self.d.effort_fit_request({}, [profiles[0]], guide)
-        self.assertEqual(set(effort["state"]["sources"]), {"openai"})
-        self.assertEqual(effort["state"]["candidates"][0]["rules"], ["gpt-6-luna:low"])
+        text = [json.dumps(req) for req in requests]
+        self.assertFalse(any(pid in t for pid in ("p-luna", "p-haiku", "p-new") for t in text))  # no profile IDs
+        self.assertNotIn("gpt-6", text[0])  # vendors are isolated
+        self.assertNotIn("claude-", text[1])
+        self.assertNotIn("lightest", text[0])  # OpenAI's rule stays in OpenAI's request
+        self.assertIn("lightest", text[1])
+        self.assertEqual(set(requests[0]["state"]["models"]), {"claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"})
+        self.assertNotIn("models", requests[1]["state"])  # OpenAI's page has no separate model matrix
+        guide_claude = guide["vendors"]["claude"]
+        self.assertNotIn("claude-fable-5-1:xhigh", guide_claude["options"])  # a step up, never a starting point
+        self.assertIn(("claude-fable-5-1", "xhigh"), guide_claude["escalations"])
+        self.assertIn("gpt-6-luna:low", requests[1]["questions"]["guidance:openai"]["criteria"])
+
+    def test_v106_one_guidance_request_per_vendor_and_none_without_guidance(self):
+        self.ps = [profile("l-low", model_id="gpt-6-luna", reasoning_effort="low"),
+                   profile("l-high", model_id="gpt-6-luna", reasoning_effort="high"),
+                   profile("s-med", model_id="claude-sonnet-5-5", reasoning_effort="medium"),
+                   profile("s-max", model_id="claude-sonnet-5-5", reasoning_effort="max"),
+                   profile("g-high", model_id="gemini-4-argon", reasoning_effort="high"),
+                   profile("x-terra", model_id="gpt-5.6-terra", reasoning_effort="low"),
+                   profile("x-oss", model_id="gpt-oss-120b", reasoning_effort="medium")]
+        self.cfg = config(self.ps)
+
+        def finish(**answers):
+            response = guided_responses(self.route(), lambda x: self.route(response=x), "__tie__", **answers)
+            return self.route(response=response)["decision"]
+
+        d = finish()
+        self.assertEqual([(s["stage"], s["request"]["state"].get("vendor")) for s in d["stages"]],
+                         [("analysis", None), ("guidance", "claude"), ("guidance", "gemini"), ("guidance", "openai")])
+        fits = d["evaluation"]["fits"]
+        self.assertEqual({pid: f["status"] for pid, f in fits.items()},
+                         {"l-low": "documented", "l-high": "alternative", "s-med": "documented", "s-max": "alternative",
+                          "g-high": "documented", "x-terra": "provisional", "x-oss": "provisional"})
+        self.assertEqual(fits["s-max"]["pending_conditions"], ["workflow_gain_unverified"])  # escalation, not a start
+        self.assertNotIn("pending_conditions", fits["l-high"])
+        self.assertEqual(fits["x-oss"]["diagnostics"], ["guidance_missing"])
+        self.assertIn("upstream_selection_required", d["uncertainty"])
+        fits = finish(**{"guidance:openai": "gpt-6.1-sol:medium", "guidance:claude": "__none__",
+                         "guidance:gemini:effort": "__unknown__"})["evaluation"]["fits"]
+        self.assertEqual(fits["l-low"]["diagnostics"], ["not_guided_starting_point", "guided_configuration_not_registered"])
+        self.assertEqual((fits["l-low"]["status"], fits["s-med"]["status"], fits["s-max"]["status"]),
+                         ("alternative", "unsuitable", "unsuitable"))
+        self.assertEqual((fits["g-high"]["status"], fits["g-high"]["diagnostics"]), ("provisional", ["guidance_fit_unresolved"]))
+
+    def test_v107_gemini_thinking_class_follows_each_models_configuration(self):
+        levels = self.d.load_guidelines()["vendors"]["gemini"]["levels"]
+        self.assertEqual(levels["gemini-3.5-flash-lite"], {"lookup": "minimal", "ordinary": "minimal", "advanced": "high"})
+        self.assertEqual(levels["gemini-3.8-flash"], {"lookup": "low", "ordinary": "medium", "advanced": "high"})
+        self.assertEqual(levels["gemini-3.1-pro-preview"]["ordinary"], "high")
+        self.ps = [profile("f-low", model_id="gemini-3.8-flash", reasoning_effort="low"),
+                   profile("f-high", model_id="gemini-3.8-flash", reasoning_effort="high")]
+        self.cfg = config(self.ps)
+        out = self.finish("f-high")
+        self.assertEqual(out["selected"]["profile"], "f-high")
+        response = guided_responses(self.route(), lambda x: self.route(response=x), "f-high",
+                                    **{"guidance:gemini:effort": "effort:lookup"})
+        fits = self.route(response=response)["selection"]["decision"]["evaluation"]["fits"]
+        self.assertEqual((fits["f-low"]["status"], fits["f-high"]["status"], fits["f-low"]["guided"]),
+                         ("documented", "alternative", "gemini-3.8-flash:low"))
 
     def test_v105_removed_default_and_fallback_keys_are_rejected(self):
         with tempfile.TemporaryDirectory() as d:

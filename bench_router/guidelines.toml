@@ -1,7 +1,12 @@
-# Versioned policy extraction from the wiki, not an automatic wiki compilation.
+# Verbatim extraction from each vendor's official pages (fetched 2026-10-24); not a wiki compilation.
+# Every `strategy`, `role`, `when` text is quoted from that vendor's own page only; never mix vendors.
 # No prefix matching or cross-version aliases. These are model IDs, not CLI flags.
-version = "2026-10-24.1"
-as_of = "2026-10-19"
+# `start` rows: (model, effort) starting points as the guide states them. `escalation` rows: effort changes the
+# guide makes conditional on evaluation or a step from the start, never starting points themselves.
+# Gemini gives model roles and a model-independent thinking rule (`effort_class`), resolved per model from
+# that page's `default`/`supported` levels.
+version = "2026-10-24.3"
+as_of = "2026-10-24"
 
 [sources.openai]
 url = "https://developers.openai.com/api/docs/guides/model-selection"
@@ -19,126 +24,141 @@ wiki = "references/sources/google-gemini-models.md"
 url = "https://ai.google.dev/gemini-api/docs/thinking"
 wiki = "references/sources/google-gemini-thinking.md"
 
-[[model]]
-id = "gpt-6-luna"
-vendor = "openai"
-revision = "2026-10-19.1"
+[vendor.openai]
+revision = "2026-10-24.1"
 sources = ["openai"]
-role = "Bounded edits, extraction and scoped problem solving; context gathering and prioritization at higher effort."
-[model.efforts]
-low = "Small edits, extraction, bounded problems."
-xhigh = "Context gathering across apps, prioritization and constrained problem solving."
+strategy = "If cost and latency aren’t a concern, you can default to Astra. To reduce costs or latency, use the guidance below to choose a model and reasoning effort for your needs. If you can, experiment using the same inputs to compare results and keep the lightest setting that meets your quality bar."
 
-[[model]]
-id = "gpt-6.1-sol"
-vendor = "openai"
-revision = "2026-10-19.1"
-sources = ["openai"]
-role = "Complex technical projects and deliverables."
-[model.efforts]
-medium = "Technical projects where further revisions are expected."
-xhigh = "Polished deliverables and reconciliation of conflicting evidence."
+[[vendor.openai.start]]
+model = "gpt-6-luna"
+effort = "low"
+when = "Fine-grained edits, well-scoped problem-solving, and simple data extraction."
+[[vendor.openai.start]]
+model = "gpt-6-luna"
+effort = "xhigh"
+when = "Finding current context across multiple apps, prioritizing work, and solving problems with clear constraints."
+[[vendor.openai.start]]
+model = "gpt-6.1-sol"
+effort = "medium"
+when = "Complex technical work and coordinated deliverables you expect to revise."
+[[vendor.openai.start]]
+model = "gpt-6.1-sol"
+effort = "xhigh"
+when = "Polished deliverables, connected visual systems, and decisions built from conflicting evidence."
+[[vendor.openai.start]]
+model = "gpt-6-astra"
+effort = "low"
+when = "Concise writing and content adaptation that preserve facts and nuance."
+[[vendor.openai.start]]
+model = "gpt-6-astra"
+effort = "medium"
+when = "Ambitious projects that need broad context, reliable interactions, and complete results."
+[[vendor.openai.start]]
+model = "gpt-6-astra"
+effort = "xhigh"
+when = "Demanding analysis and complex deliverables with exacting requirements."
 
-[[model]]
-id = "gpt-6-astra"
-vendor = "openai"
-revision = "2026-10-19.1"
-sources = ["openai"]
-role = "Nuanced writing, broad projects and demanding analysis."
-[model.efforts]
-low = "Brief writing that preserves nuance."
-medium = "Broad ambitious projects requiring dependable interactions."
-xhigh = "Demanding analysis with exacting output requirements."
-
-[[model]]
-id = "claude-haiku-5-5"
-vendor = "claude"
-revision = "2026-10-19.1"
-evaluation_only_efforts = ["xhigh", "max"]
+[vendor.claude]
+revision = "2026-10-24.1"
 sources = ["claude_models", "claude_effort"]
-role = "Budget-sensitive high-volume processing and subagent work; upgrade for demonstrated capability gaps."
-[model.efforts]
-low = "Short simple tool tasks and latency-sensitive requests; risk of skipped steps in long workflows."
-medium = "Starting point for most work, including agentic coding."
-high = "Knowledge work, longer agent tasks and strict instruction following."
-xhigh = "Use only when workflow evaluations show a quality gain."
-max = "Use only when workflow evaluations show a quality gain."
+strategy = "Most workloads start with Claude Opus 5.5. Start efficiency-first: For many applications, starting with a faster, more cost-effective model such as Claude Haiku 5.5 can be the optimal approach (best for: Initial prototyping and development; Applications with tight latency requirements; Cost-sensitive implementations; High-volume, straightforward tasks). Start capability-first: For complex tasks where intelligence and advanced capabilities are paramount, you might want to start capability-first (best for: Complex reasoning tasks; Scientific or mathematical applications; Tasks requiring nuanced understanding; Applications where accuracy outweighs cost considerations; Advanced coding and high-autonomy agentic work). Tuning effort is often a better lever than switching models."
 
-[[model]]
-id = "claude-sonnet-5-5"
-vendor = "claude"
-revision = "2026-10-19.1"
-evaluation_only_efforts = ["xhigh", "max"]
-sources = ["claude_models", "claude_effort"]
-role = "Everyday coding, analysis and tool-based workflows."
-[model.efforts]
-medium = "Clearly specified coding and tool workflows."
-high = "Harder or longer coding and tool workflows."
-xhigh = "Use only when workflow evaluations show improvement."
-max = "Use only when workflow evaluations show improvement."
-
-[[model]]
-id = "claude-opus-5-5"
-vendor = "claude"
-revision = "2026-10-19.1"
-sources = ["claude_models", "claude_effort"]
-role = "Complex engineering, large refactors and extended autonomous sessions."
-[model.efforts]
-medium = "Default starting point; evaluate effort settings afresh for this model."
-high = "Raise after evaluation when the workflow needs more capability."
-
-[[model]]
+# Model selection matrix: "When you need..." / "Example use cases".
+[[vendor.claude.model]]
 id = "claude-fable-5-1"
-vendor = "claude"
-revision = "2026-10-19.1"
-sources = ["claude_models", "claude_effort"]
-role = "Most demanding long-running agentic research and finished knowledge deliverables."
-[model.efforts]
-medium = "Step down only after evaluations show quality holds."
-high = "Starting point; raise for demanding work or lower only when quality holds in evaluations."
-xhigh = "Raise for capability-sensitive long-running agentic or coding work."
+role = "The highest available capability. Agent sessions that run for hours, multistep deep research, analysis carried through to a finished document, spreadsheet, or deck"
+[[vendor.claude.model]]
+id = "claude-opus-5-5"
+role = "Complex agentic coding and enterprise work. Multihour autonomous coding agents, large-scale refactoring, complex systems engineering, vision-heavy workflows, computer use"
+[[vendor.claude.model]]
+id = "claude-sonnet-5-5"
+role = "Speed and capability for everyday coding, agent, and enterprise workloads. Code generation, data analysis, content creation, visual understanding, agentic tool use"
+[[vendor.claude.model]]
+id = "claude-haiku-5-5"
+role = "The lowest latency and price. Real-time applications, high-volume intelligent processing, cost-sensitive deployments needing strong reasoning, subagent tasks"
 
-[[model]]
+# Per-model effort recommendations ("The per-model recommendations that follow override this table where they differ.").
+[[vendor.claude.start]]
+model = "claude-fable-5-1"
+effort = "high"
+when = "Start with `high`, the default."
+[[vendor.claude.start]]
+model = "claude-opus-5-5"
+effort = "medium"
+when = "Claude Opus 5.5 supports all five effort levels, and `medium` is the default."
+[[vendor.claude.start]]
+model = "claude-sonnet-5-5"
+effort = "high"
+when = "Start with `high` unless your workload is agentic or latency-sensitive. For agentic coding and multistep tool use, start with `medium` for well-specified tasks and move to `high` for harder or longer ones."
+[[vendor.claude.start]]
+model = "claude-sonnet-5-5"
+effort = "medium"
+when = "For agentic coding and multistep tool use, start with `medium` for well-specified tasks and move to `high` for harder or longer ones. For chat and other latency-sensitive work, start with `medium` or `low`."
+[[vendor.claude.start]]
+model = "claude-sonnet-5-5"
+effort = "low"
+when = "For chat and other latency-sensitive work, start with `medium` or `low`."
+[[vendor.claude.start]]
+model = "claude-haiku-5-5"
+effort = "medium"
+when = "Start with `medium` for most work, including agentic coding."
+[[vendor.claude.start]]
+model = "claude-haiku-5-5"
+effort = "low"
+when = "Use `low`, the cheapest and fastest level, for chat, short tool tasks, and simple, high-volume requests."
+[[vendor.claude.start]]
+model = "claude-haiku-5-5"
+effort = "high"
+when = "Use `high` for knowledge work, longer agent tasks, and strict instruction following."
+
+[[vendor.claude.escalation]]
+model = "claude-fable-5-1"
+efforts = ["xhigh", "max", "medium", "low"]
+when = "Step up to `xhigh` or `max` for the most capability-sensitive agentic and coding work, and step down to `medium` or `low` for routine or latency-sensitive work once your evals show quality holds."
+[[vendor.claude.escalation]]
+model = "claude-opus-5-5"
+efforts = ["low", "high", "xhigh", "max"]
+when = "Run an effort sweep on your own evals rather than carrying settings over from an earlier model."
+[[vendor.claude.escalation]]
+model = "claude-sonnet-5-5"
+efforts = ["xhigh", "max"]
+when = "Use `xhigh` or `max` only where your evals show a quality gain."
+[[vendor.claude.escalation]]
+model = "claude-haiku-5-5"
+efforts = ["xhigh", "max"]
+when = "Use `xhigh` or `max` only where your evals show a quality gain, and compare them with Claude Sonnet 5.5 on performance, cost, and speed."
+
+[vendor.gemini]
+revision = "2026-10-24.1"
+sources = ["gemini_models", "gemini_thinking"]
+strategy = "For any new projects, use our latest models: 3.5 Flash-Lite or 3.8 Flash. Most production apps should use a specific stable model."
+
+[[vendor.gemini.model]]
 id = "gemini-3.5-flash-lite"
-vendor = "gemini"
-revision = "2026-10-19.1"
-sources = ["gemini_models", "gemini_thinking"]
-role = "Economical high-throughput execution."
-[model.efforts]
-minimal = "Default; simple fact retrieval or classification."
-low = "Simple fact retrieval or classification."
-medium = "Supported; use the model default unless a task-specific evaluation supports another level."
-high = "Highest supported thinking for advanced coding, mathematics or multistep planning."
-
-[[model]]
+role = "Our fastest, most cost-effective 3.5 model for high-throughput execution."
+default = "minimal"
+supported = ["minimal", "low", "medium", "high"]
+[[vendor.gemini.model]]
 id = "gemini-3.8-flash"
-vendor = "gemini"
-revision = "2026-10-19.1"
-sources = ["gemini_models", "gemini_thinking"]
-role = "Sustained software engineering and autonomous agent workflows."
-[model.efforts]
-low = "Simple fact retrieval or classification."
-medium = "Default; concept comparison and ordinary creative reasoning."
-high = "Highest supported thinking for advanced coding, mathematics or multistep planning."
-
-[[model]]
+role = "Our most intelligent Flash model, engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows."
+default = "medium"
+supported = ["low", "medium", "high"]
+[[vendor.gemini.model]]
 id = "gemini-4-argon"
-vendor = "gemini"
-revision = "2026-10-19.1"
-sources = ["gemini_models", "gemini_thinking"]
-role = "Flagship reasoning and long-context work."
-[model.efforts]
-low = "Simple fact retrieval or classification."
-medium = "Default; concept comparison and ordinary creative reasoning."
-high = "Highest supported thinking for advanced coding, mathematics or multistep planning."
+role = "Our flagship reasoning model with a unified 1M context window and long decodes up to 1M tokens."
+default = "medium"
+supported = ["low", "medium", "high"]
+[[vendor.gemini.model]]
+id = "gemini-3.1-pro-preview"  # listed on the models page without a description
+default = "high"
+supported = ["low", "medium", "high"]
 
-[[model]]
-id = "gemini-3.1-pro-preview"
-vendor = "gemini"
-revision = "2026-10-19.1"
-sources = ["gemini_models", "gemini_thinking"]
-role = "Pro option with preview status; do not assume production stability."
-[model.efforts]
-low = "Simple fact retrieval or classification."
-medium = "Supported; use the model default unless a task-specific evaluation supports another level."
-high = "Default and highest supported thinking; advanced coding, mathematics or multistep planning."
+[[vendor.gemini.effort_class]]
+id = "lookup"
+when = "Use minimal or low thinking for fact retrieval or classification"
+[[vendor.gemini.effort_class]]
+id = "ordinary"
+when = "Use default thinking for comparing concepts or creative reasoning"
+[[vendor.gemini.effort_class]]
+id = "advanced"
+when = "Use maximum thinking for advanced coding, math, or multi-step planning"

@@ -34,7 +34,7 @@
 | 단일 agent 유지, 패턴 후보 생성, 조합·집계·종료 정책 | 상위 오케스트레이터 | 역할별 근거와 선택 결과를 참고 |
 | 팀 전체 모델 구성, 동일 프로필 반복, 역할 간 독립성 | 상위 오케스트레이터 | 작업별 선택을 채택하거나 외부 선택으로 기록 |
 | 주어진 작업의 facet·추론 요구·자율성·완성 기준 분류 | 라우터의 `analysis` | 현재 범위 유지; 작업 자체를 분해하거나 수행하지 않음 |
-| 해당 작업에 대한 model/effort 적합성, 비교 가능한 벤치마크, 기본 추천 | 라우터 | 현재 `analysis → fit → benchmark(조건부) → resolve` |
+| 해당 작업에 대한 model/effort 적합성, 비교 가능한 벤치마크, 기본 추천 | 라우터 | 현재 `analysis → 벤더별 guidance → benchmark(조건부) → resolve` |
 | 전체 예산·deadline·동시 실행 계획·재계획 | 상위 오케스트레이터 | 호출별 allowance와 timeout을 전달 |
 | 실행 인자 변환, admission, 가용성 검사, receipt·결과 계약 검증 | 실행 어댑터 | 현재 `herdr.py`, `coordination.py`, `parallel.py` |
 | 결과의 실질적 정확성, 채택·병합, 다음 검토·수정·재시도 | 상위 오케스트레이터 | 결과·전달 상태를 읽고 명시적으로 다음 동작 요청 |
@@ -184,7 +184,7 @@ judge 성능도 고정된 평가 과제와 충분한 측정 조건으로 한 프
 |---|---|
 | 평가 식별 | 계약 버전, 단건 task/context, 후보 집합·제외 조건, profile 설정, 가이드·근거·검색/비교 정책을 묶는 digest |
 | 후보별 제약 | hard eligibility와 제외 사유. 의미상 부적합과 필수 제약 실패를 구분 |
-| 후보별 적합성 | documented/provisional/unsuitable, 적용 규칙·미해소 조건. 판정 전이면 미완료로 표시 |
+| 후보별 적합성 | documented/provisional/alternative/unsuitable, 적용 규칙·미해소 조건. 판정 전이면 미완료로 표시 |
 | 근거 | unit별 raw 관측·exact/proxy·측정 조건·결측·freshness. 검색 범위·생략 unit 수와 비교에 실제 참여한 후보를 명시 |
 | 진단 범위 | 조회 전체의 근거 부족, 후보별 guidance/조건부 문제, 추천의 동률·선호 정책을 분리 |
 | 추천 | 기존 정책이 산출한 선택·이유를 별도 결과로 제공. 추천 없음과 평가 실패를 구분 |

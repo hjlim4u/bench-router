@@ -129,11 +129,11 @@ def task_facets(t, index, *, infer_rules=True):
 def _cell(p, uid, snap, sources, warned):
     sp = snap["profiles"].get(p["id"]) if snap else None
     stale_cfg = sp is not None and sp["fingerprint"] != r.profile_fingerprint(p)
-    if stale_cfg:
-        warned.add(p["id"])
+    if stale_cfg or (snap and sp is None):
+        warned.add(("stale_config" if stale_cfg else "profile_not_in_snapshot", p["id"]))
     e = sp.get("evidence", {}).get(uid) if sp and not stale_cfg else None
     reason = ("no_snapshot" if snap is None else "profile_not_in_snapshot" if sp is None
-              else "stale_config" if stale_cfg else "no_observation" if e is None
+              else "stale_config" if stale_cfg else r.unobserved_reason(snap, p["id"], uid) if e is None
               else "null_value" if e.get("normalized") is None
               else "missing_conditions" if e.get("scope") == "exact_profile" and not e.get("conditions")
               else "max_stale_exceeded" if sources[e["source_id"]]["excluded"] else None)
@@ -203,8 +203,9 @@ def build(t, cfg, snap, snap_warnings, index, now, max_units=12, profile_ids=Non
                              -sum(c["normalized"] is not None for c in x["profiles"].values()), x["id"]))
     res["omitted_units"] = 0 if max_units is None else max(0, len(rows) - max_units)
     res["units"] = rows if max_units is None else rows[:max_units]
-    for pid in sorted(warned):
-        warnings.append(r.warn("stale_config", f"{pid}: profile config changed since snapshot; evidence ignored"))
+    for code, pid in sorted(warned):
+        warnings.append(r.warn(code, f"{pid}: profile config changed since snapshot; evidence ignored" if code == "stale_config"
+                               else f"{pid}: profile absent from snapshot; run refresh"))
     return res
 
 

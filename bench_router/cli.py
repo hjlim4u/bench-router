@@ -337,7 +337,7 @@ def main(argv=None):
     wp.add_argument("--vault", type=Path, default=WIKI_VAULT)
     wp.add_argument("--check", action="store_true", help="validate only; do not write index.json")
     sub.add_parser("status", help="source age, failures, unmatched models, snapshot/config state")
-    profiles = sub.add_parser("profiles", help="create profiles.toml from CodeBurn-observed models")
+    profiles = sub.add_parser("profiles", help="create profiles.toml from every model each CLI's model flag accepts")
     profiles.add_argument("action", choices=["discover"])
     profiles.add_argument("--force", action="store_true", help="replace an existing profiles.toml")
     pp = sub.add_parser("parallel", help="dispatch tasks × fanout agents concurrently, each in its own git worktree")

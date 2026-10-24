@@ -172,7 +172,7 @@ mkdir -p ~/.config/bench-router
 cp examples/profiles.example.toml ~/.config/bench-router/profiles.toml
 ```
 
-`$BR profiles discover`는 Antigravity의 현재 계정 모델 목록과 CodeBurn에 기록된 다른 CLI 모델·쿼터를 바탕으로 설정을 생성합니다. 기존 파일은 `--force` 없이는 바꾸지 않습니다.
+`$BR profiles discover`는 각 CLI의 모델 플래그가 받는 모델을 모두 등록합니다. Antigravity는 현재 계정 모델 목록(`agy models`), Codex는 `~/.codex/models_cache.json`의 공개(`visibility: list`) 모델과 모델별 지원 effort, Claude는 모델 목록 명령이 없어 `guidelines.toml`의 현행 Claude 모델을 쓰며, CodeBurn에 기록된 모델도 합칩니다. 실제 계정에서 호출되는지는 실행 시 점검합니다. 기존 파일은 `--force` 없이는 바꾸지 않습니다.
 
 > [!IMPORTANT]
 > 복사한 `profiles.toml`은 **모두 비활성(`enabled = false`)인 placeholder**입니다. 다음 명령 전에 파일을 편집하세요.

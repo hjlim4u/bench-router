@@ -76,8 +76,9 @@ def oneshot(spec, args, ctx):
              "evidence": evidence.table(evidence.build(spec, cfg, snap, warns, index, now, profile_ids=cands)),
              "profiles": {pid: {"model_id": profiles[pid]["model_id"], "reasoning_effort": profiles[pid]["reasoning_effort"],
                                 "cost_tier": profiles[pid]["cost_tier"],
-                                "vendor_guidance": [{k: g[k] for k in ("role", "condition")} for g in guide["rules"].values()
-                                                    if (g["model_id"], g["effort"]) == (profiles[pid]["model_id"], profiles[pid]["reasoning_effort"])]
+                                "vendor_guidance": [{"role": g["role"], "condition": g["efforts"][profiles[pid]["reasoning_effort"]]}
+                                                    for g in [guide["models"].get(profiles[pid]["model_id"])]
+                                                    if g and profiles[pid]["reasoning_effort"] in g["efforts"]]
                                 or "guidance_missing"} for pid in cands},
              "instructions": f"Choose the profile that best fits the task with priority={spec['priority']}. "
                              "Missing scores are not zero; a different-effort score is not an exact profile measurement. "
