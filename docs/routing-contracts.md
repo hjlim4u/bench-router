@@ -358,7 +358,7 @@ CONSTRAINTS["latency"] = lambda p, t, f, ctx: None if "max_latency_p50_ms" not i
 
 4단계 구현에서 확정된 세부:
 - `decision.json` = route 1.0 출력 + `selection` + `assessment`(같은 입력의 evaluate 2.0 전체). 별도 decision 2.0 래퍼는 만들지 않음 — 재사용 응답이 기존 형태를 유지하고, 근거는 `assessment`에 모두 있음. 응답에서는 `assessment`를 뺀다.
-- `selection.source`: `orchestrator`(선택 기록) | `unrecorded`(`--profile` 단독) | `router_legacy`(자동 route) | `parallel_pinned`(group legacy fanout).
+- `selection.source`: `orchestrator`(선택 기록) | `unrecorded`(`--profile` 단독) | `parallel_pinned`(group legacy fanout).
 - `--selection`과 `--profile`은 함께 쓸 수 없다. `stale_assessment` 종료 코드는 14(conflict 계열).
 - `config_hash`가 프로필 정의 순서에 민감하므로 profiles.toml에서 순서만 바꿔도 digest가 바뀐다 (재평가 필요).
 

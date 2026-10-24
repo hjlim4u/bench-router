@@ -66,7 +66,7 @@ refresh/status가 정상 종료하면 0이다. completed는 산출물 수신의 
 
 ## 프로필 설정 계약
 
-TOML 기본 key: schema_version, default_profile, fallback_order, [[profile]].
+TOML 기본 key: schema_version, [[profile]].
 
 profile의 필수 key: id, enabled, kind, executable, args, model_id, harness_id, reasoning_effort, config_revision, cost_tier, inference_local, context_tokens, capabilities.
 
@@ -98,7 +98,7 @@ classification: stage=L0|L1|fallback, categories, self_reported_confidence(nulla
 
 status enum: selected, dispatching, waiting, completed, blocked, timed_out, delivery_uncertain, execution_failed, result_invalid, no_eligible_profile, conflict, stale_assessment, ok(evaluate), error. delivery_state enum: not_attempted, submission_attempted, write_acknowledged, activity_observed, uncertain.
 
-추가 필드(2026-10-13, 추가만·기존 의미 불변): assessment_digest, selection{source: orchestrator|unrecorded|router_legacy|parallel_pinned, …}. context가 있으면 decision_context(2.0 정규형), context_hash, context_facts. evaluate 2.0 출력, context 2.0, selection, group 2.0 계약은 docs/routing-contracts.md와 docs/orchestrator.md가 규범이다. decision.json = route 출력 + selection + assessment(evaluate 2.0).
+추가 필드(2026-10-13, 추가만·기존 의미 불변): assessment_digest, selection{source: orchestrator|unrecorded|parallel_pinned, …}. context가 있으면 decision_context(2.0 정규형), context_hash, context_facts. evaluate 2.0 출력, context 2.0, selection, group 2.0 계약은 docs/routing-contracts.md와 docs/orchestrator.md가 규범이다. decision.json = route 출력 + selection + assessment(evaluate 2.0).
 
 부분 증거·proxy·stale는 warnings에 표시한다. 특정 모델이 더 좋다는 근거 없는 문장은 출력하지 않는다.
 

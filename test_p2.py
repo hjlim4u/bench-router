@@ -227,8 +227,7 @@ class P2(unittest.TestCase):
         projects_environment(self, state.name)
         self.cwd = os.path.realpath(self.tmp.name)
         git_repo(self.cwd)
-        self.cfg = config([profile("a", kind="claude", executable="claude", args=["--model", "m", "--effort", "high"])],
-                          default="a")
+        self.cfg = config([profile("a", kind="claude", executable="claude", args=["--model", "m", "--effort", "high"])])
 
     def tearDown(self):
         cleanup_temp(self.tmp)
@@ -243,14 +242,14 @@ class P2(unittest.TestCase):
     def run_(self, fake, t=None, w=which, **kw):
         fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
         return hd.dispatch(t or self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=w,
-                           decision_options={"policy": "legacy"}, **kw)
+                           profile_id="a", selection_mode="orchestrator_pinned", **kw)
 
     def receipt(self, out):
         return json.loads(Path(out["receipt_path"]).read_text("utf-8"))
 
     def test_v98_external_selection_dispatch_and_receipt_first_recovery(self):
         from bench_router import decision
-        self.cfg = config([*self.cfg["profile"], profile("b")], default="a")
+        self.cfg = config([*self.cfg["profile"], profile("b")])
         t = self.task()
         def evaluate(response=None):
             return decision.evaluate(t, self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response)
@@ -289,7 +288,7 @@ class P2(unittest.TestCase):
         self.assertEqual((again["reused_receipt"], len(fake.prompts)), (True, 1))
 
     def test_v35_pinned_profile_replay_and_retry_guidance(self):
-        self.cfg = config([*self.cfg["profile"], profile("b", kind="claude", executable="claude")], default="a")
+        self.cfg = config([*self.cfg["profile"], profile("b", kind="claude", executable="claude")])
         fake = FakeProjects(on_prompt=write_result())
         context = {"schema_version": "1.0", "profiles": {"a": {
             "estimated_input_tokens": 1000, "estimated_output_tokens": 1000,
@@ -333,7 +332,7 @@ class P2(unittest.TestCase):
         self.assertEqual((again["reused_receipt"], len(fake.prompts)), (True, 1))
         self.assertEqual(again["warnings"][-1]["code"], "selection_differs_from_recorded")
         # 평가 후 설정 변경: 새 round라도 옛 digest로는 실행 안 함
-        changed = config([*self.cfg["profile"], profile("b", kind="claude", executable="claude")], default="a")
+        changed = config([*self.cfg["profile"], profile("b", kind="claude", executable="claude")])
         stale = go(self.task(round=2), sel, changed)
         self.assertEqual((stale["status"], stale["selected"], len(fake.prompts)), ("stale_assessment", None, 1))
         self.assertNotEqual(stale["assessment_digest"], digest)
@@ -507,7 +506,7 @@ class P2(unittest.TestCase):
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["release"]["panes"][0]["pane_id"], "w1:p1")
 
     def test_v21_inexpressible_profile_sends_nothing(self):
-        self.cfg = config([profile("a", kind="claude", executable="claude", args=["--add-dir", "/x"])], default="a")
+        self.cfg = config([profile("a", kind="claude", executable="claude", args=["--add-dir", "/x"])])
         fake = FakeProjects()
         out = self.run_(fake)
         self.assertEqual((out["status"], out["delivery_state"], fake.prompts), ("execution_failed", "not_attempted", []))

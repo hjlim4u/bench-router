@@ -23,7 +23,7 @@ class CoordinationTests(unittest.TestCase):
         self.cwd = self.base / "work"
         self.cwd.mkdir()
         git_repo(self.cwd)
-        self.cfg = config([profile("review")], default="review")
+        self.cfg = config([profile("review")])
 
     def task(self, **kw):
         return r.validate_task({"schema_version": "1.0", "task_id": "one", "round": 1, "cwd": str(self.cwd),
@@ -33,7 +33,7 @@ class CoordinationTests(unittest.TestCase):
     def run_(self, fake, t=None):
         fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
         return herdr.dispatch(t or self.task(), self.cfg, MAPPING, None, [], runner=fake, which=which,
-                              decision_options={"policy": "legacy"})
+                              profile_id="review", selection_mode="orchestrator_pinned")
 
     def test_v44_repeat_observes_and_backend_is_immutable(self):
         fake = FakeProjects(on_prompt=write_result())
@@ -173,7 +173,7 @@ class CoordinationTests(unittest.TestCase):
              patch.object(herdr, "project_call", side_effect=lambda argv, runner=None, raw=False, **kw: call(argv, fake, raw, **kw)):
             output = io.StringIO()
             with redirect_stdout(output):
-                self.assertEqual(cli.main(["route", "--task", str(task_file)]), 0, output.getvalue())
+                self.assertEqual(cli.main(["route", "--task", str(task_file), "--profile", "review"]), 0, output.getvalue())
             run = json.loads(output.getvalue())
             self.assertEqual(run["thread_id"], "repo/1")
             with redirect_stdout(io.StringIO()):

@@ -76,7 +76,7 @@ class P1(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.cache = Path(self.tmp.name)
         self.ps = [profile("a", model_id="model-a", reasoning_effort="high"), profile("dflt")]
-        self.cfg = config(self.ps, default="dflt")
+        self.cfg = config(self.ps)
         self.aliases = {"aa": {"m-a": "model-a"}}
 
     def tearDown(self):
@@ -262,7 +262,7 @@ class P1(unittest.TestCase):
         self.assertEqual((ev["conditions"]["agent_scaffold"], ev["conditions"]["aggregation"]),
                          ("codex-cli", "pass@1_mean_5"))
         # effort unknown 프로필은 exact 매칭 안 됨
-        self.cfg = config([profile("a", model_id="model-a"), profile("dflt")], default="dflt")
+        self.cfg = config([profile("a", model_id="model-a"), profile("dflt")])
         self.refresh(force=True, now=NOW + timedelta(minutes=1))
         self.assertNotIn("terminal_exact", self.snap()["profiles"]["a"]["evidence"])
 
@@ -270,7 +270,7 @@ class P1(unittest.TestCase):
         pages = aa_pages()
         pages[0]["data"][0]["slug"], pages[0]["data"][1]["slug"] = "m-a-high", "m-a"
         self.cfg = config([profile("a", model_id="model-a", reasoning_effort="high"),
-                           profile("lo", model_id="model-a", reasoning_effort="low"), profile("dflt")], default="dflt")
+                           profile("lo", model_id="model-a", reasoning_effort="low"), profile("dflt")])
         self.aliases = {"aa": {"m-a-high": "model-a", "m-a": "model-a"}}
         self.refresh(http=FakeHTTP(pages))
         snap = self.snap()
@@ -284,7 +284,7 @@ class P1(unittest.TestCase):
         self.assertEqual(k("GPT-6 Luna (xHigh, Codex Harness)")[1], "gpt-6-luna-xhigh-codex-harness")  # 변형은 자동 매칭 안 함
         pages = aa_pages()
         pages[0]["data"][0]["slug"], pages[0]["data"][1]["slug"] = "Model-A-High", "model-b"
-        self.cfg = config([profile("a", model_id="model-a", reasoning_effort="high"), profile("dflt")], default="dflt")
+        self.cfg = config([profile("a", model_id="model-a", reasoning_effort="high"), profile("dflt")])
         self.aliases = {}
         res = self.refresh(http=FakeHTTP(pages))
         self.assertEqual(self.snap()["profiles"]["a"]["evidence"]["aa_intelligence"]["raw"], 50)  # alias 없이 연결
@@ -336,17 +336,17 @@ class P1(unittest.TestCase):
         with tempfile.TemporaryDirectory() as cwd:
             t = r.validate_task({"schema_version": "1.0", "task_id": "e2e", "round": 1,
                                  "summary": "fix the deploy shell", "prompt": "p", "cwd": cwd})
-            res = r.route_legacy(t, self.cfg, MAPPING, snap, warnings, NOW)
+            res = r.evaluate_v1(t, self.cfg, MAPPING, snap, warnings, NOW)
             legacy = json.loads(json.dumps(snap))
             legacy["profiles"]["a"]["evidence"]["terminal_exact"].pop("conditions")
             legacy["snapshot_id"] = r.snapshot_hash(legacy)
-            old = r.route_legacy(t, self.cfg, MAPPING, legacy, [], NOW)
+            old = r.evaluate_v1(t, self.cfg, MAPPING, legacy, [], NOW)
             invalid = json.loads(json.dumps(snap))
             invalid["profiles"]["a"]["evidence"]["terminal_exact"]["conditions"] = {"variant": "default"}
             invalid["snapshot_id"] = r.snapshot_hash(invalid)
             with self.assertRaisesRegex(r.InputError, "conditions.suite"):
                 r.validate_snapshot(invalid)
-        self.assertEqual((res["selected"]["profile"], res["selection_mode"]), ("a", "benchmark_score"))
+        self.assertEqual(res["candidates"][0]["profile"], "a")
         a = res["candidates"][0]
         self.assertEqual((a["coverage"], a["exact_evidence_weight"]), (1.0, 0.7))
         old_terminal = next(e for e in old["candidates"][0]["evidence"] if e["id"] == "terminal_exact")
@@ -384,7 +384,7 @@ class P1Sources(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.cache = Path(self.tmp.name)
-        self.cfg = config([profile("a", model_id="model-a"), profile("b", model_id="model-b")], default="a")
+        self.cfg = config([profile("a", model_id="model-a"), profile("b", model_id="model-b")])
 
     def tearDown(self):
         self.tmp.cleanup()

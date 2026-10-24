@@ -1,6 +1,6 @@
 """Shared input validation, assessment, constraints and selection entry points.
 
-Vendor-guided decisions are the default; legacy scores require explicit opt-in.
+Selection is vendor-guided; automatic score-based selection no longer exists.
 Network decisions are opt-in for live callers. This module never dispatches or writes files.
 """
 import contextlib
@@ -503,7 +503,7 @@ def _load_toml(path):
 
 def load_profiles(path):
     cfg = _load_toml(path)
-    unknown = set(cfg) - {"schema_version", "default_profile", "fallback_order", "profile"}
+    unknown = set(cfg) - {"schema_version", "profile"}
     if unknown:
         raise InputError(f"profiles: unknown keys {sorted(unknown)}")
     if cfg.get("schema_version") != SCHEMA_VERSION:
@@ -528,13 +528,7 @@ def load_profiles(path):
         _str_list(p["capabilities"], f"profile {p['id']}.capabilities")
         if p["cost_tier"] not in TIERS:
             raise InputError(f"profile {p['id']}.cost_tier: low|medium|high")
-    default = cfg.get("default_profile")
-    fallback = _str_list(cfg.get("fallback_order", []), "profiles.fallback_order")
-    for ref in ([default] if default is not None else []) + fallback:
-        if ref not in ids:
-            raise InputError(f"profiles: unknown profile reference {ref!r}")
-    return {"schema_version": SCHEMA_VERSION, "default_profile": default, "fallback_order": fallback,
-            "profile": profiles}
+    return {"schema_version": SCHEMA_VERSION, "profile": profiles}
 
 
 def load_categories(path):
@@ -704,27 +698,6 @@ def legacy_score(c, priority):
     c["cost_proxy"] = POLICY["tier_proxy"][c["cost_tier"]]
     ranked = c["quality"] is not None and c["coverage"] >= POLICY["coverage_threshold"] - EPS
     c["score"] = c["quality"] - POLICY["lambda_cost"][priority] * c["cost_proxy"] if ranked else None
-
-
-def select(cands, priority, default, fallback_order):
-    """cands: 제약 통과 후보 [{profile, cost_tier, coverage, quality}]. score를 채우고 (선택 id, mode)."""
-    for c in cands:
-        legacy_score(c, priority)
-    ranked = [c for c in cands if c["score"] is not None]
-    if ranked:
-        top = max(c["score"] for c in ranked)
-        if priority == "quality":  # 비용으로 near-tie를 뒤집지 않음
-            pool = [c for c in ranked if top - c["score"] <= EPS]
-            return min(pool, key=lambda c: c["profile"])["profile"], "benchmark_score"
-        pool = [c for c in ranked if top - c["score"] < POLICY["near_tie_epsilon"] - EPS]
-        return min(pool, key=lambda c: (TIERS[c["cost_tier"]], c["profile"]))["profile"], "benchmark_score"
-    eligible = {c["profile"] for c in cands}
-    if default in eligible:
-        return default, "default_insufficient_evidence"
-    for pid in fallback_order:
-        if pid in eligible:
-            return pid, "fallback_insufficient_evidence"
-    return None, "none"
 
 
 def _check(passed, code, metric=None, observed=None, limit=None, **kw):
@@ -906,41 +879,10 @@ def _result_v1(asmt, cands, status, selected, mode, warnings):
                 "max_estimated_cost_usd": context.get("max_estimated_cost_usd")} if context is not None else {})}
 
 
-def route_legacy(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None):
-    """legacy 자동 선택 = assess + select. 같은 task/config/snapshot/availability/now면 결과가 동일하다."""
-    asmt = assess(t, cfg, mapping, snap, snap_warnings, now, availability, context)
-    cands = _legacy_cands(asmt)
-    pick, mode = select(cands, t["priority"], cfg["default_profile"], cfg["fallback_order"])
-    warnings, selected = list(asmt["warnings"]), None
-    if pick:
-        chosen = next(c for c in cands if c["profile"] == pick)
-        selected = {"profile": pick, "profile_fingerprint": chosen["profile_fingerprint"],
-                    "agent_name": None, "pane_id": None}
-        if availability is None:
-            warnings.append(warn("availability_unverified", "dry-run: CLI/auth readiness not probed"))
-        else:
-            warnings.append(warn("availability_checked", "live preflight passed; provider may still reject execution"))
-        if mode != "benchmark_score":
-            warnings.append(warn("insufficient_evidence", f"no candidate with coverage >= "
-                                 f"{POLICY['coverage_threshold']}; {mode}, not a benchmark-optimal choice"))
-        elif coverage_band(chosen["coverage"]) == "partial":
-            warnings.append(warn("partial_evidence", f"{pick}: coverage {chosen['coverage']:.2f}"))
-        if chosen["coverage"] > 0 and chosen["exact_evidence_weight"] <= EPS:
-            warnings.append(warn("proxy_only", f"{pick}: model-proxy evidence only, no exact profile evaluation"))
-    return {**_result_v1(asmt, cands, "selected" if pick else "no_eligible_profile", selected, mode, warnings),
-            "selection": {"source": "router_legacy"}}
-
-
 def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None,
-          *, policy="vendor-guided", host=None, response=None, selection=None, index=None,
+          *, host=None, response=None, selection=None, index=None,
           allow_network=False, env=None, check_digest=True, omit_profiles=(), decision_cache=None):
-    """Default: vendor-guided decision packet/validated choice. Legacy requires explicit opt-in."""
-    if policy == "legacy":
-        if response is not None or selection is not None:
-            raise InputError("legacy policy does not accept a decision response or vendor selection")
-        return route_legacy(t, cfg, mapping, snap, snap_warnings, now, availability, context)
-    if policy != "vendor-guided":
-        raise InputError("policy: vendor-guided|legacy required")
+    """Vendor-guided decision packet or validated choice."""
     from . import decision
     return decision.route(t, cfg, mapping, snap, snap_warnings, now, availability, context,
                           host=host, response=response, selection=selection, index=index,

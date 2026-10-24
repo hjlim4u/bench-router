@@ -483,8 +483,6 @@ def candidate_diagnostics(decision, pid, facts):
 
 def evaluate(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None, **options):
     """Public candidate assessment; never dispatches, writes, or selects an execution profile."""
-    if options.pop("policy", "vendor-guided") != "vendor-guided":
-        raise r.InputError("evaluate format 3 requires vendor-guided policy")
     result = route(t, cfg, mapping, snap, snap_warnings, now, availability, context,
                    assessment_only=True, **options)
     facts = r.assess(t, cfg, mapping, snap, snap_warnings, now, availability, context, benchmarks=False)

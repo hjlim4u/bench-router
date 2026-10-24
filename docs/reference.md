@@ -1,6 +1,6 @@
 # bench-router 상세 레퍼런스
 
-기본 선택 정책은 [공식 가이드 기반 선택](vendor-guided-routing.md)입니다. `route`·`parallel`·Skill에 공통 적용되며, 이 문서의 기존 점수식은 `--policy legacy`에서만 사용합니다.
+기본 선택 정책은 [공식 가이드 기반 선택](vendor-guided-routing.md)입니다. `route`·`parallel`·Skill에 공통 적용되며, 이 문서의 점수식은 `evaluate`가 보여 주는 참고용 근거이며 자동 선택에는 쓰이지 않습니다.
 
 설정 파일 형식, 명령과 종료 코드, 선택 공식, 데이터 수집, live 위임 계약, 병렬 위임, 검증 기록을 정리한 문서입니다. 프로젝트 개요는 [README](../README.md)를 먼저 보세요.
 
@@ -59,8 +59,6 @@ Skill의 `scripts/cli.py`와 `scripts/decide.py`는 복사된 스킬 폴더(또�
 
 ```toml
 schema_version = "1.0"
-default_profile = "claude-opus-high"                 # 근거가 부족할 때의 기본값 (제약은 동일하게 적용)
-fallback_order = ["claude-opus-high", "codex-sol-high"]
 
 [[profile]]
 id = "claude-opus-high"                              # [a-z][a-z0-9_-]{0,47}
@@ -208,23 +206,19 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 
 ## 선택 방식
 
-아래는 `route --policy legacy`의 **기존 자동 선택**입니다. 기본 `vendor-guided` 정책의 우선순위·판단 응답·3.0 기록 계약은 [공식 가이드 기반 선택](vendor-guided-routing.md)에 있습니다. 기존 2.0 명시적 선택 계약은 [routing-contracts.md](routing-contracts.md), 사용법은 [orchestrator.md](orchestrator.md)에 있습니다.
+아래는 `evaluate`가 계산하는 분류·제약·근거 점수입니다. 자동 선택은 없습니다. `vendor-guided` 정책의 우선순위·판단 응답·3.0 기록 계약은 [공식 가이드 기반 선택](vendor-guided-routing.md)에 있습니다. 기존 2.0 명시적 선택 계약은 [routing-contracts.md](routing-contracts.md), 사용법은 [orchestrator.md](orchestrator.md)에 있습니다.
 
 1. **분류**
    - summary 키워드와 `context_files` 확장자 규칙을 씁니다. 한 카테고리에서만 서로 다른 규칙이 2개 이상 맞아야 채택합니다.
    - 나머지는 `general`로 분류하고 `fallback_reason`을 남깁니다.
-2. **하드 제약**: `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, `local_only`를 적용합니다. context가 있으면 `tokens.required_context`와 `max_estimated_cost_usd`도 적용합니다(`routing.CONSTRAINTS`). live에서는 herdr kind 지원 여부와 실행 파일 존재도 확인합니다. default 프로필에도 같은 제약을 적용합니다.
+2. **하드 제약**: `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, `local_only`를 적용합니다. context가 있으면 `tokens.required_context`와 `max_estimated_cost_usd`도 적용합니다(`routing.CONSTRAINTS`). live에서는 herdr kind 지원 여부와 실행 파일 존재도 확인합니다. 같은 제약을 적용합니다.
 3. **근거와 점수**
    - 카테고리 가중치 `w`와 evidence 매핑 `v`로 evidence별 가중치 `a_b = Σ w_c·v_cb`를 구합니다.
    - 같은 cohort 전체를 모집단으로 percentile 정규화(`(평균 rank − 1)/(N − 1)`, N=1이면 0.5)를 합니다.
    - coverage `C`는 관측된 evidence의 가중치 합입니다.
    - 품질 `Q = C·Q_obs + (1−C)·0.5 − 0.1·(1−C)`. 결측에는 사전값 0.5와 페널티 0.1이 붙고, 측정된 0점은 결측이 아닙니다.
    - 점수 `S = Q − λ·cost_proxy`. λ는 quality 0, balanced 0.15, cost 0.30이고, cost_proxy는 low 0, medium 0.5, high 1입니다.
-4. **선택**
-   - `C ≥ 0.5`인 후보만 순위를 매깁니다.
-   - 최고점과 차이가 0.02 미만인 후보끼리는 낮은 cost tier, 그다음 ID 순으로 고릅니다. `quality` 우선순위에서는 비용으로 순서를 뒤집지 않습니다.
-   - 순위에 오른 후보가 없으면 제약을 통과한 `default_profile`, 그다음 `fallback_order`로 갑니다. 이때 `selection_mode`는 `default_insufficient_evidence` 또는 `fallback_insufficient_evidence`입니다.
-   - 남는 후보가 없으면 `no_eligible_profile`(exit 13)로 끝납니다.
+4. **선택**: 점수는 후보 순위가 아니라 참고 근거입니다. `C ≥ 0.5`인 후보만 점수가 계산되고, 최종 선택은 Orchestrator가 `select`로 기록합니다. 남는 후보가 없으면 `no_eligible_profile`(exit 13)입니다.
 
 카테고리별 evidence 기본값(`categories.toml`):
 
@@ -259,7 +253,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 - **실패 시**: 페이지 하나라도 실패하거나 스키마가 다르면 그 source의 새 데이터를 게시하지 않고 last-good을 유지합니다. 원본이 같으면 `unchanged`로 확인 시각만 갱신합니다.
 - **저장**: SQLite(`bench-router.db`: sources / snapshots / observations)에 source별 원본을 최근 3개까지 보관합니다. 동시 refresh는 운영체제 파일 잠금으로 막습니다.
 - **게시**: `snapshot.json`은 임시 파일에 쓰고 fsync한 뒤 `os.replace`로 교체합니다. 직전 유효본은 `snapshot.last-good.json`으로 옮기고, 재현용 사본은 `snapshots/`에 30일간 보관합니다.
-- **route 쪽 처리**: snapshot이 없거나 손상됐으면 last-good을 사용합니다. 그것도 없으면 기본 정책은 평가 결측을 표시해 잠정 판단을 요청합니다. `--policy legacy`만 제약을 통과한 default로 갑니다. route는 refresh를 시작하지 않습니다.
+- **route 쪽 처리**: snapshot이 없거나 손상됐으면 last-good을 사용합니다. 그것도 없으면 기본 정책은 평가 결측을 표시해 잠정 판단을 요청합니다. route는 refresh를 시작하지 않습니다.
 - **Arena 중복 이름**: 원본에 같은 이름의 별개 항목이 있을 수 있습니다(실측 사례 있음). 이런 항목은 모집단에는 포함하되 `이름#rank=N`으로 구분해, 이름만으로 매칭되지 않게 합니다.
 
 수동 import 형식(`--import FILE`):

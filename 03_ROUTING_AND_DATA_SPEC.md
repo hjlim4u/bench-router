@@ -154,7 +154,7 @@ Q(p) = C_p × Q_obs(p) + (1-C_p) × 0.5 - 0.1 × (1-C_p)
 결측에는 prior 0.5와 penalty 0.1을 둔다. 이는 P이며 데이터가 없는 점수를 관측치라고 기록하지 않는다. normalized 0점도 coverage에 포함한다.
 
 - 후보 중 C >= 0.5인 프로필이 있으면 그 집합만 score ranking한다.
-- 모두 C < 0.5이면 제약 만족 default를 선택하고 selection_mode=default_insufficient_evidence로 기록한다. default가 제외됐다면 명시 configured fallback_order의 첫 eligible 프로필을 쓴다. 아무것도 없으면 종료한다.
+- 모두 C < 0.5이면 점수를 매기지 않고 선택도 하지 않는다(자동 default/fallback 선택 폐기). 최종 선택은 Orchestrator 몫이다.
 - coverage_band: sufficient(C>=0.8), partial(0.5<=C<0.8), insufficient(C<0.5).
 - coverage와 exact_profile evidence 비중은 별도 보고한다. sufficient가 “실제 Agent 성공 확신 높음”을 뜻하지 않는다.
 

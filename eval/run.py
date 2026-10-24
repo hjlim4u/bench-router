@@ -1,9 +1,7 @@
 """작업군 비교 하네스. (작업, 프로필) 쌍을 한 번씩 live 위임하고 hidden check로 채점한 뒤 정책별로 집계한다.
 
-정책: fixed-default(설정의 default_profile), low-cost-first(cost tier가 가장 낮은 프로필), bench-router(dry-run 선택).
-bench-router 행은 legacy 자동 route(benchmark + cost tier) 기준선이다. Orchestrator의 다중 기준 정책을 평가하지 않는다
-(docs/routing-contracts.md §6).
-세 정책은 같은 (작업, 프로필) 실행 결과 행렬에서 계산한다 — 같은 작업·환경·예산, 쌍당 표본 1개.
+정책: low-cost-first(cost tier가 가장 낮은 프로필). 라우터의 선택은 Orchestrator 몫이라 자동 선택 기준선은 없다.
+정책은 (작업, 프로필) 실행 결과 행렬에서 계산한다 — 같은 작업·환경·예산, 쌍당 표본 1개.
 
 사용: python3 eval/run.py --tag NAME [--only id,id] [--workers 2]   (WSL, herdr session 'breval')
 """
@@ -75,19 +73,10 @@ def run_pair(t, pid, profiles, root):
 
 
 def policies(profiles_cfg, root):
-    """정책별 작업→프로필. bench-router는 실제 라우터 dry-run(제외 없음)."""
+    """정책별 작업→프로필."""
     ids = [p["id"] for p in profiles_cfg["profile"] if p["enabled"]]
     cheapest = min(ids, key=lambda i: (TIER[next(p for p in profiles_cfg["profile"] if p["id"] == i)["cost_tier"]], i))
-    out = {"fixed-default": {}, "low-cost-first": {}, "bench-router": {}}
-    for t in TASKS:
-        spec = root / "tasks" / f"{t[0]}--dryrun.json"
-        spec.write_text(json.dumps(task_json(t, root, []), ensure_ascii=False), "utf-8")
-        res, _ = cli("route", "--task", str(spec), "--dry-run")
-        out["fixed-default"][t[0]] = profiles_cfg["default_profile"]
-        out["low-cost-first"][t[0]] = cheapest
-        out["bench-router"][t[0]] = res["selected"]["profile"]
-        out.setdefault("_mode", {})[t[0]] = res["selection_mode"]
-    return out
+    return {"low-cost-first": {t[0]: cheapest for t in TASKS}}
 
 
 def ok(x):
@@ -101,10 +90,9 @@ def report(rows, pol, cfg, tag):
              f"생성: {datetime.now(timezone.utc).isoformat(timespec='seconds')} · 작업 {len(TASKS)}개 × 프로필 "
              f"{len({x['profile'] for x in rows})}개 · 쌍당 1회 실행 · priority balanced · hidden acceptance check로 채점", "",
              "성공 = 라우터 `completed` **그리고** hidden check 통과 (blocked 등은 Orchestrator가 결과를 받지 못하므로 실패).", "",
-             "bench-router = legacy 자동 route(benchmark + cost tier) 기준선. Orchestrator 다중 기준 정책의 결과가 아니다.", "",
              "| 정책 | 성공 | 성공률 | check만 통과 | 평균 시간(s) | 중앙값(s) | cost proxy 합 | 자기보고 success인데 check 실패 |",
              "|---|---|---|---|---|---|---|---|"]
-    for name in ("fixed-default", "low-cost-first", "bench-router"):
+    for name in ("low-cost-first",):
         sel = [by.get((t[0], pol[name][t[0]])) for t in TASKS]
         sel = [x for x in sel if x]
         secs = [x["seconds"] for x in sel]
@@ -115,14 +103,14 @@ def report(rows, pol, cfg, tag):
                      f"{sum(x['task_outcome'] == 'success' and not x['check'] for x in sel)} |")
     oracle = sum(any(ok(by.get((t[0], p))) for p in tier_proxy) for t in TASKS)
     lines += ["", f"참고 상한(작업마다 통과한 프로필이 하나라도 있으면 성공): {oracle}/{len(TASKS)}", "",
-              "## 작업별", "", "| 작업 | 카테고리 | bench-router 선택 (mode) | " + " | ".join(tier_proxy) + " |",
-              "|---|---|---|" + "---|" * len(tier_proxy)]
+              "## 작업별", "", "| 작업 | 카테고리 | " + " | ".join(tier_proxy) + " |",
+              "|---|---|" + "---|" * len(tier_proxy)]
     for t in TASKS:
         cells = []
         for p in tier_proxy:
             x = by.get((t[0], p))
             cells.append("-" if not x else f"{'OK' if ok(x) else 'FAIL'} ({x['status']}, check {'pass' if x['check'] else 'fail'}) {x['seconds']}s")
-        lines.append(f"| {t[0]} | {t[1]} | {pol['bench-router'][t[0]]} ({pol['_mode'][t[0]]}) | " + " | ".join(cells) + " |")
+        lines.append(f"| {t[0]} | {t[1]} | " + " | ".join(cells) + " |")
     fails = [x for x in rows if not ok(x)]
     if fails:
         lines += ["", "## 실패 상세", ""] + [f"- {x['task']} / {x['profile']}: status={x['status']} outcome={x['task_outcome']} "

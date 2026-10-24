@@ -37,11 +37,9 @@ def _load(args):
     response = (r.load_json_strict(args.decision_response, r.SNAPSHOT_MAX_BYTES)
                 if getattr(args, "decision_response", None) else None)
     from . import evidence
-    options = {"policy": getattr(args, "policy", "vendor-guided"), "host": getattr(args, "host", None),
+    options = {"host": getattr(args, "host", None),
                "response": response, "index": evidence.load_index(args.cache_dir),
                "env": r.env_with_dotenv(args.config_dir, task["cwd"])}
-    if options["policy"] == "legacy" and (response is not None or selection or getattr(args, "profile", None)):
-        raise r.InputError("--policy legacy cannot be combined with pinned choices or decision responses")
     if response is not None and (selection or getattr(args, "profile", None)):
         raise r.InputError("--decision-response cannot be combined with --selection or --profile")
     snap, snap_warnings = r.load_snapshot(args.cache_dir)
@@ -90,7 +88,7 @@ def _parallel(args):
     if not isinstance(responses, dict):
         raise r.InputError("parallel decision response: object keyed by member label required")
     return parallel.run_group(g, cfg, mapping, snap, snap_warnings, args.herdr_session, dry_run=args.dry_run, wait_ms=args.wait_ms,
-                              decision_options={"policy": args.policy, "host": args.host,
+                              decision_options={"host": args.host,
                                                 "index": evidence.load_index(args.cache_dir),
                                                 "allow_network": not args.dry_run,
                                                 "env": r.env_with_dotenv(args.config_dir, g["cwd"])},
@@ -332,8 +330,6 @@ def main(argv=None):
     pp.add_argument("--dry-run", action="store_true")
     pp.add_argument("--wait-ms", type=_wait_ms, help="per member, wait at most this long after submission; rerun the group to collect")
     for parser in (rp, ep, pp, vp):
-        parser.add_argument("--policy", choices=["vendor-guided", "legacy"], default="vendor-guided",
-                            help="selection policy (default: vendor-guided; legacy is explicit opt-in)")
         parser.add_argument("--host", choices=["antigravity", "codex", "claude"], help="native decision agent host")
         parser.add_argument("--decision-response", help="saved ordered stages array of responses (digest, provider, actual model, answers); parallel: keyed by member label")
     cp = sub.add_parser("collect", help="observe/collect an existing run; never re-sends the prompt")

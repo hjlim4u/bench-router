@@ -67,7 +67,6 @@ sequenceDiagram
 
 - **기본 선택 (`route`)**: 작업에 충분한 가벼운 구성을 우선하며, 근거 부족은 잠정 선택으로 표시합니다. 판단 도구가 없으면 `decision_required`를 반환합니다.
 - **명시적 선택 (`route --selection` / `--profile`)**: 저장된 선택을 검증하거나 지정한 프로필을 실행합니다. 기존 2.0 기록과 수동 지정은 새 정책 검증과 구분됩니다.
-- **기존 점수식 (`--policy legacy`)**: 카테고리 가중치와 비용 등급으로 선택하는 이전 정책을 명시적으로 사용할 수 있습니다.
 
 사용법과 응답 형식은 [공식 가이드 기반 정책](docs/vendor-guided-routing.md)을 참고하세요.
 
@@ -176,7 +175,7 @@ cp examples/profiles.example.toml ~/.config/bench-router/profiles.toml
 > [!IMPORTANT]
 > 복사한 `profiles.toml`은 **모두 비활성(`enabled = false`)인 placeholder**입니다. 다음 명령 전에 파일을 편집하세요.
 > - 사용할 프로필의 `enabled`를 `true`로 바꾸고, `args`의 모델명과 `model_id`를 실제 사용할 값으로 설정합니다. 나머지 실행·모델 정보도 확인하고 `config_revision`을 갱신합니다.
-> - `default_profile`과 `fallback_order`가 사용할 프로필의 `id`를 가리키게 합니다. 모든 프로필이 비활성이면 `no_eligible_profile`(종료 코드 13)이 됩니다.
+> - 모든 프로필이 비활성이면 `no_eligible_profile`(종료 코드 13)이 됩니다.
 > - 실제 위임용 `args`에는 모델·effort 설정만 넣습니다. 권한은 Projects의 `worker.access`를 따릅니다. [프로필 설정 예시](docs/reference.md#profilestoml)를 참고하세요.
 
 <details>
@@ -186,8 +185,6 @@ cp examples/profiles.example.toml ~/.config/bench-router/profiles.toml
 
 ```toml
 schema_version = "1.0"
-default_profile = "claude-opus-high"
-fallback_order = ["claude-opus-high", "codex-sol-high"]
 
 [[profile]]
 id = "claude-opus-high"
@@ -269,31 +266,7 @@ $BR evidence --task task.json --format table # 작업 성격(facet)에 맞는 �
 }
 ```
 
-#### 2) `explain --task task.json --policy legacy` 출력 예시
-`priority: "balanced"`($\lambda=0.15$)에서 `claude-opus-high`(원점수 `0.904`, 고비용)와 `codex-sol-high`(원점수 `0.852`, 중비용)를 비교해 가성비가 높은 `codex-sol-high`(`score=0.777`)를 선택한 결과입니다.
-
-```text
-task synthetic-smoke-001 round 1 · policy 1.0 · snapshot 3fbd7f5524570e61ab661b75db55f15e1cc0b8f21d9fb6ff4017145db4dd4eac
-classification: fallback {'general': 1.0} fallback=no_rule_match
-selected: codex-sol-high (benchmark_score)
-candidates:
-  codex-sol-high: score=0.777 quality=0.852 coverage=1.0 (sufficient) exact=0 cost_proxy=0.5
-    aa_intelligence w=0.6 norm=0.86 raw=0.86 scope=model_proxy src=syn@r1 published=unknown
-    arena_text w=0.4 norm=0.84 raw=0.84 scope=model_proxy src=syn@r1 published=unknown
-  claude-opus-high: score=0.754 quality=0.904 coverage=1.0 (sufficient) exact=0 cost_proxy=1.0
-    aa_intelligence w=0.6 norm=0.92 raw=0.92 scope=model_proxy src=syn@r1 published=unknown
-    arena_text w=0.4 norm=0.88 raw=0.88 scope=model_proxy src=syn@r1 published=unknown
-excluded:
-assessment (registry 1, max_estimated_cost_usd=None):
-  claude-opus-high: eligible
-    constraint enabled pass enabled=True limit=True
-    constraint cost_tier pass cost_tier=high limit=high
-  codex-sol-high: eligible
-    constraint enabled pass enabled=True limit=True
-    constraint cost_tier pass cost_tier=medium limit=high
-```
-
-#### 3) `evidence --task task.json --format table` 출력 예시
+#### 2) `evidence --task task.json --format table` 출력 예시
 점수를 하나로 합산하거나 순위를 매기지 않고, 작업 성격(facet)에 해당하는 벤치마크 측정값·백분위(`p90`)·측정 당시 effort(`max≠high` 등)를 프로필별로 나란히 보여줍니다.
 ```text
 task synthetic-smoke-001 r1 · snapshot 3fbd7f55 · wiki 9a1c4e20
@@ -306,7 +279,7 @@ profiles (raw pPERCENTILE effort; effort≠profile effort means a different effo
  codex-sol-high (high): 1=0.69 p86 max≠high · 2=—
 ```
 
-#### 4) Agent가 작성하고 라우터가 검증하는 `result.json` 계약 예시 ([`examples/result.synthetic.json`](examples/result.synthetic.json))
+#### 3) Agent가 작성하고 라우터가 검증하는 `result.json` 계약 예시 ([`examples/result.synthetic.json`](examples/result.synthetic.json))
 ```json
 {
   "schema_version": "1.0",

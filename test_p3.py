@@ -33,7 +33,7 @@ class P3(unittest.TestCase):
         subprocess.run(git + ["add", "a.txt"], check=True)
         subprocess.run(git + ["commit", "-qm", "init"], check=True)
         self.cfg = config([profile("a", kind="claude", executable="claude", args=["-m", "a"]),
-                           profile("b", args=["-m", "b"])], default="a")
+                           profile("b", args=["-m", "b"])])
 
     def tearDown(self):
         subprocess.run(["git", "-C", self.cwd, "worktree", "prune"], capture_output=True)
@@ -46,10 +46,20 @@ class P3(unittest.TestCase):
         raw.update(kw)
         return pl.validate_group(raw)
 
+    def group2(self, fanout=1, tasks=None, profiles=("a", "b"), **kw):
+        """2.0 group: each task carries one frozen selection per fanout slot, taken in `profiles` order."""
+        base = {"schema_version": "1.0", "round": 1, "summary": "s", "prompt": "do it"}
+        now, entries = pl.datetime.now(pl.timezone.utc), []
+        for t in tasks or [{**base, "task_id": "t1"}, {**base, "task_id": "t2"}]:
+            digest = r.evaluate(r.validate_task({**t, "cwd": self.cwd}), self.cfg, MAPPING, None, [], now)["assessment_digest"]
+            entries.append({"task": t, "selections": [{
+                "schema_version": "2.0", "profile": pid, "assessment_digest": digest,
+                "policy": {"id": "test", "version": "1"}, "reason": "test"} for pid in profiles[:fanout]]})
+        return pl.validate_group({"schema_version": "2.0", "group_id": "g1", "cwd": self.cwd, **kw, "tasks": entries})
+
     def run_(self, g, fake, **kw):
         fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
-        return pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which,
-                            decision_options={"policy": "legacy"}, **kw)
+        return pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which, **kw)
 
     def test_v77_guided_fanout_preflight_and_frozen_recovery(self):
         from bench_router import decision
@@ -120,7 +130,7 @@ class P3(unittest.TestCase):
         self.assertEqual((out["status"], [m["profile"] for m in out["members"]]), ("completed", ["b", "b"]))
         self.assertEqual(len({m["rounds"][0]["run_id"] for m in out["members"]}), 2)
         self.assertEqual((run(raw, fake)["status"], len(fake.prompts)), ("completed", 2))
-        self.cfg = config([*self.cfg["profile"], profile("c")], default="a")
+        self.cfg = config([*self.cfg["profile"], profile("c")])
         stale_fake = FakeProjects()
         self.assertEqual(run({**raw, "group_id": "stale-external"}, stale_fake)["status"], "stale_assessment")
         self.assertEqual(stale_fake.prompts, [])
@@ -161,7 +171,7 @@ class P3(unittest.TestCase):
         self.assertEqual((decision["selection"]["reason"], decision["decision_context"]["profiles"]["b"]["metrics"]
                           ["cost.estimated_usd"]["value"]), ("b for diversity", 0.01))
         # 평가 후 설정 변경 → 그룹 전체 실행 안 함
-        self.cfg = config([*self.cfg["profile"], profile("c")], default="a")
+        self.cfg = config([*self.cfg["profile"], profile("c")])
         stale_fake = FakeProjects(on_prompt=write_result())
         stale = self.run_(pl.validate_group({**raw, "group_id": "g3"}), stale_fake)
         self.assertEqual((stale["status"], stale_fake.prompts), ("stale_assessment", []))
@@ -176,8 +186,8 @@ class P3(unittest.TestCase):
     def test_v41_partial_failure_preserves_reassignment(self):
         self.cfg["profile"][1]["args"] = ["--add-dir", "/unsupported"]
         fake = FakeProjects(on_prompt=write_result())
-        g = self.group(fanout=2, tasks=[{"schema_version": "1.0", "task_id": "t1", "round": 1,
-                                       "summary": "s", "prompt": "do it"}])
+        g = self.group2(fanout=2, tasks=[{"schema_version": "1.0", "task_id": "t1", "round": 1,
+                                        "summary": "s", "prompt": "do it"}])
         out = self.run_(g, fake)
         self.assertEqual(out["status"], "partial_failure")
         self.assertEqual([(m["status"], m["rounds"][0]["delivery_state"], m["rounds"][0]["reassignment"])
@@ -189,7 +199,7 @@ class P3(unittest.TestCase):
 
     def test_v30_isolated_worktrees(self):
         fake = FakeProjects(on_prompt=write_result())
-        out = self.run_(self.group(), fake)
+        out = self.run_(self.group2(), fake)
         self.assertEqual(out["status"], "completed", out)
         routed = sorted(str(Path(self.cwd, ".bench-router/worktrees/g1", m["label"])) for m in out["members"])
         self.assertEqual(sorted(fake.ws_cwds), routed)  # 각 board task의 repo = 자기 router worktree
@@ -202,23 +212,19 @@ class P3(unittest.TestCase):
 
     def test_v31_fanout_distinct_profiles(self):
         one = [{"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "p"}]
-        out = self.run_(self.group(fanout=2, tasks=one), FakeProjects(on_prompt=write_result()))
+        out = self.run_(self.group2(fanout=2, tasks=one), FakeProjects(on_prompt=write_result()))
         self.assertEqual(out["status"], "completed", out)
         self.assertEqual(sorted(m["profile"] for m in out["members"]), ["a", "b"])
-        g = self.group(fanout=3)
-        out = pl.run_group(g, self.cfg, MAPPING, None, [], dry_run=True, decision_options={"policy": "legacy"})
-        self.assertEqual(len(out["members"]), 4)
-        self.assertIn("fanout_reduced", [w["code"] for w in out["warnings"]])
 
     def test_v32_shared_scratchpad(self):
         fake = FakeProjects(on_prompt=write_result())
-        out = self.run_(self.group(isolation="shared"), fake)
+        out = self.run_(self.group2(isolation="shared"), fake)
         self.assertEqual(out["status"], "completed", out)
         shared = out["shared_dir"]
         self.assertTrue(any(f"{shared}/t1-1.md" in p for p in fake.prompts))
 
     def test_v34_rerun_does_not_resend(self):
-        g = self.group(isolation="shared")
+        g = self.group2(isolation="shared")
         fake = FakeProjects(on_prompt=write_result())
         self.run_(g, fake)
         sent = len(fake.prompts)
@@ -227,7 +233,7 @@ class P3(unittest.TestCase):
         self.assertEqual(len(fake.prompts), sent)
 
     def test_wait_zero_starts_members_then_rerun_collects(self):
-        g = self.group(isolation="shared")
+        g = self.group2(isolation="shared")
         fake = FakeProjects(on_prompt=write_result())
         out = self.run_(g, fake, wait_ms=0)  # every member submitted, nobody waited on
         self.assertEqual([m["rounds"][0]["status"] for m in out["members"]], ["timed_out", "timed_out"], out)

@@ -47,7 +47,7 @@ Request example (both backends use the same shape):
  }}}
 ```
 
-For standalone bounded questions, `scripts/decide.py` retains the generic typed-answer interface. Routing stages and selection records come from the common CLI policy. Persist full evidence locally and give the parent the choice, provenance and unresolved issues. The same policy serves standalone CLI, copied Skill and parallel fanout. Use `--policy legacy` only for an explicitly requested old score-based choice.
+For standalone bounded questions, `scripts/decide.py` retains the generic typed-answer interface. Routing stages and selection records come from the common CLI policy. Persist full evidence locally and give the parent the choice, provenance and unresolved issues. The same policy serves standalone CLI, copied Skill and parallel fanout.
 
 Upstream allocation can inspect `evaluate --format 3` → `evidence.relevance[unit]`: raw `score`, `accepted`, selected `basis`, `task_requirement`, short `reason`, matched facets, comparison scope, source page and benchmark request digest. The original task and shared unit descriptions remain in `decision.task` and `evidence.units`; per-candidate observations supply the measured conditions. `benchmark_relevance` contains accepted relevance values without voting. Rejected and auxiliary evidence remains visible. These are bounded evaluator judgments, not verified task success. All fields are replayed and digest-bound when an upstream policy selects a model using selection 4.0.
 

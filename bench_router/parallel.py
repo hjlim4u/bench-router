@@ -84,8 +84,7 @@ def validate_group(raw):
 
 
 def plan(g, cfg, mapping, snap, snap_warnings, availability, decision_options=None, responses=None):
-    """1.0(legacy): task마다 route 1회 → selected 다음 후보 순서로 서로 다른 프로필 fanout개.
-    2.0: task마다 단건 route --selection과 같은 평가(evaluate_v1 + 제약 + digest)로 Orchestrator 선택을 검사한다.
+    """task마다 단건 route --selection과 같은 평가(evaluate_v1 + 제약 + digest)로 Orchestrator 선택을 검사한다.
     digest 기준은 group 수준 task(cwd=group.cwd, 원래 prompt) — Orchestrator도 그 task로 evaluate한다."""
     now = datetime.now(timezone.utc)
     members, warnings = [], []
@@ -106,39 +105,25 @@ def plan(g, cfg, mapping, snap, snap_warnings, availability, decision_options=No
                                 "profile": sel["profile"], "selection": sel, "rounds": [],
                                 "status": "planned" if chk["status"] == "selected" else chk["status"]})
             continue
-        if options.get("policy", "vendor-guided") == "vendor-guided":
-            picked = []
-            for k in range(1, g["fanout"] + 1):
-                label = f"{t['task_id']}-{k}"
-                used_labels.add(label)
-                res = r.route(t, cfg, mapping, snap, snap_warnings, now, availability,
-                              response=responses.get(label), omit_profiles=picked, **options)
-                if res["status"] == "no_eligible_profile" and picked:
-                    warnings.append(r.warn("fanout_reduced", f"{t['task_id']}: only {len(picked)} eligible profiles"))
-                    break
-                selected = res.get("selected")
-                sel = res.get("selection") if selected else None
-                members.append({"label": label, "index": i, "task_id": t["task_id"],
-                                "profile": selected["profile"] if selected else None,
-                                "selection": {key: val for key, val in sel.items() if key != "source"} if sel else None,
-                                "status": "planned" if selected else res["status"], "rounds": [],
-                                "decision": res.get("decision")})
-                if not selected:
-                    break  # Remaining choices depend on this one; generate their packets on the next invocation.
-                picked.append(selected["profile"])
-            continue
-        res = r.route(t, cfg, mapping, snap, snap_warnings, now, availability, **options)
-        if res["status"] != "selected":
-            members.append({"label": f"{t['task_id']}-1", "index": i, "task_id": t["task_id"], "profile": None,
-                            "status": "no_eligible_profile", "rounds": []})
-            continue
-        sel = res["selected"]["profile"]
-        picks = [sel] + [c["profile"] for c in res["candidates"] if c["profile"] != sel][:g["fanout"] - 1]
-        if len(picks) < g["fanout"]:
-            warnings.append(r.warn("fanout_reduced", f"{t['task_id']}: only {len(picks)} eligible profile(s)"))
-        for k, pid in enumerate(picks, 1):
-            members.append({"label": f"{t['task_id']}-{k}", "index": i, "task_id": t["task_id"], "profile": pid,
-                            "status": "planned", "rounds": []})
+        picked = []
+        for k in range(1, g["fanout"] + 1):
+            label = f"{t['task_id']}-{k}"
+            used_labels.add(label)
+            res = r.route(t, cfg, mapping, snap, snap_warnings, now, availability,
+                          response=responses.get(label), omit_profiles=picked, **options)
+            if res["status"] == "no_eligible_profile" and picked:
+                warnings.append(r.warn("fanout_reduced", f"{t['task_id']}: only {len(picked)} eligible profiles"))
+                break
+            selected = res.get("selected")
+            sel = res.get("selection") if selected else None
+            members.append({"label": label, "index": i, "task_id": t["task_id"],
+                            "profile": selected["profile"] if selected else None,
+                            "selection": {key: val for key, val in sel.items() if key != "source"} if sel else None,
+                            "status": "planned" if selected else res["status"], "rounds": [],
+                            "decision": res.get("decision")})
+            if not selected:
+                break  # Remaining choices depend on this one; generate their packets on the next invocation.
+            picked.append(selected["profile"])
     if set(responses) - used_labels:
         raise r.InputError(f"parallel: unknown or not-yet-requested response labels {sorted(set(responses) - used_labels)}")
     return members, warnings
@@ -214,7 +199,7 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                 continue
             sel = m.get("selection")
             if sel and sel["schema_version"] in ("3.0", "4.0"):
-                opts = {**(decision_options or {}), "allow_network": False, "policy": "vendor-guided"}
+                opts = {**(decision_options or {}), "allow_network": False}
                 chk = r.route(g["tasks"][i], cfg, mapping, snap, snap_warnings, datetime.now(timezone.utc),
                               availability, g["contexts"][i], selection=sel, **opts)
             else:

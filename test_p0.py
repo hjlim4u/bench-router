@@ -24,8 +24,8 @@ def profile(pid, tier="medium", **kw):
     return {**p, **kw}
 
 
-def config(profiles, default=None, fallback=()):
-    return {"schema_version": "1.0", "default_profile": default, "fallback_order": list(fallback), "profile": profiles}
+def config(profiles):
+    return {"schema_version": "1.0", "profile": profiles}
 
 
 def guided_reply(packet, chosen, **overrides):
@@ -92,9 +92,6 @@ class P0(unittest.TestCase):
         raw.update(kw)
         return r.validate_task({k: v for k, v in raw.items() if v is not None})
 
-    def run_route(self, t, profiles, ev, **cfg_kw):
-        return r.route_legacy(t, config(profiles, **cfg_kw), MAPPING, snapshot(ev, profiles), [], NOW)
-
     def test_v11_orchestrator_facts_and_budget(self):
         ps = [profile("a", context_tokens=8000), profile("b", context_tokens=0)]
         context = r.validate_context({"schema_version": "1.0", "complexity": {"level": "high", "reason": "multiple files"},
@@ -133,8 +130,7 @@ class P0(unittest.TestCase):
                          ["enabled", "cost_tier", "context_capacity"])
         self.assertIsNone(asmt["candidates"][0]["evaluations"]["benchmark"]["quality"])
         self.assertEqual(asmt["candidates"][2]["evaluations"], {})
-        # benchmark 없음 + default/fallback 없음: 자동 선택은 실패해도 평가는 유효 후보를 돌려준다
-        self.assertEqual(r.route_legacy(t, config(ps), MAPPING, None, [], NOW)["status"], "no_eligible_profile")
+        # benchmark 없음: 평가는 유효 후보를 돌려준다
         self.assertEqual([c["profile"] for c in r.evaluate_v1(t, config(ps), MAPPING, None, [], NOW)["candidates"]],
                          ["a", "b"])
 
@@ -210,7 +206,7 @@ class P0(unittest.TestCase):
                          {"cost_tier_exceeds_max", "estimated_cost_unknown"})
         self.assertEqual(b["evaluations"], {})
         # legacy_score는 route 1.0의 score와 같다. 미등록 지표가 늘어도 benchmark 결과는 불변.
-        legacy = r.route_legacy(t, config(ps), MAPPING, snap, [], NOW, context=ctx)
+        legacy = r.evaluate_v1(t, config(ps), MAPPING, snap, [], NOW, context=ctx)
         self.assertEqual(a["evaluations"]["benchmark"]["status"], "ok")
         self.assertIsNotNone(a["evaluations"]["benchmark"]["legacy_score"])
         self.assertEqual(a["evaluations"]["benchmark"]["legacy_score"], legacy["candidates"][0]["score"])
@@ -255,14 +251,15 @@ class P0(unittest.TestCase):
         fx = json.loads((EX / "scoring.synthetic.json").read_text("utf-8"))
         a, exp = fx["evidence_weights"], fx["expected"]
         self.assertEqual(r.POLICY["tier_proxy"], {k: float(v) for k, v in fx["policy"]["tier_proxy"].items()})
-        for prio, winner in exp["winner"].items():
+        for prio in exp["winner"]:
             cands = []
             for p in fx["profiles"]:
                 cov, q = r.coverage_quality(a, p["scores"])
                 self.assertAlmostEqual(cov, exp["coverage"][p["id"]], delta=1e-9)
                 self.assertAlmostEqual(q, exp["quality"][p["id"]], delta=1e-9)
                 cands.append({"profile": p["id"], "cost_tier": p["cost_tier"], "coverage": cov, "quality": q})
-            self.assertEqual(r.select(cands, prio, None, []), (winner, "benchmark_score"), prio)
+            for c in cands:
+                r.legacy_score(c, prio)
             if prio == "balanced":
                 for c in cands:
                     self.assertAlmostEqual(c["score"], exp["balanced_scores"][c["profile"]], delta=1e-9)
@@ -285,12 +282,12 @@ class P0(unittest.TestCase):
         ps = [profile("a", "high"), profile("b", "low"), profile("c")]
         ev = {"a": {"aa_intelligence": 0.9}, "b": {"aa_intelligence": 0.9}, "c": {"aa_intelligence": 0.5}}
         t = self.task()
-        one = self.run_route(t, ps, ev)
-        two = self.run_route(t, list(reversed(ps)), ev)
+        one = r.evaluate_v1(t, config(ps), MAPPING, snapshot(ev, ps), [], NOW)
+        two = r.evaluate_v1(t, config(list(reversed(ps))), MAPPING, snapshot(ev, ps), [], NOW)
         for k in ("config_hash", "assessment_digest"):  # 설정 파일 순서만 다름(digest는 config_hash에서 파생)
             one.pop(k), two.pop(k)
         self.assertEqual(json.dumps(one), json.dumps(two))
-        self.assertEqual(one["selected"]["profile"], "b")  # 최고 score
+        self.assertEqual(one["candidates"][0]["profile"], "b")  # 최고 score
 
     def test_v05_no_eligible_cli_exit13(self):
         cfg_dir, cache_dir = Path(self.cwd) / "cfg", Path(self.cwd) / "cache"
@@ -309,32 +306,6 @@ class P0(unittest.TestCase):
         self.assertEqual(res["excluded"], [{"profile": p, "reasons": ["disabled"]}
                                            for p in ("local-agy-example", "local-codex-example")])
         self.assertIn("snapshot_unusable", [w["code"] for w in res["warnings"]])
-
-    def test_v06_default_obeys_constraints(self):
-        ps = [profile("dflt", inference_local=False), profile("loc", inference_local=True)]
-        t = self.task(constraints={"local_only": True})
-        res = self.run_route(t, ps, {}, default="dflt", fallback=["dflt", "loc"])
-        self.assertEqual(res["selected"]["profile"], "loc")
-        self.assertEqual(res["selection_mode"], "fallback_insufficient_evidence")
-        self.assertIn({"profile": "dflt", "reasons": ["not_local_inference"]}, res["excluded"])
-        res = self.run_route(t, ps, {}, default="dflt", fallback=["dflt"])
-        self.assertEqual(res["status"], "no_eligible_profile")
-        # 기타 하드 제약도 default에 동일 적용
-        t = self.task(exclude_profiles=["dflt"], constraints={"max_cost_tier": "low", "min_context_tokens": 1,
-                                                               "required_capabilities": ["vision"]})
-        res = self.run_route(t, [profile("dflt")], {}, default="dflt")
-        self.assertEqual(res["excluded"][0]["reasons"], ["excluded_by_task", "cost_tier_exceeds_max",
-                                                         "context_unknown", "missing_capability:vision"])
-
-    def test_v07_low_coverage_uses_default(self):
-        # analysis = aa_intelligence 0.6 + arena_text 0.4; arena_text만 관측 → C=0.4
-        ps = [profile("a"), profile("dflt")]
-        t = self.task(summary="Analyze and research metrics")
-        res = self.run_route(t, ps, {"a": {"arena_text": 1.0}}, default="dflt")
-        self.assertEqual((res["selected"]["profile"], res["selection_mode"]), ("dflt", "default_insufficient_evidence"))
-        a = next(c for c in res["candidates"] if c["profile"] == "a")
-        self.assertEqual((a["score"], a["coverage_band"]), (None, "insufficient"))
-        self.assertIn("insufficient_evidence", [w["code"] for w in res["warnings"]])
 
     def test_v08_input_validation(self):
         bad = [dict(categories={"analysis": 1}), dict(category_confidence=0.9), dict(unknown_field=1),
@@ -366,27 +337,15 @@ class P0(unittest.TestCase):
         cls = r.classify(self.task(summary="SQL"))
         self.assertEqual(cls["stage"], "fallback")
 
-    def test_v10_near_tie_boundary(self):
-        def pick(q_b, prio):
-            cands = [{"profile": "a", "cost_tier": "high", "coverage": 1.0, "quality": 0.9},
-                     {"profile": "b", "cost_tier": "low", "coverage": 1.0, "quality": q_b}]
-            return r.select(cands, prio, None, [])[0]
-        self.assertEqual(pick(0.731, "balanced"), "b")  # 0.75 vs 0.731: gap 0.019 → near-tie, 낮은 tier
-        self.assertEqual(pick(0.73, "balanced"), "a")   # gap 0.020 → near-tie 아님
-        self.assertEqual(pick(0.899, "quality"), "a")   # quality: 비용으로 뒤집지 않음
-        self.assertEqual(pick(0.9, "quality"), "a")     # 정확 동점 → ID
-
     def test_snapshot_staleness_and_fingerprint(self):
         ps = [profile("a"), profile("dflt")]
         ev = {"a": {"aa_intelligence": 0.9}}
         t = self.task()
         s = snapshot(ev, ps, last_success="2026-10-01T00:00:00+00:00")  # 11일 > max_stale 7일
-        res = r.route_legacy(t, config(ps, default="dflt"), MAPPING, s, [], NOW)
-        self.assertEqual(res["selected"]["profile"], "dflt")
+        res = r.evaluate_v1(t, config(ps), MAPPING, s, [], NOW)
         self.assertIn("source_too_stale", [w["code"] for w in res["warnings"]])
         changed = [profile("a", args=["-m", "other"]), profile("dflt")]  # 설정 변경 → 기존 점수 무효
-        res = r.route_legacy(t, config(changed, default="dflt"), MAPPING, snapshot(ev, ps), [], NOW)
-        self.assertEqual(res["selected"]["profile"], "dflt")
+        res = r.evaluate_v1(t, config(changed), MAPPING, snapshot(ev, ps), [], NOW)
         self.assertIn("stale_config", [w["code"] for w in res["warnings"]])
         tampered = dict(snapshot(ev, ps), generated_at="x")
         with self.assertRaises(r.InputError):
@@ -764,7 +723,7 @@ class P0VendorGuidance(unittest.TestCase):
             "summary": "Fix one typo", "prompt": "Fix a typo in a comment.", "cwd": self.tmp.name})
         self.ps = [profile("light", model_id="gpt-6-luna", reasoning_effort="low"),
                    profile("strong", model_id="gpt-6-astra", reasoning_effort="xhigh")]
-        self.cfg = config(self.ps, default="strong", fallback=["light"])
+        self.cfg = config(self.ps)
 
     def route(self, **kw):
         return r.route(self.task, self.cfg, MAPPING, kw.pop("snap", None), [], kw.pop("now", NOW), host="codex", env={}, **kw)
@@ -982,7 +941,7 @@ class P0VendorGuidance(unittest.TestCase):
         idx = self.indexed()
         self.ps = [profile("light", model_id="claude-sonnet-5-5", reasoning_effort="medium"),
                    profile("strong", model_id="claude-sonnet-5-5", reasoning_effort="xhigh")]
-        self.cfg = config(self.ps, default="strong")
+        self.cfg = config(self.ps)
         proxy = snapshot({"strong": {"u/coding": 0.9}}, self.ps)
         d = self.finish("strong", snap=proxy, index=idx)["decision"]
         self.assertIn("upstream_selection_required", d["uncertainty"])
@@ -1131,7 +1090,7 @@ class P0VendorGuidance(unittest.TestCase):
     def test_v94_public_assessment_and_external_choice(self):
         from unittest.mock import patch
         self.ps.append(profile("disabled", enabled=False))
-        self.cfg = config(self.ps, default="strong", fallback=["light"])
+        self.cfg = config(self.ps)
         first = self.d.evaluate(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", env={})
         self.assertEqual((first["schema_version"], first["status"], first["assessment_digest"]),
                          ("3.0", "decision_required", None))
@@ -1345,7 +1304,7 @@ class P0VendorGuidance(unittest.TestCase):
         self.task["priority"] = "cost"
         self.ps = [profile("light", model_id="claude-sonnet-5-5", reasoning_effort="medium"),
                    profile("strong", model_id="claude-sonnet-5-5", reasoning_effort="xhigh")]
-        self.cfg = config(self.ps, default="strong")
+        self.cfg = config(self.ps)
         snap = self.exact({"light": {"u/coding": 0.6}, "strong": {"u/coding": 0.9}})
         fit = self.fit_packet(index=idx, snap=snap)
         packet = self.route(index=idx, snap=snap, response=guided_reply(fit, "strong"))
@@ -1358,6 +1317,13 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertIn("workflow_gain_unverified", strong["diagnostics"])
         self.assertIn("task_quality_unverified", strong["diagnostics"])
         self.assertEqual(assessment["recommendation"]["status"], "abstained")
+
+    def test_v105_removed_default_and_fallback_keys_are_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "profiles.toml"
+            path.write_text('schema_version = "1.0"\ndefault_profile = "a"\n', "utf-8")
+            with self.assertRaisesRegex(r.InputError, "default_profile"):
+                r.load_profiles(path)
 
 
 if __name__ == "__main__":

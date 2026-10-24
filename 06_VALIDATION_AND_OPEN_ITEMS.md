@@ -16,7 +16,7 @@ offline fixture 통과, 실제 API 확인, 실제 herdr smoke, 작업군 효과 
 | V04 | 동일 task/config/snapshot/availability | 선택과 설명 순서가 항상 동일 |
 | V05 | 후보 모두 제약 탈락 | no_eligible_profile, exit13, prompt 없음 |
 | V06 | default가 local_only/context/cost/exclude 위반 | default도 탈락; 무조건 default 실행 금지 |
-| V07 | coverage 모두 <0.5 | configured eligible default/fallback_order, 점수 최적 선택이라고 표시하지 않음 |
+| V07 | coverage 모두 <0.5 | 점수·자동 선택 없음 (default/fallback 폐기됨) |
 | V08 | categories 합 !=1, enum 밖, NaN, 중복 key | 합은 normalize; 잘못된 구조는 exit2 |
 | V09 | L1 규칙 충돌/unknown confidence | general abstain, 이유 기록 |
 | V10 | score gap 0.019/0.020, quality priority | near-tie 경계와 priority별 정렬 계약 준수 |

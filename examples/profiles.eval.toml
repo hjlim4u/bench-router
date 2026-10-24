@@ -1,7 +1,5 @@
 # compare 평가에 쓴 프로필(config_revision v3). 로컬 profiles.toml의 사본이며 키·토큰은 없다.
 schema_version = "1.0"
-default_profile = "claude-default"
-fallback_order = ["claude-default", "codex-default", "agy-default"]
 
 [[profile]]
 id = "claude-default"

@@ -1,7 +1,7 @@
 # 공식 가이드 기반 선택 정책
 
 `route`, `explain`, `parallel`, 설치한 Skill의 기본 정책은 `vendor-guided`입니다.
-기존 점수식은 `--policy legacy`로 명시적으로 선택합니다. `evaluate`는 선택 없는 사실 조회로 유지합니다.
+`evaluate`는 선택 없는 사실 조회로 유지합니다.
 
 ## 선택 순서
 
@@ -25,7 +25,6 @@
 python3 -m bench_router.cli route --task task.json --host codex --dry-run
 python3 -m bench_router.cli route --task task.json --host codex --decision-response response.json --dry-run
 python3 -m bench_router.cli route --task task.json --host codex --decision-response response.json
-python3 -m bench_router.cli route --task task.json --policy legacy --dry-run
 ```
 
 첫 명령은 `decision_required`와 `decision` 패킷을 반환합니다. dry-run은 Jev 키가 있어도 네트워크나 쓰기를 수행하지 않습니다.
