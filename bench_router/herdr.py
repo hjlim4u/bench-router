@@ -452,10 +452,24 @@ def _execute_headless(rc, prompt, profile, session, runner, wait_ms):
     return collect(rc, _wait(rc, wait_ms), session, runner)
 
 
+def _binding_unchanged(rc, session, runner):
+    """Pre-submission check. On failure nothing was sent: settle the receipt so it cannot stay `dispatching`."""
+    try:
+        if project_binding(session, runner) == rc["project_binding"]:
+            return True
+        why = "Projects version changed before submission"
+    except r.InputError as e:
+        why = str(e)
+    rc["status"] = "execution_failed"
+    _observe(rc, note=f"{why}; nothing submitted")
+    save(rc)
+    return False
+
+
 def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=None):
+    if not _binding_unchanged(rc, session, runner):
+        return rc
     if rc.get("execution") == "headless":
-        if project_binding(session, runner) != rc["project_binding"]:
-            raise r.InputError("Projects version changed before submission")
         r.atomic_write(Path(rc["run_dir"]) / "input.txt", prompt.encode("utf-8"))
         return _execute_headless(rc, prompt, profile, session, runner, wait_ms)
     settings = worker_settings(profile)
@@ -464,8 +478,6 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
         _observe(rc, note="profile args other than a model/effort cannot be expressed as Projects settings; nothing submitted")
         save(rc)
         return rc
-    if project_binding(session, runner) != rc["project_binding"]:
-        raise r.InputError("Projects version changed before submission")
     r.atomic_write(Path(rc["run_dir"]) / "input.txt", prompt.encode("utf-8"))
     remaining = (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds()
     if remaining <= 0:
@@ -612,9 +624,14 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
             rec, fresh = co.reserve(t, BACKEND, binding)
             if not fresh and not existing:
                 raise co.Conflict("recorded native submission has no receipt; inspect effects before resolving, never resend")
-            result = _dispatch(t, cfg, mapping, snap, snap_warnings, session, runner, which,
-                               profile_id, context, selection_mode, selection, check_digest, decision_options, wait_ms,
-                               availability)
+            try:
+                result = _dispatch(t, cfg, mapping, snap, snap_warnings, session, runner, which,
+                                   profile_id, context, selection_mode, selection, check_digest, decision_options, wait_ms,
+                                   availability)
+            except BaseException:
+                if fresh and not any(x["task_id"] == t["task_id"] and x["round"] == t["round"] for x in receipts(t["cwd"])):
+                    co.discard(key)  # failed before any receipt: nothing was sent, so release the admission record
+                raise
             if result.get("run_id"):
                 co.observe_receipt(load_receipt(t["cwd"], result["run_id"]))
             elif fresh:

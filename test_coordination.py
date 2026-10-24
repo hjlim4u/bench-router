@@ -98,6 +98,27 @@ class CoordinationTests(unittest.TestCase):
         self.assertEqual(self.run_(fake)["status"], "conflict")
         self.assertEqual(fake.calls, [["version"]])  # binding only; nothing added
 
+    def test_v51a_error_before_receipt_releases_admission(self):
+        with self.assertRaises(r.InputError):
+            self.run_(FakeProjects(), self.task(prompt="x" * (150 * 1024)))
+        self.assertEqual(co.inspect()["active"], 0)
+        self.assertNotEqual(self.run_(FakeProjects())["status"], "conflict")
+
+    def test_v51b_binding_failure_settles_receipt(self):
+        fake = FakeProjects()
+        real = herdr.project_binding
+        calls = []
+        def flaky(*a, **kw):
+            calls.append(1)
+            if len(calls) == 3:  # the pre-submission recheck
+                raise r.InputError("herdr-projects timed out")
+            return real(*a, **kw)
+        with patch.object(herdr, "project_binding", flaky):
+            out = self.run_(fake)
+        self.assertEqual(out["status"], "execution_failed")
+        self.assertEqual(fake.adds, [])
+        self.assertNotEqual(self.run_(FakeProjects(), self.task(task_id="two"))["status"], "conflict")
+
     def test_v52_same_key_lock_and_parent_workspace_exclusion(self):
         with co.operation(co.key_for(self.task())):
             self.assertEqual(self.run_(FakeProjects())["status"], "conflict")
