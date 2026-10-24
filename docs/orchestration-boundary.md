@@ -64,7 +64,7 @@ flowchart TD
 
 | 접점 | 현재 보장·제한 | 설계상 의미 |
 |---|---|---|
-| [`routing.evaluate()`](../bench_router/routing.py#L957) | 선택 없이 ID순 후보·제약·사실을 반환. benchmark 필드에는 기존 category 집계와 `legacy_score`도 포함 | 사실 조회로 사용. vendor-guided의 `fit`을 완료한 후보 목록으로 읽으면 안 됨 |
+| [`routing.evaluate()`](../bench_router/routing.py#L957) | 선택 없이 ID순 후보·제약·사실을 반환. benchmark 필드에는 기존 category 집계(quality·coverage)도 포함 | 사실 조회로 사용. vendor-guided의 `fit`을 완료한 후보 목록으로 읽으면 안 됨 |
 | [`evidence.build()`](../bench_router/evidence.py#L154) | facet에 맞는 관측·측정 조건·결측·freshness 제공. 기본 상위 12개 unit 및 생략 정보 | 원자료 조회와 최종 비교를 구분. 조회 순서·normalized 값은 팀 구성 점수가 아님 |
 | [`decision.route()`](../bench_router/decision.py#L359) | 단건 추천, 단계별 판단 요청, 적합성·비교 근거·불확실성을 기록 | 상위는 추천을 실행 전에 검토할 수 있음 |
 | [`selection 3.0`](../bench_router/decision.py#L339) | 결정 전체와 최종 resolved profile을 다시 검증 | 추천을 다른 profile로 바꿔 같은 기록을 사용할 수 없음 |

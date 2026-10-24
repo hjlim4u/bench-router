@@ -217,8 +217,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
    - 같은 cohort 전체를 모집단으로 percentile 정규화(`(평균 rank − 1)/(N − 1)`, N=1이면 0.5)를 합니다.
    - coverage `C`는 관측된 evidence의 가중치 합입니다.
    - 품질 `Q = C·Q_obs + (1−C)·0.5 − 0.1·(1−C)`. 결측에는 사전값 0.5와 페널티 0.1이 붙고, 측정된 0점은 결측이 아닙니다.
-   - 점수 `S = Q − λ·cost_proxy`. λ는 quality 0, balanced 0.15, cost 0.30이고, cost_proxy는 low 0, medium 0.5, high 1입니다.
-4. **선택**: 점수는 후보 순위가 아니라 참고 근거입니다. `C ≥ 0.5`인 후보만 점수가 계산되고, 최종 선택은 Orchestrator가 `select`로 기록합니다. 남는 후보가 없으면 `no_eligible_profile`(exit 13)입니다.
+4. **선택**: `Q`와 `C`는 후보 순위가 아니라 참고 근거이며, 후보는 profile ID순입니다. 최종 선택은 Orchestrator가 `select`로 기록합니다. 남는 후보가 없으면 `no_eligible_profile`(exit 13)입니다.
 
 카테고리별 evidence 기본값(`categories.toml`):
 
@@ -234,7 +233,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 | vision_doc | arena_document 0.5, arena_vision 0.5 |
 | general | aa_intelligence 1.0 |
 
-출력의 `candidates[]`에는 후보별 `score`, `quality`, `coverage`, `coverage_band`, `exact_evidence_weight`, `cost_proxy`가 들어 있고, evidence마다 원값·정규화값·scope·cohort·평가 조건(`conditions`)·출처 revision·날짜·`missing_reason`이 함께 나옵니다. 근거 데이터가 일부만 있거나, 모델 수준 대리 지표뿐이거나, 오래된 경우에는 `warnings`에 표시합니다.
+출력의 `candidates[]`에는 후보별 `quality`, `coverage`, `coverage_band`, `exact_evidence_weight`가 들어 있고, evidence마다 원값·정규화값·scope·cohort·평가 조건(`conditions`)·출처 revision·날짜·`missing_reason`이 함께 나옵니다. 근거 데이터가 일부만 있거나, 모델 수준 대리 지표뿐이거나, 오래된 경우에는 `warnings`에 표시합니다.
 
 ---
 

@@ -88,7 +88,7 @@ python3 -m bench_router.cli route --task task.json --context context.json --prof
 - `constraints`: every applied required check, with `passed`, `code` on failure, `metric`, `observed`, `limit`;
 - `facts`: registered metrics with `freshness`, including `cost.estimated_usd` (the router's computed cost uses source `router:io2-v1`);
 - `unrecognized_metrics`;
-- `evaluations.benchmark` (eligible profiles only): `status ok|insufficient|unavailable`, `quality`, `coverage`, `evidence`, and `legacy_score`. `legacy_score` is the old automatic-route score, not an overall ranking.
+- `evaluations.benchmark` (eligible profiles only): `status ok|insufficient|unavailable`, `quality`, `coverage`, and `evidence`. There is no combined score; candidates are listed by profile ID.
 
 `evaluate --format 1` keeps the previous candidate/excluded shape for one release.
 

@@ -270,8 +270,8 @@ def explain_text(res):
              f"selected: {res['selected']['profile'] if res['selected'] else '-'} ({res['selection_mode']})",
              "candidates:"]
     for c in res["candidates"]:
-        lines.append(f"  {c['profile']}: score={c['score']} quality={c['quality']} coverage={c['coverage']} "
-                     f"({c['coverage_band']}) exact={c['exact_evidence_weight']} cost_proxy={c['cost_proxy']}")
+        lines.append(f"  {c['profile']}: quality={c['quality']} coverage={c['coverage']} "
+                     f"({c['coverage_band']}) exact={c['exact_evidence_weight']}")
         for e in c["evidence"]:
             lines.append(f"    {e['id']} w={e['weight']} norm={e['normalized']} raw={e['raw']} scope={e['scope']} "
                          f"src={e['source_id']}@{e['source_revision']} published={e['published_at'] or 'unknown'}"

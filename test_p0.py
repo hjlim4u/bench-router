@@ -217,11 +217,11 @@ class P0(unittest.TestCase):
         self.assertEqual({x["code"] for x in b["constraints"] if not x["passed"]},
                          {"cost_tier_exceeds_max", "estimated_cost_unknown"})
         self.assertEqual(b["evaluations"], {})
-        # legacy_score는 route 1.0의 score와 같다. 미등록 지표가 늘어도 benchmark 결과는 불변.
+        # 미등록 지표가 늘어도 benchmark 결과는 불변.
         legacy = r.evaluate_v1(t, config(ps), MAPPING, snap, [], NOW, context=ctx)
         self.assertEqual(a["evaluations"]["benchmark"]["status"], "ok")
-        self.assertIsNotNone(a["evaluations"]["benchmark"]["legacy_score"])
-        self.assertEqual(a["evaluations"]["benchmark"]["legacy_score"], legacy["candidates"][0]["score"])
+        self.assertNotIn("legacy_score", a["evaluations"]["benchmark"])
+        self.assertNotIn("score", legacy["candidates"][0])
         ctx["profiles"]["a"]["metrics"]["acme.other"] = {"value": 1, "source": "x"}
         again = r.evaluate(t, config(ps), MAPPING, snap, [], NOW, context=ctx)
         self.assertEqual(again["candidates"][0]["evaluations"], a["evaluations"])
@@ -263,18 +263,10 @@ class P0(unittest.TestCase):
         fx = json.loads((EX / "scoring.synthetic.json").read_text("utf-8"))
         a, exp = fx["evidence_weights"], fx["expected"]
         self.assertEqual(r.POLICY["tier_proxy"], {k: float(v) for k, v in fx["policy"]["tier_proxy"].items()})
-        for prio in exp["winner"]:
-            cands = []
-            for p in fx["profiles"]:
-                cov, q = r.coverage_quality(a, p["scores"])
-                self.assertAlmostEqual(cov, exp["coverage"][p["id"]], delta=1e-9)
-                self.assertAlmostEqual(q, exp["quality"][p["id"]], delta=1e-9)
-                cands.append({"profile": p["id"], "cost_tier": p["cost_tier"], "coverage": cov, "quality": q})
-            for c in cands:
-                r.legacy_score(c, prio)
-            if prio == "balanced":
-                for c in cands:
-                    self.assertAlmostEqual(c["score"], exp["balanced_scores"][c["profile"]], delta=1e-9)
+        for p in fx["profiles"]:
+            cov, q = r.coverage_quality(a, p["scores"])
+            self.assertAlmostEqual(cov, exp["coverage"][p["id"]], delta=1e-9)
+            self.assertAlmostEqual(q, exp["quality"][p["id"]], delta=1e-9)
 
     def test_v02_missing_vs_zero(self):
         a = {"b1": 0.6, "b2": 0.4}
@@ -299,7 +291,7 @@ class P0(unittest.TestCase):
         for k in ("config_hash", "assessment_digest"):  # 설정 파일 순서만 다름(digest는 config_hash에서 파생)
             one.pop(k), two.pop(k)
         self.assertEqual(json.dumps(one), json.dumps(two))
-        self.assertEqual(one["candidates"][0]["profile"], "b")  # 최고 score
+        self.assertEqual([c["profile"] for c in one["candidates"]], ["a", "b", "c"])  # ID순, 순위 아님
 
     def test_v05_no_eligible_cli_exit13(self):
         cfg_dir, cache_dir = Path(self.cwd) / "cfg", Path(self.cwd) / "cache"
@@ -777,7 +769,7 @@ class P0VendorGuidance(unittest.TestCase):
             self.assertEqual(fit["decision"]["stage"], "effort_fit")
             self.assertNotIn("observations", json.dumps(fit["decision_request"]))
             self.assertNotIn("legacy_score", json.dumps(fit["decision_request"]))
-            self.assertTrue(all(c["score"] is None for c in packet["candidates"]))
+            self.assertTrue(all("score" not in c for c in packet["candidates"]))
             self.cfg = config(self.ps[:1])
             self.assertEqual(self.route()["status"], "decision_required")
             post.assert_not_called()

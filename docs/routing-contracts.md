@@ -52,12 +52,10 @@ task + config + snapshot + context
 
 ```json
 "benchmark": {"status": "ok|insufficient|unavailable", "quality": 0.71, "coverage": 0.8,
-              "coverage_band": "full", "exact_evidence_weight": 0.6, "evidence": [...],
-              "legacy_score": 0.56, "cost_proxy": 0.5}
+              "coverage_band": "full", "exact_evidence_weight": 0.6, "evidence": [...]}
 ```
 
 - `coverage`는 **benchmark 근거 충족도**만 뜻한다. 전체 판단 정보의 충족도가 아니다.
-- `legacy_score`는 기존 `score`와 같은 값. 이름으로 범위를 드러낸다. 종합 순위 아님.
 - 벤치마크가 없어도 후보는 남는다 (`status: "unavailable"`). 탈락은 오직 constraints가 결정.
 
 새 평가기 예 (필요해질 때만): feedback 기록 기반 `history` 성공률 → `EVALUATORS["history"] = ...` 한 줄 + 함수. 평가기는 서로의 결과를 읽지 않는다 (benchmark 점수 불변 보장).

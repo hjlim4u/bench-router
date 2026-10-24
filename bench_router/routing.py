@@ -32,9 +32,7 @@ POLICY = {
     "coverage_threshold": 0.5,
     "missing_prior": 0.5,
     "missing_penalty": 0.1,
-    "near_tie_epsilon": 0.02,
     "tier_proxy": {"low": 0.0, "medium": 0.5, "high": 1.0},
-    "lambda_cost": {"quality": 0.0, "balanced": 0.15, "cost": 0.30},
 }
 
 # L1: summary 키워드와 context_files 확장자. 한 카테고리에서 서로 다른 규칙 2개 이상이 맞아야 채택.
@@ -694,13 +692,6 @@ def coverage_band(c):
     return "sufficient" if c >= 0.8 - EPS else "partial" if c >= 0.5 - EPS else "insufficient"
 
 
-def legacy_score(c, priority):
-    """legacy 자동 선택 점수 = quality − λ·cost tier proxy. coverage 문턱 미달이면 None. 종합 점수가 아니다."""
-    c["cost_proxy"] = POLICY["tier_proxy"][c["cost_tier"]]
-    ranked = c["quality"] is not None and c["coverage"] >= POLICY["coverage_threshold"] - EPS
-    c["score"] = c["quality"] - POLICY["lambda_cost"][priority] * c["cost_proxy"] if ranked else None
-
-
 def _check(passed, code, metric=None, observed=None, limit=None, **kw):
     """제약 결과 1개. code는 실패 시에만 채운다(1.0 탈락 사유 문자열과 동일)."""
     return [{"passed": passed, "code": None if passed else code, "metric": metric,
@@ -764,9 +755,8 @@ EVIDENCE_FIELDS = ("raw", "normalized", "scope", "cohort_id", "metric_version", 
                    "fetched_at", "published_at", "evaluated_at")
 
 
-def benchmark_evaluation(p, fp, a, snap, sources, warnings, priority):
-    """benchmark 평가기. coverage는 benchmark 근거 충족도일 뿐, 전체 판단 정보의 충족도가 아니다.
-    legacy_score는 기존 자동 선택 정책의 점수이며 종합 순위가 아니다."""
+def benchmark_evaluation(p, fp, a, snap, sources, warnings):
+    """benchmark 평가기. coverage는 benchmark 근거 충족도일 뿐, 전체 판단 정보의 충족도가 아니다."""
     sp = snap["profiles"].get(p["id"]) if snap else None
     stale_cfg = sp is not None and sp["fingerprint"] != fp
     if stale_cfg:
@@ -786,11 +776,9 @@ def benchmark_evaluation(p, fp, a, snap, sources, warnings, priority):
         rows.append(row)
     cov, q = coverage_quality(a, normalized)
     exact = sum(a[b] for b in a if normalized[b] is not None and sp["evidence"][b]["scope"] == "exact_profile")
-    ev = {"coverage": cov, "quality": q, "exact_evidence_weight": exact, "evidence": rows, "cost_tier": p["cost_tier"]}
-    legacy_score(ev, priority)
+    ev = {"coverage": cov, "quality": q, "exact_evidence_weight": exact, "evidence": rows}
     ev["status"] = ("unavailable" if q is None else "ok" if cov >= POLICY["coverage_threshold"] - EPS
                     else "insufficient")
-    del ev["cost_tier"]
     return ev
 
 
@@ -825,7 +813,7 @@ def assess(t, cfg, mapping, snap, snap_warnings, now, availability=None, context
         if c["eligible"] and benchmarks:
             # ponytail: 평가기 1개라 직접 호출. 두 번째가 생기면 evaluations에 키 하나 추가.
             c["evaluations"]["benchmark"] = benchmark_evaluation(p, c["profile_fingerprint"], a, snap, sources,
-                                                                 warnings, t["priority"])
+                                                                 warnings)
         cands.append(c)
     return {"task": t, "classification": cls, "candidates": cands, "warnings": warnings, "sources": sources,
             "context": context, "availability_verified": availability is not None,
@@ -853,17 +841,17 @@ def _legacy_cands(asmt):
     return [{"profile": c["profile"], "profile_fingerprint": c["profile_fingerprint"], "cost_tier": c["cost_tier"],
               "context_facts": c["context_facts"], **c["evaluations"].get("benchmark", {
                   "quality": None, "coverage": 0, "exact_evidence_weight": 0,
-                  "score": None, "cost_proxy": None, "evidence": []})}
+                  "evidence": []})}
             for c in asmt["candidates"] if c["eligible"]]
 
 
 def _result_v1(asmt, cands, status, selected, mode, warnings):
-    """route/evaluate 1.0 출력. score는 legacy 정책(select) 점수이며 종합 순위가 아니다."""
+    """route/evaluate 1.0 출력. 후보는 profile ID순이며 순위가 아니다."""
     context = asmt["context"]
-    cands = sorted(cands, key=lambda c: (c["score"] is None, -(c["score"] or 0), c["profile"]))
-    out_cands = [{"profile": c["profile"], "score": _r(c["score"]), "quality": _r(c["quality"]),
+    cands = sorted(cands, key=lambda c: c["profile"])
+    out_cands = [{"profile": c["profile"], "quality": _r(c["quality"]),
                   "coverage": _r(c["coverage"]), "coverage_band": coverage_band(c["coverage"]),
-                  "exact_evidence_weight": _r(c["exact_evidence_weight"]), "cost_proxy": c["cost_proxy"],
+                  "exact_evidence_weight": _r(c["exact_evidence_weight"]),
                   "evidence": c["evidence"], "availability_verified": asmt["availability_verified"],
                   **({"context_facts": c["context_facts"]} if context is not None else {})} for c in cands]
     t = asmt["task"]
@@ -910,11 +898,10 @@ def evaluate(t, cfg, mapping, snap, snap_warnings, now, availability=None, conte
                       "facts": {k: m for k, m in c["metrics"].items() if k in METRICS},
                       "unrecognized_metrics": {k: m for k, m in c["metrics"].items() if k not in METRICS},
                       "evaluations": {} if ev is None else {"benchmark": {
-                          **{k: v for k, v in ev.items() if k != "score"},
+                          **ev,
                           "quality": _r(ev["quality"]), "coverage": _r(ev["coverage"]),
                           "coverage_band": coverage_band(ev["coverage"]),
-                          "exact_evidence_weight": _r(ev["exact_evidence_weight"]),
-                          "legacy_score": _r(ev["score"])}}})
+                          "exact_evidence_weight": _r(ev["exact_evidence_weight"])}}})
     t = asmt["task"]
     return {"schema_version": EVALUATE_SCHEMA_VERSION, "status": "ok", "task_id": t["task_id"], "round": t["round"],
             "assessment_digest": canonical_hash(_inputs(asmt)), "inputs": _inputs(asmt),

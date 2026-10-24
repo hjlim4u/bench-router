@@ -69,7 +69,7 @@ def prepare(t, cfg, mapping, snap, snap_warnings, now, availability=None, contex
     """One assessment supplies compatibility output, constraints and metric facts."""
     asmt = r.assess(t, cfg, mapping, snap, snap_warnings, now, availability, context, benchmarks=False)
     base = r._result_v1(asmt, r._legacy_cands(asmt), "ok", None, "vendor-guided", asmt["warnings"])
-    base["candidates"] = [{**c, "score": None} for c in sorted(base["candidates"], key=lambda c: c["profile"])
+    base["candidates"] = [c for c in sorted(base["candidates"], key=lambda c: c["profile"])
                           if c["profile"] not in omit_profiles]
     base.update(policy_version=POLICY["version"], availability_verified=availability is not None,
                 fit_profiles=[c["profile"] for c in asmt["candidates"] if c["eligible"]],
