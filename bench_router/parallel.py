@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import herdr, locking
+from . import coordination, herdr, locking
 from . import routing as r
 
 ISOLATION = ("isolated", "shared")
@@ -42,7 +42,7 @@ def validate_group(raw):
     g = {"schema_version": raw["schema_version"], "group_id": raw["group_id"],
          "isolation": raw.get("isolation", "isolated"),
          "fanout": r._int(raw.get("fanout", 1), "group.fanout", 1, 8),
-         "max_parallel": r._int(raw.get("max_parallel", 4), "group.max_parallel", 1, MAX_AGENTS)}
+         "max_parallel": r._int(raw.get("max_parallel", 4), "group.max_parallel", 1, coordination.MAX_ACTIVE)}
     if g["isolation"] not in ISOLATION:
         raise r.InputError("group.isolation: " + "|".join(ISOLATION))
     cwd = r._str(raw["cwd"], "group.cwd")

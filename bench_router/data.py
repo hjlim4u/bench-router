@@ -438,11 +438,12 @@ def refresh_source(db, sid, now, force=False, import_doc=None, get_json=None, en
             get = lambda url, h: get_json(url, h, budget)
             payload, revision, published = (fetch_arena(get, env, arena_spec) if sid == "arena" else FETCH[sid](get, env))
         obs = normalize(PARSE[sid](payload))
-    except SourceError as e:
+    except (SourceError, KeyError, TypeError, ValueError, AttributeError) as e:  # a malformed payload fails this source only
+        err = str(e) if isinstance(e, SourceError) else repr(e)
         with db:
             db.execute("UPDATE sources SET last_error=?, failure_count=failure_count+1, last_requests=? WHERE id=?",
-                       (str(e), budget["used"], sid))
-        return {"result": "failed", "error": str(e), "requests": budget["used"],
+                       (err, budget["used"], sid))
+        return {"result": "failed", "error": err, "requests": budget["used"],
                 "last_good_kept": src["current_snapshot"] is not None}
 
     payload_text = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)

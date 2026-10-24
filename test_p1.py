@@ -551,6 +551,14 @@ class P1Wiki(unittest.TestCase):
         self.assertEqual(json.loads(out.getvalue())["error"]["code"], "validation")
         self.assertEqual((self.cache / "index.json").read_bytes(), before)
 
+    def test_malformed_payload_fails_one_source_and_keeps_others(self):
+        db = d.open_db(Path(self.tmp.name) / "t.db")
+        bad = lambda url, h, b=None: [{"id": "x", "variants": [{}]}] if url.endswith("benchmarks.json") else [{"x": 1}]
+        res = d.refresh_source(db, "mg", datetime.now(timezone.utc), get_json=bad, env={})
+        self.assertEqual(res["result"], "failed")
+        self.assertIn("TypeError", res["error"])
+        self.assertEqual(db.execute("SELECT failure_count FROM sources WHERE id='mg'").fetchone()[0], 1)
+
     def test_v61_refresh_reports_wiki_error_without_failing(self):
         import argparse
         from bench_router import cli

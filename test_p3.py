@@ -61,6 +61,11 @@ class P3(unittest.TestCase):
         fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
         return pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which, **kw)
 
+    def test_max_parallel_cannot_exceed_admission_limit(self):
+        with self.assertRaises(r.InputError):
+            self.group(max_parallel=5)
+        self.assertEqual(self.group(max_parallel=4)["max_parallel"], 4)
+
     def test_v77_guided_fanout_preflight_and_frozen_recovery(self):
         from bench_router import decision
         g = self.group(fanout=2, tasks=[{"schema_version": "1.0", "task_id": "t1", "round": 1,

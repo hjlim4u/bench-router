@@ -341,7 +341,7 @@ run 디렉터리에는 `receipt.json`, `decision.json`, `input.txt`, `result.md`
             "summary": "Fix paginate off-by-one", "prompt": "..."}]}
 ```
 
-- `cwd`는 git 저장소 최상위여야 하며, task에는 `cwd`를 넣지 않습니다. `tasks × fanout ≤ 16`, `fanout` 1–8, `max_parallel` 1–16.
+- `cwd`는 git 저장소 최상위여야 하며, task에는 `cwd`를 넣지 않습니다. `tasks × fanout ≤ 16`, `fanout` 1–8, `max_parallel` 1–4(공유 admission 한도와 같음).
 - fanout 프로필은 `selected`, 그다음 후보 순위 순으로 서로 다르게 고릅니다. 부족하면 `fanout_reduced` 경고가 붙습니다. label은 `<task_id>-<k>`입니다.
 - **메인 repo를 각 Agent CLI에서 먼저 신뢰해야 합니다.** 상위 폴더가 신뢰돼 있어도 새 git repo는 다시 묻고, 그러면 agent start 단계에서 `blocked`가 됩니다(실측). 메인 repo를 한 번 신뢰하면 그 아래 worktree는 claude·codex 모두 다시 묻지 않았습니다.
 - 미커밋 변경은 worktree에 들어가지 않습니다(`dirty_base` 경고). router worktree는 member별 receipt 공간이고, 실제 작업은 board가 그 HEAD에서 만든 worktree·브랜치(`work/br-<run_id>`)에 커밋됩니다. member의 `worktree`/`branch`는 그 board 위치입니다. 비교·병합과 worktree·브랜치 정리는 Orchestrator가 맡습니다.
