@@ -64,12 +64,15 @@ def load_guidelines():
                        "role": role, "efforts": efforts, "hash": r.canonical_hash({"vendor": v, "model": mid})}
 
     for vid, v in sorted(guide["vendor"].items()):
+        # Prompt guidance is output for the selected model only; it must not change selection hashes.
+        rows, v = v.get("prompt_guidance", []), {k: x for k, x in v.items() if k != "prompt_guidance"}
         r._str(v["revision"], "guideline revision")
         if not v["sources"] or any(not sid.startswith(vid) or sid not in guide["sources"] for sid in v["sources"]):
             raise r.InputError(f"guideline {vid}: sources must belong to {vid}")
         escalations = {(e["model"], _effort(x, e["model"])): e["when"] for e in v.get("escalation", []) for x in e["efforts"]}
         entry = {"id": vid, "revision": v["revision"], "sources": v["sources"], "strategy": v["strategy"],
-                 "escalations": escalations, "hash": r.canonical_hash(v)}
+                 "escalations": escalations, "hash": r.canonical_hash(v),
+                 "prompt_guidance": [_prompt_row(vid, row, guide["sources"]) for row in rows]}
         if "start" in v:
             entry["kind"], entry["options"] = "combos", {}
             entry["roles"] = {m["id"]: m["role"] for m in v.get("model", [])}  # the guide's own model matrix, if any
@@ -94,8 +97,40 @@ def load_guidelines():
                 entry["levels"][m["id"]] = {cls: _gemini_level(m, cls) for cls in classes}
                 add_model(m["id"], vid, v, {_gemini_level(m, cls): when for cls, when in reversed(classes.items())}, m.get("role"))
         vendors[vid] = entry
+    for vid, entry in vendors.items():
+        known = {m for m, mm in models.items() if mm["vendor"] == vid}
+        for row in entry["prompt_guidance"]:
+            if set(row.get("models", ())) - known:
+                raise r.InputError(f"guideline {vid}: prompt_guidance names a model outside the guide")
     return {"version": guide["version"], "as_of": guide["as_of"], "vendors": vendors, "models": models,
-            "sources": guide["sources"], "hash": r.canonical_hash(guide)}
+            "sources": guide["sources"],
+            "hash": r.canonical_hash({**guide, "vendor": {k: {a: b for a, b in x.items() if a != "prompt_guidance"}
+                                                          for k, x in guide["vendor"].items()}})}
+
+
+def _prompt_row(vid, row, sources):
+    """One quoted passage of the vendor's own prompting guide (`text`: a prompt snippet the guide supplies)."""
+    if set(row) - {"models", "source", "topic", "when", "text"} or not {"source", "topic", "when"} <= set(row):
+        raise r.InputError(f"guideline {vid}: prompt_guidance needs source, topic, when; optional models, text")
+    if not row["source"].startswith(vid) or row["source"] not in sources:
+        raise r.InputError(f"guideline {vid}: prompt_guidance source must belong to {vid}")
+    for key in ("topic", "when", "text"):
+        if key in row:
+            r._str(row[key], f"guideline {vid} prompt_guidance.{key}", 20000)
+    return {**row, "models": r._str_list(row["models"], "prompt_guidance.models")} if "models" in row else dict(row)
+
+
+def prompt_guidance(guide, model_id):
+    """The selected model's vendor prompting guidance, quoted; no rewriting. None if the guide lacks the model."""
+    model = guide["models"].get(model_id)
+    if model is None:
+        return None
+    vendor = guide["vendors"][model["vendor"]]
+    items = [{**{k: row[k] for k in ("topic", "when", "text") if k in row},
+              "source": {"id": row["source"], **guide["sources"][row["source"]]}}
+             for row in vendor["prompt_guidance"] if model_id in row.get("models", (model_id,))]
+    return {"model": model_id, "vendor": vendor["id"], "revision": vendor["revision"],
+            "guidelines_version": guide["version"], "items": items}
 
 
 def _stable(value):

@@ -70,6 +70,20 @@ def _load(args):
     return res
 
 
+def _prompt_guidance(args):
+    """Quoted prompting guide of the selected model's vendor; the router never rewrites a prompt."""
+    from . import decision
+    model = args.model
+    if args.profile:
+        profiles = {p["id"]: p for p in _config(args)[0]["profile"]}
+        if args.profile not in profiles:
+            raise r.InputError(f"profile {args.profile!r} is not in profiles.toml")
+        model = profiles[args.profile]["model_id"]
+    guidance = decision.prompt_guidance(decision.load_guidelines(), model)
+    return {"schema_version": r.SCHEMA_VERSION, "status": "ok", "profile": args.profile, "prompt_guidance": guidance,
+            "warnings": [] if guidance else [r.warn("prompt_guidance_missing", f"no vendor prompting guide for {model}")]}
+
+
 def _select(args):
     from . import decision
     assessment = r.load_json_strict(args.assessment, r.SNAPSHOT_MAX_BYTES)
@@ -336,6 +350,10 @@ def main(argv=None):
     wp.add_argument("action", choices=["compile", "facets"])
     wp.add_argument("--vault", type=Path, default=WIKI_VAULT)
     wp.add_argument("--check", action="store_true", help="validate only; do not write index.json")
+    pgp = sub.add_parser("prompt-guidance", help="the selected model's vendor prompting guide, quoted; offline, rewrites nothing")
+    target = pgp.add_mutually_exclusive_group(required=True)
+    target.add_argument("--profile")
+    target.add_argument("--model")
     sub.add_parser("status", help="source age, failures, unmatched models, snapshot/config state")
     profiles = sub.add_parser("profiles", help="create profiles.toml from every model each CLI's model flag accepts")
     profiles.add_argument("action", choices=["discover"])
@@ -383,7 +401,7 @@ def main(argv=None):
     try:
         res = {"refresh": _refresh, "status": _status, "profiles": _profiles, "collect": _collect, "resume": _resume, "tell": _tell, "stop": _stop, "feedback": _feedback,
                 "parallel": _parallel, "select": _select, "coordination": _coordination, "wiki": _wiki,
-                "evidence": _evidence}.get(
+                "evidence": _evidence, "prompt-guidance": _prompt_guidance}.get(
             args.cmd, _load)(args)
     except r.InputError as e:
         print(json.dumps({"schema_version": r.SCHEMA_VERSION, "status": "error",

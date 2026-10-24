@@ -3,9 +3,11 @@
 # No prefix matching or cross-version aliases. These are model IDs, not CLI flags.
 # `start` rows: (model, effort) starting points as the guide states them. `escalation` rows: effort changes the
 # guide makes conditional on evaluation or a step from the start, never starting points themselves.
+# `prompt_guidance` rows quote the vendor's own prompting guides for the selected model (output only; they never
+# take part in selection or hashes). `when` is verbatim page text; `text` is the prompt snippet the page supplies.
 # Gemini gives model roles and a model-independent thinking rule (`effort_class`), resolved per model from
 # that page's `default`/`supported` levels.
-version = "2026-10-24.3"
+version = "2026-10-24.5"
 as_of = "2026-10-24"
 
 [sources.openai]
@@ -17,6 +19,38 @@ wiki = "references/sources/anthropic-model-selection.md"
 [sources.claude_effort]
 url = "https://platform.claude.com/docs/en/build-with-claude/effort"
 wiki = "references/sources/anthropic-effort.md"
+[sources.claude_prompting_fable_5_1]
+url = "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-1"
+wiki = "references/sources/anthropic-prompting-effort.md"
+capture = "_raw/_archived/2026-10-24-anthropic-prompting-fable-5-1.md"
+[sources.claude_prompting_opus_5_5]
+url = "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5"
+wiki = "references/sources/anthropic-prompting-effort.md"
+capture = "_raw/_archived/2026-10-24-anthropic-prompting-opus-5-5.md"
+[sources.claude_prompting_sonnet_5_5]
+url = "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5-5"
+wiki = "references/sources/anthropic-prompting-effort.md"
+capture = "_raw/_archived/2026-10-24-anthropic-prompting-sonnet-5-5.md"
+[sources.claude_prompting_haiku_5_5]
+url = "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-haiku-5-5"
+wiki = "references/sources/anthropic-prompting-effort.md"
+capture = "_raw/_archived/2026-10-24-anthropic-prompting-haiku-5-5.md"
+[sources.openai_prompting_gpt_6]
+url = "https://developers.openai.com/api/docs/guides/latest-model/gpt-6-astra"
+wiki = "references/sources/openai-prompting-guides.md"
+capture = "_raw/_archived/2026-10-24-openai-gpt-6-prompting-best-practices.md"
+[sources.openai_prompt_engineering]
+url = "https://developers.openai.com/api/docs/guides/prompt-engineering"
+wiki = "references/sources/openai-prompting-guides.md"
+capture = "_raw/_archived/2026-10-24-openai-prompt-engineering.md"
+[sources.openai_codex_prompting]
+url = "https://developers.openai.com/codex/prompting"
+wiki = "references/sources/openai-prompting-guides.md"
+capture = "_raw/_archived/2026-10-24-openai-codex-prompting.md"
+[sources.gemini_prompting_strategies]
+url = "https://ai.google.dev/gemini-api/docs/prompting-strategies"
+wiki = "references/sources/google-gemini-prompting-strategies.md"
+capture = "_raw/_archived/2026-10-24-google-gemini-prompting-strategies.md"
 [sources.gemini_models]
 url = "https://ai.google.dev/gemini-api/docs/models"
 wiki = "references/sources/google-gemini-models.md"
@@ -59,8 +93,8 @@ effort = "xhigh"
 when = "Demanding analysis and complex deliverables with exacting requirements."
 
 [vendor.claude]
-revision = "2026-10-24.1"
-sources = ["claude_models", "claude_effort"]
+revision = "2026-10-24.2"
+sources = ["claude_models", "claude_effort", "claude_prompting_fable_5_1", "claude_prompting_opus_5_5", "claude_prompting_sonnet_5_5", "claude_prompting_haiku_5_5"]
 strategy = "Most workloads start with Claude Opus 5.5. Start efficiency-first: For many applications, starting with a faster, more cost-effective model such as Claude Haiku 5.5 can be the optimal approach (best for: Initial prototyping and development; Applications with tight latency requirements; Cost-sensitive implementations; High-volume, straightforward tasks). Start capability-first: For complex tasks where intelligence and advanced capabilities are paramount, you might want to start capability-first (best for: Complex reasoning tasks; Scientific or mathematical applications; Tasks requiring nuanced understanding; Applications where accuracy outweighs cost considerations; Advanced coding and high-autonomy agentic work). Tuning effort is often a better lever than switching models."
 
 # Model selection matrix: "When you need..." / "Example use cases".
@@ -93,11 +127,11 @@ when = "Start with `high` unless your workload is agentic or latency-sensitive. 
 [[vendor.claude.start]]
 model = "claude-sonnet-5-5"
 effort = "medium"
-when = "For agentic coding and multistep tool use, start with `medium` for well-specified tasks and move to `high` for harder or longer ones. For chat and other latency-sensitive work, start with `medium` or `low`."
+when = "For agentic coding and multistep tool use, start with `medium` for well-specified tasks and move to `high` for harder or longer ones. For chat and other latency-sensitive work, start with `medium` or `low`. At `low` and `medium`, on long agentic tasks, it's more likely to stop and check in with the user before it completes its work."
 [[vendor.claude.start]]
 model = "claude-sonnet-5-5"
 effort = "low"
-when = "For chat and other latency-sensitive work, start with `medium` or `low`."
+when = "For chat and other latency-sensitive work, start with `medium` or `low`. At `low`, it keeps its thinking short and can skip verifying a change."
 [[vendor.claude.start]]
 model = "claude-haiku-5-5"
 effort = "medium"
@@ -105,24 +139,24 @@ when = "Start with `medium` for most work, including agentic coding."
 [[vendor.claude.start]]
 model = "claude-haiku-5-5"
 effort = "low"
-when = "Use `low`, the cheapest and fastest level, for chat, short tool tasks, and simple, high-volume requests."
+when = "Use `low`, the cheapest and fastest level, for chat, short tool tasks, and simple, high-volume requests. In long agent prompts, the model is more likely to skip a search, stop early, or skip a check at this level."
 [[vendor.claude.start]]
 model = "claude-haiku-5-5"
 effort = "high"
-when = "Use `high` for knowledge work, longer agent tasks, and strict instruction following."
+when = "Use `high` for knowledge work, longer agent tasks, and strict instruction following. When instruction following matters most, also use `high` effort."
 
 [[vendor.claude.escalation]]
 model = "claude-fable-5-1"
 efforts = ["xhigh", "max", "medium", "low"]
-when = "Step up to `xhigh` or `max` for the most capability-sensitive agentic and coding work, and step down to `medium` or `low` for routine or latency-sensitive work once your evals show quality holds."
+when = "Step up to `xhigh` or `max` for the most capability-sensitive agentic and coding work, and step down to `medium` or `low` for routine or latency-sensitive work once your evals show quality holds. At `medium`, results roughly match Claude Fable 5 at lower cost, so step down to `medium` or `low` where your evals show quality holds."
 [[vendor.claude.escalation]]
 model = "claude-opus-5-5"
 efforts = ["low", "high", "xhigh", "max"]
-when = "Run an effort sweep on your own evals rather than carrying settings over from an earlier model."
+when = "Run an effort sweep on your own evals rather than carrying settings over from an earlier model. Reserve `xhigh` and `max` for work where you've measured a quality gain."
 [[vendor.claude.escalation]]
 model = "claude-sonnet-5-5"
 efforts = ["xhigh", "max"]
-when = "Use `xhigh` or `max` only where your evals show a quality gain."
+when = "Use `xhigh` or `max` only where your evals show a quality gain. Reserve `xhigh` and `max` for work where you've measured a quality gain, because thinking and replies get much longer there."
 [[vendor.claude.escalation]]
 model = "claude-haiku-5-5"
 efforts = ["xhigh", "max"]
@@ -162,3 +196,153 @@ when = "Use default thinking for comparing concepts or creative reasoning"
 [[vendor.gemini.effort_class]]
 id = "advanced"
 when = "Use maximum thinking for advanced coding, math, or multi-step planning"
+
+# Prompting guides: quoted per vendor, shown for the finally selected model only (`prompt-guidance` command).
+# --- vendor: openai
+
+[[vendor.openai.prompt_guidance]]
+source = "openai_prompting_gpt_6"
+topic = "Initiative and follow-through"
+when = "To encourage more autonomous work, start with this prompt:"
+text = '''
+You should infer the user's intent and task scope from the instructions and prior conversation context. Your job is to bias towards action and carry the user's intended task to completion.
+
+When the user expresses intent to perform new work or fix an existing issue, persist until the user's intended goal is complete. Progress autonomously towards the user's goal (e.g. creating isolated worktrees / checkouts if needed, resolving merge conflicts, read-only actions, creating draft PRs etc.) unless they are clearly destructive or irreversible.
+'''
+
+[[vendor.openai.prompt_guidance]]
+source = "openai_prompting_gpt_6"
+topic = "Follow through on requests that imply authorization"
+when = "Prompt the model to follow through if the user’s prompt implies authorization:"
+text = '''
+When the user's prompt indicates a request for action, such as "can you...", "I want to...", "help me..." and similar expressions, treat these as instructions to do the work and take action. Do not stop at acknowledging capability (e.g. "Yes…"), proposing a plan, or offering to continue. Do not settle for a partial or "helpful enough" solution that does not fully satisfy the user's task to save time, effort or tokens. If a task requires sustained work, complete all the necessary work until the intended outcome is fulfilled.
+'''
+
+[[vendor.openai.prompt_guidance]]
+source = "openai_prompting_gpt_6"
+topic = "Instruction priority"
+when = "Make the priority of user instructions and skills explicit."
+text = '''
+The user's instructions take precedence over guidelines provided in a skill. If explicit user instructions conflict with a skill's instructions, prioritize the user's instructions.
+'''
+
+[[vendor.openai.prompt_guidance]]
+source = "openai_prompting_gpt_6"
+topic = "Testing and verification"
+when = "For coding tasks, calibrate how much testing and verification a change requires. This can help avoid unnecessary tests or repeated checks for small changes."
+text = '''
+Do not write tests for reversible, low-impact changes that mirror the implementation. If you do choose to verify your work with tests, make sure that the tests are meaningful and necessary to verify implementation.
+
+Run tests appropriate to the change and complete required checks. Once those pass, broaden or repeat testing only when new changes, failures, or unresolved concerns justify it; otherwise, continue toward completing the task.
+'''
+
+[[vendor.openai.prompt_guidance]]
+source = "openai_codex_prompting"
+topic = "Codex prompt contents"
+when = "A useful Codex prompt names the behavior you want, points to the relevant code or reproduction steps, preserves important constraints, and says how to verify the change."
+# --- vendor: claude
+
+[[vendor.claude.prompt_guidance]]
+models = ["claude-fable-5-1"]
+source = "claude_prompting_fable_5_1"
+topic = "Finish the whole task"
+when = "On complex asynchronous workloads, though, nudge it not to end its turn before the work is done."
+text = '''
+You are operating autonomously. The user is not watching in real time and cannot answer questions mid-task, so asking 'Want me to…?' or 'Shall I…?' will block the work. For reversible actions that follow from the original request, proceed without asking. Stop only for destructive actions or genuine scope changes the user must decide. Offering follow-ups after the task is done is fine; asking permission before doing the work is not.
+
+Exception: when the user is describing a problem, asking a question, or thinking out loud rather than requesting a change, the deliverable is your assessment. Report your findings and stop. Don't apply a fix until they ask for one.
+
+Before ending your turn, check your last paragraph. If it is a plan, an analysis, a question, a list of next steps, or a promise about work you have not done ('I'll…', 'let me know when…'), do that work now with tool calls. That includes retrying after errors and gathering missing information yourself. Do not stop because the context or session is long. End your turn only when the task is complete or you are blocked on input only the user can provide.
+
+Before running a command that changes system state (such as restarts, deletes, or config edits), check that the evidence actually supports that specific action. A signal that pattern-matches to a known failure may have a different cause.
+'''
+
+[[vendor.claude.prompt_guidance]]
+models = ["claude-fable-5-1"]
+source = "claude_prompting_fable_5_1"
+topic = "Keep changes and tests to what the task asks for"
+when = "It responds well to explicit instructions about what to leave out."
+text = '''
+If, while working or testing, you find a pre-existing bug, a performance concern, or behavior the task doesn't mention, don't fix, optimize or extend it in this change unless the requested behavior cannot work without it; report it as a follow-up in your summary. Where the task is ambiguous, implement the reading its wording and the surrounding code most directly support, state that assumption in your summary, and don't build for the other readings as well. Verify your work however you like; scratch scripts and quick checks need not be kept. Commit tests only where the task asks for them or this repository already keeps tests for this kind of change, sized like the neighboring test files — roughly one focused test per stated behavior — and don't turn scratch checks into additional permanent test files. This is about extras only: implement every behavior the task asks for, completely.
+'''
+
+[[vendor.claude.prompt_guidance]]
+models = ["claude-opus-5-5"]
+source = "claude_prompting_opus_5_5"
+topic = "Name the early stops to avoid"
+when = "Claude Opus 5.5 is responsive to instructions that name the specific kinds of early stop you want it to avoid, such as ending the turn with a summary that announces the next step instead of taking it."
+
+[[vendor.claude.prompt_guidance]]
+models = ["claude-sonnet-5-5"]
+source = "claude_prompting_sonnet_5_5"
+topic = "Carrying work through"
+when = "On agentic coding tasks at `low` and `medium` effort, the model sometimes checks in before the work is done."
+text = '''
+Keep working until everything the user asked for is done, and only stop to ask when you can't go on without the user or before a risky step.
+
+When the work the user asked for is done and checked, stop and report. Don't add features, tests, files, docs or refactors that weren't asked for. If you think one would help, mention it at the end instead of doing it.
+'''
+
+[[vendor.claude.prompt_guidance]]
+models = ["claude-sonnet-5-5"]
+source = "claude_prompting_sonnet_5_5"
+topic = "Verification on coding tasks"
+when = "If you see changes reported as complete without test or build output in the transcript, add this paragraph, or one like it, to the system prompt."
+text = '''
+When you change code that can be run, built, or type-checked, run a real check that exercises the change before reporting it done: the project's tests, type-checker, or build, or the changed command itself. A syntax-only check, or a check command that failed to start, does not count; if all that is missing is the project's declared dependencies, install them with its own package manager and lockfile (e.g. npm install, pip install -r requirements.txt), never via sudo or the system package manager, unless told not to. Only if no real check can run here, say which one you did not run and why instead of reporting the change as done.
+'''
+
+[[vendor.claude.prompt_guidance]]
+models = ["claude-haiku-5-5"]
+source = "claude_prompting_haiku_5_5"
+topic = "Prevent early stopping in long agent prompts"
+when = "With a long coding-agent system prompt at `low` effort, it sometimes stops early and hands the task back to the user."
+text = '''
+Keep working until everything the user asked for is done, and only stop to ask when you can't go on without the user or before a risky step.
+When the work the user asked for is done and checked, stop and report. Don't add new features, docs, or refactors that weren't asked for. If you think one would help, mention it at the end instead of doing it.
+'''
+
+[[vendor.claude.prompt_guidance]]
+models = ["claude-haiku-5-5"]
+source = "claude_prompting_haiku_5_5"
+topic = "Verification on coding tasks"
+when = "At `low` and `medium` effort, Claude Haiku 5.5 sometimes reports a code change as done without running a check."
+text = '''
+When you change code that can be run, built, or type-checked, run a real check that exercises the change before reporting it done: the project's tests, type-checker, or build, or the changed command itself. A syntax-only check, or a check command that failed to start, does not count; if all that is missing is the project's declared dependencies, install them with its own package manager and lockfile (e.g. npm install, pip install -r requirements.txt), never via sudo or the system package manager, unless told not to. Only if no real check can run here, say which one you did not run and why instead of reporting the change as done.
+'''
+# --- vendor: gemini
+
+[[vendor.gemini.prompt_guidance]]
+source = "gemini_prompting_strategies"
+topic = "Be precise and direct"
+when = "**Be precise and direct:** State your goal clearly and concisely. Avoid unnecessary or overly persuasive language."
+
+[[vendor.gemini.prompt_guidance]]
+source = "gemini_prompting_strategies"
+topic = "Consistent structure"
+when = "**Use consistent structure:** Employ clear delimiters to separate different parts of your prompt. XML-style tags (e.g., `<context>`, `<task>`) or Markdown headings are effective. Choose one format and use it consistently within a single prompt."
+
+[[vendor.gemini.prompt_guidance]]
+source = "gemini_prompting_strategies"
+topic = "Critical instructions first"
+when = "**Prioritize critical instructions:** Place essential behavioral constraints, role definitions (persona), and output format requirements in the System Instruction or at the very beginning of the user prompt."
+
+[[vendor.gemini.prompt_guidance]]
+source = "gemini_prompting_strategies"
+topic = "Verbosity"
+when = "**Control output verbosity:** By default, Gemini 3 models provide direct and efficient answers. If you need a more conversational or detailed response, you must explicitly request it in your instructions."
+
+[[vendor.gemini.prompt_guidance]]
+source = "gemini_prompting_strategies"
+topic = "Reasoning and planning"
+when = "Gemini 2.5 and 3 series models automatically generate internal \"thinking\" text to improve reasoning performance. As such, it's generally not necessary to have the model outline, plan, or detail reasoning steps in the returned response itself. For problems that require heavy reasoning, simple requests like \"Think very hard before answering\" can improve performance, though at the cost of extra thinking tokens."
+
+[[vendor.gemini.prompt_guidance]]
+source = "gemini_prompting_strategies"
+topic = "Ambiguity and permission handling"
+when = "**Ambiguity and permission handling:** Defines when the model is permitted to make assumptions versus when it must pause execution to ask the user for clarification or permission."
+
+[[vendor.gemini.prompt_guidance]]
+source = "gemini_prompting_strategies"
+topic = "Persistence and recovery"
+when = "**Persistence and Recovery:** The degree to which the model attempts to self-correct errors. High persistence increases success rates but risks higher token costs or loops."

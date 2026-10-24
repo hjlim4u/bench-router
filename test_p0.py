@@ -1368,7 +1368,9 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertEqual([(vendor, [p["id"] for p in ps]) for vendor, ps in groups],
                          [("claude", ["p-haiku"]), ("openai", ["p-luna"]), (None, ["p-new"])])
         requests = [self.d.guidance_request({}, vendor, guide) for vendor in ("claude", "openai")]
-        self.assertEqual([set(req["state"]["sources"]) for req in requests], [{"claude_models", "claude_effort"}, {"openai"}])
+        claude_sources = {sid for sid in guide["sources"] if sid.startswith("claude")}
+        self.assertTrue({"claude_models", "claude_effort", "claude_prompting_sonnet_5_5"} <= claude_sources)
+        self.assertEqual([set(req["state"]["sources"]) for req in requests], [claude_sources, {"openai"}])
         text = [json.dumps(req) for req in requests]
         self.assertFalse(any(pid in t for pid in ("p-luna", "p-haiku", "p-new") for t in text))  # no profile IDs
         self.assertNotIn("gpt-6", text[0])  # vendors are isolated
@@ -1429,6 +1431,31 @@ class P0VendorGuidance(unittest.TestCase):
         fits = self.route(response=response)["selection"]["decision"]["evaluation"]["fits"]
         self.assertEqual((fits["f-low"]["status"], fits["f-high"]["status"], fits["f-low"]["guided"]),
                          ("documented", "alternative", "gemini-3.8-flash:low"))
+
+    def test_v109_prompt_guidance_is_quoted_from_the_captured_vendor_pages(self):
+        guide = self.d.load_guidelines()
+        wiki = Path(__file__).resolve().parent / "wiki"
+        flat = lambda s: re.sub(r"\s+", " ", s).strip()
+        captures = {}
+        for entry in guide["vendors"].values():
+            self.assertTrue(entry["prompt_guidance"])
+            for row in entry["prompt_guidance"]:
+                src = guide["sources"][row["source"]]
+                if src["capture"] not in captures:  # strip the blockquote marker of the immutable capture
+                    page = (wiki / src["capture"]).read_text("utf-8")
+                    captures[src["capture"]] = flat(re.sub(r"(?m)^> ?", "", page))
+                for key in ("when", "text"):
+                    if key in row:
+                        self.assertIn(flat(row[key]), captures[src["capture"]], (row["topic"], key))
+        sonnet = self.d.prompt_guidance(guide, "claude-sonnet-5-5")
+        self.assertEqual({i["source"]["id"] for i in sonnet["items"]}, {"claude_prompting_sonnet_5_5"})  # one model, one guide
+        self.assertEqual(self.d.prompt_guidance(guide, "claude-haiku-5-5")["vendor"], "claude")
+        self.assertEqual({i["source"]["id"].split("_")[0] for i in self.d.prompt_guidance(guide, "gpt-6-luna")["items"]}, {"openai"})
+        self.assertIsNone(self.d.prompt_guidance(guide, "gpt-7-new"))
+        # prompt guidance is output only: it never changes the hashes that selection records bind
+        self.assertEqual(guide["vendors"]["claude"]["hash"],
+                         r.canonical_hash({k: v for k, v in r._load_toml(self.d.GUIDELINES)["vendor"]["claude"].items()
+                                           if k != "prompt_guidance"}))
 
     def test_v105_removed_default_and_fallback_keys_are_rejected(self):
         with tempfile.TemporaryDirectory() as d:

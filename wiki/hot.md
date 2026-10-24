@@ -1,7 +1,7 @@
 ---
 title: Hot Cache
-updated: 2026-10-22T22:23:18Z
-pages: 97
+updated: 2026-10-24T13:52:27Z
+pages: 100
 generated_by: obsidian-wiki memory hot
 ---
 
@@ -11,9 +11,9 @@ generated_by: obsidian-wiki memory hot
 
 ## Recent Activity
 
-- [2026-10-22] CAPTURE type=synthesis page=projects/bench-router/synthesis/multi-agent-pattern-selecti... title=Multi-agent pattern selection and benchmark evidence ...
-- [2026-10-22] CAPTURE type=synthesis page=projects/bench-router/synthesis/multi-agent-pattern-selecti... title=Multi-agent pattern selection and benchmark evidence ...
-- [2026-10-22] CAPTURE type=synthesis page=projects/bench-router/synthesis/router-orchestrator-boundar... title=Router and orchestration-layer responsibility boundary ...
+- [2026-10-24] LINT scope=whole vault issues_found=70 fixed=7 ...
+- [2026-10-24] WIKI_RESEARCH topic=Anthropic per-model prompting guides: effort guidance rounds=1 sources_fetched=5 ...
+- [2026-10-24] WIKI_RESEARCH topic=Vendor prompting guides (Gemini, OpenAI/Codex, Anthropic) f... rounds=1 sources_fetched=8 ...
 
 ## Active Threads
 
@@ -24,7 +24,7 @@ generated_by: obsidian-wiki memory hot
 
 ## Key Takeaways
 
-Official vendor guidance supplies dated starting points. Multi-agent pattern candidates follow task structure; final pattern, role assignments, and aggregation need workflow evidence before dispatch. Near-equal model scores alone do not establish ensemble benefit. A draft boundary proposal keeps the router a pattern-agnostic single-task assignment service; the calling layer compiles patterns into router calls and owns workflow evidence. Both multi-agent pages remain unimplemented drafts.
+Captured Gemini, OpenAI GPT-6/prompt-engineering/Codex and extended Anthropic prompting excerpts; router exposes them via prompt-guidance without rewriting prompts
 
 ## Flagged Contradictions
 
