@@ -37,7 +37,19 @@ def guided_reply(packet, chosen, **overrides):
             answers[key] = {"type": "noul", "noul": overrides.get(key, 0)}
             continue
         choice = "unknown"
-        if key.startswith("fit:"):
+        if key.startswith("model_fit:"):
+            pid = key[10:]
+            rules = [x for x in q["criteria"] if x.startswith("model:")]
+            choice = rules[0] if rules else "__provisional__"
+            if chosen not in ("__tie__", pid):
+                choice = "__unsuitable__"
+        elif key.startswith("effort_fit:"):
+            pid = key[11:]
+            rules = [x for x in q["criteria"] if not x.startswith("__")]
+            choice = rules[0] if rules else "__provisional__"
+            if chosen not in ("__tie__", pid):
+                choice = "__unsuitable__"
+        elif key.startswith("fit:"):
             pid = key[4:]
             rules = [x for x in q["criteria"] if not x.startswith("__")]
             choice = rules[0] if rules else "__provisional__"
@@ -55,7 +67,7 @@ def guided_reply(packet, chosen, **overrides):
 
 
 def guided_responses(packet, reroute, chosen, **overrides):
-    for _ in range(3):
+    for _ in range(10):
         ratings = {key: 1 for key in packet["decision_request"]["questions"] if key.startswith("relevance:")}
         response = guided_reply(packet, chosen, **{**ratings, **overrides})
         packet = reroute(response)
@@ -733,7 +745,9 @@ class P0VendorGuidance(unittest.TestCase):
         return self.route(response=response, **kw)
 
     def fit_packet(self, **kw):
-        return self.route(response=guided_reply(self.route(**kw), "__tie__"), **kw)
+        packet = self.route(**kw)
+        packet = self.route(response=guided_reply(packet, "__tie__"), **kw)
+        return self.route(response=guided_reply(packet, "__tie__"), **kw)
 
     def indexed(self, ids=("u/coding",)):
         from copy import deepcopy
@@ -760,7 +774,7 @@ class P0VendorGuidance(unittest.TestCase):
             self.assertEqual((packet["status"], packet["decision"]["stage"], assess.call_count), ("decision_required", "analysis", 1))
             self.assertNotIn("candidates", packet["decision_request"]["state"])
             fit = self.fit_packet()
-            self.assertEqual(fit["decision"]["stage"], "fit")
+            self.assertEqual(fit["decision"]["stage"], "effort_fit")
             self.assertNotIn("observations", json.dumps(fit["decision_request"]))
             self.assertNotIn("legacy_score", json.dumps(fit["decision_request"]))
             self.assertTrue(all(c["score"] is None for c in packet["candidates"]))
@@ -773,7 +787,7 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertEqual((out["status"], out["selected"]["profile"]), ("selected", "light"))
         selection = {k: v for k, v in out["selection"].items() if k != "source"}
         self.assertEqual(selection["policy"], self.d.POLICY)
-        self.assertEqual([s["stage"] for s in selection["decision"]["stages"]], ["analysis", "fit"])
+        self.assertEqual([s["stage"] for s in selection["decision"]["stages"]], ["analysis", "model_fit", "effort_fit"])
         self.assertEqual(self.route(selection=selection)["selected"], out["selected"])
         self.ps[0]["enabled"] = False
         self.assertEqual(self.route(selection=selection)["status"], "stale_assessment")
@@ -781,8 +795,8 @@ class P0VendorGuidance(unittest.TestCase):
     def test_v69_wrong_rule_stage_digest_and_model_are_rejected(self):
         from copy import deepcopy
         fit = self.fit_packet()
-        for response in (guided_reply(fit, "light", **{"fit:light": "gpt-6-astra:xhigh"}),
-                         guided_reply(fit, "light", **{"fit:light": "invented"})):
+        for response in (guided_reply(fit, "light", **{"effort_fit:light": "gpt-6-astra:xhigh"}),
+                         guided_reply(fit, "light", **{"effort_fit:light": "invented"})):
             with self.assertRaises(r.InputError):
                 self.route(response=response)
         response = guided_reply(fit, "light")
@@ -838,8 +852,8 @@ class P0VendorGuidance(unittest.TestCase):
             return result
         with patch("urllib.request.urlopen", side_effect=respond) as post:
             out = r.route(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", allow_network=True, env={"JEV_API_KEY": "synthetic"})
-            self.assertEqual((out["status"], post.call_count), ("selected", 2))
-            self.assertEqual([s["usage"]["input_tokens"] for s in out["selection"]["decision"]["stages"]], [100, 100])
+        self.assertEqual((out["status"], post.call_count), ("selected", 3))
+        self.assertEqual([s["usage"]["input_tokens"] for s in out["selection"]["decision"]["stages"]], [100, 100, 100])
         with patch("urllib.request.urlopen", side_effect=TimeoutError("secret")):
             out = r.route(self.task, self.cfg, MAPPING, None, [], NOW, allow_network=True, env={"JEV_API_KEY": "synthetic"})
             self.assertEqual(out["decision"]["reason"], "jev_unavailable")
@@ -933,7 +947,7 @@ class P0VendorGuidance(unittest.TestCase):
         out = self.finish("__tie__", snap=snap, index=idx)
         self.assertIsNone(out["selected"])
         self.assertEqual(out["decision"]["evaluation"]["comparisons"]["u/coding"], ["light"])
-        self.assertEqual(len(out["decision"]["stages"]), 3)
+        self.assertEqual(len(out["decision"]["stages"]), 4)
         snap["profiles"]["strong"]["evidence"]["u/coding"]["conditions"]["dataset_revision"] = "different"
         self.assertFalse(self.finish("__tie__", snap=snap, index=idx)["decision"]["evaluation"]["comparisons"])
 
@@ -1018,7 +1032,7 @@ class P0VendorGuidance(unittest.TestCase):
         with patch.object(self.d.provider, "decide", side_effect=AssertionError("must reuse analysis and fit")):
             out = self.route(omit_profiles=["strong"], decision_cache=cache)
         self.assertEqual(out["selected"]["profile"], "light")
-        self.assertEqual(len(cache), 2)
+        self.assertEqual(len(cache), 3)
         self.assertEqual(set(out["selection"]["decision"]["evaluation"]["fits"]), {"light"})
 
     def test_v86_forged_observations_and_changed_guides_do_not_replay(self):
@@ -1031,8 +1045,8 @@ class P0VendorGuidance(unittest.TestCase):
         forged["assessment_digest"] = r.canonical_hash(forged["decision"])
         self.assertEqual(self.route(selection=forged)["status"], "stale_assessment")
         guide = self.d.load_guidelines()
-        with patch.object(self.d, "load_guidelines", return_value={**guide, "hash": "changed"}):
-            self.assertEqual(self.route(selection=selection)["status"], "stale_assessment")
+        with patch.object(self.d, "load_guidelines", return_value={**guide, "hash": "changed", "version": "next"}):
+            self.assertEqual(self.route(selection=selection)["status"], "selected")
 
     def test_v87_semantic_facets_are_forwarded_and_uncertainty_is_retained(self):
         idx = index_fixture()
@@ -1042,7 +1056,8 @@ class P0VendorGuidance(unittest.TestCase):
         analysis = fit["decision_request"]["state"]["analysis"]
         self.assertIn("task:coding", analysis["unresolved_facets"])
         self.assertIn({"axis": "task", "value": "repo_coding", "origin": "semantic"}, analysis["facets"])
-        out = self.route(index=idx, response=guided_reply(fit, "light"))
+        effort = self.route(index=idx, response=guided_reply(fit, "light"))
+        out = self.route(index=idx, response=guided_reply(effort, "light"))
         self.assertIn("u/repo", out["selection"]["decision"]["evaluation"]["units"])
 
     def test_v88_vendor_path_does_not_compute_legacy_benchmark_scores(self):
@@ -1093,10 +1108,12 @@ class P0VendorGuidance(unittest.TestCase):
         self.cfg = config(self.ps)
         first = self.d.evaluate(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", env={})
         self.assertEqual((first["schema_version"], first["status"], first["assessment_digest"]),
-                         ("3.0", "decision_required", None))
+                          ("4.0", "decision_required", None))
         response = guided_reply({**first, "assessment_digest": first["decision"]["request_digest"]}, "__tie__")
         fit = self.d.evaluate(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response)
         response = guided_reply({**fit, "assessment_digest": fit["decision"]["request_digest"]}, "__tie__")
+        effort = self.d.evaluate(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response)
+        response = guided_reply({**effort, "assessment_digest": effort["decision"]["request_digest"]}, "__tie__")
         assessment = self.d.evaluate(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response)
         self.assertEqual(assessment["status"], "ok")
         self.assertEqual([c["profile"] for c in assessment["candidates"]], ["disabled", "light", "strong"])
@@ -1110,7 +1127,7 @@ class P0VendorGuidance(unittest.TestCase):
         with patch.object(self.d.provider, "decide", side_effect=AssertionError("must replay without calls")):
             out = self.route(selection=selection)
         self.assertEqual((selection["schema_version"], out["status"], out["selected"]["profile"]),
-                         ("4.0", "selected", "light"))
+                          ("6.0", "selected", "light"))
         self.assertEqual(out["selection_mode"], "orchestrator_assessed")
         self.assertEqual(self.route(selection=selection, availability={"light": "quota_exhausted"})["status"],
                          "stale_assessment")
@@ -1124,7 +1141,7 @@ class P0VendorGuidance(unittest.TestCase):
         self.ps[0]["model_id"] = "unlisted-model"
         decision = self.finish("__tie__")["decision"]
         # Projection is informational: changing it cannot override the embedded fit proof.
-        assessment = {"schema_version": "3.0", "status": "ok", "decision": decision,
+        assessment = {"schema_version": "4.0", "status": "ok", "decision": decision,
                       "assessment_digest": self.d.assessment_digest(decision)}
         for pid in decision["evaluation"]["fits"]:
             fit = decision["evaluation"]["fits"][pid]
@@ -1132,7 +1149,7 @@ class P0VendorGuidance(unittest.TestCase):
                 with self.assertRaisesRegex(r.InputError, "accept_provisional"):
                     self.d.bind(assessment, pid, {"id": "team", "version": "1"}, "pending")
                 self.assertEqual(self.d.bind(assessment, pid, {"id": "team", "version": "1"}, "accepted", True)
-                                 ["schema_version"], "4.0")
+                                  ["schema_version"], "6.0")
         unsuitable = self.finish("light")["selection"]["decision"]
         assessment.update(decision=unsuitable, assessment_digest=self.d.assessment_digest(unsuitable))
         with self.assertRaisesRegex(r.InputError, "suitable"):
@@ -1149,7 +1166,7 @@ class P0VendorGuidance(unittest.TestCase):
         changed["assessment_digest"] = self.d.assessment_digest(changed["decision"])
         with self.assertRaisesRegex(r.InputError, "current vendor-guided policy"):
             self.d.validate_selection(changed)
-        selection["schema_version"] = "5.0"
+        selection["schema_version"] = "4.0"
         with self.assertRaises(r.InputError):
             r.validate_selection(selection)
 
@@ -1188,7 +1205,7 @@ class P0VendorGuidance(unittest.TestCase):
                 patch("bench_router.herdr.dispatch") as dispatch, patch.object(r, "atomic_write") as writes:
             code, assessment = run(command)
             self.assertEqual(code, 17)
-            for _ in range(3):
+            for _ in range(5):
                 response_path.write_text(json.dumps(guided_reply(assessment, "__tie__")))
                 code, assessment = run([*command, "--decision-response", str(response_path)])
                 if code != 17:
@@ -1199,7 +1216,7 @@ class P0VendorGuidance(unittest.TestCase):
             pid = next(c["profile"] for c in assessment["candidates"] if c["eligible"])
             code, result = run(["select", "--assessment", str(path), "--profile", pid, "--policy-id", "team",
                                 "--policy-version", "1", "--reason", "role assignment", "--accept-provisional"])
-            self.assertEqual((code, result["selection"]["schema_version"]), (0, "4.0"))
+            self.assertEqual((code, result["selection"]["schema_version"]), (0, "6.0"))
             path = root / "selection.json"
             path.write_text(json.dumps(result["selection"]))
             code, result = run(["route", "--task", str(task), "--selection", str(path), "--dry-run"])
@@ -1220,7 +1237,7 @@ class P0VendorGuidance(unittest.TestCase):
         out = self.finish("__tie__", index=idx, snap=snap)
         self.assertIsNone(out["selected"])
         self.assertIn("upstream_selection_required", out["decision"]["uncertainty"])
-        self.assertEqual(len(out["decision"]["stages"]), 3)
+        self.assertEqual(len(out["decision"]["stages"]), 4)
         self.assertEqual(out["decision"]["evaluation"]["benchmark_relevance"], dict.fromkeys(ids, 1))
 
     def test_v100_rule_hints_can_be_rejected_without_reappearing_during_retrieval(self):
@@ -1237,7 +1254,8 @@ class P0VendorGuidance(unittest.TestCase):
                 fit = self.route(index=idx, response=guided_reply(packet, "__tie__"))
                 analysis = fit["decision_request"]["state"]["analysis"]
                 self.assertNotIn(hint, [f["value"] for f in analysis["facets"]])
-                out = self.route(index=idx, response=guided_reply(fit, "__tie__"))
+                effort = self.route(index=idx, response=guided_reply(fit, "__tie__"))
+                out = self.route(index=idx, response=guided_reply(effort, "__tie__"))
                 evaluation = out["decision"]["evaluation"]
                 self.assertFalse(evaluation["comparisons"])
                 self.assertTrue(all(hint not in u["facets"].get("task", []) for uid, u in evaluation["units"].items()
@@ -1316,7 +1334,18 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertIsNone(strong["suitability"]["workflow_gain"])
         self.assertIn("workflow_gain_unverified", strong["diagnostics"])
         self.assertIn("task_quality_unverified", strong["diagnostics"])
-        self.assertEqual(assessment["recommendation"]["status"], "abstained")
+
+    def test_v105_model_revision_and_vendor_guidance_are_isolated(self):
+        guide = self.d.load_guidelines()
+        profiles = [profile("openai", model_id="gpt-6-luna", reasoning_effort="low"),
+                    profile("claude", model_id="claude-haiku-5-5", reasoning_effort="low")]
+        groups = self.d._guidance_groups(profiles, guide)
+        requests = [self.d.model_fit_request({}, group, guide) for group in groups]
+        self.assertEqual([set(req["state"]["sources"]) for req in requests], [{"claude_models", "claude_effort"}, {"openai"}])
+        self.assertTrue(all("candidates" not in req["state"] for req in requests))
+        effort = self.d.effort_fit_request({}, [profiles[0]], guide)
+        self.assertEqual(set(effort["state"]["sources"]), {"openai"})
+        self.assertEqual(effort["state"]["candidates"][0]["rules"], ["gpt-6-luna:low"])
 
     def test_v105_removed_default_and_fallback_keys_are_rejected(self):
         with tempfile.TemporaryDirectory() as d:

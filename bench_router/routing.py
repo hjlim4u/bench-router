@@ -936,7 +936,7 @@ SELECTION_KEYS = {"schema_version", "profile", "assessment_digest", "policy", "r
 
 def validate_selection(raw):
     """Orchestrator의 선택 기록: 무엇을(profile) 어떤 평가(assessment_digest)를 근거로 왜(policy, reason) 골랐나."""
-    if isinstance(raw, dict) and raw.get("schema_version") in ("3.0", "4.0"):
+    if isinstance(raw, dict) and raw.get("schema_version") in ("3.0", "4.0", "5.0", "6.0"):
         from . import decision
         return decision.validate_selection(raw)
     if not isinstance(raw, dict) or set(raw) != SELECTION_KEYS:
@@ -960,7 +960,7 @@ def apply_selection(res, cfg, profile_id, selection=None, mode="orchestrator_pin
     profile_id만 오면(기록 없는 고정) 실행은 하되 selection_unrecorded로 알린다.
     check_digest=False는 호출자가 이미 같은 판단 입력으로 digest를 검사한 경우만(parallel worker)."""
     if selection is not None:
-        if selection.get("schema_version") in ("3.0", "4.0"):
+        if selection.get("schema_version") in ("3.0", "4.0", "5.0", "6.0"):
             from . import decision
             return decision.apply_record(res, cfg, selection, check_digest)
         if check_digest and selection["assessment_digest"] != res["assessment_digest"]:

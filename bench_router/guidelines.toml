@@ -1,6 +1,6 @@
 # Versioned policy extraction from the wiki, not an automatic wiki compilation.
 # No prefix matching or cross-version aliases. These are model IDs, not CLI flags.
-version = "2026-10-21.1"
+version = "2026-10-24.1"
 as_of = "2026-10-19"
 
 [sources.openai]
@@ -21,6 +21,8 @@ wiki = "references/sources/google-gemini-thinking.md"
 
 [[model]]
 id = "gpt-6-luna"
+vendor = "openai"
+revision = "2026-10-19.1"
 sources = ["openai"]
 role = "Bounded edits, extraction and scoped problem solving; context gathering and prioritization at higher effort."
 [model.efforts]
@@ -29,6 +31,8 @@ xhigh = "Context gathering across apps, prioritization and constrained problem s
 
 [[model]]
 id = "gpt-6.1-sol"
+vendor = "openai"
+revision = "2026-10-19.1"
 sources = ["openai"]
 role = "Complex technical projects and deliverables."
 [model.efforts]
@@ -37,6 +41,8 @@ xhigh = "Polished deliverables and reconciliation of conflicting evidence."
 
 [[model]]
 id = "gpt-6-astra"
+vendor = "openai"
+revision = "2026-10-19.1"
 sources = ["openai"]
 role = "Nuanced writing, broad projects and demanding analysis."
 [model.efforts]
@@ -46,6 +52,8 @@ xhigh = "Demanding analysis with exacting output requirements."
 
 [[model]]
 id = "claude-haiku-5-5"
+vendor = "claude"
+revision = "2026-10-19.1"
 evaluation_only_efforts = ["xhigh", "max"]
 sources = ["claude_models", "claude_effort"]
 role = "Budget-sensitive high-volume processing and subagent work; upgrade for demonstrated capability gaps."
@@ -58,6 +66,8 @@ max = "Use only when workflow evaluations show a quality gain."
 
 [[model]]
 id = "claude-sonnet-5-5"
+vendor = "claude"
+revision = "2026-10-19.1"
 evaluation_only_efforts = ["xhigh", "max"]
 sources = ["claude_models", "claude_effort"]
 role = "Everyday coding, analysis and tool-based workflows."
@@ -69,29 +79,41 @@ max = "Use only when workflow evaluations show improvement."
 
 [[model]]
 id = "claude-opus-5-5"
+vendor = "claude"
+revision = "2026-10-19.1"
 sources = ["claude_models", "claude_effort"]
 role = "Complex engineering, large refactors and extended autonomous sessions."
 [model.efforts]
 medium = "Default starting point; evaluate effort settings afresh for this model."
+high = "Raise after evaluation when the workflow needs more capability."
 
 [[model]]
 id = "claude-fable-5-1"
+vendor = "claude"
+revision = "2026-10-19.1"
 sources = ["claude_models", "claude_effort"]
 role = "Most demanding long-running agentic research and finished knowledge deliverables."
 [model.efforts]
+medium = "Step down only after evaluations show quality holds."
 high = "Starting point; raise for demanding work or lower only when quality holds in evaluations."
+xhigh = "Raise for capability-sensitive long-running agentic or coding work."
 
 [[model]]
 id = "gemini-3.5-flash-lite"
+vendor = "gemini"
+revision = "2026-10-19.1"
 sources = ["gemini_models", "gemini_thinking"]
 role = "Economical high-throughput execution."
 [model.efforts]
 minimal = "Default; simple fact retrieval or classification."
 low = "Simple fact retrieval or classification."
+medium = "Supported; use the model default unless a task-specific evaluation supports another level."
 high = "Highest supported thinking for advanced coding, mathematics or multistep planning."
 
 [[model]]
 id = "gemini-3.8-flash"
+vendor = "gemini"
+revision = "2026-10-19.1"
 sources = ["gemini_models", "gemini_thinking"]
 role = "Sustained software engineering and autonomous agent workflows."
 [model.efforts]
@@ -101,6 +123,8 @@ high = "Highest supported thinking for advanced coding, mathematics or multistep
 
 [[model]]
 id = "gemini-4-argon"
+vendor = "gemini"
+revision = "2026-10-19.1"
 sources = ["gemini_models", "gemini_thinking"]
 role = "Flagship reasoning and long-context work."
 [model.efforts]
@@ -110,8 +134,11 @@ high = "Highest supported thinking for advanced coding, mathematics or multistep
 
 [[model]]
 id = "gemini-3.1-pro-preview"
+vendor = "gemini"
+revision = "2026-10-19.1"
 sources = ["gemini_models", "gemini_thinking"]
 role = "Pro option with preview status; do not assume production stability."
 [model.efforts]
 low = "Simple fact retrieval or classification."
+medium = "Supported; use the model default unless a task-specific evaluation supports another level."
 high = "Default and highest supported thinking; advanced coding, mathematics or multistep planning."
