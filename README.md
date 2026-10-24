@@ -65,30 +65,56 @@ sequenceDiagram
 
 ## Core Concepts and Selection Flow
 
-The default selection policy is **Vendor-guided Selection (`vendor-guided`, Policy 6)**. Rather than collapsing benchmarks into a weighted sum, the router evaluates candidates in bounded phases using the host agent's native `bench-decider` subagent (or an optional external LLM endpoint via `decide.py` / Jev API):
-
-1. **`analysis` & `guidance`**: Analyzes task facets and selects baseline configurations from official vendor documentation once per eligible vendor.
-2. **`benchmark` comparison**: Queries local snapshots for comparable raw observations matching evaluation conditions, verifying task relevance while blinding model names and raw scores from the judge.
-3. **Final Selection**:
-   - **Pending phase responses (`exit 17`)**: Returns `decision_required` with the next decision packet until all required phases (`--decision-response`) are supplied.
-   - **Single viable candidate**: Automatically selected and routed by `bench-router`.
-   - **Multiple viable candidates (`exit 17`)**: Returns `upstream_selection_required` without auto-narrowing by cost or fallback order. The Orchestrator reviews the candidate assessment (`evaluate --format 3`), records its choice (`select`), and dispatches (`route --selection`).
-
-For detailed workflows, response schemas, and legacy override rules, see [Vendor-guided Routing Policy](docs/vendor-guided-routing.md).
+The default selection policy is **Vendor-guided Selection (`vendor-guided`, Policy 6)**. Instead of collapsing heterogeneous benchmarks into an arbitrary weighted sum, `bench-router` narrows and evaluates candidates through a transparent **6-step pipeline**:
 
 ```mermaid
 flowchart TD
-    T["task.json Input"] --> F["Hard Constraints Filter"]
-    F --> P["Phased Evaluation<br/>(analysis → vendor guidance → benchmark)"]
-    P -- "Missing phase response<br/>(decision_required, exit 17)" --> D["Supply --decision-response<br/>(via bench-decider or decide.py)"]
-    D --> P
-    P -- "All phases complete" --> C{"Viable Candidates?"}
+    T["① task.json Input"] --> F["② Hard Constraints Filter<br/>(cost tier, context, capabilities, quota)"]
+    F --> P1["③ Stage 1: Task & Workload Analysis<br/>(facets, clarity, reasoning, autonomy, deliverable)"]
+    P1 --> P2["④ Stage 2: Per-Vendor Official Guidance<br/>(1 request per vendor → documented / alternative / provisional)"]
+    P2 --> P3["⑤ Stage 3: Comparable Evidence & Blinded Relevance<br/>(protocol-matched snapshot lookup + relevance ≥ 0.8 check)"]
+    P1 & P2 & P3 -- "Pending stage response<br/>(decision_required, exit 17)" --> D["Lightweight Judge<br/>Jev API or bench-decider<br/>(haiku / gpt-6-luna / flash)"]
+    D -- "--decision-response" --> P1
+    P3 -- "All stages complete" --> C{"⑥ Viable Candidates?"}
     C -- "1 Candidate<br/>(no pending conditions)" --> A["Auto-Selection<br/>(selection 5.0)"]
     C -- "2+ Candidates<br/>(upstream_selection_required, exit 17)" --> U["Upstream Orchestrator<br/>evaluate --format 3 → select (selection 6.0)"]
     M["Explicit Override<br/>(--profile / manual selection 2.0)"] --> R
     A --> R["Re-verify Digest & Constraints<br/>→ Isolated Worktree Dispatch"]
     U --> R
 ```
+
+### Step-by-Step Routing Walkthrough
+
+1. **Step 1 — Hard Constraints Filtering (`routing.CONSTRAINTS`)**:
+   - Filters `profiles.toml` against non-negotiable requirements: `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, `local_only`, `max_estimated_cost_usd` (when `context.json` is supplied), and live CLI/quota availability. Candidates failing any hard constraint are immediately excluded.
+2. **Step 2 — Semantic Task & Workload Analysis (`analysis` stage)**:
+   - Evaluates the task `summary` and `prompt` to confirm task facets (e.g., `task:repo_coding`, `lang:ko`) and classify four workload dimensions: **`clarity`** (`clear` / `ambiguous`), **`reasoning`** (`bounded` / `multistep` / `demanding`), **`autonomy`** (`short` / `extended`), and **`deliverable`** (`revisable` / `finished` / `exacting`).
+   - Heuristic keyword and file-extension `rule_hints` are verified and can be rejected by semantic analysis so false-positive rules never pollute benchmark retrieval.
+3. **Step 3 — Per-Vendor Official Guidance (`guidance:<vendor>` stage)**:
+   - Sends **one request per eligible vendor** (Anthropic, OpenAI, Google) containing verbatim excerpts from that vendor's official model & effort documentation (`bench_router/guidelines.toml`).
+   - Selects the documented baseline `(model, effort)` starting point for the task's workload:
+     - **`documented`**: Profiles matching the vendor's recommended starting point (eligible for direct comparison and auto-routing).
+     - **`alternative`**: Other profiles from the same vendor (e.g., higher-cost escalations meant only for post-evaluation use). Excluded from auto-selection, but selectable by the Orchestrator via `select --accept-provisional`.
+     - **`provisional`**: Models not yet listed in official vendor guides (`guidance_missing`), retained with explicit uncertainty warnings.
+4. **Step 4 — Comparable Benchmark Evidence Lookup**:
+   - Queries the local snapshot (`snapshot.json`) and pre-compiled facet index (`index.json`) for benchmark units matching the confirmed task facets.
+   - Compares fresh observations strictly when measurement protocols match (`suite`, `version`, `subset`, `metric`, `evaluation_harness`, `reasoning_effort`), or records `model_proxy_comparison` when comparing base models within the same cohort. Missing scores are never treated as zero, and disparate cohorts are never merged into synthetic rankings.
+5. **Step 5 — Blinded Benchmark Relevance Verification (`benchmark` stage)**:
+   - When comparable benchmark units exist across candidates, the router issues a `benchmark` decision request containing only the task requirements and each benchmark unit's measurement description—**blinding model names, profile IDs, and raw scores** to prevent judge bias.
+   - Only units judged directly relevant to a core task requirement (`score ≥ 0.8`) are marked `accepted: true`.
+6. **Step 6 — Final Selection & Isolated Worktree Dispatch**:
+   - **Pending phase responses (`exit 17`)**: If any stage above still needs an answer, the CLI outputs `decision_required` with the bounded question packet until completed via `--decision-response`.
+   - **Single viable candidate**: When exactly one `documented` candidate remains with no unverified conditions, `bench-router` automatically produces a `selection 5.0` record and dispatches the worker.
+   - **Multiple viable candidates (`exit 17`)**: Rather than guessing by cost tier or arbitrary fallback order, the router returns `upstream_selection_required`. The Orchestrator inspects the side-by-side evidence (`evaluate --format 3`), binds its final choice (`select` → `selection 6.0`), and dispatches (`route --selection`) into an isolated `herdr-projects` Git worktree.
+
+> [!TIP]
+> **Token Efficiency via Lightweight Decision Models (`Jev` & `bench-decider`)**
+> Routing should never cost as much as executing the task itself. `bench-router` maximizes token efficiency during the semantic evaluation stages (`analysis`, `guidance`, `benchmark`) through three design choices:
+> 1. **Dedicated Low-Cost Judge Models**: Phased decisions are delegated to **Jev** (`jev-1.13.0`, a fast bounded decision endpoint via `decide.py`) or the host CLI's native **`bench-decider` subagent** pinned to each vendor's lightweight tier (**`haiku`** on Claude Code, **`gpt-6-luna`** on Codex, **`flash`** on Antigravity; customizable via `BENCH_ROUTER_DECISION_MODEL`).
+> 2. **Per-Vendor Batching**: `guidance` is evaluated **once per vendor** rather than once per profile, cutting decision calls and token volume by ~75–80% on multi-profile setups.
+> 3. **Minimal Context & Digest Caching**: Decision packets send only structured task summaries, facet criteria, and short verbatim guide rows—never repository file contents, full wiki pages, or raw score tables. Stage digests are cached so snapshot refreshes never re-trigger task analysis.
+
+For detailed response schemas and replay rules, see [Vendor-guided Routing Policy](docs/vendor-guided-routing.md).
 
 <details>
 <summary><b>🔖 Schema & Format Version Reference (<code>evaluate</code> / <code>select</code> / <code>route</code>)</b></summary>
@@ -135,12 +161,17 @@ Choose the integration mode that matches your workflow before configuring prereq
 
 ### 1) Prerequisites Checklist
 
+> [!TIP]
+> **One-Stop Setup (`mise` or `uv`)**:
+> Run `mise install && mise run setup` (or manually: `uv sync --extra arena && mkdir -p ~/.config/bench-router && cp -n examples/profiles.default.toml ~/.config/bench-router/profiles.toml && cp -n examples/aliases.example.toml ~/.config/bench-router/aliases.toml`).
+> This provisions the virtual environment, copies ready-to-run profiles and aliases for standard Claude / Codex / Gemini CLI models, and fetches initial public benchmark data in one command.
+
 | Component | Item | Required? | Version & Setup Instructions |
 |---|---|---|---|
 | **Base Runtime** | **Python 3.11+** | **Required** | Core CLI uses the standard library only. Offline evaluation and data refresh supported on Linux / WSL2 / Windows |
-| **Arena Refresh** | **`pyarrow`** | Required for Arena refresh | `mise install && mise run setup` or `uv sync --extra arena` |
-| **Router Config** | **`profiles.toml`** | **Required** | `~/.config/bench-router/profiles.toml` — Candidate Agent profiles. Generated and edited as shown in step 3 |
-| **Router Config** | **`aliases.toml`** | Recommended | `~/.config/bench-router/aliases.toml` — Maps external benchmark model names to profile `model_id` ([Reference](docs/reference.md#aliasestoml)) |
+| **Arena Refresh** | **`pyarrow`** | Required for Arena refresh | Handled automatically by `mise run setup` (or `uv sync --extra arena`) |
+| **Router Config** | **`profiles.toml`** | **Required** | `~/.config/bench-router/profiles.toml` — Handled automatically by `mise run setup` (or copy from `examples/profiles.default.toml`) |
+| **Router Config** | **`aliases.toml`** | Recommended | `~/.config/bench-router/aliases.toml` — Handled automatically by `mise run setup` (or copy from `examples/aliases.example.toml`) |
 | **Live Dispatch** | **[Herdr](https://herdr.dev)** | Required for live runs | **Linux / WSL2**, version **0.9.3+** (`herdr --version`, default `~/.local/bin/herdr`) |
 | **Live Dispatch** | **`herdr-projects` plugin** | Required for live runs | Pinned to version **1.2.1** (`herdr plugin install eliasstravik/herdr-projects` → verify `herdr-projects version`) |
 | **Live Dispatch** | **Target Agent CLIs** | Required for live runs | Target CLIs (`claude`, `codex`, `agy`, etc.) installed, authenticated, and project directories trusted |
@@ -192,18 +223,16 @@ Run directly from the repository root (or via `scripts/cli.py` in an installed S
 ```bash
 BR="python3 -m bench_router.cli"
 
-# 1. Prepare Agent profiles (copy template and configure)
+# 1. Prepare Agent profiles (copy ready-to-run default profiles, or use profiles discover)
 mkdir -p ~/.config/bench-router
-cp examples/profiles.example.toml ~/.config/bench-router/profiles.toml
+cp -n examples/profiles.default.toml ~/.config/bench-router/profiles.toml
+cp -n examples/aliases.example.toml ~/.config/bench-router/aliases.toml
 ```
 
-`$BR profiles discover` scans locally available model/effort configurations. Antigravity inspects current account models (`agy models`), Codex reads public models and per-model efforts from `~/.codex/models_cache.json`, Claude queries `guidelines.toml` and CLI help effort flags, combining with CodeBurn observed models. Generated profiles default to `enabled=true`, `cost_tier=high`, `context_tokens=0`; review before use. Discovery does not guarantee live account call success. Existing configurations are never overwritten without `--force`.
+`examples/profiles.default.toml` comes pre-configured with active profiles for standard Claude (`claude-opus-high`), Codex (`codex-sol-high`), and Gemini (`agy-argon-medium`). Alternatively, `$BR profiles discover` scans locally available model/effort configurations from installed CLIs. Existing configurations are never overwritten without `--force`.
 
-> [!IMPORTANT]
-> The template `profiles.toml` contains **disabled placeholders (`enabled = false`)**. Edit the file prior to running commands:
-> - Set `enabled = true` on desired profiles, updating `args` model flags and `model_id` to actual values. Review remaining execution parameters and increment `config_revision`.
-> - If all profiles are disabled, routing terminates with `no_eligible_profile` (exit code 13).
-> - Live dispatch `args` must contain only model and effort flags. Execution permissions follow Projects `worker.access`. See [Profile Configuration Reference](docs/reference.md#profilestoml).
+> [!NOTE]
+> If using `examples/profiles.example.toml` instead, note that it contains disabled placeholders (`enabled = false`) for custom setups. At least one profile must be enabled to prevent `no_eligible_profile` (exit 13). Live dispatch `args` must contain only model and effort flags; execution permissions follow Projects `worker.access`. See [Profile Configuration Reference](docs/reference.md#profilestoml).
 
 <details>
 <summary><b>📝 Minimal working <code>profiles.toml</code> configuration example</b></summary>
@@ -370,19 +399,18 @@ $BR feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success            # Recor
 
 ---
 
-## Current Status and Limitations
+## Testing and Operational Limits
 
-| Policy (20 tasks × 2 profiles) | Success (passed hidden checks) | Success Rate | Median Time (s) | Cost Proxy Sum | API USD Equivalent ([`v1-cost.md`](eval/results/v1-cost.md)) | USD per Success |
-|---|---|---|---|---|---|---|
-| **fixed-default** (`claude-opus-high`) | 20 / 20 | 100% | 36.2s | 20.0 | $4.69 | $0.234 |
-| **low-cost-first** (`codex-sol-high`) | 19 / 20 | 95% | 77.5s | 10.0 | $1.33 | $0.070 |
-| **bench-router** (`balanced`) | **20 / 20** | **100%** | **38.2s** | **19.0** | **$4.35** | **$0.217** |
+The offline test suite runs with standard library tools (or `mise run test`) without requiring external services or network access:
 
-- Offline test suites and live data collection across AA, Arena, and The Model Gap are verified. Actual live dispatch with Claude Code and Codex across the 20-task benchmark reflects historical direct Herdr execution. The current Projects 1.2.1 pathway is verified offline using fake CLIs and real Git worktrees; historical live results do not certify the new execution pathway.
-- The 20-task evaluation reflects legacy policies and does not validate the quality or cost of Policy 6. The new policy also cannot guarantee quality without task-level evaluation. Historical comparisons are recorded in [eval/results/v1.md](eval/results/v1.md).
-- `cost_tier` values are relative policy categories, not empirical billing amounts.
+```bash
+python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn
+```
 
-The offline suite currently passes 163 of 165 tests (2 skipped) as of 2026-10-24. For detailed coverage and live verification limits, see [Implementation Status](docs/implementation-status.md).
+- **Scope of Offline Tests**: Verifies facet filtering, hard constraint enforcement, guideline parsing, snapshot publishing, parallel worktree isolation, and receipt validation contracts using synthetic test doubles and isolated Git repositories.
+- **Contract Verification vs. Task Correctness**: A `completed` status certifies that output files comply with the result contract schema and SHA-256 integrity. It does not certify substantive code correctness, which is judged and recorded by the upstream Orchestrator via `feedback`.
+- **Cost Categories**: `cost_tier` represents policy-level relative groupings (low / medium / high), not empirical billing invoice amounts.
+- **Historical Benchmarks & Logs**: Historical v1 evaluation comparisons and live dispatch tracking are archived in [Implementation Status](docs/implementation-status.md) and [eval/results/v1.md](eval/results/v1.md).
 
 ---
 

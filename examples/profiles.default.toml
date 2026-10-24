@@ -1,0 +1,47 @@
+# Ready-to-run default profiles for standard vendor models (Anthropic, OpenAI, Google).
+schema_version = "1.0"
+
+[[profile]]
+id = "claude-opus-high"
+enabled = true
+kind = "claude"
+executable = "claude"
+args = ["--model", "claude-opus-5-5", "--effort", "high"]
+model_id = "claude-opus-5-5"
+harness_id = "claude-code"
+reasoning_effort = "high"
+config_revision = "2026-10-24"
+cost_tier = "high"
+inference_local = false
+context_tokens = 200000
+capabilities = ["filesystem_write"]
+
+[[profile]]
+id = "codex-sol-high"
+enabled = true
+kind = "codex"
+executable = "codex"
+args = ["-m", "gpt-6.1-sol", "-c", "model_reasoning_effort=\"high\""]
+model_id = "gpt-6.1-sol"
+harness_id = "codex-cli"
+reasoning_effort = "high"
+config_revision = "2026-10-24"
+cost_tier = "medium"
+inference_local = false
+context_tokens = 200000
+capabilities = ["filesystem_write"]
+
+[[profile]]
+id = "agy-argon-medium"
+enabled = true
+kind = "agy"
+executable = "agy"
+args = ["--model", "gemini-4-argon-medium"]
+model_id = "gemini-4-argon"
+harness_id = "antigravity-cli"
+reasoning_effort = "medium"
+config_revision = "2026-10-24"
+cost_tier = "medium"
+inference_local = false
+context_tokens = 1000000
+capabilities = ["filesystem_write"]

@@ -4,8 +4,14 @@ node = "lts"
 "npm:codeburn" = "latest"  # eval/codeburn.py shells out to the codeburn CLI
 
 [tasks.setup]
-description = "install Arena refresh deps (pyarrow) into .venv"
-run = "uv sync --extra arena"
+description = "one-stop environment setup (uv sync, default profiles/aliases, and initial public data)"
+run = """
+uv sync --extra arena
+mkdir -p ~/.config/bench-router
+[ -f ~/.config/bench-router/profiles.toml ] || cp examples/profiles.default.toml ~/.config/bench-router/profiles.toml
+[ -f ~/.config/bench-router/aliases.toml ] || cp examples/aliases.example.toml ~/.config/bench-router/aliases.toml
+uv run python -m bench_router.cli refresh --source mg
+"""
 
 [tasks.test]
 description = "offline test suite"
