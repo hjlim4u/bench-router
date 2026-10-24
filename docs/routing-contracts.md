@@ -1,419 +1,168 @@
-# 다중 기준 라우팅 계약 설계
+# 다중 기준 라우팅 계약
 
-작성일: 2026-10-13. 입력: [확장성 점검 보고서](routing-extensibility-review.md). 상태: 설계안, 구현 전.
+갱신: 2026-10-24. 구현: `routing.py`, `decision.py`, `cli.py`, `herdr.py`, `parallel.py`. 초기 2026-10-13 설계의 후보 평가·지표·제약 경계를 유지하며, 제거된 legacy 자동 선택 절차는 현재 계약에 포함하지 않는다.
 
-후속 변경: 기본 선택은 [공식 가이드 기반 정책](vendor-guided-routing.md)으로 전환되었습니다. 아래의 기존 자동 선택·2.0 명시적 기록 계약은 과거 설계 기준이며, 새 요청 digest와 3.0 기록은 후속 문서를 따릅니다.
+## 0. 목표와 책임
 
-## 0. 목표와 비목표
+Router는 사실 정리·필수 제약·공식 가이드 적합성·비교 가능한 평가·선택 기록·실행을 제공한다. 상위 Orchestrator는 작업 분해·팀 구성·최종 선택·전체 예산·결과 채택을 결정한다. 범용 플러그인 로더·규칙 엔진·단위 변환 DSL·workflow scheduler는 없다.
 
-목표: 새 지표(지연, 성공률, 쿼터, 캐시 비용 등)를 추가할 때 **표 한 줄(지표 정의) + 필요하면 함수 하나(제약)** 만 바꾸면 되는 구조. 기존 자동 `route` 결과는 보존.
-
-비목표 (보고서 결론 유지):
-
-- 범용 플러그인 로더, 규칙 엔진, 비용 계산 DSL, 단위 변환표.
-- Router 내부 종합 점수. 지표 간 trade-off와 최종 선택은 Orchestrator 소유.
-- 가격·쿼터 수집기. 값은 Orchestrator가 공급한다.
-- 작업 전체 예산·병렬 예약 관리. Orchestrator 소유 (§5).
-
-책임 경계 한 줄 요약: **Router = 사실 정리 + 필수 제약 검사 + 판단 기록 + 실행.** Orchestrator = 순위·선택·예산.
-
-```
-task + config + snapshot + context
-          │
-          ▼
-   assess()  ── facts (지표 정규화·유효성)
-          │   ── constraints (통과/탈락, 구조화된 사유)
-          │   ── evaluations {"benchmark": ...}   ← 기존 계산, 이름만 붙임
-          ▼
-   assessment  ──► evaluate 출력 (Orchestrator가 선택)
-          │
-          └──► legacy_select()  ──► route 출력 (기존 자동 선택, 호환)
-```
+기본 선택은 [vendor-guided 정책 6](vendor-guided-routing.md)이다. 복수 적합 후보는 상위 선택을 요구하고, 가중합·near-tie·default/fallback 순위로 줄이지 않는다.
 
 ## 1. 계약 A — 후보 평가와 선택의 분리
 
-### 1.1 구조 변경
+### 1.1 공통 경계
 
-현재 `evaluate()`가 `route()`를 호출하고 선택을 지운다. 방향을 뒤집는다.
+| 함수 / CLI | 책임 |
+|---|---|
+| `routing.assess()` | ID순 전 프로필 facts·제약·선택적 benchmark 평가. 선택하지 않음 |
+| `routing.evaluate()` / `evaluate --format 2` | 기본 schema 2.0의 사실·제약·category benchmark quality/coverage |
+| `routing.evaluate_v1()` / `evaluate --format 1` | schema 1.0의 candidates/excluded 호환 형태 |
+| `decision.evaluate()` / `evaluate --format 3` | schema 4.0의 단계별 의미 판단·후보 적합성·관측·비교·진단 |
+| `decision.bind()` / `select` | 완료된 format 3 평가에서 상위 선택 기록 6.0 생성 |
+| `routing.route()` → `decision.route()` | 정책 6의 판단 패킷·제한된 단일 후보 선택 5.0·선택 재생 |
+| `routing.apply_selection()` | selection 2.0 또는 `--profile`의 명시적 override; 현재 제약 검사 |
 
-| 함수 | 역할 | 비고 |
-|---|---|---|
-| `assess(t, cfg, mapping, snap, snap_warnings, now, availability, context)` | 전 프로필에 대해 facts·constraints·evaluations 계산 | 새 공통 경계. 선택하지 않음 |
-| `legacy_select(assessment, t, cfg)` | 기존 `select()` 그대로 적용 | `POLICY`, `lambda_cost`, near-tie, default/fallback 그대로 |
-| `route()` | `legacy_select(assess(...))` → 기존 1.0 출력 형태로 변환 | 출력 바이트 단위 호환 목표 |
-| `evaluate()` | `assess()` 결과를 2.0 출력으로 반환 | 정렬은 profile ID순 |
-| `pin_selection()` | assessment에서 지정 프로필이 제약 통과했는지 확인 | §4 selection 기록 추가 |
+CLI `--format 3`은 JSON schema 버전 `4.0`과 다르다. `select`는 format 1·2 결과를 받지 않는다. 모든 evaluate 형식은 오프라인이며 worker 실행·파일 쓰기·판단 API 호출을 하지 않는다.
 
-### 1.2 평가기 = 이름 붙은 함수
+### 1.2 기본 benchmark 평가
 
-확장점은 후보의 `evaluations` 맵(이름 → 결과)이다. 평가기가 1개인 동안 `assess()`가 `benchmark_evaluation()`을 직접 호출한다. 두 번째 평가기가 생기면 그 호출 옆에 한 줄 추가 (그때 공통 시그니처가 필요하면 dict로). 등록 API·로더 없음.
+`assess()`는 제약을 통과한 후보에만 `benchmark_evaluation()`을 직접 호출한다. 평가 결과는 `status: ok|insufficient|unavailable`, `quality`, `coverage`, `exact_evidence_weight`, `evidence`다. 출력 변환 시 `coverage_band`를 붙인다. 근거가 없어도 후보는 남으며 하드 탈락은 제약이 결정한다.
 
-`benchmark_evaluation`은 현재 `route()` 루프 안의 evidence/coverage/quality 계산을 그대로 옮긴 것. 결과 필드:
-
-```json
-"benchmark": {"status": "ok|insufficient|unavailable", "quality": 0.71, "coverage": 0.8,
-              "coverage_band": "full", "exact_evidence_weight": 0.6, "evidence": [...]}
-```
-
-- `coverage`는 **benchmark 근거 충족도**만 뜻한다. 전체 판단 정보의 충족도가 아니다.
-- 벤치마크가 없어도 후보는 남는다 (`status: "unavailable"`). 탈락은 오직 constraints가 결정.
-
-새 평가기 예 (필요해질 때만): feedback 기록 기반 `history` 성공률 → `EVALUATORS["history"] = ...` 한 줄 + 함수. 평가기는 서로의 결과를 읽지 않는다 (benchmark 점수 불변 보장).
+coverage는 benchmark 근거 충족도이며 전체 판단의 확신도가 아니다. category 가중치·percentile·quality 식은 [데이터 명세](../03_ROUTING_AND_DATA_SPEC.md)에 있다. `score`, `legacy_score`, `cost_proxy`는 출력하지 않고 후보 순서는 profile ID순이다. 다른 평가기를 실제 추가할 때 `evaluations`에 이름 하나와 함수 호출을 추가한다. 별도 `EVALUATORS` registry는 없다.
 
 ### 1.3 evaluate 출력 2.0
 
-```json
-{"schema_version": "2.0", "status": "ok", "task_id": "...", "round": 1,
- "assessment_digest": "sha256:...",           // §4
- "inputs": {"task_hash": "...", "config_hash": "...", "snapshot_id": "...", "context_hash": "...",
-            "router_policy_version": "1.0", "metric_registry_version": "1"},
- "task_facts": {"task.complexity": {...}},
- "candidates": [                               // profile ID순, 전 프로필
-   {"profile": "a", "profile_fingerprint": "...", "eligible": true,
-    "constraints": [ ... §3.2 결과 (통과 항목 포함) ... ],
-    "facts": {"cost.estimated_usd": {...}, "latency.p50_ms": {...}},
-    "unrecognized_metrics": {"acme.vibe": {...}},
-    "evaluations": {"benchmark": {...}}}],
- "classification": {...}, "sources": {...}, "warnings": [...]}
-```
+| 필드 | 의미 |
+|---|---|
+| `inputs`, `assessment_digest` | task/config/snapshot/context·기본 정책·지표 registry 버전의 정적 입력과 SHA-256 hex |
+| `task_facts`, `max_estimated_cost_usd` | task 지표와 호출 allowance |
+| `candidates` | 모든 프로필 ID순; eligible·constraints·facts·unrecognized_metrics·evaluations |
+| `classification`, `sources`, `warnings` | 기본 category 분류·소스 날짜·경고 |
+| `availability_verified` | evaluate에서는 false; live dispatch에서 재검사 |
 
-결정:
+`evaluations`는 하드 탈락 후보에서 `{}`다. `constraints`는 적용한 통과·실패를 모두 포함한다. format 1은 candidates/excluded 형태를 유지하지만 순위·자동 선택을 제공하지 않는다.
 
-- `candidates`와 `excluded` 분리 대신 단일 목록 + `eligible`. Orchestrator가 탈락 사유의 관측값·기준값을 같은 위치에서 본다.
-- `route` 출력은 1.0 그대로 (`score`, `quality`, `coverage`, `cost_proxy`, `excluded`). 의미 변경 없음.
-- evaluate 1.0 출력 소비자: `evaluate --format 1` 플래그로 한 버전 동안 유지 후 제거. ponytail: 플래그 하나로 이행, 버전 협상 없음.
+### 1.4 vendor-guided 후보 평가와 선택
+
+format 3은 `analysis → 적격 벤더별 guidance → benchmark(비교가 있을 때)`를 재생한다. 판단 미완료는 `decision_required`(17), 완료된 평가는 `status: ok`다. pending 응답의 최종 `assessment_digest`는 null이며 현재 request digest는 `decision.request_digest`다.
+
+완료된 schema 4.0은 전 프로필의 hard eligibility·suitability·facts·sparse observations/missing·후보별 diagnostics를 제공한다. 공유 `evidence`에는 unit 정의·comparisons·comparison_scopes·relevance·prefiltered_units·auxiliary_units를 둔다. 선택용 검색에는 표 표시용 12 unit 제한을 적용하지 않는다. `decision`은 재생 원본, `recommendation`은 제한된 단일 후보 추천 또는 기권이다. 자세한 필드와 응답 작성은 [상위 연동](orchestrator.md#vendor-guided-candidate-assessments-and-upstream-choices)을 따른다.
 
 ## 2. 계약 B — 지표(facts)의 의미·유효성
 
 ### 2.1 지표 정의표
 
-새 지표 추가의 **유일한 필수 수정 지점**.
+`routing.METRICS`가 등록 지표의 대상·타입·단위·최대 수명을 정의한다. 등록 항목은 tokens.estimated_input/output, tokens.required_context, price.input/output_usd_per_mtok, cost.estimated_usd, task.complexity다. latency.p50_ms 등 다른 namespaced 지표는 현재 미등록이며 전달만 한다.
 
-```python
-# ponytail: 코드 내 상수. 사용자 튜닝 대상이 아닌 계약이라 TOML로 빼지 않음.
-METRIC_REGISTRY_VERSION = "1"
-METRICS = {
-  # id: (applies_to, kind, unit, max_age_hours | None)
-  "tokens.estimated_input":   ("profile", "int",    "tokens", None),
-  "tokens.estimated_output":  ("profile", "int",    "tokens", None),
-  "tokens.required_context":  ("profile", "int",    "tokens", None),
-  "price.input_usd_per_mtok": ("profile", "number", "usd/mtok", 24 * 30),
-  "price.output_usd_per_mtok":("profile", "number", "usd/mtok", 24 * 30),
-  "cost.estimated_usd":       ("profile", "number", "usd", None),     # Orchestrator 견적 (§3.4)
-  "task.complexity":          ("task",    "enum:low|medium|high", None, None),
-}
-```
-
-| 필드 | 의미 |
-|---|---|
-| `applies_to` | `task` = 작업 특성 (복잡도). `profile` = 이 작업에 대한 프로필별 관측·추정. 섞어 넣으면 입력 오류 |
-| `kind` | `number`, `int`, `bool`, `enum:a\|b`. 검증만 함 |
-| `unit` | 정규 단위 1개. 입력 단위가 다르면 **입력 오류**. 변환 안 함 |
-| `max_age_hours` | `observed_at` 기준 수명. `None` = 만료 없음. 지표마다 다름 (가격 30일, 지연이라면 1시간 등) |
-
-**선호 방향(“클수록 좋다”)은 정의표에 넣지 않는다.** 그건 정책이다. Router는 순위를 매기지 않으므로 필요 없다.
-
-ponytail: 단위 변환 없음. ms/s 혼용이 실제로 생기면 그 지표만 `unit` 목록 + 배수로 확장.
+선호 방향이나 지표 간 가중치는 registry에 없다. 등록 지표의 타입·단위가 다르면 입력 오류이며 자동 단위 변환을 하지 않는다. 미등록 namespaced 지표는 형식만 검사하고 전달하며 제약·평가에 사용하지 않는다.
 
 ### 2.2 관측값 형식 (context 2.0)
 
 ```json
 {"schema_version": "2.0",
- "task_metrics": {"task.complexity": {"value": "high", "source": "orch-classifier@3", "reason": "..."}},
- "max_estimated_cost_usd": 0.05,
- "profiles": {
-   "my-codex": {"metrics": {
-     "tokens.estimated_input":   {"value": 40000, "unit": "tokens", "source": "orch-estimator@2"},
-     "price.input_usd_per_mtok": {"value": 1.25, "unit": "usd/mtok", "source": "vendor-page",
-                                  "observed_at": "2026-10-10T00:00:00Z"},
-     "latency.p50_ms":           {"status": "missing", "reason": "not_measured", "source": "orch-telemetry"},
-     "acme.vibe":                {"value": 3, "unit": "stars", "source": "x"}
-   }}}}
+ "task_metrics": {"task.complexity": {"value": "high", "source": "orch-classifier@3", "reason": "cross-file change"}},
+ "max_estimated_cost_usd": 0.25,
+ "profiles": {"my-codex": {"metrics": {
+   "tokens.estimated_input": {"value": 40000, "unit": "tokens", "source": "orch-estimator@2"},
+   "price.input_usd_per_mtok": {"value": 1.25, "unit": "usd/mtok", "source": "example-price",
+                              "observed_at": "2026-10-24T00:00:00Z"},
+   "latency.p50_ms": {"status": "missing", "reason": "not_measured", "source": "telemetry"},
+   "acme.vibe": {"value": 3, "unit": "stars", "source": "experiment@1"}
+ }}}}
 ```
 
-| 키 | 필수 | 규칙 |
-|---|---|---|
-| `value` | `status`가 `missing`이 아니면 필수 | `kind` 검사. `null` 금지 — 결측은 `status`로 |
-| `unit` | 정의표에 unit이 있으면 필수 | 정의표 값과 정확히 일치 |
-| `source` | 필수 | 출처·산출 버전 문자열 (`name@version` 권장) |
-| `observed_at` | `max_age_hours`가 있는 지표는 필수 | ISO-8601 UTC |
-| `expires_at` | 선택 | 공급자가 더 짧은 수명을 알 때. `max_age_hours`보다 우선하지 않고 더 이른 쪽 적용 |
-| `status` | 선택, 기본 `ok` | `ok` \| `missing`. `missing`이면 `reason` 필수 |
-| `reason` | 선택 | `task.complexity` 등 설명용 |
+위 가격은 형식 예시다. 프로필 키는 설정된 ID여야 한다. 지표는 모두 선택적이며 각 관측에는 `source`가 필요하다. 값이 있으면 `value`와 정의된 `unit`, 결측이면 `status: missing`과 `reason`을 쓴다. `value: null`은 거부한다.
 
-Router가 계산해 facts에 붙이는 필드: `freshness: "fresh" | "expired" | "missing"`, `age_hours`.
+수명이 있는 지표는 `observed_at`이 필요하고 `expires_at`으로 더 짧은 수명을 줄 수 있다. 가격은 30일이다. 계산된 facts에는 fresh/expired/missing을 표시한다. 만료·결측은 0이 아니며 계산에서 제외한다. 해당 값을 쓰는 제약이 없으면 결측 자체로 탈락시키지 않는다.
 
-규칙:
+### 2.3 context 1.0 호환
 
-- 결측은 0이 아니다. `missing`/`expired` 값은 계산(예: 비용)에 쓰지 않는다.
-- **미등록 지표**는 형식 검사(`value`/`source` 존재, id 네임스페이스) 후 `unrecognized_metrics`로 그대로 전달. 제약·평가에 절대 쓰지 않는다. → Orchestrator는 Router 배포 없이 실험 지표를 흘려 보낼 수 있다.
-- 만료·결측 자체로 후보를 제외하지 않는다. 제외 여부는 그 지표를 **쓰는 제약**이 정한다 (§3.2 `on_missing`).
-- 핵심 필드(`schema_version`, `profiles`, 지표 항목 키)는 계속 엄격 검증 — 오타 검출 유지. 확장은 `metrics` 맵 안에서만.
-
-### 2.3 1.0 context 호환
-
-`validate_context`가 1.0을 받으면 2.0으로 변환 후 동일 경로 처리:
-
-| 1.0 | 2.0 |
-|---|---|
-| `complexity {level, reason}` | `task_metrics["task.complexity"] {value: level, reason, source: "context-1.0"}` |
-| `estimated_input_tokens` 등 | `tokens.*` |
-| `price {input…, output…, source, as_of}` | `price.*`, `observed_at = as_of` |
-| `signals[name] {value, unit, source}` | `metrics[name]` (대부분 미등록 → `unrecognized_metrics`) |
-
-`context_hash`는 **변환 후** 2.0 형태로 계산. 1.0 출력의 `context_facts`는 변환 결과에서 역으로 채워 route 1.0 출력 유지.
+`complexity`, `estimated_*_tokens`, `required_context_tokens`, `price{..., as_of}`, `signals`는 context 2.0으로 변환해 같은 검증 경로를 탄다. `context_hash`와 `decision_context`는 변환 후 형태를 사용한다. 과거 1.0 가격도 30일 만료를 적용한다.
 
 ## 3. 계약 C — 제약 (필수 조건)
 
-### 3.1 제약과 선호의 분리
+### 3.1 제약과 선호
 
-- Router는 **제약만** 평가한다. 제약 실패는 어떤 점수로도 상쇄되지 않는다.
-- 선호(비용 낮을수록, 지연 짧을수록)는 Router 출력에 없다. `legacy_select`의 `priority`/`lambda_cost`는 호환 정책 내부 개념으로 격리.
+제약 실패는 점수·상위 선택·provisional 수용으로 상쇄할 수 없다. 비용·지연 trade-off와 전체 예산은 상위 정책이다. `priority` 입력은 호환상 받지만 자동 비용 차감·near-tie 정렬에 사용하지 않는다.
 
-### 3.2 제약 = 이름 붙은 함수
+### 3.2 이름 붙은 검사
 
-```python
-# ponytail: dict가 확장점. 새 지표로 거르려면 함수 하나 추가.
-CONSTRAINTS = {
-  "enabled":            ...,  # profile.enabled
-  "task_exclusion":     ...,  # task.exclude_profiles
-  "cost_tier":          ...,  # task.constraints.max_cost_tier  (legacy proxy, §3.3)
-  "context_capacity":   ...,  # max(task.min_context_tokens, tokens.required_context) vs profile.context_tokens
-  "capabilities":       ...,
-  "local_only":         ...,
-  "estimated_cost":     ...,  # context.max_estimated_cost_usd vs cost.estimated_usd (§3.4)
-  "availability":       ...,  # live probe 결과
-}
-# 각 함수: (profile, task, x) -> 실패 결과 목록 ([] = 통과 또는 미적용)
-# x = {context, facts, cost(Decimal), availability}
-```
-
-구현 상태 (1단계): 실패 결과만 `constraint_failures`에 기록. 통과 결과 기록은 evaluate 2.0(3단계)에서 추가. 1단계에서는 기존 `context_capacity`를 `min_context`(task)와 `required_context`(context) 두 제약으로 유지 — 사유 코드 중복까지 1.0 출력과 동일하게 하기 위함. 3단계에서 하나로 합친다.
-
-결과 형식 (통과도 기록 — explain과 decision이 같은 근거를 보여줌):
+`routing.CONSTRAINTS`는 enabled, task_exclusion, cost_tier, context_capacity, capabilities, local_only, availability, estimated_cost다. 검사 함수 `(profile, task, x)`는 적용한 통과·실패 결과 목록을 반환한다. 결과의 검사 이름은 `constraint`다.
 
 ```json
-{"name": "estimated_cost", "passed": false, "code": "estimated_cost_exceeds_max",
+{"constraint": "estimated_cost", "passed": false, "code": "estimated_cost_exceeds_max",
  "metric": "cost.estimated_usd", "observed": 0.20, "limit": 0.05, "on_missing": "exclude"}
 ```
 
-- `code`는 기존 탈락 사유 문자열을 그대로 쓴다 (`context_insufficient`, `estimated_cost_unknown` 등). route 1.0의 `excluded[].reasons`는 실패한 결과의 `code` 목록 → 호환.
-- `on_missing`: 제약이 쓰는 지표가 missing/expired일 때 동작. 각 제약 함수에 상수로 명시 (`exclude` | `pass`). 현재 동작 기준:
-  - `estimated_cost`: `exclude` (현재 `estimated_cost_unknown`과 동일).
-  - `context_capacity`: 프로필 용량 미설정이면 `exclude` (`context_unknown`, 현재와 동일).
-- 제약이 적용되지 않으면 (예: `max_estimated_cost_usd` 미지정) 결과를 남기지 않는다. 쓰지 않는 지표가 없다고 탈락시키지 않는다.
+context capacity는 task 최소값과 context 필요값 중 큰 값으로 검사한다. 용량 불명은 양수 요구를 충족하지 않는다. 비용 상한이 있는데 견적이 missing/expired면 `estimated_cost_unknown`으로 탈락한다. 적용하지 않는 제약은 불필요한 결측 실패를 만들지 않는다.
 
-### 3.3 등급 vs 달러 상한
+### 3.3 등급과 달러 상한
 
-둘 다 독립 제약이며 동시 지정 시 **둘 다** 통과해야 한다 (현재 동작 유지, 문서로 확정).
+`max_cost_tier`(low/medium/high)와 `max_estimated_cost_usd`는 독립이며 둘 다 지정하면 둘 다 통과해야 한다. 등급 기본 high는 등록된 모든 등급을 허용한다. 견적이 있다고 등급을 자동 무시하지 않는다.
 
-- `max_cost_tier`는 실제 가격이 없을 때 쓰는 legacy proxy.
-- 실제 견적만으로 거르고 싶은 Orchestrator는 `max_cost_tier`를 지정하지 않는다 (기본 `high` = 무제한).
-- 자동 대체(“견적이 있으면 등급 무시”)는 하지 않는다. 암묵 규칙이라 3시에 해독해야 할 대상.
+### 3.4 비용·토큰·quota
 
-### 3.4 비용·토큰 범위
+1. fresh `cost.estimated_usd` 공급자 견적이 우선이다.
+2. 없으면 `(input tokens × input rate + output tokens × output rate) / 1,000,000`으로 계산한다(`source: router:io2-v1`).
+3. 입력이 없거나 만료되면 missing과 원인을 반환한다. 캐시·추가 요금은 상위 견적에 반영한다.
 
-| 개념 | 위치 | Router 처리 |
-|---|---|---|
-| 컨텍스트 수용량 | profile `context_tokens` (정적 설정) | `context_capacity` 제약 |
-| 이번 호출 예상 사용량 | `tokens.estimated_input/output` | 비용 계산 입력 |
-| 이번 호출 비용 상한 | `context.max_estimated_cost_usd` | `estimated_cost` 제약 (단건 allowance) |
-| 작업 전체 잔여 예산, 병렬 예약, 재시도 누적 | Orchestrator | **처리 안 함.** 필요하면 Orchestrator가 남은 예산을 단건 allowance로 나눠 전달 |
-| 계정 쿼터 | — | 유보 (기존 합의) |
-
-`cost.estimated_usd` 결정 순서:
-
-1. Orchestrator가 `cost.estimated_usd`를 직접 주면 그대로 사용 (캐시·부가 비용을 반영한 공급자 견적). `source`에 산출 버전 포함.
-2. 없으면 Router가 계산: `(in × price.in + out × price.out) / 1e6`, `source: "router:io2-v1"`. 입력 지표 중 하나라도 missing/expired면 결과도 `missing` (`reason: "estimate_or_price_missing"` 또는 `"price_expired"`).
-
-ponytail: 계산식은 입출력 2요율 한 가지. 캐시 요율이 필요해지면 1번 경로(공급자 견적)로 해결. 계산 항목 추가는 그래도 부족할 때만.
+예상 토큰은 이번 호출의 비용 입력, profile.context_tokens는 정적 수용량이다. 호출 allowance를 팀 전체 budget이나 실제 요금 보장으로 읽지 않는다. live에서는 CodeBurn의 provider 상태·모든 quota window 소진을 선택적으로 검사한다. Antigravity는 `agy models`의 실제 모델 목록을 검사한다. CodeBurn 실패는 PATH 검사로 폴백하되 agy 모델 검사는 유지한다. N개 worker를 위한 quota 예약은 없다.
 
 ## 4. 계약 D — 판단 기록과 실행 연결
 
-### 4.1 assessment digest
+### 4.1 digest
 
-```
-assessment_digest = canonical_hash({task_hash, config_hash, snapshot_id, context_hash,
-                                    router_policy_version, metric_registry_version})
-```
+format 1·2의 digest는 task_hash·config_hash·snapshot_id·context_hash·router_policy_version·metric_registry_version을 묶는다. now·가용성·freshness는 제외하고 실행 직전 다시 검사한다.
 
-- 기존 해시 재사용. 정적 입력만 포함.
-- **포함하지 않음**: `now`, availability, freshness. 시간·환경에 따라 변하는 값은 실행 직전 재검사 대상이지 동일성 비교 대상이 아니다.
+format 3의 schema 4.0 digest는 `canonical_hash({"schema_version":"4.0", "decision":...})`다. decision에는 task·전체 입력·단계별 request/digest/답변·관측·관련성·진단이 있다. 단계별 request digest는 그 단계의 실제 의존성만 묶는다. 시간 경과 값 자체는 제외하지만 만료에 따른 freshness 변경은 재검증 대상이다. 파일 본문 전체를 hash하는 계약은 아니다.
 
 ### 4.2 selection 입력
 
-`route --profile`에 선택 근거를 함께 받는다.
+| schema | 생성과 검증 |
+|---|---|
+| 2.0 | format 1·2의 digest + profile·외부 policy·reason. 의미 판단 override로 `selection_legacy` 경고 |
+| 5.0 | 정책 6의 자동 단일 후보 + 전체 decision. 추천 profile에 고정 |
+| 6.0 | 완료된 format 3 평가에서 `select`로 생성. 외부 policy·reason·accept_provisional·전체 decision |
 
-```bash
-bench-router route --task task.json --context context.json --selection selection.json
-```
+6.0은 documented 후보 또는 명시적 수용이 있는 provisional/alternative 후보를 선택한다. unsuitable·미평가·hard 탈락은 거부한다. 수용은 pending 조건을 해소하지 않는다. `select` 출력은 `selection` 객체를 감싼 schema 1.0 응답이므로 그 객체만 `--selection` 파일에 저장한다.
 
-```json
-{"schema_version": "2.0", "profile": "my-codex",
- "assessment_digest": "sha256:...",
- "policy": {"id": "orch-cost-latency", "version": "4"},
- "reason": "lowest estimated cost among candidates with benchmark coverage >= 0.5"}
-```
+`--selection`과 `--profile`은 배타적이며 `--decision-response`도 함께 쓸 수 없다. `--profile`은 기록 없는 override로 `selection_unrecorded`를 경고한다. 기존 vendor-guided schema 3.0·4.0이나 정책 1–5 기록은 새 판단에 재사용하지 않는다.
 
-실행 시 처리:
+5.0·6.0 실행은 provider를 새로 호출하지 않고 저장된 단계를 재생하며 현재 제약·가용성을 검사한다. 근거 입력이 달라지면 `stale_assessment`(14), 잘못된 입력 형식·미지원 schema는 validation(2)다. 5.0의 profile만 바꿔 재사용할 수 없다.
 
-1. `assess()` 재실행 (live availability 포함, freshness는 현재 시각 기준).
-2. digest 불일치 → `status: "stale_assessment"`, exit 14 (conflict 계열), 실행 안 함. 응답에 새 digest 포함 → Orchestrator는 재평가 후 재선택.
-3. 지정 프로필이 제약 실패 → `no_eligible_profile` (현재와 동일) + 실패한 제약 결과.
-4. 통과 → `decision.json`에 assessment 전체 + selection 원문 기록 후 실행.
+### 4.3 멱등성
 
-`--profile` 단독 사용은 유지 (selection 없음 → `selection_unrecorded` 경고, digest 검사 생략). 다음 메이저 버전에서 제거 후보.
-
-### 4.3 멱등성 (변경 없음, 명시)
-
-- 같은 `(task_id, round)`는 최초 receipt를 회수한다. 새 context·selection으로 재호출해도 재실행 안 함.
-- 새 판단으로 다시 실행하려면 **새 round**.
-- 같은 round에 다른 selection이 오면: profile이 다르면 기존 `profile_round_conflict`, 같으면 회수 + selection 차이를 `selection_differs_from_recorded` 경고로 알림.
+같은 canonical cwd·task_id·round는 기존 receipt를 먼저 확인한다. 같은 semantic hash면 회수하고 다른 내용은 conflict다. 지정 profile이 다르면 `profile_round_conflict`, 같은 profile의 선택 기록만 다르면 회수와 `selection_differs_from_recorded` 경고다. 의도적 새 실행은 상위가 부분 효과를 검토한 뒤 새 round로 요청한다. timeout은 취소·재전송 허가가 아니다.
 
 ### 4.4 decision.json
 
-```json
-{"schema_version": "2.0", "assessment": {...§1.3...},
- "selection": {...§4.2 원문 또는 {"mode": "legacy_auto", "selection_mode": "benchmark_score"}...},
- "selected": {"profile": "...", "profile_fingerprint": "..."}, "run_id": "..."}
-```
-
-자동 `route`도 같은 형식으로 기록 (`selection.mode = "legacy_auto"`). explain은 이 구조만 읽어서 출력 → 사람용 설명과 저장 기록이 같은 근거를 보여줌.
+run의 `decision.json`은 route 응답에 selection과 기본 evaluate 2.0 `assessment`를 더한 형태다. vendor-guided의 원본 근거는 `selection.decision`에도 보존한다. 별도 decision 2.0 wrapper는 없다. 실행 응답에서는 전체 assessment를 제외한다. 출력 전용 `selection.source`는 재입력 전에 제거한다.
 
 ## 5. 계약 E — 병렬 경로
 
-### 5.1 기본 경로 결정
+group 1.0은 task × fanout으로 정책 6을 반복하고 앞서 고른 profile은 다음 비교에서 제외한다. 복수 적합 후보가 남으면 판단·상위 선택을 요청하며 자동 기본값으로 fanout하지 않는다.
 
-**권장: 다중 기준 선택이 필요한 병렬화는 Orchestrator가 단건 `route --selection`을 여러 번 호출해 수행한다.** group 경로는 worktree 격리·collab 텍스트 기능 때문에 유지하되, 선택은 두 모드만 지원:
+group 2.0은 task별 `context`와 `selections`의 순서 있는 실행 목록을 받는다. selection 2.0·5.0·6.0을 사용할 수 있고 같은 profile도 반복할 수 있다. task당 1–8개·group 전체 최대 16개며 `fanout` 키는 허용하지 않는다. `max_parallel`은 1–4, 사용자 공유 admission도 활성 4개다.
 
-| group 입력 | 동작 |
-|---|---|
-| `selections` 없음 | 기존 legacy: `route()` 선택 + 다음 후보 fanout. 단, 후보 순서는 `legacy_score`순 (현재와 동일) |
-| task별 `context` + `selections` 배열 | 지정 프로필 그대로 fanout (`fanout` = 배열 길이). 계획·실행 모두 §4.2와 같은 `assess` + digest 검사 |
+상위는 group.cwd와 원래 prompt로 평가한다. plan 단계에서 모든 선택의 digest를 확인하고 stale 항목 하나면 전체 미실행이다. 모든 선택이 끝나기 전에는 worktree·group 파일·worker를 만들지 않는다. worker의 cwd·협업 문구는 실행 시 달라지므로 내부적으로 이미 검사한 task hash만 조정하고 현재 제약·가용성은 재검사한다.
 
-```json
-{"schema_version": "2.0", "group_id": "g1", "cwd": "/repo", "isolation": "isolated",
- "tasks": [{"task": {...}, "context": {...},
-            "selections": [{"profile": "a", "assessment_digest": "...", "policy": {...}, "reason": "..."},
-                           {"profile": "b", ...}]}]}
-```
-
-### 5.2 예산
-
-- 각 worker의 `max_estimated_cost_usd`는 그 호출의 allowance다. 같은 잔여 예산을 모든 worker에 그대로 주면 총합 제한이 안 된다 — 분배는 Orchestrator 책임 (문서에 명시).
-
-ponytail: 예약→실행→정산 원장 없음. 전체 예산 준수를 Router가 보장해야 하는 요구가 생기면 그때 별도 설계 (보고서 §3 조건 유지).
+동결된 plan과 receipts로 같은 group을 회수한다. 입력 변경·목록 재정렬은 conflict다. member rounds는 `delivery_state`·`reassignment`를 보존한다. 반복 selection도 별도 label·worktree·receipt·한도를 사용한다. team budget·집계·채택·재시도는 상위 책임이다.
 
 ## 6. 버전과 문서
 
-| 항목 | 값 | 바뀌는 조건 |
-|---|---|---|
-| task schema | `1.0` 유지 | 변경 없음 |
-| context schema | `2.0` 신규, `1.0` 수용 | §2.2 |
-| group schema | `2.0` 신규, `1.0` 수용 | §5.1 |
-| evaluate 출력 | `2.0` (`--format 1` 한시 유지) | §1.3 |
-| route 출력 | `1.0` 유지 + `assessment_digest` 추가 필드 | 추가만, 기존 의미 불변 |
-| `POLICY_VERSION` | legacy 선택 정책 버전. 출력에서 `router_policy_version`으로 표기 | `legacy_select` 변경 시 |
-| `METRIC_REGISTRY_VERSION` | 정의표 버전 | 기존 지표 의미·단위 변경 시만. 지표 **추가**는 버전 유지 |
-
-`SCHEMA_VERSION` 단일 상수를 입력 종류별 상수로 분리 (`TASK_SCHEMA`, `CONTEXT_SCHEMAS = {"1.0","2.0"}` 등).
-
-문서 정리 (구현과 같은 PR):
-
-- `03_ROUTING_AND_DATA_SPEC.md`의 선택 공식 절 → “legacy 자동 선택 정책” 표기, 규범은 이 문서.
-- `docs/orchestrator.md` → context 2.0, selection, evaluate 2.0 예시로 갱신.
-- `eval/run.py`의 low-cost-first 비교 → “legacy route baseline” 명시. 외부 정책 유효성 주장에 쓰지 않는다.
-
-## 7. 새 지표 추가 절차 (확장성 검증 기준)
-
-| 하고 싶은 것 | 수정 |
+| 계약 | 현재 값 |
 |---|---|
-| 지표를 Orchestrator 판단용으로 전달만 | **아무것도 안 함** (미등록 지표로 통과) |
-| 단위·수명 검증을 받고 explain에 정식 표시 | `METRICS`에 한 줄 |
-| Router가 그 지표로 후보를 거름 | 위 + `CONSTRAINTS`에 함수 1개 + context에 상한 필드 1개 |
-| Router가 새 근거로 평가 정보 제공 (예: 과거 성공률) | `EVALUATORS`에 함수 1개 |
-| 지표로 순위를 매김 | Router 수정 없음. Orchestrator 정책 |
+| task / result / route envelope | 1.0 |
+| context / group | 2.0, 입력 1.0도 수용 |
+| evaluate 기본 / 호환 | schema 2.0 / 1.0 |
+| evaluate `--format 3` | schema 4.0 |
+| vendor-guided 정책 / selection | policy 6 / 자동 5.0·외부 6.0 |
+| 기본 평가·snapshot 정책 / 지표 registry | routing.POLICY_VERSION 1.0 / METRIC_REGISTRY_VERSION 1 |
 
-예: p50 지연 상한.
+정책 버전·CLI format 번호·JSON schema 번호는 독립이다. 공식 가이드는 `guidelines.toml`의 별도 버전과 원문으로 고정한다. 상세 운영 예는 [reference](reference.md), 현재 검증은 [implementation-status](implementation-status.md), 상위 사용법은 [orchestrator](orchestrator.md)를 따른다.
 
-```python
-METRICS["latency.p50_ms"] = ("profile", "number", "ms", 1)
-CONSTRAINTS["latency"] = lambda p, t, f, ctx: None if "max_latency_p50_ms" not in ctx else \
-    check(f, "latency.p50_ms", "<=", ctx["max_latency_p50_ms"], code="latency_exceeds_max", on_missing="pass")
-```
+## 7. 지표 추가와 검증
 
-## 8. 구현 순서
+전달만 할 namespaced 지표는 registry 수정 없이 사용할 수 있다. 정식 타입·단위·수명이 필요하면 `METRICS`, 필터가 필요하면 `CONSTRAINTS`의 함수·입력 상한·focused fixture를 함께 추가한다. 단순 예시 지연 상한을 실제 지원 입력처럼 문서화하지 않는다. 순위 정책은 상위에서 구현한다.
 
-각 단계는 독립 커밋, 단계마다 `python3 -m unittest test_p0 test_p1 test_p2 test_p3` 통과.
-
-진행: 1–7단계 완료. 1–6단계는 2026-10-13에 완료했고, 7단계는 공개 후보 평가·외부 선택 계약으로 확장했다. 남은 일: 실환경 herdr smoke, `evaluate --format 1` 제거 시점 결정.
-
-3단계 구현에서 확정된 세부:
-- evaluate 2.0의 `assessment_digest`는 4단계에서 추가. 3단계 출력은 그 재료인 `inputs`만 포함.
-- `evaluations`는 제약 통과 후보에만 채운다 (탈락 후보는 `{}`). 탈락 후보 벤치마크까지 계산하면 stale_config 경고가 달라져 route 1.0 호환이 깨진다.
-- `min_context`와 `required_context`를 `context_capacity` 하나로 합침 (더 큰 요구치 기준). 두 조건이 동시에 실패할 때 route 1.0 `excluded.reasons`의 중복 코드가 하나로 줄었다.
-- Python API: `evaluate()` = 2.0, `evaluate_v1()` = 1.0 (`route --profile`과 `evaluate --format 1`이 사용).
-
-4단계 구현에서 확정된 세부:
-- `decision.json` = route 1.0 출력 + `selection` + `assessment`(같은 입력의 evaluate 2.0 전체). 별도 decision 2.0 래퍼는 만들지 않음 — 재사용 응답이 기존 형태를 유지하고, 근거는 `assessment`에 모두 있음. 응답에서는 `assessment`를 뺀다.
-- `selection.source`: `orchestrator`(선택 기록) | `unrecorded`(`--profile` 단독) | `parallel_pinned`(group legacy fanout).
-- `--selection`과 `--profile`은 함께 쓸 수 없다. `stale_assessment` 종료 코드는 14(conflict 계열).
-- `config_hash`가 프로필 정의 순서에 민감하므로 profiles.toml에서 순서만 바꿔도 digest가 바뀐다 (재평가 필요).
-
-5단계 구현에서 확정된 세부:
-- group 2.0의 digest는 group 수준 task(cwd=group.cwd, 원래 prompt) 기준으로 plan 시점에 한 번 검사. worker task는 worktree cwd·협업 안내로 구조상 달라 `check_digest=False`로 dispatch (context·제약·가용성은 재검사).
-- 선택 하나라도 stale이면 그룹 전체를 실행하지 않는다 (`stale_assessment`).
-- group 2.0에서 `fanout` 키는 금지 (선택 수가 곧 fanout). task당 선택 1–8개이며 `selections`는 순서 있는 실행 인스턴스 목록이다. 같은 프로필을 반복할 수 있고 각 항목은 별도 label·worktree·receipt를 받는다. 반복도 task당 8개 및 group 전체 16개 한도에 포함한다.
-
-7단계 구현에서 확정된 세부:
-- `evaluate --format 3`은 vendor-guided의 analysis·fit·비교 근거를 선택 없이 공개한다. 후보는 ID순이며, hard 제약·semantic suitability·후보별 diagnostics와 공유 evidence를 구분해 반환한다.
-- 정책 버전 4는 `evidence.relevance`에 관련도·직접 측정하는 요구의 facet·요구 설명·짧은 판단 이유·비교 범위·출처 페이지·판단 요청 digest를 공개한다. `prefiltered_units`는 사전 제외 이유, `auxiliary_units`는 공통 에이전트 신뢰성, `benchmark_relevance`는 거부된 unit을 0으로 표시한 관련도다. unit별 결과는 투표·합산하지 않는다. 복수 적합 후보 또는 workflow 검증이 필요한 effort는 `upstream_selection_required`로 상위 선택에 맡긴다. 후자는 벤치마크 우세가 있어도 provisional·`workflow_gain_unverified`를 유지한다. 상위 계층의 4.0 선택에도 이 근거가 그대로 포함되어 실행 시 재생 검증된다.
-- `select`는 완료된 format 3 assessment에서 selection 4.0을 만든다. 상위 정책은 라우터 추천과 다른 documented 후보를 고를 수 있고, provisional 후보는 `accept_provisional=true`을 명시해야 한다. unsuitable·미평가 후보와 hard 제약 실패는 선택할 수 없다.
-- 4.0 선택은 실행 시 기록된 판단을 재생하고 현재 제약·가용성을 다시 확인한다. 입력이 달라지면 `stale_assessment`이며, 이미 제출한 같은 task/round는 선택 재평가보다 receipt 회수가 우선한다. 2.0 override와 3.0 vendor-guided 선택의 의미는 변경하지 않는다.
-- group member 결과는 단건 실행의 `delivery_state`와 `reassignment`를 보존한다. 이 필드는 전송 불확실 시 자동 재시도 대신 `collect_first` 결정을 지원한다.
-
-1. **assess 추출** (`routing.py`): `route()` 루프를 `assess` + `benchmark_evaluation` + `CONSTRAINTS`로 분리, `route`/`evaluate`(1.0 형식) 재구성. 기존 테스트 무수정 통과가 완료 조건.
-2. **context 2.0 + METRICS** (`routing.py`): 검증·freshness·1.0 변환·비용 결정 순서.
-3. **evaluate 2.0 출력 + explain** (`routing.py`, `cli.py`).
-4. **digest + selection + decision 2.0** (`routing.py`, `herdr.py`, `cli.py`).
-5. **group 2.0** (`parallel.py`).
-6. **문서** (§6).
-7. **공개 후보 평가와 외부 선택** (`decision.py`, `cli.py`, `herdr.py`, `parallel.py`).
-
-## 9. 검증 사례
-
-보고서 필수 사례 → 테스트 위치. 명명은 기존 `test_vNN_description` 연번을 이어간다.
-
-| 사례 | 기대 | 파일 |
-|---|---|---|
-| 벤치마크 없음, 다른 유효 facts 있음 | evaluate에 eligible 후보, `benchmark.status=unavailable` | test_p0 |
-| 새 지표 추가 | 기존 `legacy_score`·route 선택 불변 | test_p0 |
-| 기존 자동 선택 회귀 | 1단계 전후 route 출력 동일 (기존 fixture 전체) | test_p0 |
-| 미등록 지표 | `unrecognized_metrics`로 전달, 제약 미사용 | test_p0 |
-| `value: null` / `status: missing` | 전자 입력 오류, 후자 수용·0 아님 | test_p0 |
-| 만료 가격 + 비용 상한 | `estimated_cost` 실패, `observed: null`, code `estimated_cost_unknown` | test_p0 |
-| 만료 가격, 비용 상한 없음 | 후보 유지, facts에 `expired` | test_p0 |
-| 단위 불일치 (`s` vs `ms`) | 입력 오류 | test_p0 |
-| 지표 `applies_to` 위반 | 입력 오류 | test_p0 |
-| 등급 high + 견적 저렴 + `max_cost_tier=medium` | 탈락 (`cost_tier_exceeds_max`), 문서와 일치 | test_p0 |
-| context 1.0 입력 | 2.0과 같은 facts, route 1.0 출력 불변 | test_p0 |
-| evaluate 후 config 변경 → route --selection | `stale_assessment`, 실행 안 함 | test_p2 |
-| 같은 round 재호출, 다른 selection 같은 profile | 회수 + `selection_differs_from_recorded` | test_p2 |
-| decision.json | assessment + selection + digest 기록 | test_p2 |
-| group selections + context | 지정 프로필 fanout, 각 dispatch에 context 전달 | test_p3 |
-
-전체 예산(동시 예약·정산) 검증은 해당 기능을 만들 때 추가.
-
-## 10. 결정 요약
-
-| # | 결정 | 대안 / 업그레이드 경로 |
-|---|---|---|
-| 1 | Router는 순위 없음. 제약 + 사실 + 기존 legacy 선택만 | Orchestrator 정책 공유가 필요해지면 정책을 별도 모듈로 이식 |
-| 2 | 지표 정의는 코드 상수 `METRICS` | 외부 팀이 자주 추가하면 TOML |
-| 3 | 단위 변환 없음, 불일치 = 오류 | 지표별 배수 목록 |
-| 4 | 미등록 지표는 전달만 | — |
-| 5 | 등급·달러 상한 모두 독립 제약 | — |
-| 6 | 비용 계산식 1개 + 공급자 견적 우선 | 계산 항목 추가 |
-| 7 | digest = 정적 입력 해시, 불일치 시 실행 거부 | — |
-| 8 | 병렬 다중 기준은 Orchestrator 주도, group은 selections 전달만 | 전체 예산 원장은 요구 시 |
-| 9 | evaluate만 2.0, route 1.0 유지 | route 2.0은 legacy 선택 폐기 시 |
+전체 검증 명령은 `python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn`이다. 현재 선택·stale·재생·부분 실패·중복 방지의 기준은 [검증 문서](../06_VALIDATION_AND_OPEN_ITEMS.md)에 있다. Projects live·workflow 품질·팀 예산 검증은 오프라인 계약 검증과 별도다.

@@ -1,10 +1,12 @@
 # 사용자 의도와 설계 결정
 
-## 제공된 컨텍스트와 한계
+갱신: 2026-10-24. 현재 동작과 계약은 [문서 안내](00_START_HERE.md), [vendor-guided 정책](docs/vendor-guided-routing.md), [Projects 실행](docs/projects.md)을 따른다.
 
-사용자는 구현 전에 기존 OSS/도구의 활용 가능성을 조사하고, 타 AI 답변과 객관적으로 교차 검증한 설계를 원했다. 이번 요청은 **다른 CLI Agent가 새로운 세션에서 구현·검증을 이어갈 handoff 문서 작성**이다.
+## 설계의 출발점
 
-현재 제공된 자료는 사용자 요구와 타 AI가 제안한 bench-router 초안 전문이다. 과거의 별도 최종 설계 답변이나 기존 저장소 구현은 제공되지 않았다. 따라서 이 묶음은 초안 전체가 이미 사용자에게 최종 승인됐다고 주장하지 않는다. 아래는 사용자 요구를 보존하면서 사실 오류와 실행 위험을 보완한 구현 기준선이다.
+사용자는 구현 전에 기존 OSS/도구의 활용 가능성을 조사하고, 타 AI 답변과 객관적으로 교차 검증한 설계를 원했다. 초기 문서는 다른 CLI Agent가 구현을 이어갈 handoff로 작성됐고, 현재는 구현된 라우터의 설계 결정 기록이다.
+
+아래 사용자 요구는 초기 목표를 보존한다. 구현 과정에서 가중합 자동 선택은 제거됐고, 공식 가이드 기반 평가와 상위 최종 선택으로 구체화됐다. 과거 외부 도구 조사는 확인일 당시의 기록이며 현재 버전의 전면 비교가 아니다.
 
 ## 사용자 요구
 
@@ -21,9 +23,9 @@
 
 | 주체 | 책임 |
 | --- | --- |
-| Orchestrator | 위임 판단, 작업 분해, summary/categories, 컨텍스트 선별, 결과 검토, 추가 라운드 |
-| bench-router | 스냅샷 수집·정규화, 제약 필터, 분류 fallback, 선택 근거, herdr CLI 접착, 결과 계약 검사 |
-| herdr | pane와 Agent 실행, 입력 전달, 실제 상태 관찰, 대기, 터미널 읽기 |
+| Orchestrator | 위임 판단, 작업 분해·팀 구성, task/facets·컨텍스트, 복수 후보 최종 선택, 결과 검토·추가 라운드·예산 |
+| bench-router | 스냅샷 수집·정규화, 제약, 공식 가이드 적합성·비교 근거·선택 기록, 실행 연결·결과 계약 검사 |
+| herdr-projects / herdr | worktree·pane와 Agent 실행, 입력 전달, 실제 상태 관찰·복구 |
 | Subagent | 작업 수행, 실행별 결과 파일 작성, 수행·미수행·오류 정보 보고 |
 | 주기 실행 도구 | 정기 refresh 실행; cron/systemd/launchd 중 현장 하나를 사용 |
 
@@ -37,16 +39,19 @@
 | D02 | route는 벤치마크 API를 호출하지 않음 | 사용자 요청 지연과 API 부담 제거 | 확정 원칙 |
 | D03 | refresh는 별도 명령과 OS 주기 작업 | 상시 서비스·Redis 없이 충분 | v1 기본값 |
 | D04 | SQLite 이력 + 작은 JSON snapshot | 표준 라이브러리, 읽기 경로 단순화, 근거 재현 | v1 기본값 |
-| D05 | L0 Orchestrator 카테고리 → L1 규칙 → general | 기존 분석을 재사용하고 추가 모델 호출 최소화 | MVP 기본값 |
-| D06 | 임베딩/Jev는 로그가 보여주는 분류 문제 이후 도입 | 초기 의존성·콜드 스타트·원격 호출 감소 | 보류 |
+| D05 | 기본 평가는 L1 규칙 → general; vendor-guided는 의미 analysis 사용 | 초기 L0 categories 입력은 제거됐고 명시 작업 특성은 task.facets 사용 | 구현 |
+| D06 | Jev 또는 native bench-decider로 제한된 단계별 판단, 임베딩은 미도입 | 작업 분석·벤더별 가이드 시작점·평가 관련성을 구조화 | 구현 |
 | D07 | herdr-projects 공개 CLI를 subprocess argv로 호출 (2026-10-15) | 프로젝트 실행 계층 재사용. 결과 계약·admission은 Router 유지 | 확정 원칙 |
-| D08 | idle/done + 실행별 결과 계약으로 완료 확인 | 터미널 상태는 작업 성공이나 turn ID가 아님 | 확정 원칙 |
-| D09 | MVP는 단일 머신, 새 Agent 사용, 동기 route | 원격 파일 회수·세션 오염·재사용 경쟁을 먼저 피함 | v1 기본값 |
+| D08 | Projects approval/done 또는 headless 종료 확인 + 실행별 결과 계약 | 실행 종료는 작업 성공 인증이 아님 | 확정 원칙 |
+| D09 | 단일 머신·새 worker, wait-ms/collect·명시적 resume 지원 | 원격 실행·자동 세션 pool은 미구현 | 구현 |
 | D10 | 선택·수집·실행을 별도 함수로 유지 | dry-run·fixture 검증 가능; 플러그인 프레임워크는 만들지 않음 | v1 기본값 |
 | D11 | 결과 최적성은 실제 작업으로 비교 검증 | 외부 순위는 개별 작업 성공확률이 아님 | 확정 원칙 |
 | D12 | API 응답/CLI 스키마를 버전 고정하여 기록 | 동적 데이터·문서와 설치 버전 차이를 통제 | 확정 원칙 |
 | D13 | 최종 선택·지표 간 trade-off·예산은 Orchestrator, Router는 사실 정리·필수 제약·선택 기록·실행 (2026-10-13) | 지표가 늘어도 Router 정책을 바꾸지 않고, USD와 percentile 같은 단위를 의미 없이 섞지 않음. 근거: docs/routing-extensibility-review.md | 확정 원칙 |
 | D14 | 새 지표 = `METRICS` 한 줄(+거를 때만 `CONSTRAINTS` 함수 하나), 미등록 지표는 전달만 (2026-10-13) | 플러그인 프레임워크·규칙 엔진 없이 확장. 계약: docs/routing-contracts.md | v1 기본값 |
+| D15 | 정책 6: analysis → 벤더별 guidance → 필요 시 benchmark; 복수 적합 후보는 상위 선택 | 가이드 원칙을 벤더 사이에 일반화하거나 서로 다른 평가를 합산하지 않음 | 구현 |
+| D16 | 후보 평가 schema 4.0(`--format 3`), 자동 selection 5.0, 외부 selection 6.0 | CLI 형식 번호·JSON schema·선택 정책 버전을 분리 | 구현 |
+| D17 | group 2.0 반복 selection 허용, max_parallel 1–4, 합산 admission 4 | 실행 인스턴스별 worktree·receipt를 유지 | 구현 |
 
 ## 타 AI 초안에서 유지하는 부분
 
@@ -57,7 +62,9 @@
 - dry-run/explain, 선택 근거·기준일·feedback 기록.
 - 임베딩·결정 모델을 선택적 고도화로 두는 방향.
 
-## 보완·수정하는 부분
+## 초기 초안 검토 기록 (당시 기준)
+
+아래 coverage 수축·default·결정성 설명은 초기 설계 비교다. 현재 quality/coverage는 기본 평가 진단으로만 남고 비용 차감·default/fallback·near-tie 자동 선택은 제거됐다. 의미 판단은 저장된 단계 응답과 digest로 재생한다.
 
 | 초안 가정 | handoff 기준선 |
 | --- | --- |
@@ -84,7 +91,7 @@
 
 ## 범위 밖
 
-MVP에서 worker scheduler, 자체 Agent 런타임, agent 내부 매 turn 모델 교체, 자동 가중치 학습, vector DB, 웹 대시보드, Kubernetes, 자동 원격 파일 동기화, herdr 플러그인 설치를 만들지 않는다. 벤치마크 태스크 자체를 매일 재실행하는 것도 요구에 없다.
+자체 Agent 런타임, agent 내부 매 turn 모델 교체, 자동 가중치 학습, vector DB, 웹 대시보드, Kubernetes, 자동 원격 파일 동기화, herdr 플러그인 자동 설치는 범위 밖이다. 구현된 병렬 실행 어댑터는 패턴·DAG·투표·예산 scheduler가 아니다. 벤치마크 태스크 자체를 매일 재실행하지 않는다.
 
 Python은 권장 기본값이다. 현장 저장소가 다른 언어로 충분히 구현되어 있으면 재작성보다 계약 준수를 우선한다.
 

@@ -1,16 +1,16 @@
 # bench-router
 
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
-![Zero Dependencies](https://img.shields.io/badge/Dependencies-stdlib%20only-2ea44f)
+![Core Dependencies](https://img.shields.io/badge/Core-stdlib%20only-2ea44f)
 ![Platform](https://img.shields.io/badge/Live%20Dispatch-Linux%20%7C%20WSL2-FCC624?logo=linux&logoColor=black)
-![Schema](https://img.shields.io/badge/Contract%20Schema-1.0%20%7C%202.0-6f42c1)
+![Policy](https://img.shields.io/badge/Vendor%20Guided%20Policy-6-6f42c1)
 
-**작업에 가장 잘 맞는 AI 코딩 Agent를 공개 벤치마크 점수로 골라 대신 실행시켜 주는 라우터**입니다.
+**공식 모델 가이드와 공개 벤치마크로 작업에 맞는 AI Agent 프로필의 선택·실행을 돕는 라우터**입니다.
 
-Claude Code, Codex 같은 CLI Agent는 잘하는 일이 서로 다르고 비용도 다릅니다. "이 버그 수정은 누구에게 맡기지?"를 매번 감으로 정하는 대신, bench-router는 작업 종류를 파악하고 공개 벤치마크(Artificial Analysis, LMArena, The Model Gap, SWE-bench, Terminal-Bench 등) 점수와 비용을 따져 Agent를 고릅니다. 고른 Agent에게 작업을 넘기고, 약속한 형식의 결과 파일이 돌아왔는지 확인한 뒤 돌려줍니다.
+Claude Code, Codex 같은 CLI Agent는 모델·effort·실행 설정이 다릅니다. bench-router는 작업 요구와 필수 제약을 확인하고, 벤더별 공식 가이드의 시작점과 비교 가능한 벤치마크 근거를 제공합니다. 적합 후보가 여러 개이면 상위 Orchestrator가 최종 선택합니다. 선택된 Agent에게 작업을 넘기고, 약속한 형식의 결과 파일이 돌아왔는지 확인합니다.
 
 <p align="center">
-  <img src="docs/assets/terminal-demo.svg" alt="bench-router explain & route terminal workflow" width="860">
+  <img src="docs/assets/terminal-demo.svg" alt="bench-router vendor-guided 평가·상위 선택·실행 흐름의 합성 요약" width="860">
 </p>
 
 ---
@@ -27,8 +27,10 @@ sequenceDiagram
     participant CLI as Agent CLI (claude / codex / …)
 
     Orch->>BR: ① 작업 요청 (task.json)
-    BR->>Snap: ② 작업 분류 및 후보 점수·제약 조회
-    Snap-->>BR: 정규화된 벤치마크 근거 반환
+    BR->>Snap: ② 작업별 후보 제약·벤치마크 근거 조회
+    Snap-->>BR: 관측값·측정 조건·결측 반환
+    BR-->>Orch: 단계별 판단 패킷 또는 후보 평가
+    Orch->>BR: 판단 응답 · 최종 selection
     BR->>HP: ③ 선택한 프로필로 격리 Worktree 실행 위임
     HP->>CLI: 세션 실행 및 프롬프트 전달
     CLI-->>HP: 작업 수행 후 result.md · result.json 작성
@@ -37,7 +39,7 @@ sequenceDiagram
 ```
 
 1. **요청**: Orchestrator(작업을 나누고 위임을 결정하는 상위 Agent나 사람)가 할 일을 `task.json`에 적어 넘깁니다.
-2. **선택**: bench-router가 작업 종류를 분류합니다(예: 저장소 코드 수정, 터미널 작업, 글쓰기). 조건에 맞는 Agent 프로필 가운데 그 종류의 벤치마크 점수가 높고 비용이 적당한 것을 고르거나(`route`), 작업 성격(facet)에 맞는 벤치마크 증거 표를 뽑아 Orchestrator가 직접 고르게 합니다(`evaluate` + `evidence` → `route --selection`).
+2. **선택**: `analysis`와 벤더별 `guidance`로 적합성을 판단하고 비교 가능한 평가를 조회합니다. 복수 후보이면 `evaluate --format 3` → `select` → `route --selection`으로 상위가 고릅니다. 미검증 조건이 없는 단일 적합 후보는 라우터가 선택할 수 있습니다.
 3. **실행**: 선택한 Agent를 [herdr](https://herdr.dev)와 `herdr-projects` 터미널 세션의 격리된 Git worktree에서 실행합니다. Agent는 작업을 마치면 정해진 형식의 결과 파일을 씁니다.
 4. **회수**: bench-router가 결과 파일의 형식과 무결성을 확인해 Orchestrator에게 돌려줍니다. 작업이 실제로 성공했는지는 Orchestrator가 판단하고 `feedback`으로 기록합니다.
 
@@ -57,16 +59,17 @@ sequenceDiagram
 | **Agent CLI** (`claude`, `codex`, `agy`, …) | 실제 작업 수행 및 결과 계약(`result.md`, `result.json`) 작성 |
 
 > [!TIP]
-> bench-router는 일부러 얇게 만들었습니다. 단순 `subprocess` 호출 대신 `herdr` / `herdr-projects`를 쓰는 이유는 각 작업을 격리된 Git worktree에서 실행하고, 권한 승인 대기(`blocked`)나 타임아웃 시에도 프롬프트 중복 전송 없이 안전하게 관찰·복구(`collect`, `resume`)하기 위해서입니다. Python 3.11 이상에서 외부 패키지 없이 **표준 라이브러리만** 사용합니다.
+> bench-router는 `herdr` / `herdr-projects`로 각 작업을 격리된 Git worktree에서 실행하고, 권한 승인 대기(`blocked`)나 타임아웃 뒤에는 `collect`로 관찰·회수합니다. `resume`은 완료된 대화를 다시 엽니다. 핵심 CLI는 Python 3.11 이상의 **표준 라이브러리만** 사용하며, Arena refresh에는 선택 의존성 `pyarrow`가 필요합니다.
 
 ---
 
 ## 핵심 개념과 선택 흐름
 
-기본 정책은 **공식 가이드 기반 선택(`vendor-guided`)**입니다. Jev 또는 native `bench-decider`가 작업 특성 분석 후 정확한 모델·effort 권고로 후보를 정합니다. 코드는 남은 후보의 관련 평가를 검색하고 비교 가능한 raw 점수·비용으로 선택합니다. 평가가 상충할 때만 점수 없이 평가의 작업 관련성을 추가 판단합니다. `route`·`parallel`·Skill이 같은 정책을 사용합니다.
+기본 정책은 **공식 가이드 기반 선택(`vendor-guided`, 정책 6)**입니다. Jev 또는 native `bench-decider`가 작업을 분석하고, 적격 프로필이 있는 벤더마다 한 번씩 공식 가이드 원문에서 시작점 구성을 고릅니다. 코드는 관련 평가를 조회해 같은 측정 조건의 fresh raw 관측을 비교합니다. 비교가 있으면 모델명·점수를 보내지 않는 `benchmark` 판단으로 작업 관련성을 확인합니다. `route`·`parallel`·Skill이 같은 정책을 사용합니다.
 
-- **기본 선택 (`route`)**: 작업에 충분한 가벼운 구성을 우선하며, 근거 부족은 잠정 선택으로 표시합니다. 판단 도구가 없으면 `decision_required`를 반환합니다.
-- **명시적 선택 (`route --selection` / `--profile`)**: 저장된 선택을 검증하거나 지정한 프로필을 실행합니다. 기존 2.0 기록과 수동 지정은 새 정책 검증과 구분됩니다.
+- **기본 선택 (`route`)**: 복수 적합 후보이면 `decision_unavailable`과 `upstream_selection_required`를 반환합니다. 판단 응답이 필요하면 `decision_required`이며 둘 다 종료 17입니다. 비용·priority·default 순서로 후보를 자동 축소하지 않습니다.
+- **상위 선택 (`evaluate --format 3` → `select`)**: 후보 평가 schema 4.0에서 selection 6.0을 만듭니다. 자동 단일 후보 선택은 selection 5.0입니다. `--format 3`은 CLI 형식 번호로, JSON schema 버전과 다릅니다.
+- **명시적 override (`route --selection` 2.0 / `--profile`)**: 기존 수동 선택은 경고와 함께 유지합니다. 과거 vendor-guided selection 3.0·4.0은 새 실행 전에 재평가해야 합니다.
 
 사용법과 응답 형식은 [공식 가이드 기반 정책](docs/vendor-guided-routing.md)을 참고하세요.
 
@@ -87,7 +90,7 @@ flowchart LR
 - **중복 전송 방지**: 같은 작업을 다시 요청해도 프롬프트를 두 번 보내지 않고, 이미 진행 중이거나 끝난 실행의 결과를 회수합니다.
 
 <details>
-<summary><b>📊 legacy 정책의 카테고리별 벤치마크 가중치 매핑 (<code>categories.toml</code>)</b></summary>
+<summary><b>📊 evaluate 1·2의 참고용 카테고리 매핑 (<code>categories.toml</code>, 자동 선택에 사용하지 않음)</b></summary>
 
 | 카테고리 | 설명 | 반영 벤치마크 및 가중치 |
 |---|---|---|
@@ -113,7 +116,8 @@ flowchart LR
 
 | 구분 | 항목 | 필수 여부 | 요구 버전 및 설치·설정 방법 |
 |---|---|---|---|
-| **기본 런타임** | **Python 3.11+** | **필수** | 외부 패키지 불필요(표준 라이브러리만 사용). 오프라인 평가·데이터 갱신은 Linux / WSL2 / Windows 모두 지원 |
+| **기본 런타임** | **Python 3.11+** | **필수** | 핵심 CLI는 표준 라이브러리 사용. 오프라인 평가·데이터 갱신은 Linux / WSL2 / Windows 지원 |
+| **Arena 갱신** | **`pyarrow`** | Arena refresh 시 필수 | `mise install` 후 `mise run setup` 또는 `uv sync --extra arena` |
 | **라우터 설정** | **`profiles.toml`** | **필수** | `~/.config/bench-router/profiles.toml` — 라우팅 후보 Agent 프로필 목록. 아래 3단계 예시대로 생성·편집 |
 | **라우터 설정** | **`aliases.toml`** | 권장 | `~/.config/bench-router/aliases.toml` — 외부 벤치마크 모델명을 프로필 `model_id`와 매칭 ([작성법](docs/reference.md#aliasestoml)) |
 | **실제 위임 (Live)** | **[Herdr](https://herdr.dev)** | 실제 위임 시 필수 | **Linux / WSL2**, 버전 **0.9.3 이상** (`herdr --version`, 기본 `~/.local/bin/herdr`) |
@@ -147,7 +151,7 @@ flowchart LR
 
 ### 2) 어디서든 Skill로 사용하도록 설치하기 (`npx skills`)
 
-[`npx skills`](https://skills.sh/) 한 줄이면 내 컴퓨터의 모든 코딩 에이전트(Claude Code, Codex, Cursor, Gemini CLI, Windsurf, Cline, Copilot, Antigravity 등 40+ 에이전트)나 다른 프로젝트 경로에 바로 설치됩니다. `skills/bench-router/` 안에 라우터 본체(`bench_router/`, 컴파일된 벤치마크 인덱스 `index.json` 포함)가 번들되어 있어 **원본 저장소를 클론해 두지 않아도 복사된 스킬 폴더(약 250KB)만으로 단독 동작**합니다.
+[`npx skills`](https://skills.sh/)로 지원되는 코딩 에이전트나 다른 프로젝트 경로에 설치할 수 있습니다. `skills/bench-router/` 안에 라우터 본체(`bench_router/`, `index.json`, `guidelines.toml` 포함)가 번들되어 있어 **원본 저장소나 wiki 폴더 없이 복사된 스킬로 동작**합니다.
 
 ```bash
 # A. 내 컴퓨터의 모든 프로젝트에서 쓰기 (글로벌 설치 — 권장)
@@ -172,7 +176,7 @@ mkdir -p ~/.config/bench-router
 cp examples/profiles.example.toml ~/.config/bench-router/profiles.toml
 ```
 
-`$BR profiles discover`는 각 CLI의 모델 플래그가 받는 모델을 모두 등록합니다. Antigravity는 현재 계정 모델 목록(`agy models`), Codex는 `~/.codex/models_cache.json`의 공개(`visibility: list`) 모델과 모델별 지원 effort, Claude는 모델 목록 명령이 없어 `guidelines.toml`의 현행 Claude 모델을 쓰며, CodeBurn에 기록된 모델도 합칩니다. 실제 계정에서 호출되는지는 실행 시 점검합니다. 기존 파일은 `--force` 없이는 바꾸지 않습니다.
+`$BR profiles discover`는 로컬에서 확인할 수 있는 모델·effort 조합을 등록합니다. Antigravity는 현재 계정 모델 목록(`agy models`), Codex는 `~/.codex/models_cache.json`의 공개 모델과 모델별 effort, Claude는 `guidelines.toml`의 모델과 CLI help의 effort를 사용하며 CodeBurn 관측 모델도 합칩니다. 생성값은 enabled=true·cost_tier=high·context_tokens=0이므로 사용 전 검토하세요. discovery가 실제 계정 호출 성공을 보장하지는 않습니다. 기존 파일은 `--force` 없이는 바꾸지 않습니다.
 
 > [!IMPORTANT]
 > 복사한 `profiles.toml`은 **모두 비활성(`enabled = false`)인 placeholder**입니다. 다음 명령 전에 파일을 편집하세요.
@@ -227,11 +231,12 @@ capabilities = ["filesystem_write"]
 # 2. 벤치마크 점수 받기
 # - API 키가 없어도 공개 소스(mg, arena)는 바로 수집할 수 있습니다.
 $BR refresh --source mg                      # The Model Gap 공개 점수 수집 (API 키 불필요)
-$BR refresh --source arena                   # LMArena 공개 점수 수집 (API 키 불필요)
+uv sync --extra arena                       # Arena Parquet 디코더 준비
+uv run python -m bench_router.cli refresh --source arena # API 키 불필요
 
 # - Artificial Analysis API 키가 있다면 전체 소스를 한 번에 갱신합니다.
 set -a; [ -f ~/.config/bench-router/env ] && . ~/.config/bench-router/env; set +a
-$BR refresh                                  # aa, arena, mg 전체 갱신
+uv run python -m bench_router.cli refresh     # aa, arena, mg 전체 갱신
 $BR status                                   # 데이터 상태 및 미매칭 모델 확인
 
 # 3. 실행 없이 판단 요청 보기 (cwd를 현재 저장소 절대 경로로 치환)
@@ -241,7 +246,19 @@ $BR explain --task task.json                 # 선택 이유를 사람이 읽는
 $BR evidence --task task.json --format table # 작업 성격(facet)에 맞는 프로필별 벤치마크 증거 표 보기
 ```
 
-`--dry-run`, `explain`, `evidence`는 네트워크·herdr·파일 쓰기 없이 동작합니다. 기본 dry-run은 현재 단계의 판단 패킷을 반환합니다. `decision.completed`와 새 응답을 순서대로 담은 `{"stages": [...]}` 파일을 `--decision-response`로 다시 넣어 단계를 진행하고, 완료된 `--selection`은 오프라인 재검증합니다. snapshot이 없어도 잠정 선택을 위한 요청을 만들 수 있습니다. 이전 오프라인 자동 선택은 `--policy legacy`로 사용할 수 있습니다.
+`--dry-run`, `explain`, `evaluate`, `evidence`는 네트워크·herdr·파일 쓰기 없이 동작합니다. 기본 dry-run은 현재 단계의 판단 패킷을 반환합니다. `decision.completed`와 새 응답을 순서대로 담은 `{"stages": [...]}` 파일을 `--decision-response`로 다시 넣어 단계를 진행하고, 완료된 `--selection`은 오프라인 재검증합니다. snapshot이 없어도 근거 결측을 표시한 판단 요청을 만들 수 있습니다. 가중합 자동 선택과 `--policy legacy`는 제거됐습니다.
+
+복수 적합 후보가 남으면 같은 응답 파일로 후보 평가를 완료하고 상위 정책으로 선택합니다. `select` 출력에서는 `selection` 객체만 저장합니다.
+
+```bash
+$BR evaluate --format 3 --task task.json --host codex --decision-response responses.json > assessment.json
+$BR select --assessment assessment.json --profile PROFILE --policy-id my-policy --policy-version 1 \
+  --reason "작업 요구와 후보 근거를 검토한 선택" > selection-output.json
+python3 -c 'import json; print(json.dumps(json.load(open("selection-output.json"))["selection"]))' > selection.json
+$BR route --task task.json --selection selection.json --dry-run
+```
+
+`assessment.json`은 `status: "ok"`일 때 사용합니다. provisional·alternative 후보를 수용하려면 `select --accept-provisional`이 필요합니다. 단계별 응답 작성법은 [상위 연동](docs/orchestrator.md)을 참고하세요.
 
 <details>
 <summary><b>🔍 입력(<code>task.json</code>), <code>explain</code>, 증거 표(<code>evidence</code>), 결과 계약(<code>result.json</code>) 실제 입출력 예시 보기</b></summary>
@@ -307,7 +324,7 @@ profiles (raw pPERCENTILE effort; effort≠profile effort means a different effo
 
 ```bash
 # 4. 실제로 맡기고 회수·검증하기 (Linux/WSL2, herdr·herdr-projects·Agent CLI 준비 필요)
-$BR --herdr-session work route --task task.json                     # work는 실제 Herdr 세션 이름으로 변경
+$BR --herdr-session work route --task task.json --selection selection.json # work는 실제 세션 이름
 $BR --herdr-session work collect --run-id <RUN_ID> --cwd "$PWD"     # 타임아웃/대기 시 재전송 없이 상태 확인·회수
 $BR feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success       # Orchestrator의 최종 검증 결과 기록
 ```
@@ -316,8 +333,8 @@ $BR feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success       # Orchestrat
 
 ## 그 밖에 할 수 있는 일
 
-- **Orchestrator가 직접 고르기 (`evaluate` → `route --selection`)**:
-  - `evaluate --task task.json [--context context.json]`으로 모든 프로필의 하드 제약 통과 여부·예상 비용·벤치마크 평가를 받고, 최종 선택은 Orchestrator가 해서 `route --selection selection.json`으로 실행합니다. → [docs/orchestrator.md](docs/orchestrator.md)
+- **Orchestrator가 직접 고르기 (`evaluate --format 3` → `select` → `route --selection`)**:
+  - 공식 가이드 적합성과 평가 근거를 검토해 최종 프로필을 기록합니다. 기본 `evaluate`(format 2)는 별도의 사실·제약 조회이며 선택하지 않습니다. → [docs/orchestrator.md](docs/orchestrator.md)
 - **작업 성격(facet)별 벤치마크 증거 표 보기 (`evidence` & `wiki facets`)**:
   - `evidence --task task.json --format table`은 점수를 합산하거나 순위를 매기지 않고, 작업에서 감지·태그된 facet(언어·작업 유형·에이전트 신호 등)에 맞는 벤치마크 결과를 프로필별 표로 보여줍니다(측정된 effort가 프로필과 다르면 `max≠high`처럼 표시).
   - 컴파일된 벤치마크 인덱스(`bench_router/index.json`)가 기본 내장되어 있어 별도 위키 설정 없이 바로 동작합니다(`wiki/` 문서를 직접 수정한 경우에만 `wiki compile` 실행).
@@ -326,7 +343,7 @@ $BR feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success       # Orchestrat
   - `completed`된 작업의 Agent 터미널 pane은 자원 반환을 위해 자동으로 닫힙니다. 같은 대화 맥락을 이어서 작업하려면 `resume --run-id <RUN_ID> --cwd <DIR>`로 세션을 다시 엽니다.
   - 실패하거나 전달이 불확실한 실행이 동시 실행 제한(최대 4개)을 점유할 때는 작업 정지를 확인한 뒤 `coordination release --key <KEY> --confirmed-stopped --note "..."`로 해제합니다.
 - **병렬 위임 (`parallel`)**:
-  - 여러 하위 작업을 동시에 맡기거나, 같은 작업을 상위 N개 Agent에게 각자 격리된 worktree로 맡겨 결과를 비교합니다(`isolated` / `shared` 스크래치패드 공유). → [상세 레퍼런스](docs/reference.md#병렬-위임과-협업-수준)
+  - group 2.0의 명시적 selection 목록을 격리 worktree에서 실행합니다. 같은 프로필 반복도 별도 실행이며 task당 8개·group당 16개, `max_parallel`은 1–4입니다. group 1.0도 vendor-guided를 사용하며 복수 적합 후보를 자동 fanout하지 않습니다. → [상세 레퍼런스](docs/reference.md#병렬-위임과-협업-수준)
 - **여러 Agent에서 Skill로 사용**:
   - `npx skills add hjlim4u/bench-router -g` 한 줄로 [`skills/bench-router`](skills/bench-router/SKILL.md)를 모든 에이전트에 설치하면, 어떤 프로젝트 경로에서든 호스트의 경량 서브에이전트(`bench-decider`)나 Jev API를 활용한 의사결정 워크플로우([`decision.md`](skills/bench-router/references/decision.md))까지 바로 사용할 수 있습니다. → [설정 방법](docs/reference.md#여러-agent에서-skill-사용-글로벌-또는-프로젝트별-설치)
 
@@ -344,7 +361,7 @@ $BR feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success       # Orchestrat
 - 위 20개 과제 비교는 이전 legacy 정책의 결과이며 새 공식 가이드 기반 정책의 품질·비용 검증 결과가 아닙니다. 새 정책도 작업별 평가가 없으면 품질을 보장하지 않습니다. 이전 비교 결과는 [eval/results/v1.md](eval/results/v1.md)에 있습니다.
 - 비용 등급(`cost_tier`)은 실측 요금이 아니라 정책상 상대값입니다.
 
-자세한 검증 기록과 한계 목록은 [상세 레퍼런스](docs/reference.md#검증-현황-2026-10-12)에 있습니다.
+현재 오프라인 suite는 164개 실행 중 162개 통과·2개 skip입니다(2026-10-24). 자세한 범위와 live 검증 한계는 [구현 상태](docs/implementation-status.md)에 있습니다.
 
 ---
 
@@ -352,7 +369,7 @@ $BR feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success       # Orchestrat
 
 | 문서 | 내용 |
 |---|---|
-| [docs/reference.md](docs/reference.md) | 설정 파일 형식, 모든 명령과 종료 코드, 선택 공식, 데이터 수집, 결과 계약, 테스트 |
+| [docs/reference.md](docs/reference.md) | 설정 파일 형식, 모든 명령과 종료 코드, 평가·선택 경로, 데이터 수집, 결과 계약, 테스트 |
 | [docs/projects.md](docs/projects.md) | live 실행 환경(herdr-projects 1.2.1) 준비 및 권한·회수·재개 계약 |
 | [docs/orchestrator.md](docs/orchestrator.md) · [docs/routing-contracts.md](docs/routing-contracts.md) | Orchestrator 연동(`evaluate`, `context.json`, `selection.json`)과 입출력 계약 |
 | [wiki/AGENTS.md](wiki/AGENTS.md) · [docs/benchmark-index-analysis.md](docs/benchmark-index-analysis.md) | 벤치마크 위키(`wiki/`) 스키마와 다중 속성 인덱스 설계 분석 |

@@ -1,11 +1,23 @@
 # 외부 근거·의존성·확인 한계
 
-확인일: 2026-10-12. 공식 프로젝트/데이터 발행자 문서를 읽었다. 실제 인증 API 호출과 herdr 실행 검증은 하지 않았다. 2차 블로그의 가격·속도·점수 차이를 구현 상수로 사용하지 않는다.
+원 조사일: 2026-10-12 · 구현 대조 갱신: 2026-10-24. 아래 E1·U 설명은 원 조사 당시의 외부 근거 기록이다. 이번 갱신에서 외부 사이트·계정 응답을 다시 확인하지 않았다. 현재 구현과 이후 검증은 다음 표 및 [구현 상태](docs/implementation-status.md)를 따른다.
+
+| 항목 | 현재 구현 / 확인 범위 |
+|---|---|
+| 핵심 CLI | Python 3.11+ 표준 라이브러리, 별도 설치 없이 모듈 실행 |
+| Arena | revision 고정 Parquet·pyarrow 직접 디코드; 활성 wiki unit 수집 |
+| AA / MG | AA pagination, The Model Gap 공개 JSON adapter 구현; 과거 실호출 기록 있음 |
+| SWE / TB | 평가 조건이 있는 승인 수동 import; Verified / TB 4.0 고정 |
+| 의미 판단 | Jev 또는 native bench-decider의 analysis·벤더별 guidance·benchmark 단계 구현 |
+| 실행 | Projects 1.2.1 대화형 / Herdr headless; 현재 회귀 검증은 fake CLI·실제 임시 Git worktree |
+| 보조 도구 | uv/mise 선택 설치, CodeBurn 가용성·quota·프로필 discovery 연동 |
+
+공식 가이드의 모델별 원문과 버전은 `bench_router/guidelines.toml`에 고정하며 runtime 웹 조회는 하지 않는다. 정책 6과 기록 버전은 [vendor-guided](docs/vendor-guided-routing.md)에 있다. 2차 자료의 가격·속도·점수 차이를 구현 상수로 사용하지 않는다.
 
 ## 근거 수준
 
 - E1: 공식 웹 문서에서 확인.
-- E2: 실제 계정 응답·설치 바이너리에서 확인. **이 세션에서 E2 완료 항목 없음.**
+- E2: 실제 계정 응답·설치 바이너리에서 확인. 아래 원 조사에는 없었으며 이후 AA·Arena·MG와 직접 Herdr 실측 기록은 구현 상태·eval 문서를 참조한다.
 - P: 본 handoff가 정한 정책. 외부 성능의 증거 아님.
 - U: 추가 검증 필요.
 
@@ -63,7 +75,7 @@ E1: layout 생성과 Agent start는 별개다. Agent는 이름 또는 현재 pan
 
 E1: prompt --wait는 개별 turn을 추적하지 않는다. working 중 전송하면 기존 turn의 종료가 대기를 만족할 수 있다. idle/done은 입력 준비이고 성공 인증이 아니다. timeout/stalled만으로 미전송을 판단할 수 없다.
 
-U: “herdr가 작업 단위 exactly-once와 structured result를 전부 제공”한다고 확장하지 않는다. 본 wrapper가 receipt와 run-bound result 계약을 둔다. plugin 액션 argv/TTY 제약과 --machine 형태는 이번 확인에서 확정하지 않았으므로 MVP에서 사용하지 않는다.
+현재도 herdr가 작업 단위 exactly-once와 structured result를 전부 제공한다고 해석하지 않는다. wrapper가 receipt와 run-bound result 계약을 유지한다. 원 조사에서 미확정이던 plugin 사용은 이후 Projects 1.2.1 공개 CLI로 구현됐다. 원격 `--machine` 실행은 구현하지 않았다.
 
 ## 다음 Agent가 남길 의존성 증거
 

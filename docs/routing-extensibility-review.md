@@ -1,6 +1,8 @@
 # 다중 기준 라우팅 확장성 점검
 
-점검일: 2026-10-13. 대상: 현재 작업 트리의 Router, Orchestrator 연동, 병렬 실행, 데이터 수집, 평가 코드.
+점검일: 2026-10-13. 대상은 **당시 작업 트리**의 Router·Orchestrator 연동·병렬 실행·데이터·평가 코드다. 아래 코드 행 링크와 “현재” 표현도 당시 기준이며 현행 API를 설명하지 않는다.
+
+2026-10-24 구현 대조: assess 분리·지표 registry·통과/실패 제약·digest·선택 기록·group 2.0이 구현됐다. 가중합 자동 선택은 제거됐고 evaluate 1·2는 ID순 사실 평가다. 정책 6의 의미 적합성은 evaluate --format 3(schema 4.0), 상위 선택은 selection 6.0으로 공개한다. 현재 규범은 [라우팅 계약](routing-contracts.md)과 [vendor-guided 정책](vendor-guided-routing.md)을 따른다. 이 문서는 설계 변경의 근거 기록으로 보존한다.
 
 ## 결론
 

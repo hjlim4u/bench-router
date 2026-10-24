@@ -67,7 +67,7 @@ Router는 입력과 결과 계약을 `input.txt`로 원자 저장하고 제출 �
 - 여러 run 대기: `collect --run CWD RUN_ID --run … --until any|all --wait-ms N`은 run마다 `collect`를 반복해, 하나 또는 전부가 settle·`blocked`가 되면 반환한다. 어떤 결과를 채택할지는 상위 agent가 정한다.
 - 실행 중 지시: `tell --cwd CWD [--run-id RUN] --message TEXT | --message-file F`가 board `tell ID TEXT`로 그 run의 agent에 메시지 하나를 전달한다. Router가 스스로 보내지 않고 상위 agent가 명시적으로 호출할 때만 보낸다. 보내기 전후를 `runs/RUN_ID/messages.jsonl`에 기록하고(`attempted` → `sent`/`uncertain`), 응답이 유실되면 재전송 전에 board에서 확인한다. settle된 run은 board가 agent를 새로 시작하므로 `resume` 뒤에만 받는다. receipt는 `collect` 때 갱신되므로, 보내기 전에 board stage를 다시 보고 이미 끝난 task(approval·done·failed 등)면 거부한다. 비대화형(`execution: headless`) run은 받지 않는다. dispatch 잠금을 잡지 않아 같은 cwd에서 `collect`·`parallel`이 기다리는 중에도 보낼 수 있다. `--run-id`를 생략하면 cwd의 유일한 미완료 run을 쓴다.
 - `completed`는 run ID·nonce·프로필 지문·결과 경로·크기·SHA-256 검사를 통과한 수신 상태다. 작업 성공은 `task_outcome`, 결과 채택은 별도 `coordination feedback`으로 기록한다.
-- 실패나 전달 불확실 실행은 worker 정지와 부분 효과를 확인할 때까지 합산 4개 제한을 점유한다. `coordination release --key KEY --confirmed-stopped --note "..."`로 해제한다.
+- 제출 전 실행 실패가 확정되면 receipt를 settle하고 admission을 반환한다. 제출됐거나 전달이 불확실한 실패는 worker 정지와 부분 효과를 확인할 때까지 합산 4개 제한을 점유한다. 필요하면 `coordination release --key KEY --confirmed-stopped --note "..."`로 해제한다.
 - board에서 직접 만든 task는 Router의 실행 제한에 포함되지 않는다.
 
 ## parallel
@@ -75,12 +75,12 @@ Router는 입력과 결과 계약을 `input.txt`로 원자 저장하고 제출 �
 `parallel`은 member마다 `<cwd>/.bench-router/worktrees/GROUP/LABEL` router worktree를 만들어 receipt 공간과 board task의 `--repo`로 쓴다.
 board가 그 HEAD에서 다시 agent worktree를 만들므로, member의 `worktree`/`branch`는 board가 보고한 위치로 바뀐다.
 `shared` scratchpad는 agent worktree 밖이므로 `worker.access ask`에서는 쓰기마다 승인이 필요하다.
-worktree의 비교·병합·제거는 상위 agent가 담당한다. fanout, stale assessment 일괄 거부, 부분 실패 보존 계약은 유지한다.
+worktree의 비교·병합·제거는 상위 agent가 담당한다. 모든 선택 완료 전에는 실행 자원을 만들지 않는다. group 2.0은 동일 프로필 selection도 반복할 수 있고 각각 별도 label·receipt를 갖는다. task당 8개·group 전체 16개, max_parallel은 1–4다. 단건 정책 6·stale assessment 일괄 거부·동결 plan 회수·부분 실패 보존 계약을 유지하며 member rounds에 delivery_state·reassignment를 전달한다. 상세 버전은 [라우팅 계약](routing-contracts.md)을 따른다.
 
 ## 검증
 
 ```bash
-python -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination
+python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn
 ```
 
 Projects CLI는 1.2.1 소스(`src/cli/tasks.rs`의 `brief`/`details`, `crates/flow/src/state.rs`의 stage→state)를 따르는 fake로 대체하고, task마다 실제 `git worktree`를 만든다.

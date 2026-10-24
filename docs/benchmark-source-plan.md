@@ -1,6 +1,8 @@
 # 벤치마크 점수 수집·중복 제거 설계
 
-확인일: 2026-10-13. 이 문서는 수집 및 라우팅 정책의 구현안이다. 현재 코드나 가중치를 변경하지 않는다.
+원 조사일: 2026-10-13. 아래 목록·수치·우선순위는 **당시 수집 설계 기록**이며 현행 소스 inventory나 자동 선택 규칙이 아니다. 외부 목록은 이번 갱신에서 재조회하지 않았다.
+
+2026-10-24 구현 대조: AA·Arena·The Model Gap 자동 수집, 검토된 wiki index의 활성 unit 수집·facet 검색, 평가 조건별 매칭이 구현됐다. Arena는 pyarrow로 Parquet를 직접 읽는다. 수동 exact import는 SWE Verified/TB 4.0에 고정한다. 명시 alias 외에 모델명·effort 정규화 매칭도 사용한다. category 가중치는 evaluate 1·2 진단이며 선택은 [vendor-guided 6](vendor-guided-routing.md)이다. 현재 상세 규범은 [데이터 명세](../03_ROUTING_AND_DATA_SPEC.md)·[reference](reference.md#데이터-수집-refresh)를 따른다.
 
 ## 현재 상태와 수집처
 

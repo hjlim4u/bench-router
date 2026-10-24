@@ -1,8 +1,8 @@
 # bench-router 상세 레퍼런스
 
-기본 선택 정책은 [공식 가이드 기반 선택](vendor-guided-routing.md)입니다. `route`·`parallel`·Skill에 공통 적용되며, 이 문서의 점수식은 `evaluate`가 보여 주는 참고용 근거이며 자동 선택에는 쓰이지 않습니다.
+갱신: 2026-10-24. 기본 선택은 [공식 가이드 기반 정책 6](vendor-guided-routing.md)이며 `route`·`parallel`·Skill에 공통 적용됩니다. 아래 quality/coverage는 `evaluate` format 1·2의 참고 근거이며 자동 선택에는 쓰이지 않습니다. 가중합 자동 선택과 `--policy legacy`는 제거됐습니다.
 
-설정 파일 형식, 명령과 종료 코드, 선택 공식, 데이터 수집, live 위임 계약, 병렬 위임, 검증 기록을 정리한 문서입니다. 프로젝트 개요는 [README](../README.md)를 먼저 보세요.
+설정 파일 형식, 명령과 종료 코드, 평가·선택 경로, 데이터 수집, live 위임 계약, 병렬 위임, 검증 기록을 정리한 문서입니다. 프로젝트 개요는 [README](../README.md)를 먼저 보세요.
 
 ---
 
@@ -13,16 +13,16 @@
 - live 위임에는 Herdr, herdr-projects **1.2.1**(board), Agent CLI 설치·로그인이 필요합니다. task `cwd`는 커밋이 있는 git 저장소의 최상위여야 합니다. 자세한 내용은 [docs/projects.md](projects.md)를 보세요.
 - AA 데이터를 쓰려면 Artificial Analysis API 키(Free tier로 충분)가 필요합니다.
 
-별도 설치 단계는 없습니다. 저장소 루트에서 모듈로 실행합니다.
+핵심 CLI는 별도 설치 없이 저장소 루트에서 모듈로 실행합니다. Arena refresh에는 pyarrow가 필요합니다. `mise install` 후 `mise run setup` 또는 `uv sync --extra arena`로 준비하고, 해당 환경의 `uv run python -m bench_router.cli refresh`를 사용하세요. `mise run test`는 전체 오프라인 suite, `mise run refresh`는 전체 source의 `--force` 갱신입니다.
 
 ```bash
-cd /path/to/bench-router-handoff
+cd /path/to/bench-router
 python3 -m bench_router.cli --help
 ```
 
 ### 여러 Agent에서 Skill 사용 (글로벌 또는 프로젝트별 설치)
 
-`skills/bench-router/` 안에 `bench_router` 패키지(컴파일된 `index.json` 내장)가 심볼릭 링크로 포함되어 있어, [`npx skills`](https://skills.sh/)가 스킬 폴더를 복사(`dereference`)해 설치하더라도 원본 저장소나 `wiki/` 폴더 없이 **복사된 스킬 자체(약 250KB)만으로 단독 동작**합니다.
+`skills/bench-router/` 안에 `bench_router` 패키지(`index.json`, `guidelines.toml` 내장)가 심볼릭 링크로 포함되어 있어, [`npx skills`](https://skills.sh/)가 스킬 폴더를 복사(`dereference`)해 설치하더라도 원본 저장소나 `wiki/` 폴더 없이 **복사된 스킬로 동작**합니다.
 
 ```bash
 # 1. 글로벌 설치 (-g): 감지된 모든 Agent(Claude Code, Codex, Cursor, Gemini CLI 등)에 일괄 연결
@@ -51,7 +51,7 @@ Skill의 `scripts/cli.py`와 `scripts/decide.py`는 복사된 스킬 폴더(또�
 | `categories.toml` | 아니오 | 없으면 내장 `bench_router/categories.toml` 사용 |
 | `env` | 아니오 | API 키 보관용 파일(권한 600 권장). 실행 전 `set -a; . ~/.config/bench-router/env; set +a`로 로드 |
 | `ARTIFICIAL_ANALYSIS_API_KEY` | 아니오 (`aa` 수집 시) | Artificial Analysis Free API 키. 없어도 `arena`·`mg` 공개 데이터와 `wiki compile`은 동작함 |
-| `TYPESAFE_API_KEY` (또는 `JEV_API_KEY`) | 아니오 (Skill 결정 시) | `scripts/decide.py`에서 Jev API를 호출할 때만 사용. 없으면 호스트의 `bench-decider` 서브에이전트로 자동 폴백 |
+| `TYPESAFE_API_KEY` (또는 `JEV_API_KEY`) | 아니오 (live/Skill 판단 시) | live route/parallel 또는 decide.py의 Jev 호출. 없거나 실패하면 native 판단 패킷 반환; 호스트가 bench-decider를 실행 |
 
 ### profiles.toml
 
@@ -95,7 +95,9 @@ capabilities = ["filesystem_write"]
 
 권한은 Projects의 `worker.access`(`full` | `ask`) 설정을 따릅니다. 변경이 필요하면 `herdr-projects set worker.access ask [--repo NAME]`처럼 Projects에서 설정하세요. `ask`에서는 Claude의 편집이나 Codex의 worktree 밖 쓰기에 승인이 필요해 `blocked`가 될 수 있습니다. 자세한 내용은 [Projects 프로필과 권한](projects.md#프로필과-권한)을 보세요.
 
-live `route`와 `parallel`은 `codeburn quota --format json`을 실행할 수 있으면 Claude, Codex, Antigravity 프로필의 로그인 상태와 모든 quota window가 소진됐는지를 가용성 제약으로 사용합니다. 프로젝트의 `.bench-router/codeburn` 설치본을 자동으로 찾고, PATH의 `codeburn` 또는 `BENCH_ROUTER_CODEBURN`으로 이를 대체할 수 있습니다. CodeBurn이 없거나 조회에 실패하면 기존 executable PATH 검사만 수행합니다.
+live `route`와 `parallel`은 PATH를 확인하고, Antigravity는 `agy models`에 등록된 실제 모델을 검사합니다. `codeburn quota --format json`을 쓸 수 있으면 Claude/Codex의 provider 상태와 모든 quota window 소진도 검사합니다. 프로젝트의 `.bench-router/codeburn` 설치본을 자동으로 찾고, PATH의 `codeburn` 또는 `BENCH_ROUTER_CODEBURN`으로 대체할 수 있습니다. CodeBurn 실패 시 PATH 검사로 폴백하며 agy 모델 검사는 유지합니다.
+
+`profiles discover [--force]`는 설치된 CLI의 후보를 `profiles.toml`로 생성합니다. Codex는 공개 models_cache와 모델별 effort, Claude는 가이드 모델과 CLI help의 effort, agy는 계정 모델 목록을 사용하며 CodeBurn의 관측 모델도 합칩니다. 기본 생성값은 enabled=true·cost_tier=high·context_tokens=0입니다. 권한·capability·context와 계정의 실제 호출 가능 여부를 검토하세요. 기존 파일 교체에는 `--force`가 필요합니다.
 
 ### aliases.toml
 
@@ -120,7 +122,7 @@ alias가 없어도 refresh가 출처 모델명을 정규화해 프로필 `model_
 
 ## 명령
 
-모든 명령은 stdout에 **JSON 한 객체**만 출력합니다(`explain`은 예외로 사람이 읽는 텍스트). 로그는 stderr로 나갑니다. 전역 옵션: `--config-dir`, `--cache-dir`, `--herdr-session NAME`(또는 환경변수 `BENCH_ROUTER_HERDR_SESSION`). Projects 실행 파일 경로는 `BENCH_ROUTER_PROJECTS`(기본 `herdr-projects`)로 지정합니다. `--herdr-session`은 프로젝트가 속한 세션과 일치해야 합니다.
+모든 명령은 stdout에 **JSON 한 객체**를 출력합니다(`explain`, `evidence --format table`은 텍스트). 로그는 stderr로 나갑니다. 전역 옵션: `--config-dir`, `--cache-dir`, `--herdr-session NAME`(또는 환경변수 `BENCH_ROUTER_HERDR_SESSION`). Projects 실행 파일 경로는 `BENCH_ROUTER_PROJECTS`(기본 `herdr-projects`)로 지정합니다. `--herdr-session`은 프로젝트가 속한 세션과 일치해야 합니다.
 
 | 명령 | 동작 |
 |---|---|
@@ -130,9 +132,11 @@ alias가 없어도 refresh가 출처 모델명을 정규화해 프로필 `model_
 | `wiki facets` | Orchestrator가 `task.facets`에 태그할 수 있는 어휘와 설명·판정 규칙 출력 |
 | `evidence --task FILE [--format json\|table] [--max-units N]` | 작업 facet에 맞는 벤치마크 증거를 프로필별로 출력(합산·순위 없음, 읽기 전용) |
 | `status` | source별 나이·실패 횟수·마지막 오류·미매칭 모델, snapshot/설정 일치 여부 |
+| `profiles discover [--force]` | 프로필 자동 생성, 기존 파일 교체는 force 필요 |
 | `route --task FILE --dry-run` | 오프라인 판단 패킷 생성. 저장된 응답·선택 기록이 있으면 검증(네트워크·herdr·파일 쓰기 없음) |
 | `explain --task FILE [--context FILE]` | dry-run의 전체 후보·근거·제외 사유와 제약 결과·지표를 텍스트로 출력 |
-| `evaluate --task FILE [--context FILE]` | 선택 없이 전 프로필의 지표·제약 결과·benchmark 평가와 `assessment_digest` (Orchestrator용, [docs/orchestrator.md](orchestrator.md)) |
+| `evaluate --task FILE [--context FILE] [--format 1\|2\|3]` | 기본 schema 2.0의 사실 평가 / format 3은 schema 4.0의 단계별 적합성·근거 (선택 없음) |
+| `select --assessment FILE --profile ID --policy-id ID --policy-version V --reason TEXT [--accept-provisional]` | 완료된 format 3 평가에서 selection 6.0 생성, 출력의 selection 객체만 저장 |
 | `route --task FILE --selection FILE` | Orchestrator가 고른 프로필을 선택 근거와 함께 실행. 평가 후 입력이 바뀌었으면 `stale_assessment` |
 | `route --task FILE [--wait-ms N]` | 선택 후 herdr로 위임하고, 유한한 시간 안에 대기·회수. `--wait-ms 0`은 제출 직후 반환 |
 | `parallel --group FILE [--dry-run]` | 여러 agent를 각자 worktree에서 병렬 위임 ([병렬 위임](#병렬-위임과-협업-수준)) |
@@ -206,18 +210,20 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 
 ## 선택 방식
 
-아래는 `evaluate`가 계산하는 분류·제약·근거 점수입니다. 자동 선택은 없습니다. `vendor-guided` 정책의 우선순위·판단 응답·3.0 기록 계약은 [공식 가이드 기반 선택](vendor-guided-routing.md)에 있습니다. 기존 2.0 명시적 선택 계약은 [routing-contracts.md](routing-contracts.md), 사용법은 [orchestrator.md](orchestrator.md)에 있습니다.
+기본 `route`는 정책 6의 작업 analysis·벤더별 guidance·필요 시 benchmark 관련성을 판단합니다. 복수 적합 후보이면 상위 선택을 요청합니다. `evaluate --format 3`(schema 4.0) → `select` → `route --selection`은 상위 선택 6.0, 제한된 자동 단일 후보는 5.0입니다. 과거 vendor-guided selection 3.0·4.0은 재평가해야 합니다. 상세 판단·응답·digest는 [공식 가이드 기반 선택](vendor-guided-routing.md), 기존 2.0 override와 전체 버전은 [routing-contracts](routing-contracts.md)를 따릅니다.
+
+아래 분류·quality/coverage 계산은 `evaluate --format 1|2`의 기본 사실 평가입니다. vendor-guided의 의미 적합성과 별개이며 후보 순위를 만들지 않습니다.
 
 1. **분류**
    - summary 키워드와 `context_files` 확장자 규칙을 씁니다. 한 카테고리에서만 서로 다른 규칙이 2개 이상 맞아야 채택합니다.
    - 나머지는 `general`로 분류하고 `fallback_reason`을 남깁니다.
-2. **하드 제약**: `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, `local_only`를 적용합니다. context가 있으면 `tokens.required_context`와 `max_estimated_cost_usd`도 적용합니다(`routing.CONSTRAINTS`). live에서는 herdr kind 지원 여부와 실행 파일 존재도 확인합니다. 같은 제약을 적용합니다.
+2. **하드 제약**: `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, `local_only`를 적용합니다. context가 있으면 `tokens.required_context`와 `max_estimated_cost_usd`도 적용합니다(`routing.CONSTRAINTS`). live는 executable/kind 일치·PATH와 agy 모델·선택적 CodeBurn도 검사합니다. 실행 adapter가 지원하지 않는 args는 제출 전에 거부합니다.
 3. **근거와 점수**
    - 카테고리 가중치 `w`와 evidence 매핑 `v`로 evidence별 가중치 `a_b = Σ w_c·v_cb`를 구합니다.
    - 같은 cohort 전체를 모집단으로 percentile 정규화(`(평균 rank − 1)/(N − 1)`, N=1이면 0.5)를 합니다.
    - coverage `C`는 관측된 evidence의 가중치 합입니다.
    - 품질 `Q = C·Q_obs + (1−C)·0.5 − 0.1·(1−C)`. 결측에는 사전값 0.5와 페널티 0.1이 붙고, 측정된 0점은 결측이 아닙니다.
-4. **선택**: `Q`와 `C`는 후보 순위가 아니라 참고 근거이며, 후보는 profile ID순입니다. 최종 선택은 Orchestrator가 `select`로 기록합니다. 남는 후보가 없으면 `no_eligible_profile`(exit 13)입니다.
+4. **선택**: `Q`와 `C`는 참고 근거이고 후보는 profile ID순입니다. `select`를 사용하려면 별도로 format 3 판단을 완료해야 합니다. format 1·2 기반의 수동 선택은 selection 2.0 override입니다. 실행 가능한 후보가 없으면 `no_eligible_profile`(exit 13)입니다.
 
 카테고리별 evidence 기본값(`categories.toml`):
 
@@ -233,7 +239,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 | vision_doc | arena_document 0.5, arena_vision 0.5 |
 | general | aa_intelligence 1.0 |
 
-출력의 `candidates[]`에는 후보별 `quality`, `coverage`, `coverage_band`, `exact_evidence_weight`가 들어 있고, evidence마다 원값·정규화값·scope·cohort·평가 조건(`conditions`)·출처 revision·날짜·`missing_reason`이 함께 나옵니다. 근거 데이터가 일부만 있거나, 모델 수준 대리 지표뿐이거나, 오래된 경우에는 `warnings`에 표시합니다.
+기본 평가에서 후보별 `quality`, `coverage`, `coverage_band`, `exact_evidence_weight`와 evidence의 원값·정규화값·scope·cohort·평가 조건·revision·날짜·missing_reason을 제공합니다. format 2는 `candidates[].evaluations.benchmark`, format 1은 `candidates[]`에 펼칩니다. score·legacy_score·cost_proxy는 없습니다. 기본 route의 실제 의미 판단 근거는 `decision.evaluation` 또는 `selection.decision.evaluation`을 읽고, 전 후보 적합성은 format 3에서 확인하세요. CLI route의 첫 3개 후보 요약은 ID순이며 순위가 아닙니다.
 
 ---
 
@@ -331,7 +337,11 @@ run 디렉터리에는 `receipt.json`, `decision.json`, `input.txt`, `result.md`
 
 ## 병렬 위임과 협업 수준
 
-`parallel --group FILE`은 하위작업 여러 개(`tasks`)와 같은 작업을 상위 N개 프로필에 동시에 맡기기(`fanout`)를 한 번에 처리합니다. agent마다 `<cwd>/.bench-router/worktrees/<group_id>/<label>` git worktree(브랜치 `br/<group_id>/<label>`, HEAD 기준)를 만들어 그 안에서 실행합니다. 각 worktree가 그 agent의 `task.cwd`가 되므로 receipt·잠금·재전송 방지·결과 계약은 `route`와 같습니다. 같은 group 파일로 다시 실행하면 기존 receipt를 회수할 뿐 프롬프트를 다시 보내지 않습니다.
+`parallel --group FILE`은 여러 tasks와 실행 인스턴스를 묶습니다. group 2.0은 task별 context·명시적 selections를 받으며 같은 profile도 반복할 수 있습니다. task당 최대 8개·group 전체 16개이고 max_parallel은 1–4입니다. schema 1.0의 fanout도 같은 vendor-guided 정책을 사용하며 자동 점수 순위가 아닙니다.
+
+member마다 `<cwd>/.bench-router/worktrees/<group_id>/<label>` router worktree(브랜치 `br/<group_id>/<label>`, HEAD 기준)를 만듭니다. 이곳이 receipt·잠금 공간이며 Agent는 Projects가 추가로 만든 실제 worktree에서 작업합니다. 같은 group 파일은 저장된 plan과 receipts를 회수하며 프롬프트를 다시 보내지 않습니다. 모든 선택 완료 전에는 worktree·group 파일·worker를 만들지 않습니다.
+
+아래는 schema 1.0 입력 모양입니다. 복수 적합 후보이면 상위 선택을 요청하므로 자동으로 2개를 선택한다는 예가 아닙니다. 명시적 selection 2.0·5.0·6.0을 쓰는 group 2.0 예는 [상위 연동](orchestrator.md#parallel-groups-with-orchestrator-selections)에 있습니다.
 
 ```json
 {"schema_version": "1.0", "group_id": "fix-pager", "cwd": "/home/me/project",
@@ -341,7 +351,7 @@ run 디렉터리에는 `receipt.json`, `decision.json`, `input.txt`, `result.md`
 ```
 
 - `cwd`는 git 저장소 최상위여야 하며, task에는 `cwd`를 넣지 않습니다. `tasks × fanout ≤ 16`, `fanout` 1–8, `max_parallel` 1–4(공유 admission 한도와 같음).
-- fanout 프로필은 `selected`, 그다음 후보 순위 순으로 서로 다르게 고릅니다. 부족하면 `fanout_reduced` 경고가 붙습니다. label은 `<task_id>-<k>`입니다.
+- group 1.0은 선택한 profile을 다음 비교에서 제외하고 정책 6을 반복합니다. 추가 후보가 없으면 fanout_reduced, 복수 적합 후보가 남으면 decision_unavailable입니다. group 2.0은 선택 목록 그대로 실행하며 label은 `<task_id>-<k>`입니다.
 - **메인 repo를 각 Agent CLI에서 먼저 신뢰해야 합니다.** 상위 폴더가 신뢰돼 있어도 새 git repo는 다시 묻고, 그러면 agent start 단계에서 `blocked`가 됩니다(실측). 메인 repo를 한 번 신뢰하면 그 아래 worktree는 claude·codex 모두 다시 묻지 않았습니다.
 - 미커밋 변경은 worktree에 들어가지 않습니다(`dirty_base` 경고). router worktree는 member별 receipt 공간이고, 실제 작업은 board가 그 HEAD에서 만든 worktree·브랜치(`work/br-<run_id>`)에 커밋됩니다. member의 `worktree`/`branch`는 그 board 위치입니다. 비교·병합과 worktree·브랜치 정리는 Orchestrator가 맡습니다.
 
@@ -350,7 +360,7 @@ run 디렉터리에는 `receipt.json`, `decision.json`, `input.txt`, `result.md`
 | `isolated` (기본) | worktree 격리만. 서로의 존재를 모름 |
 | `shared` | 공용 scratchpad `<cwd>/.bench-router/groups/<group_id>/shared/`. agent는 자기 `<label>.md`·`<label>/`에만 쓰고 동료 노트를 읽어, 실패한 접근·발견·중간 실험 결과를 공유합니다. scratchpad는 agent worktree 밖이므로 board의 `worker.access`가 `ask`이면 쓰기마다 승인(`blocked`)이 필요합니다 |
 
-출력은 member별 `profile`, `worktree`, `branch`, `rounds[]`(status, run_id, result_path, task_outcome, worktree, branch)이며, `groups/<group_id>/group.json`에도 남습니다. 전부 `completed`면 exit 0, 아니면 `partial_failure`(16), 같은 group이 이미 실행 중이면 `conflict`(14)입니다.
+실행 출력은 member별 profile·worktree·branch·rounds이며 rounds에는 status·run_id·receipt_path·result_path·task_outcome·delivery_state·reassignment가 포함됩니다. 결과는 groups/GROUP/group.json에 남습니다. 전체 completed면 0, 실행 이후 일부 미완료·실패는 partial_failure(16), group 충돌은 14입니다. 실행 전에는 판단 미완료/기권 17·stale 14·후보 없음 13을 반환할 수 있습니다. 전달이 불확실한 member는 collect_first를 따릅니다.
 
 ### agent 간 통신
 
@@ -393,21 +403,25 @@ task에 `"execution": "headless"`를 주면 board agent 대신 one-shot CLI로 �
 ## 테스트
 
 ```bash
-python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination
+python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn
 ```
 
 | 파일 | 범위 |
 |---|---|
-| `test_p0.py` | 선택·입력 계약(V01–V10): 합성 기대값, 결측과 측정된 0, percentile, 결정성, 제약, near-tie 경계 |
+| `test_p0.py` | 입력·지표·제약·기본 평가, wiki/facet/evidence, 정책 6 단계·가이드·공개 평가·상위 선택 |
 | `test_p1.py` | 수집·캐시(V11–V18): 페이지 순회, 부분 실패 시 last-good, 해시 동일 시 no-op, HTTP 오류와 시간 상한, 잠금과 원자 게시, alias와 버전 cohort |
 | `test_p3.py` | 병렬 위임(V30–V34): worktree 격리, fanout, shared scratchpad, 재실행 시 재전송 없음 (git 필요) |
 | `test_p2.py` | 위임(V19–V29): argv 전달, 반환 ID 사용, 시작 실패, 전송 직전 상태, 결과 계약·경로 공격, timeout 후 재전송 없음, crash 복구, 충돌·잠금 |
+| `test_coordination.py` | 공유 admission·경로 중첩·소유권·채택·정지 확인 |
+| `test_codeburn.py` | 가용성·quota·사용량·프로필 discovery fixture |
 
 현재 실행 테스트는 Projects 1.2.1 CLI(`src/cli/tasks.rs`)의 JSON 형태를 따르는 fake를 사용하며, task마다 실제 `git worktree`를 만듭니다. 아래의 직접 Herdr smoke 결과는 이전 실행 경로의 기록이며 Projects live 검증을 의미하지 않습니다. 실측 근거는 `docs/evidence/`에 있습니다(herdr help·API schema·skill, claude/codex `--help`).
 
 ---
 
 ## 검증 현황 (2026-10-12)
+
+아래는 과거 직접 Herdr·legacy 선택 정책의 실측 기록입니다. 현재 검증(2026-10-24)은 전체 suite 164개 중 162개 통과·2개 skip이며 [구현 상태](implementation-status.md)에 범위·환경 한계를 기록했습니다. 과거 35/35 수치를 현재 테스트 수로 읽지 마세요. 현재 정책 6과 Projects live의 품질·비용 검증을 뜻하지 않습니다.
 
 | 항목 | 결과 |
 |---|---|
@@ -441,23 +455,23 @@ python3 eval/cost.py --tag T       # 실행별 토큰·API 환산 비용
 
 ## 알려진 한계
 
-- **근거 데이터 coverage가 낮습니다.** 최신 모델의 AA `coding_index`가 null이고, SWE/TB exact 데이터는 수동 import 전까지 없습니다. 그래서 coding_repo, terminal_ops, code_gen, webdev는 대개 default로 갑니다.
+- **근거는 결측일 수 있습니다.** AA coding null·수동 exact 미수집·harness/effort 차이를 진단으로 남깁니다. 결측을 default 자동 선택이나 측정 0으로 바꾸지 않습니다.
 - `cost_tier`는 정책상 상대값입니다. 실측 비용으로 보정하지 않았습니다.
 - 프로필 지문에는 CLI 버전이 들어가지 않습니다(`unknown`으로 고정).
 - 결정·피드백은 SQLite가 아니라 run 디렉터리 파일로 남깁니다. 실행별 토큰 사용량은 라우터에 기록하지 않습니다(평가 도구에서만 측정).
-- 원격 실행(`--machine`), 비동기 `--no-wait`, Agent 재사용, 임베딩·LLM 기반 분류(L2/L3)는 구현하지 않았습니다.
+- 원격 실행(`--machine`), 자동 Agent pool·임베딩은 구현하지 않았습니다. 대기 단축은 `--wait-ms`와 `collect`, 완료 대화 재개는 `resume`을 사용합니다. 제한된 LLM 의미 판단은 Jev/native 단계로 구현됐습니다.
 - 파일 잠금은 Linux/WSL2에서 `fcntl`, Windows에서 `msvcrt`를 사용합니다. 네이티브 Windows와 WSL이 같은 물리 캐시를 동시에 사용하지 않도록 실행 환경을 통일하세요. Projects live 실행 환경은 Linux/WSL2입니다.
 - 프롬프트가 herdr argv로 전달되므로 프로세스 목록에 노출될 수 있습니다.
 
-## 명세와 다른 점
+## 초기 설계에서 달라진 결정
 
-| 명세(handoff 문서) | 구현 | 이유 |
+| 초기 설계 | 현재 구현 | 이유 |
 |---|---|---|
 | 결과 계약: `result.json`을 원자적으로 기록 | "마지막에 한 번에 작성, `sha256sum` 사용" | 원자적 쓰기 지시 때문에 Agent가 `mv`·검증 스크립트를 시도하다 승인 대기에 걸렸습니다. 라우터는 Agent가 끝난 뒤에만 검사하고 해시도 확인하므로 원자성은 실익이 없습니다 |
 | 결정·feedback을 SQLite에 저장 | run 디렉터리의 `decision.json`, `feedback.jsonl` | 집계 요구가 생기기 전까지 파일로 충분합니다 |
 | Arena parquet 처리용 의존성 허용 | pyarrow로 원본 parquet 직접 디코드 | datasets-server `/filter`가 페이지당 20-60초에 5xx가 잦아 wiki unit을 다 받지 못했습니다(2026-10-21). pyarrow가 없으면 arena만 실패하고 last-good을 유지합니다 |
 | conditional GET(304) | 원본 해시가 같으면 `unchanged` 처리 | AA/HF 문서에 ETag 관련 언급이 없습니다 |
-| refresh 재시도 상한만 규정 | source별 전체 180초 상한 추가 | HF 장애 때 한 번의 refresh가 25분까지 늘어질 수 있었습니다 |
+| refresh 재시도 상한만 규정 | source별 전체 180초, Arena는 600초 상한 | 요청·재시도·대기가 무한히 누적되지 않게 제한 |
 
 ## 라이선스와 출처
 
