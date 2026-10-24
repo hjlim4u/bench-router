@@ -96,7 +96,7 @@ def plan(g, cfg, mapping, snap, snap_warnings, availability, decision_options=No
         if g["selections"] is not None:
             res = r.evaluate_v1(t, cfg, mapping, snap, snap_warnings, now, availability, g["contexts"][i])
             for k, sel in enumerate(g["selections"][i], 1):
-                if sel["schema_version"] in ("3.0", "4.0", "5.0", "6.0"):
+                if sel["schema_version"] in r.GUIDED_SELECTIONS:
                     chk = r.route(t, cfg, mapping, snap, snap_warnings, now, availability, g["contexts"][i],
                                   selection=sel, **options)
                 else:
@@ -198,7 +198,7 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                    for rc in herdr.receipts(wt)):
                 continue
             sel = m.get("selection")
-            if sel and sel["schema_version"] in ("3.0", "4.0", "5.0", "6.0"):
+            if sel and sel["schema_version"] in r.GUIDED_SELECTIONS:
                 opts = {**(decision_options or {}), "allow_network": False}
                 chk = r.route(g["tasks"][i], cfg, mapping, snap, snap_warnings, datetime.now(timezone.utc),
                               availability, g["contexts"][i], selection=sel, **opts)

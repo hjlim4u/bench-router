@@ -14,9 +14,8 @@ RELEVANCE_BASES = {
     "__unrelated__": "The measured outcome or required workflow does not match the requested work.",
     "__unknown__": "The supplied task or benchmark description does not establish a direct relationship.",
 }
-SELECTION_VERSION = "5.0"
 ASSESSMENT_VERSION = "4.0"
-EXTERNAL_SELECTION_VERSION = "6.0"
+SELECTION_VERSION, EXTERNAL_SELECTION_VERSION = r.GUIDED_SELECTIONS
 GUIDELINES = Path(__file__).with_name("guidelines.toml")
 WORKLOADS = {
     "clarity": {"clear": "Explicit requirements and acceptance conditions.",
@@ -310,7 +309,7 @@ def validate_selection(raw):
     external = isinstance(raw, dict) and raw.get("schema_version") == EXTERNAL_SELECTION_VERSION
     extra = {"accept_provisional"} if external else set()
     if (not isinstance(raw, dict) or set(raw) != r.SELECTION_KEYS | {"decision"} | extra
-            or raw.get("schema_version") not in (SELECTION_VERSION, EXTERNAL_SELECTION_VERSION)):
+            or raw.get("schema_version") not in r.GUIDED_SELECTIONS):
         raise r.InputError("selection 5.0/6.0: profile, assessment_digest, policy and decision required; 6.0 also needs accept_provisional")
     old = r.validate_selection({**{k: raw[k] for k in r.SELECTION_KEYS}, "schema_version": "2.0"})
     d = raw["decision"]

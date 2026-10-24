@@ -59,7 +59,7 @@ def _load(args):
         return (r.evaluate_v1 if args.format == "1" else r.evaluate)(task, cfg, mapping, snap, snap_warnings, now,
                                                                      context=context)
     if args.cmd == "route" and (args.profile or selection):
-        if selection and selection["schema_version"] in ("3.0", "4.0", "5.0", "6.0"):
+        if selection and selection["schema_version"] in r.GUIDED_SELECTIONS:
             return r.route(task, cfg, mapping, snap, snap_warnings, now, context=context,
                            selection=selection, **options)
         res = r.evaluate_v1(task, cfg, mapping, snap, snap_warnings, now, context=context)
