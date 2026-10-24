@@ -1,128 +1,128 @@
-# CLI·JSON·실행 계약
+# CLI, JSON, and Execution Contracts
 
-갱신: 2026-10-24. 실제 실행은 [Projects 계약](docs/projects.md), 선택은 [vendor-guided 정책 6](docs/vendor-guided-routing.md), 지표와 digest는 [라우팅 계약](docs/routing-contracts.md)을 따른다.
+Updated: 2026-10-24. Live execution follows [Projects Contract](docs/projects.md), selection follows [Vendor-guided Policy 6](docs/vendor-guided-routing.md), and metrics/digests follow [Routing Contracts](docs/routing-contracts.md).
 
 ## CLI
 
-전역 옵션은 `--config-dir`, `--cache-dir`, `--herdr-session`이며 하위 명령 앞에 둔다. 명령의 정확한 인자는 `--help`를 따른다.
+Global options are `--config-dir`, `--cache-dir`, and `--herdr-session`, placed before subcommands. Refer to `--help` for exact arguments.
 
-| 명령 | 동작 |
+| Command | Behavior |
 |---|---|
-| `route --task FILE --dry-run` / `explain --task FILE` | 오프라인 판단 패킷·선택 재현 / 전체 후보·제약을 포함한 텍스트 설명 |
-| `route --task FILE [--wait-ms N]` | 선택 후 live 제출·유한 대기; 0은 제출 직후 반환 |
-| `evaluate --task FILE [--context FILE] [--format 1\|2\|3]` | 선택 없는 평가. 기본 schema 2.0, format 3은 schema 4.0 |
-| `select --assessment FILE --profile ID --policy-id ID --policy-version V --reason TEXT [--accept-provisional]` | 완료된 format 3 평가에서 selection 6.0 생성. 실행·쓰기 없음 |
-| `route --task FILE --selection FILE [--dry-run]` | 선택 2.0·5.0·6.0 검증·재생 |
-| `route --task FILE --profile ID [--dry-run]` | 기록 없는 명시적 override, 경고 |
-| `parallel --group FILE [--dry-run] [--wait-ms N]` | task별 선택·worktree·group 실행과 동일 plan 회수 |
-| `refresh [--source ID] [--force] [--vault DIR]` / `--import FILE` | 수집·wiki index·snapshot 갱신 / 승인 SWE·TB import |
-| `status` / `profiles discover [--force]` | 캐시·설정 상태 / 프로필 생성(기존 파일은 force 필요) |
-| `wiki compile [--check]` / `wiki facets` | 검토된 wiki 컴파일·검증 / facet 어휘 |
-| `evidence --task FILE [--format json\|table] [--max-units N]` | facet별 근거 조회, 기본 12 unit, 순위 없음 |
-| `collect --run-id ID --cwd DIR [--wait-ms N]` | 기존 receipt 관찰·결과 회수, 재전송 없음 |
-| `collect --run CWD ID [--run …] --until any\|all [--wait-ms N]` | 여러 run의 settle 또는 blocked 관찰 |
-| `tell --cwd DIR [--run-id ID] --message TEXT` / `--message-file FILE` | 실행 중 또는 resume한 대화형 run에 명시적 메시지 |
-| `stop --cwd DIR [--run-id ID]` / `resume --cwd DIR --run-id ID` | 명시적 중단 / 완료된 대화 재개(전송 없음) |
-| `feedback --run-id ID --cwd DIR --outcome success\|partial\|fail` | Orchestrator 검증 결과 기록 |
-| `coordination status\|release\|feedback` | 공유 admission·정지 확인 후 해제·결과 채택 기록 |
+| `route --task FILE --dry-run` / `explain --task FILE` | Offline decision packet and selection replay / Text explanation covering all candidates and constraints |
+| `route --task FILE [--wait-ms N]` | Live submission and finite wait after selection; 0 returns immediately after submission |
+| `evaluate --task FILE [--context FILE] [--format 1\|2\|3]` | Evaluation without selection. Default schema 2.0; format 3 yields schema 4.0 |
+| `select --assessment FILE --profile ID --policy-id ID --policy-version V --reason TEXT [--accept-provisional]` | Generates selection 6.0 from completed format 3 evaluation. No execution or side-effects |
+| `route --task FILE --selection FILE [--dry-run]` | Validates and replays selection 2.0, 5.0, or 6.0 |
+| `route --task FILE --profile ID [--dry-run]` | Explicit unrecorded override; emits warning |
+| `parallel --group FILE [--dry-run] [--wait-ms N]` | Per-task selection, worktree, and group execution with identical plan recovery |
+| `refresh [--source ID] [--force] [--vault DIR]` / `--import FILE` | Collection, wiki index, and snapshot update / Approved SWE & TB manual import |
+| `status` / `profiles discover [--force]` | Inspect cache & config status / Generate profiles (existing files require `--force`) |
+| `wiki compile [--check]` / `wiki facets` | Compile & validate reviewed wiki / Inspect facet vocabulary |
+| `evidence --task FILE [--format json\|table] [--max-units N]` | Query per-facet evidence; default 12 units, unranked |
+| `collect --run-id ID --cwd DIR [--wait-ms N]` | Inspect existing receipt and retrieve results without resubmission |
+| `collect --run CWD ID [--run …] --until any\|all [--wait-ms N]` | Monitor settlement or blocked state across multiple runs |
+| `tell --cwd DIR [--run-id ID] --message TEXT` / `--message-file FILE` | Send explicit message to active or resumed interactive run |
+| `stop --cwd DIR [--run-id ID]` / `resume --cwd DIR --run-id ID` | Explicit abort / Reopen completed conversation (no transmission) |
+| `feedback --run-id ID --cwd DIR --outcome success\|partial\|fail` | Record Orchestrator verification outcome |
+| `coordination status\|release\|feedback` | Shared admission & quiescence check followed by release or adoption recording |
 
-표의 선택 인자는 실제 명령에서 하나를 고른다. stdout은 JSON 한 객체이며 `explain`과 `evidence --format table`은 텍스트다. dry-run·evaluate·explain·evidence는 네트워크·Herdr·파일 쓰기 없이 동작한다. route·explain·parallel·evaluate는 `--host antigravity|codex|claude`, `--decision-response`를 받는다. evaluate의 응답 입력은 format 3에서만 허용한다. `--selection`·`--profile`은 배타적이고 `--decision-response`와도 함께 쓸 수 없다.
+Optional command arguments in the table are mutually exclusive in actual invocations. Stdout produces a single JSON object, except for `explain` and `evidence --format table` which output plain text. `dry-run`, `evaluate`, `explain`, and `evidence` operate without network, Herdr, or disk writes. `route`, `explain`, `parallel`, and `evaluate` accept `--host antigravity|codex|claude` and `--decision-response`. Response inputs to `evaluate` are allowed only under format 3. `--selection` and `--profile` are mutually exclusive, and neither may be combined with `--decision-response`.
 
-| 코드 | 의미 |
+| Exit Code | Meaning |
 |---|---|
-| 0 | selected·completed·ok·기록/제어 명령 정상 |
-| 2 | 입력·설정·인자 validation 오류, 미지원 schema |
-| 10 | blocked, 승인·질문 대기 |
-| 11 | waiting·timed_out·delivery_uncertain; 실행 중일 수 있음 |
-| 12 | execution_failed·result_invalid |
+| 0 | selected, completed, ok, normal completion of record/control commands |
+| 2 | Validation error on input, config, or arguments; unsupported schema |
+| 10 | blocked; awaiting approval or answering questions |
+| 11 | waiting, timed_out, delivery_uncertain; run may still be active |
+| 12 | execution_failed, result_invalid |
 | 13 | no_eligible_profile |
-| 14 | conflict·잠금/admission 거절·stale_assessment |
-| 15 | 저장소·I/O 오류 |
-| 16 | refresh 일부/전체 실패; 소스별 last-good 유지 |
-| 17 | decision_required·decision_unavailable; 판단 응답 또는 상위 선택 필요 |
+| 14 | conflict; lock/admission denied; stale_assessment |
+| 15 | Storage or I/O error |
+| 16 | Partial or complete refresh failure; preserves per-source last-known-good |
+| 17 | decision_required, decision_unavailable; phase response or upstream selection needed |
 
-## 입력 계약
+## Input Contract
 
-task 필수 필드는 `schema_version="1.0"`, `task_id`, `round`, `summary`, `prompt`, `cwd`다.
+Task required fields are `schema_version="1.0"`, `task_id`, `round`, `summary`, `prompt`, and `cwd`.
 
-- task_id: `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`, round: integer ≥1. 실행별 UUID run_id는 별도 생성한다.
-- summary는 비어 있지 않은 최대 4,000자, prompt는 UTF-8 최대 256 KiB다. task 파일은 최대 1 MiB다.
-- cwd는 존재하는 절대 디렉터리이며 실제 경로로 정규화한다. live는 커밋이 있는 Git 최상위여야 한다.
-- context_files는 cwd 내부 상대 경로 목록이다. 파일 본문 자동 복사·외부 전송을 하지 않고 경로 탈출을 거부한다.
-- constraints 기본: max_cost_tier=high, min_context_tokens=0, local_only=false, timeout_ms=900000, required_capabilities=[]. timeout은 1,000–3,600,000ms다.
-- priority=quality|balanced|cost(기본 balanced)는 호환 입력이며 자동 비용 순위로 쓰지 않는다. exclude_profiles는 제외 목록이다.
-- execution=interactive|headless(기본 interactive). headless는 one-shot CLI이며 tell을 받지 않는다.
-- facets=`{axis: [value]}`는 명시적 작업 특성이다. `wiki facets` 어휘를 사용하고 vendor-guided 판단·근거 검색에 반영한다. 기본 semantic_task_hash에는 없지만 decision 입력에 별도로 묶인다.
-- 알 수 없는 필드·NaN/Infinity·duplicate JSON key·잘못된 UTF-8은 validation 오류다.
+- `task_id`: `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`, `round`: integer ≥1. Per-execution UUID `run_id` is generated independently.
+- `summary`: Non-empty string, max 4,000 characters; `prompt`: UTF-8, max 256 KiB. Task file size limit is 1 MiB.
+- `cwd`: Must exist as an absolute directory, resolved to its real canonical path. Live execution requires it to be a Git root with commits.
+- `context_files`: Relative paths within `cwd`. Rejects directory traversal; does not automatically copy or upload file contents externally.
+- Constraints defaults: `max_cost_tier=high`, `min_context_tokens=0`, `local_only=false`, `timeout_ms=900000`, `required_capabilities=[]`. Timeout range is 1,000–3,600,000 ms.
+- `priority=quality|balanced|cost` (default `balanced`) is a compatibility field; not used for automated cost-based ranking. `exclude_profiles` provides an exclusion list.
+- `execution=interactive|headless` (default `interactive`). Headless runs one-shot CLI and does not accept `tell`.
+- `facets={axis: [value]}` specifies explicit task attributes. Uses vocabulary from `wiki facets` and feeds vendor-guided decisions and evidence queries. Kept separate from base `semantic_task_hash` but bundled into decision inputs.
+- Unknown fields, NaN/Infinity, duplicate JSON keys, or malformed UTF-8 trigger validation errors.
 
-interactive 제출은 실행 계약을 합쳐 120 KiB 제한이며 argv 노출 가능성이 있다. headless prompt는 input.txt로 전달한다. `local_only`는 모델 inference의 로컬성을 뜻하며 Herdr가 로컬이라는 이유로 cloud 모델을 허용하지 않는다.
+Interactive submissions combine task and execution contracts under a 120 KiB limit and may expose text in process argv. Headless passes prompts via `input.txt`. `local_only` denotes locality of model inference; running cloud models is never permitted solely because Herdr itself executes locally.
 
-semantic_task_hash는 prompt·summary·constraints·priority·cwd·context_files·exclude_profiles를 묶고, headless이면 execution도 포함한다. task_id/round는 receipt identity다. 파일 본문 전체를 hash하지 않으므로 상위가 artifact revision을 관리한다.
+`semantic_task_hash` bundles prompt, summary, constraints, priority, cwd, context_files, and exclude_profiles (plus execution for headless). `task_id` and `round` define receipt identity. File contents are not hashed, leaving artifact revision management to the upstream Orchestrator.
 
-## 프로필 설정 계약
+## Profile Configuration Contract
 
-TOML은 `schema_version="1.0"`, `[[profile]]`을 갖는다. profile 필수 키는 id·enabled·kind·executable·args·model_id·harness_id·reasoning_effort·config_revision·cost_tier·inference_local·context_tokens·capabilities다. 미등록 키를 허용하지 않는다.
+The TOML configuration requires `schema_version="1.0"` and `[[profile]]` entries. Required profile keys are: `id`, `enabled`, `kind`, `executable`, `args`, `model_id`, `harness_id`, `reasoning_effort`, `config_revision`, `cost_tier`, `inference_local`, `context_tokens`, and `capabilities`. Unregistered keys are rejected.
 
-id는 `[a-z][a-z0-9_-]{0,47}`다. executable은 kind와 같아야 하고 args는 shell 문자열이 아닌 argv다. 현재 Projects 변환은 모델(`--model`/`-m`)·effort(`--effort`, Codex `-c model_reasoning_effort=...`)만 받는다. 다른 권한·도구 인자는 제출 전에 거부한다. interactive 권한은 Projects worker.access 설정을 따른다.
+`id` matches `[a-z][a-z0-9_-]{0,47}`. `executable` must equal `kind`, and `args` is an argv array, not a shell string. Current Projects transformation accepts only model (`--model`/`-m`) and effort (`--effort`, Codex `-c model_reasoning_effort=...`). Other permission and tool flags are rejected prior to submission. Interactive permissions follow Projects `worker.access` configuration.
 
-model/harness/effort는 평가 매칭과 구분해서 보존한다. context_tokens=0은 불명이며 양수 context 요구를 만족하지 않는다. reasoning_effort=unknown은 exact 매칭 불가·가이드 결측이다. config_revision 변경은 지문에 반영하며 CLI 버전은 현재 unknown이다.
+`model`, `harness`, and `effort` are preserved separately from evaluation matching. `context_tokens=0` represents unknown capacity and cannot satisfy positive context demands. `reasoning_effort=unknown` prevents exact matching and marks guidelines as missing. Changing `config_revision` updates the configuration fingerprint, while CLI version currently defaults to `unknown`.
 
-[profiles.example.toml](examples/profiles.example.toml)은 모두 비활성 placeholder다. `profiles discover`는 실행 가능한 CLI의 모델·effort 정보를 수집해 활성 프로필을 만들지만 계정 호출 성공을 보장하지 않는다. live probe는 PATH·agy models·선택적 CodeBurn 상태를 확인하며 모델의 실제 실행 성공은 별도다.
+[profiles.example.toml](examples/profiles.example.toml) contains disabled placeholders. `profiles discover` inspects executable CLIs to collect model and effort details into active profiles, but cannot guarantee successful live invocations. Live probes check PATH, agy models, and optional CodeBurn status; actual model runtime execution success is verified separately.
 
-## 출력과 선택 기록
+## Output and Selection Records
 
-route envelope는 schema 1.0이며 status·task_id·round·run_id·selected·selection_mode·classification·candidates·excluded·snapshot_id·policy_version·config_hash·warnings·sources·assessment_digest를 포함한다. vendor-guided에는 decision 입력·단계별 근거·후보 facts도 제공한다. CLI route candidates는 ID순 첫 3개 요약이며 candidates_total에 전체 수를 남긴다. 상위 3위가 아니다.
+The route envelope uses schema 1.0 and contains: `status`, `task_id`, `round`, `run_id`, `selected`, `selection_mode`, `classification`, `candidates`, `excluded`, `snapshot_id`, `policy_version`, `config_hash`, `warnings`, `sources`, and `assessment_digest`. Vendor-guided mode also includes decision inputs, phase rationale, and candidate facts. In CLI route output, `candidates` summarizes the first 3 by ID, recording total count in `candidates_total` (this is not a top-3 ranking).
 
-기본 evaluate 1·2의 후보는 quality·coverage·coverage_band·exact_evidence_weight·evidence를 제공한다. score·legacy_score·cost_proxy는 없다. 기본 route의 후보 quality/coverage는 category 평가 결과가 아니므로 의미 판단 근거는 `decision.evaluation` 또는 `selection.decision.evaluation`에서 읽는다. 제약 결과·공개 후보별 적합성은 format 3을 사용한다.
+Default evaluate formats 1 and 2 provide candidate `quality`, `coverage`, `coverage_band`, `exact_evidence_weight`, and `evidence`. Fields `score`, `legacy_score`, and `cost_proxy` are omitted. Because candidate quality/coverage in basic route output does not reflect category evaluation results, read semantic decision evidence from `decision.evaluation` or `selection.decision.evaluation`. Use format 3 for constraint evaluations and public candidate suitability.
 
-| 계약 | 버전 |
+| Contract | Version |
 |---|---|
-| evaluate 기본 / 호환 | 2.0 / 1.0 |
-| evaluate `--format 3`의 assessment | 4.0 |
-| 자동 단일 후보 / 상위 선택 selection | 5.0 / 6.0 |
-| 명시적 override selection | 2.0 |
-| context / group | 2.0, 입력 1.0도 수용 |
+| evaluate default / compatibility | 2.0 / 1.0 |
+| assessment in `evaluate --format 3` | 4.0 |
+| automatic single-candidate / upstream selection | 5.0 / 6.0 |
+| explicit override selection | 2.0 |
+| context / group | 2.0 (accepts 1.0 input) |
 
-과거 vendor-guided selection 3.0·4.0은 재평가한다. `select`는 schema 1.0 응답의 `selection` 객체에 6.0 기록을 반환하며 그 객체만 입력 파일로 사용한다. 5.0·6.0에는 재생용 task·stages·evaluation·uncertainty·입력 digest가 있다. 상세 필드는 [상위 연동](docs/orchestrator.md)을 따른다.
+Legacy vendor-guided selection schemas 3.0 and 4.0 must be re-evaluated. `select` returns a 6.0 record within the `selection` object of a schema 1.0 envelope; only that object should be used as input. Schemas 5.0 and 6.0 include replayable task, stages, evaluation, uncertainty, and input digests. For field details, refer to [Upstream Integration](docs/orchestrator.md).
 
-live 응답에는 receipt_path·결과 경로·task_outcome·delivery_state·reassignment·coordination_key·thread_id·worktree·branch 등이 추가된다. completed의 결과 경로는 유효한 절대 경로다. source별 날짜를 유지하고 혼합 소스를 한 기준일로 요약하지 않는다.
+Live responses append: `receipt_path`, result path, `task_outcome`, `delivery_state`, `reassignment`, `coordination_key`, `thread_id`, `worktree`, `branch`, etc. On `completed`, the result path is a valid absolute path. Per-source dates are preserved rather than collapsed into a single composite date.
 
-## 실행과 중복 방지
+## Execution and Deduplication
 
-1. 같은 task/round의 receipt를 먼저 확인한다. 같은 semantic hash는 재전송 없이 collect, 다른 내용·지정 profile 충돌은 conflict다. 기존 실행 회수는 새 정책 판단보다 우선한다.
-2. 새 실행은 제약·선택 재생·현재 가용성을 확인한다. 공유 admission은 활성 4개와 경로 중첩을 검사하고 cwd dispatch lock을 사용한다.
-3. UUID run_id·128-bit nonce·프로필 지문·deadline·선택·input.txt를 run 디렉터리에 기록한다. receipt와 decision을 원자 게시한다.
-4. interactive는 Projects 1.2.1의 add/delegate를 한 번 호출하고 board task ID를 기록한다. headless는 Herdr worktree pane에서 one-shot CLI를 실행한다. 제출 의도는 외부 호출 전에 fsync한다.
-5. interactive는 board approval/done에서, headless는 종료 후 결과 계약을 검사한다. blocked·timed_out·delivery_uncertain은 자동 재전송·다른 worker 위임·취소를 하지 않는다.
-6. 제출 전 확정 실패는 receipt settle과 admission 반환을 수행한다. 제출 여부 불확실은 상태를 보존하고 collect/정지 확인을 요구한다.
-7. completed는 관리 대상 pane을 반환한다. resume은 완료 대화를 같은 세션으로 다시 열며 전송하지 않는다. stop/tell은 명시적 요청에만 수행한다.
+1. Checks for an existing receipt matching the same `task_id` and `round` first. An identical semantic hash initiates `collect` without resubmission; differing contents or conflicting specified profiles yield a `conflict`. Recovering existing runs takes precedence over evaluating new policy decisions.
+2. New execution checks constraints, selection replay, and current availability. Shared admission limits active runs to 4, checks path overlaps, and acquires the cwd dispatch lock.
+3. Generates UUID `run_id`, 128-bit nonce, profile fingerprint, deadline, selection, and `input.txt` inside the run directory. Atomically publishes receipt and decision.
+4. Interactive calls Projects 1.2.1 `add`/`delegate` once and records the board task ID. Headless launches a one-shot CLI inside a Herdr worktree pane. Execution intent is fsynced prior to external invocation.
+5. Interactive verifies result contracts upon board `approval`/`done`; headless verifies upon process exit. Neither automatically resubmits, delegates to other workers, nor cancels when `blocked`, `timed_out`, or `delivery_uncertain`.
+6. Pre-submission failures settle receipts and release admission slots. Uncertain submission delivery preserves state, requiring `collect` and quiescence checks.
+7. `completed` releases managed panes. `resume` reopens completed sessions without re-sending inputs. `stop` and `tell` run strictly on explicit request.
 
-group은 모든 선택을 먼저 검증하며, 반복 profile도 별도 label·worktree·receipt를 사용한다. task당 8·group당 16·max_parallel 1–4다. 실행 plan을 동결하고 동일 입력은 기존 receipts를 회수한다. group rounds에도 delivery_state와 reassignment를 전달한다.
+Groups validate all selections upfront, assigning dedicated labels, worktrees, and receipts even for repeated profiles. Limits: max 8 tasks per group, max 16 items per group, `max_parallel` 1–4. Freezes the execution plan; identical inputs recover existing receipts. Delivers `delivery_state` and `reassignment` across group rounds.
 
-## Subagent 결과 계약
+## Subagent Result Contract
 
-worker는 자기 worktree의 `.bench-router/runs/<run_id>/`에 result.md를 완성하고 result.json을 마지막에 한 번에 작성한다. `sha256sum result.md`로 최종 hash를 계산하도록 안내한다. wrapper 자신의 receipt·input 원자 기록과 worker manifest 작성 지시를 구분한다.
+The worker completes `result.md` within `.bench-router/runs/<run_id>/` in its worktree, writing `result.json` in a single atomic operation at the end. Workers are instructed to compute the final hash using `sha256sum result.md`. The wrapper's atomic receipt/input persistence is strictly decoupled from the worker's manifest generation instructions.
 
 ```json
 {"schema_version":"1.0", "run_id":"<RUN_ID>", "nonce":"<NONCE>",
  "profile_fingerprint":"<FINGERPRINT>", "status":"success",
  "result_file":"result.md", "result_sha256":"<SHA256>",
- "checks":[{"command":"검증 명령", "outcome":"passed", "notes":"검증 결과"}]}
+ "checks":[{"command":"verification command", "outcome":"passed", "notes":"verification notes"}]}
 ```
 
-manifest status는 success|partial|fail, checks.outcome은 passed|failed|not_run이다. checks는 빈 배열도 허용하며 worker의 주장이다. 라우터가 명령을 자동 실행하지 않는다. Markdown에는 변경·검증·미완료 사항을 기록한다. 형식 예는 [result.synthetic.json](examples/result.synthetic.json)과 [result.synthetic.md](examples/result.synthetic.md)에 있다.
+Manifest `status` is `success|partial|fail`, and `checks.outcome` is `passed|failed|not_run`. `checks` accepts an empty array and represents the worker's claims; the router does not automatically execute these commands. The Markdown file records modifications, verifications, and incomplete items. Examples: [result.synthetic.json](examples/result.synthetic.json) and [result.synthetic.md](examples/result.synthetic.md).
 
-라우터는 run ID·nonce·fingerprint·상태·UTF-8·regular file·경로 내부성·symlink 탈출·크기·hash를 검사한다. result.md는 비어 있지 않은 최대 10 MiB, manifest는 최대 64 KiB다. 유효 결과는 원래 cwd run 디렉터리로 복사한다. `DONE` 터미널 줄은 보조 진단이며 결과 계약을 대체하지 않는다. nonce는 과거 파일 혼동을 막는 식별자이며 악의적 위조를 막는 인증 수단은 아니다.
+The router validates run ID, nonce, fingerprint, status, UTF-8 validity, regular file status, path locality, symlink escaping, size, and hash. `result.md` must be non-empty and ≤10 MiB; the manifest must be ≤64 KiB. Validated results are copied to the original cwd run directory. A `DONE` terminal line is secondary telemetry and does not substitute for the result contract. The nonce prevents confusion with stale files but does not serve as an anti-tamper security token.
 
-## 상태와 후속 처리
+## States and Follow-up Actions
 
-| 결과 | 후속 행동 |
+| Outcome | Follow-up Action |
 |---|---|
-| decision_required / decision_unavailable | 단계 응답 또는 상위 선택을 완료; 실행 없음 |
-| stale_assessment | 같은 제출이 없다면 재평가·재선택 |
-| blocked | 사용자 승인·질문 처리 후 collect |
-| timed_out / delivery_uncertain | 실행 중일 수 있으므로 collect_first |
-| execution_failed / result_invalid | 전송·부분 효과·worker 상태를 검토하고 재배정 여부 결정 |
-| completed | task_outcome·결과 내용·작업 브랜치를 검토하고 feedback·채택/병합 결정 |
+| decision_required / decision_unavailable | Complete phase responses or upstream selection; no execution performed |
+| stale_assessment | Re-evaluate and re-select if no identical submission exists |
+| blocked | Handle user approval or questions, then collect |
+| timed_out / delivery_uncertain | Execution may be ongoing; perform `collect` first |
+| execution_failed / result_invalid | Inspect transmission, partial side effects, and worker status before deciding reassignment |
+| completed | Review `task_outcome`, result contents, and working branch; determine feedback and merge adoption |
 
-`completed`는 형식에 맞는 결과를 받았다는 뜻이다. 내용의 정확성은 상위가 판단한다. 재시도는 같은 task/round 재전송이 아니라 부분 효과·정지 여부를 확인한 후 명시적 새 round로 수행한다.
+`completed` certifies receipt of a well-formed result complying with the format contract. Upstream is responsible for assessing substantive correctness. Retries must not resubmit identical task/rounds blindly; verify quiescence and partial effects, then execute as an explicit new round.

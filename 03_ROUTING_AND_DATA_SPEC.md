@@ -1,94 +1,94 @@
-# 데이터·분류·선택 명세
+# Data, Classification, and Routing Specification
 
-갱신: 2026-10-24. 현재 선택은 [vendor-guided 정책 6](docs/vendor-guided-routing.md), 공개 계약은 [라우팅 계약](docs/routing-contracts.md)을 따른다.
+Updated: 2026-10-24. Current selection follows [Vendor-guided Policy 6](docs/vendor-guided-routing.md), and public contracts follow [Routing Contracts](docs/routing-contracts.md).
 
-## 요청과 갱신의 분리
+## Separation of Request and Refresh Paths
 
 ```mermaid
 flowchart TD
-  O[Orchestrator task + context] --> C[필수 제약 검사]
-  C --> A[analysis · 벤더별 guidance]
-  S[로컬 snapshot + wiki index + guidelines] --> A
-  A --> B[비교 가능한 평가 · 관련성 판단]
-  B --> P[단일 후보 선택 또는 상위 선택 요청]
+  O["Orchestrator task + context"] --> C["Hard Constraints Check"]
+  C --> A["analysis · Vendor Guidance"]
+  S["Local snapshot + wiki index + guidelines"] --> A
+  A --> B["Comparable Evaluation · Relevance Assessment"]
+  B --> P["Single Candidate Selection or Upstream Selection Request"]
   P --> O
-  O -->|검증된 selection| E[Projects 실행 · 결과 계약 검사]
+  O -->|"Validated selection"| E["Projects Execution · Result Contract Check"]
   E --> O
-  T[수동 refresh 또는 별도 OS timer] --> F[소스 수집 · SQLite 이력]
+  T["Manual refresh or Independent OS Timer"] --> F["Source Collection · SQLite History"]
   F --> S
 ```
 
-요청 경로는 벤치마크 소스를 호출하거나 자동 refresh하지 않는다. snapshot·index·가이드를 로컬에서 읽는다. dry-run·explain·evaluate·evidence는 네트워크·Herdr·파일 쓰기가 없다. live route/parallel은 설정된 Jev를 의미 판단에 사용할 수 있으며, 사용 불가 시 native 판단 패킷을 반환한다. 이 호출은 benchmark refresh와 별개다.
+The request path never queries benchmark sources over the network or triggers automatic refresh. It reads snapshots, indices, and guidelines locally. `dry-run`, `explain`, `evaluate`, and `evidence` perform zero network requests, Herdr invocations, or file writes. Live `route`/`parallel` may use a configured Jev instance for semantic decisions; when unavailable, it outputs a native decision packet. These decision calls are entirely distinct from benchmark data refresh.
 
-## 저장 위치와 기록
+## Storage Locations and Persistence
 
-| 위치 | 내용 |
+| Path | Contents |
 |---|---|
-| `$XDG_CONFIG_HOME/bench-router` 또는 `~/.config/bench-router` | profiles·aliases·선택적 categories·env |
-| `$XDG_CACHE_HOME/bench-router` 또는 `~/.cache/bench-router` | SQLite `bench-router.db`, snapshot·last-good·30일 재현본·컴파일된 index |
-| `bench_router/index.json`, `bench_router/guidelines.toml` | 설치본에 포함되는 benchmark index와 버전 고정 공식 가이드 |
-| `<cwd>/.bench-router/runs/<run_id>/` | receipt·input.txt·decision.json·result.md/json·feedback.jsonl |
-| `<cwd>/.bench-router/groups/<group_id>/` | 그룹 plan과 결과 |
+| `$XDG_CONFIG_HOME/bench-router` or `~/.config/bench-router` | profiles, aliases, optional categories, env |
+| `$XDG_CACHE_HOME/bench-router` or `~/.cache/bench-router` | SQLite `bench-router.db`, snapshots, last-known-good, 30-day replay copies, compiled index |
+| `bench_router/index.json`, `bench_router/guidelines.toml` | Packaged benchmark index and version-pinned official guidelines |
+| `<cwd>/.bench-router/runs/<run_id>/` | receipt, input.txt, decision.json, result.md/json, feedback.jsonl |
+| `<cwd>/.bench-router/groups/<group_id>/` | Group plan and results |
 
-SQLite에는 `sources`, `snapshots`, `observations`를 둔다. 선택·실행·feedback은 run 디렉터리 파일에 기록하며 별도 decisions/feedback 테이블은 없다. 선택 기록에는 재생용 task·판단 단계가 포함되므로 prompt가 남는다. 키·secret은 기록하지 않는다.
+SQLite maintains `sources`, `snapshots`, and `observations`. Selection, execution, and feedback are recorded in run directory files rather than dedicated decisions/feedback tables. Because selection records contain replayable task and decision phases, prompt contents are persisted. Keys and secrets are never recorded.
 
-## 소스와 refresh
+## Sources and Refresh
 
-| 소스 | 수집 경로 | TTL / max_stale |
+| Source | Collection Path | TTL / max_stale |
 |---|---|---|
-| AA | Free API 전체 pagination; 기본 Intelligence/Coding 및 활성 `aa:*` wiki unit | 24h / 7d |
-| Arena | revision SHA에 고정한 config별 `latest` Parquet, pyarrow 디코드 후 category 로컬 필터 | 24h / 7d |
-| The Model Gap (`mg`) | 공개 JSON의 활성 `mg:*` wiki unit | 24h / 7d |
-| SWE / TB | 승인된 수동 import; SWE-bench Verified / Terminal-Bench 4.0 고정 | 168h / 30d |
+| AA | Free API full pagination; baseline Intelligence/Coding and active `aa:*` wiki units | 24h / 7d |
+| Arena | Revision SHA pinned config-specific `latest` Parquet, pyarrow decoding, local category filtering | 24h / 7d |
+| The Model Gap (`mg`) | Active `mg:*` wiki units from public JSON | 24h / 7d |
+| SWE / TB | Approved manual imports; SWE-bench Verified / Terminal-Bench 4.0 pinned | 168h / 30d |
 
-1. 운영체제 파일 잠금으로 refresh writer를 하나로 제한한다. Linux/WSL2는 `fcntl`, Windows는 `msvcrt`를 사용한다. 두 환경이 같은 물리 캐시를 동시에 쓰지 않는다.
-2. TTL 이내이면 skip한다. `--force`는 TTL을 무시한다. 자동 timer는 설치하지 않는다.
-3. 요청별 크기·횟수·timeout과 소스 전체 deadline을 제한한다. 기본 180초, Arena는 600초다. 401/403/429는 재시도하지 않고, 5xx·네트워크 오류는 최대 2회 재시도한다.
-4. 페이지 일부 실패·잘못된 payload는 해당 소스의 실패로 격리하고 last-good을 유지한다. 다른 소스 갱신은 계속한다. null은 결측이며 측정된 0은 유효하다.
-5. 동일 payload hash는 `unchanged`로 확인 시각만 갱신한다. conditional GET/304는 구현하지 않았다.
-6. 프로필·alias·wiki index 변경도 snapshot 재빌드에 반영한다. snapshot은 임시 파일 flush/fsync 후 `os.replace`로 게시하고 직전 유효본을 last-good으로 보관한다.
-7. 소스별 정상 payload 최근 3개, routing snapshot 재현본 30일을 보관한다.
+1. OS file locking restricts refresh to a single writer. Linux/WSL2 uses `fcntl`; Windows uses `msvcrt`. The two environments must never share the same physical cache concurrently.
+2. Skips if within TTL. `--force` bypasses TTL. No automatic timers are installed by the application.
+3. Enforces per-request size limits, counts, timeouts, and source-level deadlines (default 180s, Arena 600s). 401/403/429 errors are not retried; 5xx and network errors retry at most twice.
+4. Partial page failures or corrupted payloads are isolated as failures of that source, preserving last-known-good while other sources continue. `null` denotes missing data, whereas measured `0` is valid.
+5. Identical payload hashes are marked `unchanged`, updating only verification timestamps. Conditional GET / 304 is not implemented.
+6. Changes to profiles, aliases, or wiki index trigger a snapshot rebuild. Snapshots are published via `os.replace` after temp file flush/fsync, archiving the prior valid snapshot as last-good.
+7. Retains the latest 3 successful payloads per source, and 30 days of routing snapshot replay copies.
 
-Arena refresh만 `pyarrow`가 필요하다. 오프라인 평가·라우팅·수동 import는 표준 라이브러리로 동작한다. 설치는 `mise install` 후 `mise run setup` 또는 `uv sync --extra arena`다.
+Only Arena refresh requires `pyarrow`. Offline evaluation, routing, and manual imports function purely on standard library. Installation is via `mise install` followed by `mise run setup`, or `uv sync --extra arena`.
 
-## 모델과 평가 identity
+## Model and Evaluation Identity
 
-모델 수준 observation은 프로필 `model_id`와 연결한다. 명시 alias가 우선하고, 그 외에는 대소문자·구분자·끝 effort 표기를 정규화해 자동 매칭한다. 미등록 모델이나 모호한 매칭은 진단으로 남긴다. 비슷한 이름·preview 변형을 임의로 동일 모델로 만들지 않는다. 가이드의 모델 ID 매칭은 이 수집용 정규화와 달리 정확한 ID를 사용한다.
+Model-level observations are linked to profile `model_id`. Explicit aliases take precedence; otherwise, automatic matching normalizes case, delimiters, and trailing effort notations. Unregistered models or ambiguous matches are recorded as diagnostics. Similar names or preview variants are never merged into the same model identifier. Guideline model ID matching requires exact IDs, unlike collection-time normalization.
 
-`exact_profile`에는 model·harness·effort와 평가 조건의 일치가 필요하다. fingerprint는 실행 프로필 설정을 묶으며 CLI 버전은 현재 `unknown`이다. 프로필이 달라진 snapshot observation은 `stale_config`로 제외한다. 단순 모델 proxy를 하네스 보정 계수로 exact 점수로 변환하지 않는다.
+`exact_profile` requires exact agreement on model, harness, effort, and evaluation conditions. A fingerprint bundles execution profile settings, while CLI version currently defaults to `unknown`. Snapshot observations with altered profiles are excluded as `stale_config`. Simple model proxies are never scaled into exact scores via harness adjustment factors.
 
-평가 조건은 suite/version/subset/metric·variant·dataset revision·evaluation harness·aggregation 등을 보존한다. SWE Verified/Pro, TB 2.0/4.0, Arena text/style-control/agent 지표를 섞지 않는다. 조건 없는 구 exact 캐시는 `missing_conditions`로 제외한다. 수동 import 형식은 [reference](docs/reference.md#데이터-수집-refresh)를 따른다.
+Evaluation conditions preserve suite, version, subset, metric, variant, dataset revision, evaluation harness, aggregation, etc. Never mix SWE Verified/Pro, TB 2.0/4.0, or Arena text/style-control/agent metrics. Legacy exact caches lacking condition metadata are excluded as `missing_conditions`. Manual import formats follow [Reference](docs/reference.md#데이터-수집-refresh).
 
-## 신선도와 결측
+## Freshness and Missing Data
 
-소스 `last_success_at`으로 TTL·max_stale를 판단하고 published/evaluated 날짜는 별도로 보존한다. TTL 초과는 stale 경고, max_stale 초과는 observation 제외다. 게시 시각만으로 평가가 최신이라고 판단하지 않는다.
+Source `last_success_at` determines TTL and max_stale, while published/evaluated dates are preserved independently. Exceeding TTL emits a stale warning; exceeding max_stale excludes observations. Publication timestamp alone does not guarantee evaluation freshness.
 
-snapshot이 없거나 손상되면 last-good을 시도한다. 쓸 수 있는 데이터가 없어도 하드 제약을 통과한 프로필은 근거 결측과 함께 평가할 수 있다. configured default/fallback을 자동 실행하지 않는다. 실행 가능한 프로필 자체가 없을 때는 `no_eligible_profile`(13)이다. 판단 미완료·기권·상위 선택 필요는 종료 17로 구분한다.
+When a snapshot is missing or corrupted, the system attempts recovery from last-known-good. Profiles passing hard constraints can still be evaluated alongside recorded data gaps even if no benchmark data is available. Configured default/fallback profiles are never executed automatically. If no viable profile exists at all, the router terminates with `no_eligible_profile` (exit code 13). Incomplete decisions, abstentions, or upstream selection requirements are distinguished by exit code 17.
 
-## 분류·필수 제약·기본 평가
+## Classification, Hard Constraints, and Basic Evaluation
 
-`routing.classify()`의 L1 summary·파일 경로 규칙과 general fallback은 `evaluate` 1·2의 category 집계에 사용한다. 한 카테고리에서 서로 다른 규칙이 2개 이상 일치해야 채택한다. task.categories·L0 분류 입력은 현재 지원하지 않는다. facet 조회는 `evidence.py`의 규칙과 명시 `task.facets`를 사용한다. 파일 본문을 자동으로 조사하지 않는다.
+`routing.classify()` applies L1 summary and file path rules with a general fallback for category aggregation in `evaluate` formats 1 and 2. A category requires matching at least two distinct rules to be adopted. `task.categories` and L0 classification inputs are currently unsupported. Facet lookups rely on `evidence.py` rules and explicit `task.facets`. File contents are not inspected automatically.
 
-vendor-guided의 `analysis`는 미확정 facet과 workload를 의미 판단한다. 자동 규칙은 거부 가능한 `rule_hints`이고, 상위가 지정한 facet과 구조적 사실은 보존한다. 이것이 작업 분해나 새 worker 생성으로 이어지지는 않는다.
+Vendor-guided `analysis` semantically evaluates unconfirmed facets and workload attributes. Automated rules serve as dismissible `rule_hints`, while user-specified facets and structural facts are preserved. This analysis does not trigger task decomposition or worker spawning.
 
-`routing.CONSTRAINTS`는 enabled·exclude·cost tier·context capacity·capabilities·local_only·가용성·예상 비용을 검사한다. context의 필요 토큰과 비용 상한도 적용한다. 비용 등급과 달러 견적은 독립된 제약이며 실제 지출 한도를 보장하지 않는다. live dispatch 직전에 현재 가용성과 제약을 재검사한다.
+`routing.CONSTRAINTS` validates enabled status, exclusions, cost tier, context capacity, capabilities, `local_only`, availability, and estimated cost. Context required tokens and cost caps are also enforced. Cost tiers and dollar estimates are independent constraints and do not guarantee actual spending limits. Current availability and constraints are re-verified immediately before live dispatch.
 
-## 세 가지 평가·선택 접점
+## Three Evaluation and Selection Touchpoints
 
-| 접점 | 제공하는 것 | 선택 의미 |
+| Touchpoint | Output Provided | Selection Semantics |
 |---|---|---|
-| `evaluate --format 1` / `--format 2` (기본 2) | ID순 후보·facts·제약·category benchmark의 quality/coverage | 의미 적합성 판단 없음; selection 2.0 override 또는 `--profile`의 사실 근거 |
-| `evidence` | facet별 raw·percentile·effort·결측·조건 표, 기본 12 unit | 조회 순서는 모델 순위가 아님 |
-| `evaluate --format 3` / 기본 `route` | 정책 6의 analysis·벤더별 guidance·필요 시 benchmark 관련성·후보 적합성 | 후보 평가 schema 4.0에서 상위가 `select`로 selection 6.0 생성; 제한된 단일 후보 경로는 자동 5.0 |
+| `evaluate --format 1` / `--format 2` (default 2) | ID-ordered candidates, facts, constraints, category benchmark quality/coverage | No semantic suitability assessment; factual evidence for selection 2.0 override or `--profile` |
+| `evidence` | Per-facet raw values, percentiles, effort levels, data gaps, conditions table; default 12 units | Query order is not a model ranking |
+| `evaluate --format 3` / default `route` | Policy 6 analysis, vendor guidance, benchmark relevance if needed, candidate suitability | In candidate evaluation schema 4.0, upstream produces selection 6.0 via `select`; bounded single-candidate path uses automatic 5.0 |
 
-`categories.toml`의 가중치는 기본 평가의 근거 요약용이다. 같은 cohort의 percentile은 `(average_rank_ascending−1)/(N−1)`, 동점은 평균 rank, N=1이면 0.5다. 방향을 반영하며 성공 확률로 읽지 않는다.
+Weights in `categories.toml` are used solely for basic evaluation evidence summarization. Cohort percentile is calculated as `(average_rank_ascending−1)/(N−1)`, with ties taking average rank, and 0.5 when N=1. Reflects relative direction; must not be interpreted as probability of success.
 
-`coverage C`는 유효 observation의 가중치 합이다. `Q_obs`는 관측된 normalized 값의 가중 평균, `quality Q = C×Q_obs + (1−C)×0.5 − 0.1×(1−C)`다. 관측이 전혀 없으면 Q는 null이다. coverage band는 sufficient(≥0.8), partial(≥0.5), insufficient(<0.5)다. 이 수치는 평가 진단이며 후보 순위·자동 선택에 쓰이지 않는다. `score`, `legacy_score`, `cost_proxy`, lambda·near-tie 선택은 제거됐다. `examples/scoring.synthetic.json`은 Q/C 수학 검증용 초기 fixture다.
+`coverage C` is the weighted sum of valid observations. `Q_obs` is the weighted average of observed normalized values, and `quality Q = C×Q_obs + (1−C)×0.5 − 0.1×(1−C)`. When no observations exist, Q is `null`. Coverage bands are sufficient (≥0.8), partial (≥0.5), and insufficient (<0.5). These figures serve as diagnostic evaluation metrics and are not used for candidate ranking or automated selection. `score`, `legacy_score`, `cost_proxy`, lambda, and near-tie selections have been removed. `examples/scoring.synthetic.json` serves as an early fixture for Q/C mathematical validation.
 
-## 정책 6과 기록 버전
+## Policy 6 and Record Versions
 
-정책 6은 적격 벤더별 공식 가이드 원문으로 시작점 구성을 판정한다. 다른 벤더의 원칙을 공통 척도로 적용하지 않는다. documented/provisional/alternative/unsuitable을 구분하고, 비교 가능한 fresh raw observation과 관련성 근거를 상위에 제공한다. unit별 승패를 투표·가중합하지 않는다. workflow 평가가 필요한 effort는 `workflow_gain_unverified`로 남긴다.
+Policy 6 evaluates baseline configurations against official vendor guidance texts. Guidance principles are never cross-applied across vendors on a common scale. Identifies candidates as documented, provisional, alternative, or unsuitable, providing comparable fresh raw observations and relevance rationale to upstream. Does not tally votes or weighted sums across units. Effort levels requiring workflow evaluation are marked `workflow_gain_unverified`.
 
-복수 적합 후보이면 `upstream_selection_required`이며 priority·비용·default 순서로 축소하지 않는다. `select --accept-provisional`은 provisional·alternative 선택 조건의 수용을 기록할 뿐 측정된 개선을 증명하지 않는다. 선택 5.0은 단일 추천에 고정되고 6.0은 외부 선택을 기록한다. 2.0 override와 `--profile`은 별도 경고와 함께 유지한다. 과거 vendor-guided selection 3.0·4.0은 지원 입력이 아니므로 재평가해야 한다.
+When multiple viable candidates exist, `upstream_selection_required` is emitted without narrowing candidates by priority, cost, or default order. `select --accept-provisional` records acceptance of provisional or alternative selection conditions, but does not certify measured performance improvements. Selection 5.0 is pinned to single recommendations, while 6.0 records external upstream selections. Selection 2.0 overrides and `--profile` are maintained alongside explicit warnings. Historical vendor-guided selection schemas 3.0 and 4.0 are unsupported as inputs and require re-evaluation.
 
-전체 decision digest는 입력과 판단 근거를 묶고, 각 request digest는 단계의 실제 의존성만 묶는다. snapshot만 바뀌면 analysis·guidance 응답은 재사용할 수 있지만 최종 selection은 다시 생성해야 한다. 정책 1–5의 선택은 새 실행 전에 재평가한다. 이미 제출한 같은 task/round의 receipt는 정책 변경과 무관하게 먼저 회수한다.
+The composite decision digest binds inputs to decision evidence, whereas each phase request digest binds only the actual dependencies of that specific phase. If only the snapshot changes, analysis and guidance responses may be reused, but final selection must be regenerated. Selections under Policies 1–5 must be re-evaluated before new execution. Receipts for previously submitted identical task/rounds are retrieved first, regardless of policy changes.
