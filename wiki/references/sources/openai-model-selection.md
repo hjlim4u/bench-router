@@ -5,10 +5,10 @@ category: references
 tags: [source, agentic, reasoning]
 sources: ["url:https://developers.openai.com/api/docs/guides/model-selection"]
 created: 2026-10-19T01:52:29Z
-updated: 2026-10-19T01:52:29Z
-as_of: 2026-10-19
+updated: 2026-10-24T12:45:00Z
+as_of: 2026-10-24
 summary: >-
-  OpenAI's documented workload-to-model/effort examples and its recommendation to compare settings on the same inputs.
+  OpenAI's documented model/effort starting points, quoted verbatim, and its advice to keep the lightest setting that meets the quality bar.
 provenance:
   extracted: 1.0
   inferred: 0.0
@@ -19,31 +19,38 @@ lifecycle_changed: 2026-10-19
 tier: supporting
 snapshots:
   - "[[_raw/_archived/2026-10-19-openai-model-selection|2026-10-19-openai-model-selection]]"
+  - "[[_raw/_archived/2026-10-24-openai-model-selection|2026-10-24-openai-model-selection]]"
 ---
 
 # OpenAI model and reasoning-effort selection
 
-OpenAI's Model selection guide, inspected on 2026-10-19, provides examples pairing workloads with models and reasoning effort.
+OpenAI's Model selection guide, checked on 2026-10-24, pairs workloads with a model and a reasoning effort. Quotations below are verbatim.
+
+> If cost and latency aren’t a concern, you can default to Astra. To reduce costs or latency, use the guidance below to choose a model and reasoning effort for your needs.
 
 ## Documented starting points
 
-| Workload, paraphrased | Model | Effort shown in the guide |
+| Model | Effort shown in the guide | Workload, verbatim |
 |---|---|---|
-| Small edits, bounded problems, extraction | Luna | Low |
-| Gathering context from apps, prioritization, constrained problems | Luna | Extra high |
-| Technical projects with expected revisions | GPT-6.1 Sol | Medium |
-| Finished deliverables and conflicting evidence | GPT-6.1 Sol | Extra high |
-| Brief writing that retains nuance | Astra | Low |
-| Broad projects requiring dependable interactions | Astra | Medium |
-| Demanding analysis with strict requirements | Astra | Extra high |
+| Luna | Low | Fine-grained edits, well-scoped problem-solving, and simple data extraction. |
+| Luna | Extra high | Finding current context across multiple apps, prioritizing work, and solving problems with clear constraints. |
+| GPT-6.1 Sol | Medium | Complex technical work and coordinated deliverables you expect to revise. |
+| GPT-6.1 Sol | Extra high | Polished deliverables, connected visual systems, and decisions built from conflicting evidence. |
+| Astra | Low | Concise writing and content adaptation that preserve facts and nuance. |
+| Astra | Medium | Ambitious projects that need broad context, reliable interactions, and complete results. |
+| Astra | Extra high | Demanding analysis and complex deliverables with exacting requirements. |
+
+The page presents Extra high as a starting point for these workloads; it does not advise against it.
 
 ## Evaluation principle
 
-Compare configurations on identical inputs and retain one that meets the required quality with less resource use. Frequency, turnaround time, intended audience, and quality requirements affect the choice.
+> If you can, experiment using the same inputs to compare results and keep the lightest setting that meets your quality bar.
+
+> A task you’re waiting on may need a faster setting than one that runs overnight.
 
 ## Limits
 
-These are dated starting points. The page distinguishes product/version availability and does not establish a common score for competing vendors. Display labels above are not verified CLI flags or configured bench-router profile IDs.
+These are dated starting points. The page distinguishes product/version availability and does not establish a common score for competing vendors. Display labels above are not verified CLI flags or configured bench-router profile IDs. The page names no default reasoning effort.
 
 ## Related
 
@@ -53,4 +60,5 @@ These are dated starting points. The page distinguishes product/version availabi
 
 ## Sources
 
-- [[_raw/_archived/2026-10-19-openai-model-selection]] — bounded original excerpt; canonical link and capture scope are recorded there.
+- [[_raw/_archived/2026-10-24-openai-model-selection]] — verbatim excerpts of every quoted row and sentence.
+- [[_raw/_archived/2026-10-19-openai-model-selection]] — earlier bounded excerpt; canonical link and capture scope are recorded there.

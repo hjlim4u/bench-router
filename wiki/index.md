@@ -5,7 +5,7 @@ generated_by: obsidian-wiki memory index
 
 # Wiki Index
 
-Benchmark knowledge for bench-router. Schema: [[AGENTS]]. Compiled into `index.json` by `bench_router/wiki.py`.
+Benchmark knowledge for bench-router. Schema: [[AGENTS]]. Compiled into `index.json` by `bench_router/wiki.py`. Vault metadata: [[_meta/taxonomy]] (tag vocabulary), [[_meta/todos]] (open threads).
 
 ## Facets
 
@@ -192,8 +192,8 @@ Benchmark knowledge for bench-router. Schema: [[AGENTS]]. Compiled into `index.j
 ## References
 
 - [[references/sources/agent-arena-methodology]] — Agent Arena causal-tracing methodology and signal definitions. ( #source #benchmark)
-- [[references/sources/anthropic-effort]] — Claude effort affects response, tool-call, and thinking tokens; model-specific recommendations override general level descriptions. ( #source #reasoning #coding)
-- [[references/sources/anthropic-model-selection]] — Anthropic's efficiency-first and capability-first starting strategies, model roles, and workload-specific evaluation requirements. ( #source #agentic #coding)
+- [[references/sources/anthropic-effort]] — Claude effort affects response, tool-call, and thinking tokens; per-model recommendations, quoted verbatim, override the general level table. ( #source #reasoning #coding)
+- [[references/sources/anthropic-model-selection]] — Anthropic's model matrix (most workloads start with Opus 5.5), efficiency-first and capability-first strategies, and effort defaults, quoted verbatim. ( #source #agentic #coding)
 - [[references/sources/arena-alignment-index]] — Arena Alignment Index: Unauthorized Action, False Attribution, Deceptive Completion; LLM-judge rubrics; weights 50/25/25 (2026-10-08). ( #source #benchmark)
 - [[references/sources/arena-category]] — Arena category definitions: coding heuristic, long queries over 500 tokens, Polyglot language tags, LLM-classified creative writing. ( #source #benchmark)
 - [[references/sources/arena-expert]] — Expert tagging (zero-shot DeepSeek-v3, prompt only) and the 23 occupational categories, 8 with leaderboards. ( #source #benchmark)
@@ -201,11 +201,11 @@ Benchmark knowledge for bench-router. Schema: [[AGENTS]]. Compiled into `index.j
 - [[references/sources/arena-hard-prompts]] — Hard Prompts: seven criteria, a prompt qualifies with a hardness score of 6 or more. ( #source #benchmark)
 - [[references/sources/arena-leaderboard-changelog]] — Leaderboard changelog: WebDev split, Document Arena, Image-to-WebDev, Bash Reliability replacing Bash Recovery. ( #source #benchmark)
 - [[references/sources/arena-vision-categories]] — Current Vision Arena categories: captioning, creative writing, diagrams, entity recognition, homework, humor, OCR. ( #source #benchmark)
-- [[references/sources/google-gemini-models]] — Dated examples of Google's published Gemini model roles, distinct from workload-specific reasoning settings and measured routing results. ( #source #agentic #coding)
+- [[references/sources/google-gemini-models]] — Google's published Gemini model descriptions and new-project advice, quoted verbatim; distinct from thinking settings and measured routing results. ( #source #agentic #coding)
 - [[references/sources/google-gemini-thinking]] — Google's workload-based thinking guidance, automatic effort adjustment, and model-specific supported levels. ( #source #reasoning #agentic)
 - [[references/sources/hf-official-benchmarks]] — Hugging Face official benchmark datasets: 49 entries and their card descriptions (fetched 2026-10-17). ( #source #benchmark)
 - [[references/sources/lmarena-leaderboard-dataset]] — LMArena leaderboard dataset: configs, splits, column meanings. ( #source #benchmark)
-- [[references/sources/openai-model-selection]] — OpenAI's documented workload-to-model/effort examples and its recommendation to compare settings on the same inputs. ( #source #agentic #reasoning)
+- [[references/sources/openai-model-selection]] — OpenAI's documented model/effort starting points, quoted verbatim, and its advice to keep the lightest setting that meets the quality bar. ( #source #agentic #reasoning)
 - [[references/sources/themodelgap-data]] — The Model Gap benchmark metadata and scores (CC BY 4.0). ( #source #benchmark)
 - [[references/sources/visionarena-battle]] — VisionArena-Battle dataset: question category tag names. ( #source #benchmark)
 - [[references/sources/visionarena-paper]] — VisionArena paper: original categories (Gemini 1.5 Flash classification) and the multi-turn, exclude-ties and exclude-refusal filters. ( #source #benchmark)

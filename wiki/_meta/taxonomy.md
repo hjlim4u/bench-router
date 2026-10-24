@@ -1,3 +1,13 @@
+---
+title: Tag Taxonomy
+category: _meta
+tags: [meta/taxonomy]
+sources: [conversation]
+created: 2026-10-18
+updated: 2026-10-18
+summary: Canonical tag vocabulary for this vault: type, collector and topic tags, alias mapping and usage rules.
+---
+
 # Tag Taxonomy
 
 Canonical tags for this vault. Rules: at most 5 tags per page (`visibility/` tags excluded), lowercase and hyphenated, prefer broad over narrow.

@@ -6,6 +6,7 @@ sources: [conversation]
 created: 2026-10-22
 updated: 2026-10-22
 generated_by: obsidian-wiki memory todo
+summary: Open threads carried between sessions on the router design (evaluations, pattern selection, benchmark uncertainty, orchestration boundary).
 ---
 
 # Todo Index
