@@ -247,6 +247,28 @@ class P2(unittest.TestCase):
     def receipt(self, out):
         return json.loads(Path(out["receipt_path"]).read_text("utf-8"))
 
+    def test_v99_discovers_profiles_from_codeburn_models_and_quota(self):
+        rows = [{"provider": "codex", "model": "gpt-6.1-sol"},
+                {"provider": "claude", "model": "claude-opus-5-5"},
+                {"provider": "unknown", "model": "skip"}]
+        quota = {"providers": [{"id": "codex", "available": True, "windows": [{"usedPct": 20}]},
+                               {"id": "claude", "available": False, "windows": []}]}
+        def runner(cmd, **kw):
+            if cmd[0] == "agy":
+                return SimpleNamespace(returncode=0, stdout="gemini-4-argon-high\tGemini 4 Argon (High)\n", stderr="")
+            return SimpleNamespace(returncode=0, stdout=json.dumps(rows if cmd[1] == "models" else quota), stderr="")
+        profiles = hd.discover_profiles(which=lambda name: None if name == "claude" else "/usr/bin/tool", runner=runner)
+        self.assertEqual([p["id"] for p in profiles], ["agy-gemini-4-argon-high", "codex-gpt-6-1-sol-high",
+                                                          "codex-gpt-6-1-sol-low", "codex-gpt-6-1-sol-medium",
+                                                          "codex-gpt-6-1-sol-xhigh"])
+        self.assertEqual(profiles[1]["args"], ["-m", "gpt-6.1-sol", "-c", 'model_reasoning_effort="high"'])
+        self.assertEqual(r.load_profiles(self._write_profiles(profiles))["profile"], profiles)
+
+    def _write_profiles(self, profiles):
+        path = Path(self.tmp.name) / "profiles.toml"
+        path.write_text(hd.profiles_toml(profiles), "utf-8")
+        return path
+
     def test_v98_external_selection_dispatch_and_receipt_first_recovery(self):
         from bench_router import decision
         self.cfg = config([*self.cfg["profile"], profile("b")])
@@ -263,7 +285,7 @@ class P2(unittest.TestCase):
                                selection=selection, decision_options={"host": "codex", "env": {}})
         out = dispatch()
         self.assertEqual((out["status"], out["selected"]["profile"], out["selection"]["schema_version"]),
-                         ("completed", "b", "4.0"))
+                     ("completed", "b", "6.0"))
         with patch.object(decision, "load_guidelines", side_effect=AssertionError("must collect saved run")):
             again = dispatch()
         self.assertEqual((again["run_id"], len(fake.prompts)), (out["run_id"], 1))
@@ -281,7 +303,7 @@ class P2(unittest.TestCase):
             self.task(), self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response), "a")
         first = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake,
                             which=which, decision_options={**opts, "response": response})
-        self.assertEqual((first["status"], first["selection"]["schema_version"]), ("completed", "3.0"))
+        self.assertEqual((first["status"], first["selection"]["schema_version"]), ("completed", "5.0"))
         with patch.object(decision, "load_guidelines", side_effect=AssertionError("must recover without new choice")):
             again = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake,
                                 which=which, decision_options=opts)
@@ -645,6 +667,19 @@ class P2(unittest.TestCase):
     def test_prompt_size_limit(self):
         with self.assertRaises(r.InputError):
             self.run_(FakeProjects(), self.task(prompt="x" * hd.MAX_PROMPT_ARG_BYTES))
+
+
+class P2Availability(unittest.TestCase):
+    def test_agy_native_model_list_overrides_codeburn_quota(self):
+        def runner(cmd, **kw):
+            if cmd[:2] == ["agy", "models"]:
+                return SimpleNamespace(returncode=0, stdout="gemini-4-argon-high\tGemini 4 Argon (High)\n", stderr="")
+            return SimpleNamespace(returncode=0, stdout=json.dumps({"providers": [{"id": "antigravity", "available": False}]}), stderr="")
+        profiles = [profile("ok", kind="agy", executable="agy", args=["--model", "gemini-4-argon-high"]),
+                    profile("missing", kind="agy", executable="agy", args=["--model", "gone-high"])]
+        with patch.object(hd.shutil, "which", return_value="/usr/bin/tool"):
+            got = hd.probe_profiles(profiles, which=lambda _: "/usr/bin/tool", runner=runner)
+        self.assertEqual(got, {"ok": None, "missing": "agy_model_unavailable"})
 
 
 if __name__ == "__main__":

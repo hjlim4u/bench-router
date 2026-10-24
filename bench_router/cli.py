@@ -59,7 +59,7 @@ def _load(args):
         return (r.evaluate_v1 if args.format == "1" else r.evaluate)(task, cfg, mapping, snap, snap_warnings, now,
                                                                      context=context)
     if args.cmd == "route" and (args.profile or selection):
-        if selection and selection["schema_version"] in ("3.0", "4.0"):
+        if selection and selection["schema_version"] in ("3.0", "4.0", "5.0", "6.0"):
             return r.route(task, cfg, mapping, snap, snap_warnings, now, context=context,
                            selection=selection, **options)
         res = r.evaluate_v1(task, cfg, mapping, snap, snap_warnings, now, context=context)
@@ -227,6 +227,18 @@ def _status(args):
     return data.status(args.cache_dir, datetime.now(timezone.utc), cfg_hash)
 
 
+def _profiles(args):
+    from . import herdr
+    path = args.config_dir / "profiles.toml"
+    if path.exists() and not args.force:
+        raise r.InputError(f"{path} exists; use profiles discover --force to replace it")
+    profiles = herdr.discover_profiles()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    r.atomic_write(path, herdr.profiles_toml(profiles).encode("utf-8"))
+    return {"schema_version": r.SCHEMA_VERSION, "status": "ok", "written": str(path),
+            "profiles": [p["id"] for p in profiles]}
+
+
 def _metric_text(mid, m):
     if m["freshness"] == "missing":
         return f"{mid} MISSING ({m.get('reason')}) src={m['source']}"
@@ -325,6 +337,9 @@ def main(argv=None):
     wp.add_argument("--vault", type=Path, default=WIKI_VAULT)
     wp.add_argument("--check", action="store_true", help="validate only; do not write index.json")
     sub.add_parser("status", help="source age, failures, unmatched models, snapshot/config state")
+    profiles = sub.add_parser("profiles", help="create profiles.toml from CodeBurn-observed models")
+    profiles.add_argument("action", choices=["discover"])
+    profiles.add_argument("--force", action="store_true", help="replace an existing profiles.toml")
     pp = sub.add_parser("parallel", help="dispatch tasks × fanout agents concurrently, each in its own git worktree")
     pp.add_argument("--group", required=True)
     pp.add_argument("--dry-run", action="store_true")
@@ -366,7 +381,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     try:
-        res = {"refresh": _refresh, "status": _status, "collect": _collect, "resume": _resume, "tell": _tell, "stop": _stop, "feedback": _feedback,
+        res = {"refresh": _refresh, "status": _status, "profiles": _profiles, "collect": _collect, "resume": _resume, "tell": _tell, "stop": _stop, "feedback": _feedback,
                 "parallel": _parallel, "select": _select, "coordination": _coordination, "wiki": _wiki,
                 "evidence": _evidence}.get(
             args.cmd, _load)(args)

@@ -74,6 +74,9 @@ def tb_import(**kw):
 class P1(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+        # Network is forbidden in tests. Individual HTTP tests replace this stub with their response fixture.
+        self.enterContext(mock.patch("urllib.request.urlopen", side_effect=AssertionError("network disabled in tests")))
+        self.enterContext(mock.patch.object(d.sys, "stderr", io.StringIO()))
         self.cache = Path(self.tmp.name)
         self.ps = [profile("a", model_id="model-a", reasoning_effort="high"), profile("dflt")]
         self.cfg = config(self.ps)

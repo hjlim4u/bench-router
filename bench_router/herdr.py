@@ -27,6 +27,8 @@ MAX_PROMPT_ARG_BYTES = 120 * 1024  # the prompt is one argv entry (--desc); Linu
 _LOCAL_CODEBURN_BIN = Path(__file__).resolve().parents[1] / ".bench-router" / "codeburn" / "node_modules" / ".bin" / "codeburn"
 CODEBURN_BIN = os.environ.get("BENCH_ROUTER_CODEBURN", str(_LOCAL_CODEBURN_BIN) if _LOCAL_CODEBURN_BIN.exists() else "codeburn")
 CODEBURN_KIND = {"claude": "claude", "codex": "codex", "agy": "antigravity"}
+DISCOVERED_KIND = {"claude": ("claude", "claude-code", "--model"),
+                   "codex": ("codex", "codex-cli", "-m")}
 RESULT_REL = Path(".bench-router") / "runs"  # agent writes results here, relative to its board worktree
 # One agent run per receipt: no review rounds, attempts, plan gate or merge. worker.access stays the board's setting.
 WORK_SETTINGS = ["--workspace.from", "here", "--workspace.cleanup", "false", "--review.when", "never",
@@ -129,9 +131,34 @@ def probe(p, which=shutil.which):
     return None if which(p["executable"]) else "executable_not_found"
 
 
+def agy_models(runner=subprocess.run):
+    try:
+        res = runner(["agy", "models"], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                     timeout=SHORT_CALL_S, shell=False)
+        return {line.split("\t", 1)[0] for line in res.stdout.splitlines() if "\t" in line} if not res.returncode else None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def claude_efforts(runner=subprocess.run):
+    try:
+        res = runner(["claude", "--help"], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                     timeout=SHORT_CALL_S, shell=False)
+        match = re.search(r"--effort <level>.*?\(([^)]+)\)", res.stdout, re.S)
+        return tuple(x.strip() for x in match.group(1).split(",")) if not res.returncode and match else ()
+    except (OSError, subprocess.SubprocessError):
+        return ()
+
+
 def probe_profiles(profiles, which=shutil.which, runner=subprocess.run):
     """CLI preflight plus optional CodeBurn account/quota preflight."""
     out = {p["id"]: probe(p, which) for p in profiles}
+    agy = [p for p in profiles if p["kind"] == "agy" and out[p["id"]] is None]
+    if agy:
+        models = agy_models(runner)
+        for p in agy:
+            model = model_effort(p)
+            out[p["id"]] = "agy_models_unavailable" if models is None else (None if model and model[0] in models else "agy_model_unavailable")
     if not shutil.which(CODEBURN_BIN):
         return out
     try:
@@ -143,7 +170,7 @@ def probe_profiles(profiles, which=shutil.which, runner=subprocess.run):
     except (OSError, ValueError, subprocess.SubprocessError):
         return out
     for p in profiles:
-        if out[p["id"]]:
+        if p["kind"] == "agy" or out[p["id"]]:
             continue
         provider = providers.get(CODEBURN_KIND.get(p["kind"]))
         if provider is None:
@@ -158,6 +185,68 @@ def probe_profiles(profiles, which=shutil.which, runner=subprocess.run):
         if windows and len(exhausted) == len(windows):
             out[p["id"]] = "codeburn_quota_exhausted"
     return out
+
+
+def discover_profiles(which=shutil.which, runner=subprocess.run):
+    """Turn CodeBurn's locally observed model ids into currently usable profiles."""
+    rows = []
+    if which(CODEBURN_BIN):
+        try:
+            res = runner([CODEBURN_BIN, "models", "--format", "json"], capture_output=True, text=True,
+                         encoding="utf-8", errors="replace", timeout=SHORT_CALL_S, shell=False)
+            rows = json.loads(res.stdout) if res.returncode == 0 else []
+        except (OSError, ValueError, subprocess.SubprocessError):
+            pass
+    if not isinstance(rows, list):
+        rows = []
+    profiles = []
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("provider"), str) or not isinstance(row.get("model"), str):
+            continue
+        spec = DISCOVERED_KIND.get(row["provider"])
+        if spec is None or not row["model"]:
+            continue
+        kind, harness_id, model_flag = spec
+        efforts = claude_efforts(runner) if kind == "claude" else ("low", "medium", "high", "xhigh")
+        for effort in efforts or ("unknown",):
+            profile_id = re.sub(r"[^a-z0-9_-]", "-", f"{kind}-{row['model'].lower()}-{effort}")[:48].rstrip("-")
+            if not profile_id or any(p["id"] == profile_id for p in profiles):
+                continue
+            args = [model_flag, row["model"]]
+            args += ["--effort", effort] if kind == "claude" and effort != "unknown" else []
+            args += ["-c", f'model_reasoning_effort="{effort}"'] if kind == "codex" else []
+            profiles.append({"id": profile_id, "enabled": True, "kind": kind, "executable": kind,
+                             "args": args, "model_id": row["model"], "harness_id": harness_id,
+                             "reasoning_effort": effort, "config_revision": "codeburn-discovery",
+                             "cost_tier": "high", "inference_local": False, "context_tokens": 0,
+                             "capabilities": ["filesystem_write"]})
+    profiles = [p for p in profiles if probe(p, which) is None]
+    if which("agy"):
+        for model in agy_models(runner) or ():
+            match = re.fullmatch(r"(.+)-(low|medium|high)", model)
+            if not match:
+                continue
+            model_id, effort = match.groups()
+            profile_id = re.sub(r"[^a-z0-9_-]", "-", f"agy-{model.lower()}")[:48].rstrip("-")
+            if any(p["id"] == profile_id for p in profiles):
+                continue
+            profiles.append({"id": profile_id, "enabled": True, "kind": "agy", "executable": "agy",
+                             "args": ["--model", model], "model_id": model_id, "harness_id": "antigravity-cli",
+                             "reasoning_effort": effort, "config_revision": "agy-models",
+                             "cost_tier": "high", "inference_local": False, "context_tokens": 0,
+                             "capabilities": ["filesystem_write"]})
+    if not profiles:
+        raise r.InputError("CodeBurn found no model with an available supported CLI and provider quota")
+    return sorted(profiles, key=lambda p: p["id"])
+
+
+def profiles_toml(profiles):
+    fields = ("id", "enabled", "kind", "executable", "args", "model_id", "harness_id", "reasoning_effort",
+              "config_revision", "cost_tier", "inference_local", "context_tokens", "capabilities")
+    lines = ['schema_version = "1.0"']
+    for profile in profiles:
+        lines += ["", "[[profile]]"] + [f"{field} = {json.dumps(profile[field], ensure_ascii=False)}" for field in fields]
+    return "\n".join(lines) + "\n"
 
 
 # ---------- receipt ----------
@@ -515,7 +604,7 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
                                  **(decision_options or {}))
                 if choice["status"] != "selected":
                     return choice
-                if choice["selection"].get("schema_version") == "3.0":
+                if choice["selection"].get("schema_version") == "5.0":
                     selection = {k: v for k, v in choice["selection"].items() if k != "source"}
                     profile_id = selection["profile"]
                     selection_mode = "vendor-guided"
@@ -569,7 +658,7 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                 return out
             now = _now()
             availability = availability if availability is not None else probe_profiles(cfg["profile"], which)
-            if selection is not None and selection.get("schema_version") in ("3.0", "4.0"):
+            if selection is not None and selection.get("schema_version") in ("3.0", "4.0", "5.0", "6.0"):
                 opts = {**(decision_options or {}), "allow_network": False}
                 opts.pop("response", None)
                 res = r.route(t, cfg, mapping, snap, snap_warnings, now, availability, context,

@@ -172,6 +172,8 @@ mkdir -p ~/.config/bench-router
 cp examples/profiles.example.toml ~/.config/bench-router/profiles.toml
 ```
 
+`$BR profiles discover`는 Antigravity의 현재 계정 모델 목록과 CodeBurn에 기록된 다른 CLI 모델·쿼터를 바탕으로 설정을 생성합니다. 기존 파일은 `--force` 없이는 바꾸지 않습니다.
+
 > [!IMPORTANT]
 > 복사한 `profiles.toml`은 **모두 비활성(`enabled = false`)인 placeholder**입니다. 다음 명령 전에 파일을 편집하세요.
 > - 사용할 프로필의 `enabled`를 `true`로 바꾸고, `args`의 모델명과 `model_id`를 실제 사용할 값으로 설정합니다. 나머지 실행·모델 정보도 확인하고 `config_revision`을 갱신합니다.
