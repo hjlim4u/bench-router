@@ -74,7 +74,7 @@ The default selection policy is **Vendor-guided Selection (`vendor-guided`, Poli
    - **Single viable candidate**: Automatically selected and routed by `bench-router`.
    - **Multiple viable candidates (`exit 17`)**: Returns `upstream_selection_required` without auto-narrowing by cost or fallback order. The Orchestrator reviews the candidate assessment (`evaluate --format 3`), records its choice (`select`), and dispatches (`route --selection`).
 
-For detailed workflows, response schemas, and legacy override rules, see [Vendor-guided Routing Policy (KR)](docs/vendor-guided-routing.md).
+For detailed workflows, response schemas, and legacy override rules, see [Vendor-guided Routing Policy](docs/vendor-guided-routing.md).
 
 ```mermaid
 flowchart TD
@@ -140,7 +140,7 @@ Choose the integration mode that matches your workflow before configuring prereq
 | **Base Runtime** | **Python 3.11+** | **Required** | Core CLI uses the standard library only. Offline evaluation and data refresh supported on Linux / WSL2 / Windows |
 | **Arena Refresh** | **`pyarrow`** | Required for Arena refresh | `mise install && mise run setup` or `uv sync --extra arena` |
 | **Router Config** | **`profiles.toml`** | **Required** | `~/.config/bench-router/profiles.toml` — Candidate Agent profiles. Generated and edited as shown in step 3 |
-| **Router Config** | **`aliases.toml`** | Recommended | `~/.config/bench-router/aliases.toml` — Maps external benchmark model names to profile `model_id` ([Reference (KR)](docs/reference.md#aliasestoml)) |
+| **Router Config** | **`aliases.toml`** | Recommended | `~/.config/bench-router/aliases.toml` — Maps external benchmark model names to profile `model_id` ([Reference](docs/reference.md#aliasestoml)) |
 | **Live Dispatch** | **[Herdr](https://herdr.dev)** | Required for live runs | **Linux / WSL2**, version **0.9.3+** (`herdr --version`, default `~/.local/bin/herdr`) |
 | **Live Dispatch** | **`herdr-projects` plugin** | Required for live runs | Pinned to version **1.2.1** (`herdr plugin install eliasstravik/herdr-projects` → verify `herdr-projects version`) |
 | **Live Dispatch** | **Target Agent CLIs** | Required for live runs | Target CLIs (`claude`, `codex`, `agy`, etc.) installed, authenticated, and project directories trusted |
@@ -364,9 +364,9 @@ $BR feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success            # Recor
   - Completed agent terminal panes close automatically to release system resources. Reopen the conversation context using `resume --run-id <RUN_ID> --cwd <DIR>`.
   - When failed or uncertain executions occupy shared concurrency slots (limit 4), verify process termination and release manually via `coordination release --key <KEY> --confirmed-stopped --note "..."`.
 - **Parallel Dispatch (`parallel`)**:
-  - Dispatches an explicit list of selections from group 2.0 into isolated worktrees. Repeated profiles run as separate workers, bounded by 8 tasks per group, 16 items per group, and `max_parallel` 1–4. Group 1.0 also uses vendor-guided selection without automatic fan-out across multiple candidates. → [Detailed Reference (KR)](docs/reference.md#병렬-위임과-협업-수준)
+  - Dispatches an explicit list of selections from group 2.0 into isolated worktrees. Repeated profiles run as separate workers, bounded by 8 tasks per group, 16 items per group, and `max_parallel` 1–4. Group 1.0 also uses vendor-guided selection without automatic fan-out across multiple candidates. → [Detailed Reference](docs/reference.md#parallel-dispatch-and-collaboration-levels)
 - **Multi-Agent Skill Integration**:
-  - Install [`skills/bench-router`](skills/bench-router/SKILL.md) across all agents with `npx skills add hjlim4u/bench-router -g`. Enables automated decision workflows via the host's native `bench-decider` subagent or the optional `decide.py` API helper ([`decision.md`](skills/bench-router/references/decision.md)) from any project path. → [Skill Setup Guide (KR)](docs/reference.md#여러-agent에서-skill-사용-글로벌-또는-프로젝트별-설치)
+  - Install [`skills/bench-router`](skills/bench-router/SKILL.md) across all agents with `npx skills add hjlim4u/bench-router -g`. Enables automated decision workflows via the host's native `bench-decider` subagent or the optional `decide.py` API helper ([`decision.md`](skills/bench-router/references/decision.md)) from any project path. → [Skill Setup Guide](docs/reference.md#using-as-a-skill-across-multiple-agents)
 
 ---
 
@@ -382,7 +382,7 @@ $BR feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success            # Recor
 - The 20-task evaluation reflects legacy policies and does not validate the quality or cost of Policy 6. The new policy also cannot guarantee quality without task-level evaluation. Historical comparisons are recorded in [eval/results/v1.md](eval/results/v1.md).
 - `cost_tier` values are relative policy categories, not empirical billing amounts.
 
-The offline suite currently passes 163 of 165 tests (2 skipped) as of 2026-10-24. For detailed coverage and live verification limits, see [Implementation Status (KR)](docs/implementation-status.md).
+The offline suite currently passes 163 of 165 tests (2 skipped) as of 2026-10-24. For detailed coverage and live verification limits, see [Implementation Status](docs/implementation-status.md).
 
 ---
 
@@ -390,14 +390,14 @@ The offline suite currently passes 163 of 165 tests (2 skipped) as of 2026-10-24
 
 | Document | Language | Contents |
 |---|---|---|
-| [docs/reference.md](docs/reference.md) | KR | Configuration formats, complete CLI reference, exit codes, evaluation pathways, data refresh, result contracts, test guides |
-| [docs/vendor-guided-routing.md](docs/vendor-guided-routing.md) | KR | Vendor-guided routing policy (Policy 6), phased decision packets, and selection rules |
-| [docs/projects.md](docs/projects.md) | KR | Live execution setup (herdr-projects 1.2.1), permissions, collection, and session resumption contracts |
-| [docs/orchestrator.md](docs/orchestrator.md) · [docs/routing-contracts.md](docs/routing-contracts.md) | EN · KR | Orchestrator integration (`evaluate`, `context.json`, `selection.json`) and I/O contracts |
-| [wiki/AGENTS.md](wiki/AGENTS.md) · [docs/benchmark-index-analysis.md](docs/benchmark-index-analysis.md) | EN · KR | Benchmark wiki (`wiki/`) schema and multi-attribute index architecture |
+| [docs/reference.md](docs/reference.md) | EN | Configuration formats, complete CLI reference, exit codes, evaluation pathways, data refresh, result contracts, test guides |
+| [docs/vendor-guided-routing.md](docs/vendor-guided-routing.md) | EN | Vendor-guided routing policy (Policy 6), phased decision packets, and selection rules |
+| [docs/projects.md](docs/projects.md) | EN | Live execution setup (herdr-projects 1.2.1), permissions, collection, and session resumption contracts |
+| [docs/orchestrator.md](docs/orchestrator.md) · [docs/routing-contracts.md](docs/routing-contracts.md) | EN | Orchestrator integration (`evaluate`, `context.json`, `selection.json`) and I/O contracts |
+| [wiki/AGENTS.md](wiki/AGENTS.md) · [docs/benchmark-index-analysis.md](docs/benchmark-index-analysis.md) | EN | Benchmark wiki (`wiki/`) schema and multi-attribute index architecture |
 | [skills/bench-router/SKILL.md](skills/bench-router/SKILL.md) · [decision.md](skills/bench-router/references/decision.md) | EN | Multi-agent Skill usage and lightweight decision workflows (`decide.py` / `bench-decider`) |
-| [00_START_HERE.md](00_START_HERE.md) ~ [06_VALIDATION_AND_OPEN_ITEMS.md](06_VALIDATION_AND_OPEN_ITEMS.md) | EN · KR | Architectural and design specification documents |
-| [docs/implementation-status.md](docs/implementation-status.md) | KR | Implementation tracking and historical run logs |
+| [00_START_HERE.md](00_START_HERE.md) ~ [06_VALIDATION_AND_OPEN_ITEMS.md](06_VALIDATION_AND_OPEN_ITEMS.md) | EN | Architectural and design specification documents |
+| [docs/implementation-status.md](docs/implementation-status.md) | EN | Implementation tracking and historical run logs |
 
 ## Licenses and Attribution
 

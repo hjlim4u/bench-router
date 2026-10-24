@@ -1,62 +1,62 @@
-# 다중 기준 라우팅 계약
+# Multi-Criteria Routing Contracts
 
-갱신: 2026-10-24. 구현: `routing.py`, `decision.py`, `cli.py`, `herdr.py`, `parallel.py`. 초기 2026-10-13 설계의 후보 평가·지표·제약 경계를 유지하며, 제거된 legacy 자동 선택 절차는 현재 계약에 포함하지 않는다.
+Updated: 2026-10-24. Implementation: `routing.py`, `decision.py`, `cli.py`, `herdr.py`, `parallel.py`. Preserves candidate evaluation, metrics, and constraint boundaries from the initial 2026-10-13 design; removed legacy automatic selection procedures are excluded from the current contract.
 
-## 0. 목표와 책임
+## 0. Goals and Responsibilities
 
-Router는 사실 정리·필수 제약·공식 가이드 적합성·비교 가능한 평가·선택 기록·실행을 제공한다. 상위 Orchestrator는 작업 분해·팀 구성·최종 선택·전체 예산·결과 채택을 결정한다. 범용 플러그인 로더·규칙 엔진·단위 변환 DSL·workflow scheduler는 없다.
+The Router provides facts collation, hard constraint checking, official guide suitability, comparable evaluations, selection records, and execution dispatch. The upstream Orchestrator decides task decomposition, team formation, final selection, global budget allocation, and result adoption. There is no general-purpose plugin loader, rule engine, unit-conversion DSL, or workflow scheduler.
 
-기본 선택은 [vendor-guided 정책 6](vendor-guided-routing.md)이다. 복수 적합 후보는 상위 선택을 요구하고, 가중합·near-tie·default/fallback 순위로 줄이지 않는다.
+The default selection policy is [Vendor-guided Policy 6](vendor-guided-routing.md). Multiple viable candidates require upstream selection and are never reduced via weighted sums, near-tie logic, or default/fallback priorities.
 
-## 1. 계약 A — 후보 평가와 선택의 분리
+## 1. Contract A — Separation of Candidate Assessment and Selection
 
-### 1.1 공통 경계
+### 1.1 Common Boundaries
 
-| 함수 / CLI | 책임 |
+| Function / CLI | Responsibility |
 |---|---|
-| `routing.assess()` | ID순 전 프로필 facts·제약·선택적 benchmark 평가. 선택하지 않음 |
-| `routing.evaluate()` / `evaluate --format 2` | 기본 schema 2.0의 사실·제약·category benchmark quality/coverage |
-| `routing.evaluate_v1()` / `evaluate --format 1` | schema 1.0의 candidates/excluded 호환 형태 |
-| `decision.evaluate()` / `evaluate --format 3` | schema 4.0의 단계별 의미 판단·후보 적합성·관측·비교·진단 |
-| `decision.bind()` / `select` | 완료된 format 3 평가에서 상위 선택 기록 6.0 생성 |
-| `routing.route()` → `decision.route()` | 정책 6의 판단 패킷·제한된 단일 후보 선택 5.0·선택 재생 |
-| `routing.apply_selection()` | selection 2.0 또는 `--profile`의 명시적 override; 현재 제약 검사 |
+| `routing.assess()` | Facts, constraints, and optional benchmark evaluation for all profiles in ID order. Does not select. |
+| `routing.evaluate()` / `evaluate --format 2` | Default schema 2.0 facts, constraints, and category benchmark quality/coverage. |
+| `routing.evaluate_v1()` / `evaluate --format 1` | Schema 1.0 candidates/excluded compatibility format. |
+| `decision.evaluate()` / `evaluate --format 3` | Schema 4.0 phased semantic judgments, candidate suitability, observations, comparisons, and diagnostics. |
+| `decision.bind()` / `select` | Generates upstream selection record 6.0 from a completed format 3 assessment. |
+| `routing.route()` → `decision.route()` | Policy 6 decision packets, bounded single-candidate selection 5.0, and selection replay. |
+| `routing.apply_selection()` | Explicit override for selection 2.0 or `--profile`; checks current constraints. |
 
-CLI `--format 3`은 JSON schema 버전 `4.0`과 다르다. `select`는 format 1·2 결과를 받지 않는다. 모든 evaluate 형식은 오프라인이며 worker 실행·파일 쓰기·판단 API 호출을 하지 않는다.
+CLI `--format 3` is distinct from JSON schema version `4.0`. `select` does not accept format 1 or 2 results. All evaluate formats run offline without executing workers, writing files, or calling external decision APIs.
 
-### 1.2 기본 benchmark 평가
+### 1.2 Default Benchmark Evaluation
 
-`assess()`는 제약을 통과한 후보에만 `benchmark_evaluation()`을 직접 호출한다. 평가 결과는 `status: ok|insufficient|unavailable`, `quality`, `coverage`, `exact_evidence_weight`, `evidence`다. 출력 변환 시 `coverage_band`를 붙인다. 근거가 없어도 후보는 남으며 하드 탈락은 제약이 결정한다.
+`assess()` invokes `benchmark_evaluation()` directly only for candidates passing constraints. Evaluation results consist of `status: ok|insufficient|unavailable`, `quality`, `coverage`, `exact_evidence_weight`, and `evidence`. Output serialization attaches `coverage_band`. Candidates remain even when evidence is missing; disqualification is governed strictly by hard constraints.
 
-coverage는 benchmark 근거 충족도이며 전체 판단의 확신도가 아니다. category 가중치·percentile·quality 식은 [데이터 명세](../03_ROUTING_AND_DATA_SPEC.md)에 있다. `score`, `legacy_score`, `cost_proxy`는 출력하지 않고 후보 순서는 profile ID순이다. 다른 평가기를 실제 추가할 때 `evaluations`에 이름 하나와 함수 호출을 추가한다. 별도 `EVALUATORS` registry는 없다.
+Coverage indicates benchmark evidence completeness, not the overall confidence of the final decision. Category weights, percentiles, and quality formulas reside in [Data Specification](../03_ROUTING_AND_DATA_SPEC.md). `score`, `legacy_score`, and `cost_proxy` are omitted from output; candidate lists follow profile ID order. Adding a new evaluator requires appending its name and function call to `evaluations`. There is no separate `EVALUATORS` registry.
 
-### 1.3 evaluate 출력 2.0
+### 1.3 Evaluate Output 2.0
 
-| 필드 | 의미 |
+| Field | Meaning |
 |---|---|
-| `inputs`, `assessment_digest` | task/config/snapshot/context·기본 정책·지표 registry 버전의 정적 입력과 SHA-256 hex |
-| `task_facts`, `max_estimated_cost_usd` | task 지표와 호출 allowance |
-| `candidates` | 모든 프로필 ID순; eligible·constraints·facts·unrecognized_metrics·evaluations |
-| `classification`, `sources`, `warnings` | 기본 category 분류·소스 날짜·경고 |
-| `availability_verified` | evaluate에서는 false; live dispatch에서 재검사 |
+| `inputs`, `assessment_digest` | Static inputs (task/config/snapshot/context, default policy, metric registry version) and SHA-256 hex |
+| `task_facts`, `max_estimated_cost_usd` | Task metrics and invocation cost allowance |
+| `candidates` | All profiles in ID order: eligible, constraints, facts, unrecognized_metrics, evaluations |
+| `classification`, `sources`, `warnings` | Default category classification, source timestamps, and warnings |
+| `availability_verified` | false in evaluate; re-verified during live dispatch |
 
-`evaluations`는 하드 탈락 후보에서 `{}`다. `constraints`는 적용한 통과·실패를 모두 포함한다. format 1은 candidates/excluded 형태를 유지하지만 순위·자동 선택을 제공하지 않는다.
+`evaluations` is `{}` for candidates failing constraints. `constraints` includes all evaluated passing and failing checks. Format 1 retains the candidates/excluded structure but provides no ranking or automatic selection.
 
-### 1.4 vendor-guided 후보 평가와 선택
+### 1.4 Vendor-guided Candidate Assessment and Selection
 
-format 3은 `analysis → 적격 벤더별 guidance → benchmark(비교가 있을 때)`를 재생한다. 판단 미완료는 `decision_required`(17), 완료된 평가는 `status: ok`다. pending 응답의 최종 `assessment_digest`는 null이며 현재 request digest는 `decision.request_digest`다.
+Format 3 replays `analysis → eligible vendor guidance → benchmark (when comparisons exist)`. Incomplete decisions return `decision_required` (17); completed evaluations return `status: ok`. The final `assessment_digest` of pending responses is null, and the current request digest is `decision.request_digest`.
 
-완료된 schema 4.0은 전 프로필의 hard eligibility·suitability·facts·sparse observations/missing·후보별 diagnostics를 제공한다. 공유 `evidence`에는 unit 정의·comparisons·comparison_scopes·relevance·prefiltered_units·auxiliary_units를 둔다. 선택용 검색에는 표 표시용 12 unit 제한을 적용하지 않는다. `decision`은 재생 원본, `recommendation`은 제한된 단일 후보 추천 또는 기권이다. 자세한 필드와 응답 작성은 [상위 연동](orchestrator.md#vendor-guided-candidate-assessments-and-upstream-choices)을 따른다.
+Completed schema 4.0 provides hard eligibility, suitability, facts, sparse observations/missing data, and candidate diagnostics across all profiles. Shared `evidence` contains unit definitions, comparisons, comparison_scopes, relevance, prefiltered_units, and auxiliary_units. Retrieval for selection is not subject to the 12-unit table display limit. `decision` contains replay data, while `recommendation` contains a bounded single-candidate recommendation or abstention. For detailed field specifications and response formatting, see [Upstream Integration](orchestrator.md#vendor-guided-candidate-assessments-and-upstream-choices).
 
-## 2. 계약 B — 지표(facts)의 의미·유효성
+## 2. Contract B — Facts Semantics and Validity
 
-### 2.1 지표 정의표
+### 2.1 Metric Definitions Table
 
-`routing.METRICS`가 등록 지표의 대상·타입·단위·최대 수명을 정의한다. 등록 항목은 tokens.estimated_input/output, tokens.required_context, price.input/output_usd_per_mtok, cost.estimated_usd, task.complexity다. latency.p50_ms 등 다른 namespaced 지표는 현재 미등록이며 전달만 한다.
+`routing.METRICS` defines targets, types, units, and maximum lifetimes for registered metrics: tokens.estimated_input/output, tokens.required_context, price.input/output_usd_per_mtok, cost.estimated_usd, and task.complexity. Other namespaced metrics (such as latency.p50_ms) are currently unregistered and passed through transparently.
 
-선호 방향이나 지표 간 가중치는 registry에 없다. 등록 지표의 타입·단위가 다르면 입력 오류이며 자동 단위 변환을 하지 않는다. 미등록 namespaced 지표는 형식만 검사하고 전달하며 제약·평가에 사용하지 않는다.
+The registry contains no preference directions or cross-metric weights. Mismatches in type or unit for registered metrics trigger input errors; automatic unit conversion is never performed. Unregistered namespaced metrics are validated for structural syntax and passed through, unused in constraints or evaluation.
 
-### 2.2 관측값 형식 (context 2.0)
+### 2.2 Observation Format (Context 2.0)
 
 ```json
 {"schema_version": "2.0",
@@ -71,98 +71,98 @@ format 3은 `analysis → 적격 벤더별 guidance → benchmark(비교가 있�
  }}}}
 ```
 
-위 가격은 형식 예시다. 프로필 키는 설정된 ID여야 한다. 지표는 모두 선택적이며 각 관측에는 `source`가 필요하다. 값이 있으면 `value`와 정의된 `unit`, 결측이면 `status: missing`과 `reason`을 쓴다. `value: null`은 거부한다.
+The prices above serve as format examples. Profile keys must match configured profile IDs. All metrics are optional, and every observation requires a `source`. Recorded values must include `value` and defined `unit`; missing data must include `status: missing` and `reason`. `value: null` is rejected.
 
-수명이 있는 지표는 `observed_at`이 필요하고 `expires_at`으로 더 짧은 수명을 줄 수 있다. 가격은 30일이다. 계산된 facts에는 fresh/expired/missing을 표시한다. 만료·결측은 0이 아니며 계산에서 제외한다. 해당 값을 쓰는 제약이 없으면 결측 자체로 탈락시키지 않는다.
+Metrics with finite validity require `observed_at`, and `expires_at` can impose shorter lifetimes. Price observations expire after 30 days. Computed facts annotate fresh/expired/missing status. Expired and missing values are not treated as zero and are excluded from computation. In the absence of constraints requiring a metric, missing data alone does not disqualify a candidate.
 
-### 2.3 context 1.0 호환
+### 2.3 Context 1.0 Compatibility
 
-`complexity`, `estimated_*_tokens`, `required_context_tokens`, `price{..., as_of}`, `signals`는 context 2.0으로 변환해 같은 검증 경로를 탄다. `context_hash`와 `decision_context`는 변환 후 형태를 사용한다. 과거 1.0 가격도 30일 만료를 적용한다.
+`complexity`, `estimated_*_tokens`, `required_context_tokens`, `price{..., as_of}`, and `signals` are transformed into Context 2.0 and follow the same validation path. `context_hash` and `decision_context` operate on the converted structure. Historical 1.0 price entries also adhere to 30-day expiration.
 
-## 3. 계약 C — 제약 (필수 조건)
+## 3. Contract C — Constraints (Hard Requirements)
 
-### 3.1 제약과 선호
+### 3.1 Constraints vs. Preferences
 
-제약 실패는 점수·상위 선택·provisional 수용으로 상쇄할 수 없다. 비용·지연 trade-off와 전체 예산은 상위 정책이다. `priority` 입력은 호환상 받지만 자동 비용 차감·near-tie 정렬에 사용하지 않는다.
+Constraint failures cannot be offset by high scores, upstream selection, or provisional acceptance. Cost-vs-latency trade-offs and global budgets are governed by upstream policy. The `priority` input is accepted for compatibility but is never used for automated cost discounting or near-tie sorting.
 
-### 3.2 이름 붙은 검사
+### 3.2 Named Checks
 
-`routing.CONSTRAINTS`는 enabled, task_exclusion, cost_tier, context_capacity, capabilities, local_only, availability, estimated_cost다. 검사 함수 `(profile, task, x)`는 적용한 통과·실패 결과 목록을 반환한다. 결과의 검사 이름은 `constraint`다.
+`routing.CONSTRAINTS` defines: enabled, task_exclusion, cost_tier, context_capacity, capabilities, local_only, availability, and estimated_cost. Check functions `(profile, task, x)` return a list of applied pass/fail results under the check name `constraint`.
 
 ```json
 {"constraint": "estimated_cost", "passed": false, "code": "estimated_cost_exceeds_max",
  "metric": "cost.estimated_usd", "observed": 0.20, "limit": 0.05, "on_missing": "exclude"}
 ```
 
-context capacity는 task 최소값과 context 필요값 중 큰 값으로 검사한다. 용량 불명은 양수 요구를 충족하지 않는다. 비용 상한이 있는데 견적이 missing/expired면 `estimated_cost_unknown`으로 탈락한다. 적용하지 않는 제약은 불필요한 결측 실패를 만들지 않는다.
+Context capacity is checked against the maximum of task minimum requirements and context requirements. Unknown capacity cannot satisfy positive requirements. When cost caps are specified, missing or expired estimates fail with `estimated_cost_unknown`. Unapplied constraints do not generate superfluous missing-value failures.
 
-### 3.3 등급과 달러 상한
+### 3.3 Tiers vs. Dollar Caps
 
-`max_cost_tier`(low/medium/high)와 `max_estimated_cost_usd`는 독립이며 둘 다 지정하면 둘 다 통과해야 한다. 등급 기본 high는 등록된 모든 등급을 허용한다. 견적이 있다고 등급을 자동 무시하지 않는다.
+`max_cost_tier` (low/medium/high) and `max_estimated_cost_usd` are independent; specifying both requires passing both. The default high tier permits all configured tiers. Specifying an estimated cost allowance does not bypass tier constraints.
 
-### 3.4 비용·토큰·quota
+### 3.4 Cost, Tokens, and Quota
 
-1. fresh `cost.estimated_usd` 공급자 견적이 우선이다.
-2. 없으면 `(input tokens × input rate + output tokens × output rate) / 1,000,000`으로 계산한다(`source: router:io2-v1`).
-3. 입력이 없거나 만료되면 missing과 원인을 반환한다. 캐시·추가 요금은 상위 견적에 반영한다.
+1. Fresh `cost.estimated_usd` provider estimates take precedence.
+2. If absent, cost is calculated as `(input tokens × input rate + output tokens × output rate) / 1,000,000` (`source: router:io2-v1`).
+3. If inputs are missing or expired, missing status and cause are returned. Cache discounts and surcharges must be reflected in upstream estimates.
 
-예상 토큰은 이번 호출의 비용 입력, profile.context_tokens는 정적 수용량이다. 호출 allowance를 팀 전체 budget이나 실제 요금 보장으로 읽지 않는다. live에서는 CodeBurn의 provider 상태·모든 quota window 소진을 선택적으로 검사한다. Antigravity는 `agy models`의 실제 모델 목록을 검사한다. CodeBurn 실패는 PATH 검사로 폴백하되 agy 모델 검사는 유지한다. N개 worker를 위한 quota 예약은 없다.
+Estimated tokens represent cost inputs for this invocation, while profile.context_tokens represents static capacity. An invocation allowance must not be interpreted as a team budget or actual billing guarantee. In live mode, CodeBurn provider status and quota exhaustion across all windows are optionally checked. Antigravity checks the active model list via `agy models`. CodeBurn failures fall back to PATH checks while retaining agy model validation. No quota reservation is made for N workers.
 
-## 4. 계약 D — 판단 기록과 실행 연결
+## 4. Contract D — Binding Decision Records to Execution
 
-### 4.1 digest
+### 4.1 Digest
 
-format 1·2의 digest는 task_hash·config_hash·snapshot_id·context_hash·router_policy_version·metric_registry_version을 묶는다. now·가용성·freshness는 제외하고 실행 직전 다시 검사한다.
+The format 1/2 digest binds task_hash, config_hash, snapshot_id, context_hash, router_policy_version, and metric_registry_version. Timestamps, availability, and freshness are excluded from the digest and re-verified immediately prior to dispatch.
 
-format 3의 schema 4.0 digest는 `canonical_hash({"schema_version":"4.0", "decision":...})`다. decision에는 task·전체 입력·단계별 request/digest/답변·관측·관련성·진단이 있다. 단계별 request digest는 그 단계의 실제 의존성만 묶는다. 시간 경과 값 자체는 제외하지만 만료에 따른 freshness 변경은 재검증 대상이다. 파일 본문 전체를 hash하는 계약은 아니다.
+The format 3 schema 4.0 digest is `canonical_hash({"schema_version":"4.0", "decision":...})`. The decision encapsulates the task, static inputs, ordered request/digest/answers per stage, observations, relevance, and diagnostics. Stage request digests bind only the concrete dependencies of that stage. Historical elapsed time metrics are excluded, but freshness shifts due to expiration trigger re-verification. The contract does not hash raw file contents.
 
-### 4.2 selection 입력
+### 4.2 Selection Input
 
-| schema | 생성과 검증 |
+| Schema | Generation and Verification |
 |---|---|
-| 2.0 | format 1·2의 digest + profile·외부 policy·reason. 의미 판단 override로 `selection_legacy` 경고 |
-| 5.0 | 정책 6의 자동 단일 후보 + 전체 decision. 추천 profile에 고정 |
-| 6.0 | 완료된 format 3 평가에서 `select`로 생성. 외부 policy·reason·accept_provisional·전체 decision |
+| 2.0 | Format 1/2 digest + profile, external policy, and reason. Overrides semantic decisions with a `selection_legacy` warning. |
+| 5.0 | Policy 6 automated single candidate + full decision. Locked to recommended profile. |
+| 6.0 | Produced via `select` from completed format 3 evaluation. External policy, reason, accept_provisional, and full decision. |
 
-6.0은 documented 후보 또는 명시적 수용이 있는 provisional/alternative 후보를 선택한다. unsuitable·미평가·hard 탈락은 거부한다. 수용은 pending 조건을 해소하지 않는다. `select` 출력은 `selection` 객체를 감싼 schema 1.0 응답이므로 그 객체만 `--selection` 파일에 저장한다.
+Schema 6.0 selects documented candidates or provisional/alternative candidates accompanied by explicit acceptance. Unsuitable, unassessed, or constraint-failed candidates are rejected. Acceptance does not resolve pending conditions. The output of `select` wraps the `selection` object inside a schema 1.0 envelope; store only the inner object in the `--selection` file.
 
-`--selection`과 `--profile`은 배타적이며 `--decision-response`도 함께 쓸 수 없다. `--profile`은 기록 없는 override로 `selection_unrecorded`를 경고한다. 기존 vendor-guided schema 3.0·4.0이나 정책 1–5 기록은 새 판단에 재사용하지 않는다.
+`--selection` and `--profile` are mutually exclusive and cannot be combined with `--decision-response`. `--profile` constitutes an unrecorded override, emitting `selection_unrecorded`. Historical vendor-guided schema 3.0/4.0 and Policy 1–5 records cannot be reused for new decisions.
 
-5.0·6.0 실행은 provider를 새로 호출하지 않고 저장된 단계를 재생하며 현재 제약·가용성을 검사한다. 근거 입력이 달라지면 `stale_assessment`(14), 잘못된 입력 형식·미지원 schema는 validation(2)다. 5.0의 profile만 바꿔 재사용할 수 없다.
+Executions using 5.0 or 6.0 replay stored stages without invoking providers, validating current constraints and availability. Altered evidence inputs trigger `stale_assessment` (14); malformed input formats or unsupported schemas trigger validation errors (2). Altering only the profile ID of a 5.0 record is rejected.
 
-### 4.3 멱등성
+### 4.3 Idempotency
 
-같은 canonical cwd·task_id·round는 기존 receipt를 먼저 확인한다. 같은 semantic hash면 회수하고 다른 내용은 conflict다. 지정 profile이 다르면 `profile_round_conflict`, 같은 profile의 선택 기록만 다르면 회수와 `selection_differs_from_recorded` 경고다. 의도적 새 실행은 상위가 부분 효과를 검토한 뒤 새 round로 요청한다. timeout은 취소·재전송 허가가 아니다.
+Identical canonical cwd, task_id, and round check for existing receipts first. Matching semantic hashes recover existing runs; mismatched contents constitute conflicts. Divergent profile specifications trigger `profile_round_conflict`; matching profiles with differing selection records trigger recovery with a `selection_differs_from_recorded` warning. Intentional new executions require upstream inspection of partial effects and submission under a new round. Timeouts do not grant permission for cancellation or resubmission.
 
 ### 4.4 decision.json
 
-run의 `decision.json`은 route 응답에 selection과 기본 evaluate 2.0 `assessment`를 더한 형태다. vendor-guided의 원본 근거는 `selection.decision`에도 보존한다. 별도 decision 2.0 wrapper는 없다. 실행 응답에서는 전체 assessment를 제외한다. 출력 전용 `selection.source`는 재입력 전에 제거한다.
+A run's `decision.json` augments the route response with selection and default evaluate 2.0 `assessment`. Raw vendor-guided evidence is preserved within `selection.decision`. There is no separate decision 2.0 wrapper. Full assessments are omitted from live execution responses. Output-only `selection.source` fields are stripped prior to re-submission.
 
-## 5. 계약 E — 병렬 경로
+## 5. Contract E — Parallel Execution
 
-group 1.0은 task × fanout으로 정책 6을 반복하고 앞서 고른 profile은 다음 비교에서 제외한다. 복수 적합 후보가 남으면 판단·상위 선택을 요청하며 자동 기본값으로 fanout하지 않는다.
+Group 1.0 repeats Policy 6 across task × fanout, excluding previously selected profiles from subsequent comparisons. Viable candidates trigger decision requests and upstream selection without defaulting to fallback profiles.
 
-group 2.0은 task별 `context`와 `selections`의 순서 있는 실행 목록을 받는다. selection 2.0·5.0·6.0을 사용할 수 있고 같은 profile도 반복할 수 있다. task당 1–8개·group 전체 최대 16개며 `fanout` 키는 허용하지 않는다. `max_parallel`은 1–4, 사용자 공유 admission도 활성 4개다.
+Group 2.0 accepts an ordered execution list of task-specific `context` and `selections`. Selections can use schema 2.0, 5.0, or 6.0 and may repeat identical profiles. Supports 1–8 tasks per group, up to 16 items total; the `fanout` key is prohibited. `max_parallel` ranges from 1 to 4, matching the shared pool of 4 active execution slots.
 
-상위는 group.cwd와 원래 prompt로 평가한다. plan 단계에서 모든 선택의 digest를 확인하고 stale 항목 하나면 전체 미실행이다. 모든 선택이 끝나기 전에는 worktree·group 파일·worker를 만들지 않는다. worker의 cwd·협업 문구는 실행 시 달라지므로 내부적으로 이미 검사한 task hash만 조정하고 현재 제약·가용성은 재검사한다.
+Upstream evaluators evaluate using group.cwd and original prompts. All selection digests are validated during the planning phase; a single stale item aborts execution of the entire group. Worktrees, group files, and workers are never created before all selections conclude. Because worker cwd and collaboration prompts vary at execution time, internal task hashes are adjusted while current constraints and availability are re-verified.
 
-동결된 plan과 receipts로 같은 group을 회수한다. 입력 변경·목록 재정렬은 conflict다. member rounds는 `delivery_state`·`reassignment`를 보존한다. 반복 selection도 별도 label·worktree·receipt·한도를 사용한다. team budget·집계·채택·재시도는 상위 책임이다.
+Identical groups are recovered using frozen plans and receipts. Altered inputs or reordered lists constitute conflicts. Member rounds preserve `delivery_state` and `reassignment`. Repeated selections receive separate labels, worktrees, receipts, and slot allocations. Team budgets, aggregation, adoption, and retries belong to upstream responsibility.
 
-## 6. 버전과 문서
+## 6. Versions and Documents
 
-| 계약 | 현재 값 |
+| Contract | Current Value |
 |---|---|
 | task / result / route envelope | 1.0 |
-| context / group | 2.0, 입력 1.0도 수용 |
-| evaluate 기본 / 호환 | schema 2.0 / 1.0 |
+| context / group | 2.0 (accepts 1.0 input) |
+| evaluate default / compatibility | schema 2.0 / 1.0 |
 | evaluate `--format 3` | schema 4.0 |
-| vendor-guided 정책 / selection | policy 6 / 자동 5.0·외부 6.0 |
-| 기본 평가·snapshot 정책 / 지표 registry | routing.POLICY_VERSION 1.0 / METRIC_REGISTRY_VERSION 1 |
+| vendor-guided policy / selection | policy 6 / automatic 5.0, external 6.0 |
+| default evaluation, snapshot policy / metric registry | routing.POLICY_VERSION 1.0 / METRIC_REGISTRY_VERSION 1 |
 
-정책 버전·CLI format 번호·JSON schema 번호는 독립이다. 공식 가이드는 `guidelines.toml`의 별도 버전과 원문으로 고정한다. 상세 운영 예는 [reference](reference.md), 현재 검증은 [implementation-status](implementation-status.md), 상위 사용법은 [orchestrator](orchestrator.md)를 따른다.
+Policy versions, CLI format numbers, and JSON schema versions are independent. Official vendor guidelines are pinned to distinct versions and verbatim text in `guidelines.toml`. For operational examples, see [Reference](reference.md); for verification status, see [Implementation Status](implementation-status.md); for upstream usage, see [Orchestrator Integration](orchestrator.md).
 
-## 7. 지표 추가와 검증
+## 7. Adding Metrics and Verification
 
-전달만 할 namespaced 지표는 registry 수정 없이 사용할 수 있다. 정식 타입·단위·수명이 필요하면 `METRICS`, 필터가 필요하면 `CONSTRAINTS`의 함수·입력 상한·focused fixture를 함께 추가한다. 단순 예시 지연 상한을 실제 지원 입력처럼 문서화하지 않는다. 순위 정책은 상위에서 구현한다.
+Namespaced metrics passed through transparently require no registry modifications. Adding formal types, units, or lifetimes requires updating `METRICS`; adding filter constraints requires implementing functions, limits, and focused test fixtures in `CONSTRAINTS`. Illustrative latency caps must not be documented as active inputs. Ranking policies belong to upstream implementation.
 
-전체 검증 명령은 `python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn`이다. 현재 선택·stale·재생·부분 실패·중복 방지의 기준은 [검증 문서](../06_VALIDATION_AND_OPEN_ITEMS.md)에 있다. Projects live·workflow 품질·팀 예산 검증은 오프라인 계약 검증과 별도다.
+The complete verification command is `python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn`. Verification standards for selection, staleness, replay, partial failure, and deduplication reside in [Validation Documentation](../06_VALIDATION_AND_OPEN_ITEMS.md). Live Projects dispatch, workflow quality, and team budget validation remain separate from offline contract testing.

@@ -1,61 +1,64 @@
-# bench-router 상세 레퍼런스
+# bench-router Detailed Reference
 
-갱신: 2026-10-24. 기본 선택은 [공식 가이드 기반 정책 6](vendor-guided-routing.md)이며 `route`·`parallel`·Skill에 공통 적용됩니다. 아래 quality/coverage는 `evaluate` format 1·2의 참고 근거이며 자동 선택에는 쓰이지 않습니다. 가중합 자동 선택과 `--policy legacy`는 제거됐습니다.
+Updated: 2026-10-24. The default selection policy is [Vendor-guided Policy 6](vendor-guided-routing.md), shared across `route`, `parallel`, and installed Skills. Quality and coverage metrics described below serve as diagnostic evidence in `evaluate` formats 1 and 2 and are not used for automated selection. Weighted-sum automated selection and `--policy legacy` have been removed.
 
-설정 파일 형식, 명령과 종료 코드, 평가·선택 경로, 데이터 수집, live 위임 계약, 병렬 위임, 검증 기록을 정리한 문서입니다. 프로젝트 개요는 [README](../README.md)를 먼저 보세요.
+This document covers configuration formats, CLI commands, exit codes, evaluation pathways, data refresh mechanisms, live delegation contracts, parallel dispatch, and historical validation records. For a project overview, consult [README](../README.md) first.
 
 ---
 
-## 요구 사항
+## Requirements
 
-- 오프라인 평가·refresh는 Linux/WSL2/Windows에서 동작합니다. Projects live 실행은 Linux/WSL2에서 준비하세요.
-- Python 3.11 이상.
-- live 위임에는 Herdr, herdr-projects **1.2.1**(board), Agent CLI 설치·로그인이 필요합니다. task `cwd`는 커밋이 있는 git 저장소의 최상위여야 합니다. 자세한 내용은 [docs/projects.md](projects.md)를 보세요.
-- AA 데이터를 쓰려면 Artificial Analysis API 키(Free tier로 충분)가 필요합니다.
+- Offline evaluation and data refresh run on Linux, WSL2, and Windows. Live Projects execution runs on Linux or WSL2.
+- Python 3.11+.
+- Live delegation requires Herdr, herdr-projects **1.2.1** (board), and authenticated Agent CLIs. The task `cwd` must be the root of a Git repository containing at least one commit. See [docs/projects.md](projects.md).
+- Refreshing Artificial Analysis data requires an API key (Free tier suffices).
 
-핵심 CLI는 별도 설치 없이 저장소 루트에서 모듈로 실행합니다. Arena refresh에는 pyarrow가 필요합니다. `mise install` 후 `mise run setup` 또는 `uv sync --extra arena`로 준비하고, 해당 환경의 `uv run python -m bench_router.cli refresh`를 사용하세요. `mise run test`는 전체 오프라인 suite, `mise run refresh`는 전체 source의 `--force` 갱신입니다.
+The core CLI runs directly as a Python module from the repository root without installation. Arena refresh requires `pyarrow`. Set up using `mise install && mise run setup` or `uv sync --extra arena`, and invoke via `uv run python -m bench_router.cli refresh`. `mise run test` executes the complete offline test suite, and `mise run refresh` performs a `--force` refresh across all sources.
 
 ```bash
 cd /path/to/bench-router
 python3 -m bench_router.cli --help
 ```
 
-### 여러 Agent에서 Skill 사용 (글로벌 또는 프로젝트별 설치)
+<a id="여러-agent에서-skill-사용-글로벌-또는-프로젝트별-설치"></a>
+<a id="using-as-a-skill-across-multiple-agents"></a>
+### Using as a Skill Across Multiple Agents (Global or Project-Local Installation)
 
-`skills/bench-router/` 안에 `bench_router` 패키지(`index.json`, `guidelines.toml` 내장)가 심볼릭 링크로 포함되어 있어, [`npx skills`](https://skills.sh/)가 스킬 폴더를 복사(`dereference`)해 설치하더라도 원본 저장소나 `wiki/` 폴더 없이 **복사된 스킬로 동작**합니다.
+The `skills/bench-router/` directory bundles the complete `bench_router` engine (with built-in `index.json` and `guidelines.toml`) via symlinks. When [`npx skills`](https://skills.sh/) copies (`dereferences`) the skill directory during installation, it operates **fully autonomously without requiring the original repository or `wiki/` directory**.
 
 ```bash
-# 1. 글로벌 설치 (-g): 감지된 모든 Agent(Claude Code, Codex, Cursor, Gemini CLI 등)에 일괄 연결
+# 1. Global installation (-g): connect across all detected agents (Claude Code, Codex, Cursor, Gemini CLI, etc.)
 npx skills add hjlim4u/bench-router -g
-# (로컬 저장소에서 설치할 때: npx skills add /abs/path/to/bench-router -g)
+# (To install from a local clone: npx skills add /abs/path/to/bench-router -g)
 
-# 2. 특정 프로젝트 경로에만 설치
+# 2. Local installation into a specific project directory
 cd /abs/path/to/my-project && npx skills add hjlim4u/bench-router
 
-# 3. Node.js 없이 수동 심볼릭 링크로 설치할 때
+# 3. Manual symlink installation without Node.js
 ln -s "$REPO/skills/bench-router" "$AGENT_SKILLS/bench-router"
 ```
 
-Skill의 `scripts/cli.py`와 `scripts/decide.py`는 복사된 스킬 폴더(또는 심볼릭 링크된 원본 저장소)의 `bench_router`를 바로 실행합니다. 같은 OS 실행 환경의 Agent는 동일 사용자 설정(`~/.config/bench-router`)·캐시(`~/.cache/bench-router`)를 공유합니다. 네이티브 Windows와 WSL은 잠금 구현이 다르므로 둘이 같은 물리 캐시를 동시에 쓰지 마세요. 한 환경으로 실행을 통일하면 사본 없이 공유할 수 있습니다. `route`는 캐시를 갱신하지 않으며, 정기 `refresh`는 사용자당 한 곳에서만 예약하세요. 수동 `refresh`도 동일 잠금과 캐시를 사용합니다. Windows에서는 작업 스케줄러에 이 스크립트의 `refresh` 명령을 한 번 등록할 수 있습니다.
+The Skill's `scripts/cli.py` and `scripts/decide.py` directly invoke the bundled `bench_router` package. Agents running within the same OS environment share user configuration (`~/.config/bench-router`) and cache (`~/.cache/bench-router`). Because native Windows and WSL implement distinct file-locking primitives, do not share the same physical cache between Windows and WSL concurrently. Running within a single unified environment allows safe sharing without duplication. `route` never modifies the cache; schedule periodic `refresh` runs in only one place per user. Manual `refresh` shares the same locks and cache. On Windows, register the `refresh` command once in Windows Task Scheduler.
 
 ---
 
-## 설정
+## Configuration
 
-설정 디렉터리 기본값은 `$XDG_CONFIG_HOME/bench-router`(없으면 `~/.config/bench-router`)이고, `--config-dir`로 바꿀 수 있습니다. 캐시 디렉터리 기본값은 `$XDG_CACHE_HOME/bench-router`(없으면 `~/.cache/bench-router`)이고, `--cache-dir`로 바꿀 수 있습니다.
+The default configuration directory is `$XDG_CONFIG_HOME/bench-router` (`~/.config/bench-router`), configurable via `--config-dir`. The default cache directory is `$XDG_CACHE_HOME/bench-router` (`~/.cache/bench-router`), configurable via `--cache-dir`.
 
-| 파일 / 환경변수 | 필수 | 내용 |
+| File / Environment Variable | Required | Description |
 |---|---|---|
-| `profiles.toml` | **예** | 라우팅 대상 Agent 프로필 목록 |
-| `aliases.toml` | 아니오 (권장) | 출처별 모델 문자열 → 프로필 `model_id` 매핑 (`status`의 `unmatched_sample` 참고) |
-| `categories.toml` | 아니오 | 없으면 내장 `bench_router/categories.toml` 사용 |
-| `env` | 아니오 | API 키 보관용 파일(권한 600 권장). 실행 전 `set -a; . ~/.config/bench-router/env; set +a`로 로드 |
-| `ARTIFICIAL_ANALYSIS_API_KEY` | 아니오 (`aa` 수집 시) | Artificial Analysis Free API 키. 없어도 `arena`·`mg` 공개 데이터와 `wiki compile`은 동작함 |
-| `TYPESAFE_API_KEY` (또는 `JEV_API_KEY`) | 아니오 (live/Skill 판단 시) | live route/parallel 또는 decide.py의 Jev 호출. 없거나 실패하면 native 판단 패킷 반환; 호스트가 bench-decider를 실행 |
+| `profiles.toml` | **Yes** | Inventory of candidate Agent profiles |
+| `aliases.toml` | No (Recommended) | Source model string → profile `model_id` mapping (refer to `unmatched_sample` in `status`) |
+| `categories.toml` | No | Uses internal `bench_router/categories.toml` if absent |
+| `env` | No | API key storage (recommended permissions: `chmod 600`). Load via `set -a; . ~/.config/bench-router/env; set +a` |
+| `ARTIFICIAL_ANALYSIS_API_KEY` | No (for `aa` refresh) | Free API key for Artificial Analysis. Public `arena` and `mg` data and `wiki compile` work without it |
+| `TYPESAFE_API_KEY` (or `JEV_API_KEY`) | No (for Skill decisions) | Optional external API key for Jev in live route/parallel or `decide.py`. If absent or failed, falls back to native decision packets handled by the host agent's `bench-decider` |
 
+<a id="profilestoml"></a>
 ### profiles.toml
 
-라우팅 단위는 **프로필**(Agent CLI + 모델 + 실행 설정)입니다. 모든 키가 필수이며, 모르는 키가 있으면 오류입니다.
+Routing operates at the **profile** granularity (Agent CLI + model + execution configuration). All keys are required; unrecognized keys trigger configuration errors.
 
 ```toml
 schema_version = "1.0"
@@ -63,16 +66,16 @@ schema_version = "1.0"
 [[profile]]
 id = "claude-opus-high"                              # [a-z][a-z0-9_-]{0,47}
 enabled = true
-kind = "claude"                                      # herdr --kind 값. executable과 같아야 함
+kind = "claude"                                      # herdr --kind value; must match executable
 executable = "claude"
-args = ["--model", "claude-opus-5-5", "--effort", "high"]  # 모델·effort 설정만 지원
-model_id = "claude-opus-5-5"                         # aliases.toml이 가리키는 canonical ID
-harness_id = "claude-code"                           # exact 벤치마크 매칭용
-reasoning_effort = "high"                            # "unknown"이면 exact 매칭 불가
-config_revision = "2026-10-12c"                      # 설정을 바꾸면 갱신 → 지문(fingerprint) 변경
-cost_tier = "high"                                   # low | medium | high (정책상 상대값, 실제 요금 아님)
+args = ["--model", "claude-opus-5-5", "--effort", "high"]  # model and effort settings only
+model_id = "claude-opus-5-5"                         # canonical ID mapped in aliases.toml
+harness_id = "claude-code"                           # for exact benchmark matching
+reasoning_effort = "high"                            # "unknown" prevents exact matching
+config_revision = "2026-10-12c"                      # change config → update revision → shifts fingerprint
+cost_tier = "high"                                   # low | medium | high (policy relative tier, not billing cost)
 inference_local = false
-context_tokens = 0                                   # 0 = 모름 → min_context_tokens 요구 시 탈락
+context_tokens = 0                                   # 0 = unknown → fails min_context_tokens constraints
 capabilities = ["filesystem_write"]
 
 [[profile]]
@@ -91,21 +94,22 @@ context_tokens = 0
 capabilities = ["filesystem_write"]
 ```
 
-위 모델명과 effort는 예시입니다. 실제 사용할 모델은 `herdr-projects models KIND`에서 확인하세요. `args`는 `--model`/`-m`, `--effort`, Codex의 `-c model_reasoning_effort="E"`만 Projects 설정으로 변환할 수 있습니다. `--permission-mode`, `-s`, `-a` 등 다른 인자를 넣으면 제출 전에 `execution_failed`로 끝납니다.
+The model names and effort levels above are illustrative. Confirm supported models using `herdr-projects models KIND`. `args` can only translate `--model`/`-m`, `--effort`, and Codex `-c model_reasoning_effort="E"` into Projects settings. Passing other flags (such as `--permission-mode`, `-s`, `-a`) terminates with `execution_failed` prior to submission.
 
-권한은 Projects의 `worker.access`(`full` | `ask`) 설정을 따릅니다. 변경이 필요하면 `herdr-projects set worker.access ask [--repo NAME]`처럼 Projects에서 설정하세요. `ask`에서는 Claude의 편집이나 Codex의 worktree 밖 쓰기에 승인이 필요해 `blocked`가 될 수 있습니다. 자세한 내용은 [Projects 프로필과 권한](projects.md#프로필과-권한)을 보세요.
+Permissions follow Projects `worker.access` (`full` | `ask`). Modify using `herdr-projects set worker.access ask [--repo NAME]`. Under `ask`, Claude requires approval on every file edit and Codex on writes outside the worktree, pausing in `blocked`. For details, see [Projects Profiles and Permissions](projects.md#profiles-and-permissions).
 
-live `route`와 `parallel`은 PATH를 확인하고, Antigravity는 `agy models`에 등록된 실제 모델을 검사합니다. `codeburn quota --format json`을 쓸 수 있으면 Claude/Codex의 provider 상태와 모든 quota window 소진도 검사합니다. 프로젝트의 `.bench-router/codeburn` 설치본을 자동으로 찾고, PATH의 `codeburn` 또는 `BENCH_ROUTER_CODEBURN`으로 대체할 수 있습니다. CodeBurn 실패 시 PATH 검사로 폴백하며 agy 모델 검사는 유지합니다.
+Live `route` and `parallel` check PATH availability, and Antigravity checks the active model list via `agy models`. When `codeburn quota --format json` is available, provider status and quota window exhaustion are checked for Claude and Codex. CodeBurn installations under `.bench-router/codeburn` are detected automatically, overridable via PATH or `BENCH_ROUTER_CODEBURN`. When CodeBurn is unavailable, checks fall back to PATH while retaining agy model verification.
 
-`profiles discover [--force]`는 설치된 CLI의 후보를 `profiles.toml`로 생성합니다. Codex는 공개 models_cache와 모델별 effort, Claude는 가이드 모델과 CLI help의 effort, agy는 계정 모델 목록을 사용하며 CodeBurn의 관측 모델도 합칩니다. 기본 생성값은 enabled=true·cost_tier=high·context_tokens=0입니다. 권한·capability·context와 계정의 실제 호출 가능 여부를 검토하세요. 기존 파일 교체에는 `--force`가 필요합니다.
+`profiles discover [--force]` generates candidate configurations in `profiles.toml` from installed CLIs. Codex inspects `models_cache.json` and per-model effort; Claude inspects guidelines models and CLI help effort flags; agy inspects account model listings, merged with CodeBurn observed models. Generated profiles default to `enabled=true`, `cost_tier=high`, and `context_tokens=0`. Review permissions, capabilities, context limits, and live account invocation status before use. Overwriting existing files requires `--force`.
 
+<a id="aliasestoml"></a>
 ### aliases.toml
 
-출처마다 모델 이름이 다르므로 **정확한 문자열 → canonical ID**를 지정할 수 있습니다. 이 표는 필요할 때만 쓰는 예외 처리입니다.
+Because external sources name models differently, specify **verbatim source string → canonical ID** mappings here. This table serves as an explicit override mechanism.
 
-alias가 없어도 refresh가 출처 모델명을 정규화해 프로필 `model_id`에 자동으로 잇습니다: 대소문자·`.`/공백/`-` 차이를 같게 보고, 끝의 effort 표기(`(High)`, `-high`)를 뗍니다. 예를 들어 `Claude Opus 5.5 (High)`, `claude-opus-5.5-high`, `claude-opus-5-5`는 모두 `claude-opus-5-5` 프로필에 붙습니다. 새 모델 프로필을 추가하면 다음 refresh에서 별도 설정 없이 연결됩니다. 명시 alias가 있으면 그쪽이 우선합니다.
+Even without aliases, `refresh` normalizes source names to profile `model_id`: ignoring case, dots, spaces, and hyphens, and stripping trailing effort annotations (`(High)`, `-high`). For example, `Claude Opus 5.5 (High)`, `claude-opus-5.5-high`, and `claude-opus-5-5` all resolve to `claude-opus-5-5`. Adding a new profile automatically links matching names on the next refresh. Explicit aliases take precedence over automated normalization.
 
-자동 매칭하지 않는 것: `-preview`, `(xHigh, Codex Harness)`처럼 이름이 달라지는 변형, 프로필에 없는 모델. 필요하면 아래처럼 직접 연결하세요. effort별 행은 프로필 effort와 같은 행이 우선하고 없으면 effort 표기가 없는 행을 씁니다.
+What automated normalization does not match: divergent suffixes such as `-preview`, `(xHigh, Codex Harness)`, or unconfigured models. Map them manually as follows. Rows with explicit effort match profile effort first, falling back to rows without effort:
 
 ```toml
 [arena]
@@ -116,43 +120,43 @@ alias가 없어도 refresh가 출처 모델명을 정규화해 프로필 `model_
 "gpt-6-1-sol-high" = "gpt-6.1-sol"
 ```
 
-매칭되지 않은 이름은 `status`의 `unmatched_count`/`unmatched_sample`로 확인할 수 있습니다.
+Unmatched names can be inspected via `unmatched_count` and `unmatched_sample` in `status`.
 
 ---
 
-## 명령
+## Commands
 
-모든 명령은 stdout에 **JSON 한 객체**를 출력합니다(`explain`, `evidence --format table`은 텍스트). 로그는 stderr로 나갑니다. 전역 옵션: `--config-dir`, `--cache-dir`, `--herdr-session NAME`(또는 환경변수 `BENCH_ROUTER_HERDR_SESSION`). Projects 실행 파일 경로는 `BENCH_ROUTER_PROJECTS`(기본 `herdr-projects`)로 지정합니다. `--herdr-session`은 프로젝트가 속한 세션과 일치해야 합니다.
+All commands emit a **single JSON object** to stdout (except `explain` and `evidence --format table`, which output text). Diagnostic logs go to stderr. Global options include: `--config-dir`, `--cache-dir`, `--herdr-session NAME` (or environment variable `BENCH_ROUTER_HERDR_SESSION`). The Projects executable path defaults to `herdr-projects`, overridable via `BENCH_ROUTER_PROJECTS`. `--herdr-session` must match the session containing the target project.
 
-| 명령 | 동작 |
+| Command | Action |
 |---|---|
-| `refresh [--source aa\|arena\|mg] [--force] [--vault DIR]` | 자동 source 수집 및 검토된 wiki 컴파일(`index.json`) → snapshot 게시. TTL 안이면 건너뜀 |
-| `refresh --source swe\|tb --import FILE` | 승인된 수동 벤치마크 결과 import |
-| `wiki compile [--vault DIR] [--check]` | 검토된 benchmark wiki 페이지를 `index.json`으로 컴파일(`--check`는 검증만) |
-| `wiki facets` | Orchestrator가 `task.facets`에 태그할 수 있는 어휘와 설명·판정 규칙 출력 |
-| `evidence --task FILE [--format json\|table] [--max-units N]` | 작업 facet에 맞는 벤치마크 증거를 프로필별로 출력(합산·순위 없음, 읽기 전용) |
-| `status` | source별 나이·실패 횟수·마지막 오류·미매칭 모델, snapshot/설정 일치 여부 |
-| `profiles discover [--force]` | 프로필 자동 생성, 기존 파일 교체는 force 필요 |
-| `route --task FILE --dry-run` | 오프라인 판단 패킷 생성. 저장된 응답·선택 기록이 있으면 검증(네트워크·herdr·파일 쓰기 없음) |
-| `explain --task FILE [--context FILE]` | dry-run의 전체 후보·근거·제외 사유와 제약 결과·지표를 텍스트로 출력 |
-| `evaluate --task FILE [--context FILE] [--format 1\|2\|3]` | 기본 schema 2.0의 사실 평가 / format 3은 schema 4.0의 단계별 적합성·근거 (선택 없음) |
-| `select --assessment FILE --profile ID --policy-id ID --policy-version V --reason TEXT [--accept-provisional]` | 완료된 format 3 평가에서 selection 6.0 생성, 출력의 selection 객체만 저장 |
-| `route --task FILE --selection FILE` | Orchestrator가 고른 프로필을 선택 근거와 함께 실행. 평가 후 입력이 바뀌었으면 `stale_assessment` |
-| `route --task FILE [--wait-ms N]` | 선택 후 herdr로 위임하고, 유한한 시간 안에 대기·회수. `--wait-ms 0`은 제출 직후 반환 |
-| `parallel --group FILE [--dry-run]` | 여러 agent를 각자 worktree에서 병렬 위임 ([병렬 위임](#병렬-위임과-협업-수준)) |
-| `collect --run-id ID --cwd DIR [--wait-ms N]` | 기존 run을 관찰·회수. **프롬프트를 다시 보내지 않음** |
-| `collect --run CWD ID [--run …] --until any\|all [--wait-ms N]` | 여러 run을 하나라도(any) 또는 전부(all) 끝날 때까지 관찰 |
-| `stop --cwd DIR [--run-id ID]` | 실행 중인 run 중단(board stop, 비대화형은 workspace 닫기). 다음 collect에서 `execution_failed` |
-| `resume --run-id ID --cwd DIR` | 완료되어 닫힌 run의 board task와 agent 대화를 같은 세션으로 재개(프롬프트 전송 없음) |
-| `tell --cwd DIR [--run-id ID] --message TEXT \| --message-file F` | 실행 중(또는 resume한) run의 agent에 메시지 하나를 전달. `runs/ID/messages.jsonl`에 기록. 자동으로는 보내지 않음 |
-| `feedback --run-id ID --cwd DIR --outcome success\|partial\|fail [--evaluator X] [--note Y]` | Orchestrator의 검증 결과 기록 |
-| `coordination status\|release\|feedback` | 합산 활성 실행(최대 4개) 조회, worker 정지 확인 후 슬롯 해제(`release`), 채택 결과 기록 |
+| `refresh [--source aa\|arena\|mg] [--force] [--vault DIR]` | Fetches automated sources and compiles reviewed wiki pages (`index.json`) → publishes snapshot. Skips if within TTL |
+| `refresh --source swe\|tb --import FILE` | Imports approved manual benchmark results |
+| `wiki compile [--vault DIR] [--check]` | Compiles reviewed benchmark wiki pages into `index.json` (`--check` validates only) |
+| `wiki facets` | Emits vocabulary, descriptions, and rule mappings available for tagging in `task.facets` |
+| `evidence --task FILE [--format json\|table] [--max-units N]` | Emits per-profile benchmark evidence matching task facets (no sums or rankings; read-only) |
+| `status` | Reports source ages, failure counts, last errors, unmatched models, and snapshot/config consistency |
+| `profiles discover [--force]` | Discovers installed CLIs and generates candidate profiles (requires `--force` to overwrite) |
+| `route --task FILE --dry-run` | Generates offline decision packets; validates saved responses or selection records (no network, herdr, or disk writes) |
+| `explain --task FILE [--context FILE]` | Outputs human-readable candidate rationale, evidence, disqualifications, constraint results, and metrics |
+| `evaluate --task FILE [--context FILE] [--format 1\|2\|3]` | Evaluates facts (schema 2.0 default) / format 3 evaluates phased suitability and evidence (schema 4.0; no selection) |
+| `select --assessment FILE --profile ID --policy-id ID --policy-version V --reason TEXT [--accept-provisional]` | Produces selection 6.0 from a completed format 3 assessment; save only the inner `selection` object |
+| `route --task FILE --selection FILE` | Dispatches the profile chosen by the Orchestrator with selection evidence; returns `stale_assessment` if inputs changed |
+| `route --task FILE [--wait-ms N]` | Selects profile, delegates via Herdr, and waits/collects within timeout budget; `--wait-ms 0` returns immediately after dispatch |
+| `parallel --group FILE [--dry-run]` | Dispatches multiple agents into isolated worktrees in parallel ([Parallel Dispatch](#parallel-dispatch-and-collaboration-levels)) |
+| `collect --run-id ID --cwd DIR [--wait-ms N]` | Observes and collects an active run; **never re-sends prompts** |
+| `collect --run CWD ID [--run …] --until any\|all [--wait-ms N]` | Observes multiple runs until one (`any`) or all (`all`) settle |
+| `stop --cwd DIR [--run-id ID]` | Stops an active run (board `stop`, or closes workspace for headless tasks); next collect records `execution_failed` |
+| `resume --run-id ID --cwd DIR` | Reopens a closed board task and agent conversation in the same session (no prompt sent) |
+| `tell --cwd DIR [--run-id ID] --message TEXT \| --message-file F` | Delivers a message to an active or resumed agent; logged in `runs/ID/messages.jsonl`; never sent autonomously |
+| `feedback --run-id ID --cwd DIR --outcome success\|partial\|fail [--evaluator X] [--note Y]` | Records Orchestrator verification verdict |
+| `coordination status\|release\|feedback` | Inspects shared active executions (limit 4), releases slots after confirming worker stoppage (`release`), and records adoption |
 
-### 사용 예
+### Example Usage
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"                 # herdr, claude, codex
-set -a; . ~/.config/bench-router/env; set +a          # AA 키
+set -a; . ~/.config/bench-router/env; set +a          # AA API key
 BR="python3 -m bench_router.cli"
 
 $BR refresh                       # aa, arena, mg + wiki index
@@ -160,29 +164,29 @@ $BR status
 $BR route --task task.json --dry-run
 $BR explain --task task.json
 $BR evidence --task task.json --format table
-$BR --herdr-session work route --task task.json      # live 위임
+$BR --herdr-session work route --task task.json      # live delegation
 $BR collect --run-id <RUN_ID> --cwd /abs/project --wait-ms 60000
 $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator orchestrator
 ```
 
-### 종료 코드
+### Exit Codes
 
-| 코드 | 의미 |
+| Code | Meaning |
 |---|---|
-| 0 | `selected`(dry-run), `completed`, refresh/status/feedback 정상 |
-| 2 | 입력·설정·인자 오류 |
-| 10 | `blocked` — Agent가 승인·질문을 기다림 |
-| 11 | `timed_out` / `delivery_uncertain` — 실행 중일 수 있음. `collect`로 확인 |
+| 0 | `selected` (dry-run), `completed`, normal termination for refresh/status/feedback |
+| 2 | Invalid input, configuration, or argument error |
+| 10 | `blocked` — Agent is paused waiting on user approval or prompt response |
+| 11 | `timed_out` / `delivery_uncertain` — Execution may still be active; check via `collect` |
 | 12 | `execution_failed` / `result_invalid` |
-| 13 | `no_eligible_profile` — 위임하지 않음 |
-| 14 | `conflict` — 같은 task/round에 다른 내용, 미해결 run 존재, 또는 잠금 사용 중. `stale_assessment` — `evaluate` 이후 task·설정·snapshot·context가 바뀜 |
-| 15 | 내부 저장소·I/O 오류 |
-| 16 | refresh 대상 source 일부 또는 전체 실패(정상 데이터 last-good 유지) |
-| 17 | `decision_required` — native 판단 패킷 해결 필요 / `decision_unavailable` — 판단 불가·기권, 위임하지 않음 |
+| 13 | `no_eligible_profile` — Task not dispatched |
+| 14 | `conflict` — Incompatible task/round content, unresolved runs, or lock contention; `stale_assessment` — Task, config, snapshot, or context changed after evaluation |
+| 15 | Internal storage or I/O error |
+| 16 | Partial or complete failure during refresh (last-good data preserved) |
+| 17 | `decision_required` — Pending native decision packet resolution / `decision_unavailable` — Decision impossible or abstained; not dispatched |
 
 ---
 
-## 입력: task.json
+## Input: task.json
 
 ```json
 {
@@ -190,7 +194,7 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
   "task_id": "fix-pager-001",
   "round": 1,
   "summary": "Fix an off-by-one bug in pager.paginate.",
-  "prompt": "pager.py의 paginate(...)가 첫 페이지를 빠뜨립니다. 고치세요.",
+  "prompt": "paginate(...) in pager.py skips the first page. Please resolve.",
   "cwd": "/home/me/project",
   "context_files": ["pager.py"],
   "constraints": {"max_cost_tier": "high", "min_context_tokens": 0, "local_only": false,
@@ -200,34 +204,34 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 }
 ```
 
-- 필수: `schema_version`, `task_id`(`[A-Za-z0-9][A-Za-z0-9_-]{0,63}`), `round`(≥1), `summary`(≤4000자), `prompt`(≤256 KiB), `cwd`(존재하는 절대 경로).
-- 선택: `facets`(`{axis: [value]}`). `wiki facets`에 등록된 작업 성격을 Orchestrator가 직접 태그할 때 사용하며, `evidence` 표 조회에 반영됩니다.
-- 모르는 필드, NaN/Infinity, 중복 JSON 키, 잘못된 UTF-8, cwd 밖을 가리키는 `context_files`는 모두 오류(exit 2)입니다.
-- live 위임 시 프롬프트와 실행 계약 문구를 합쳐 120 KiB를 넘으면 거부합니다. herdr가 프롬프트를 argv 인자로만 받기 때문입니다.
-- **`cwd`는 Agent가 이미 신뢰한 폴더여야 합니다.** 처음 보는 폴더에서는 Claude Code 등이 신뢰 확인 창을 띄워 `blocked`가 됩니다. 라우터는 이 보안 확인에 자동으로 응답하지 않습니다.
+- Required: `schema_version`, `task_id` (`[A-Za-z0-9][A-Za-z0-9_-]{0,63}`), `round` (≥1), `summary` (≤4000 chars), `prompt` (≤256 KiB), `cwd` (existing absolute path).
+- Optional: `facets` (`{axis: [value]}`). Used when the Orchestrator explicitly tags task characteristics defined in `wiki facets`, reflected in `evidence` table queries.
+- Unrecognized keys, NaN/Infinity, duplicate JSON keys, invalid UTF-8, and `context_files` pointing outside `cwd` return exit code 2.
+- During live dispatch, the prompt combined with execution contract text must not exceed 120 KiB, because Herdr passes prompts strictly as single argv arguments.
+- **`cwd` must be trusted by target Agent CLIs in advance.** Unrecognized directories trigger trust confirmation dialogs in Claude Code or Codex, resulting in `blocked`. The router never automates security confirmations.
 
 ---
 
-## 선택 방식
+## Selection Methodology
 
-기본 `route`는 정책 6의 작업 analysis·벤더별 guidance·필요 시 benchmark 관련성을 판단합니다. 복수 적합 후보이면 상위 선택을 요청합니다. `evaluate --format 3`(schema 4.0) → `select` → `route --selection`은 상위 선택 6.0, 제한된 자동 단일 후보는 5.0입니다. 과거 vendor-guided selection 3.0·4.0은 재평가해야 합니다. 상세 판단·응답·digest는 [공식 가이드 기반 선택](vendor-guided-routing.md), 기존 2.0 override와 전체 버전은 [routing-contracts](routing-contracts.md)를 따릅니다.
+Default `route` evaluates task analysis, vendor guidance, and benchmark relevance under Policy 6. Multiple viable candidates request upstream selection. `evaluate --format 3` (schema 4.0) → `select` → `route --selection` produces selection schema 6.0; automated single-candidate selection produces schema 5.0. Historical vendor-guided schemas 3.0 and 4.0 require re-evaluation. Detailed decision flows, responses, and digests follow [Vendor-guided Routing Policy](vendor-guided-routing.md); legacy 2.0 overrides follow [Routing Contracts](routing-contracts.md).
 
-아래 분류·quality/coverage 계산은 `evaluate --format 1|2`의 기본 사실 평가입니다. vendor-guided의 의미 적합성과 별개이며 후보 순위를 만들지 않습니다.
+The classification and quality/coverage formulas below apply to default fact evaluations in `evaluate --format 1|2`. They are distinct from semantic suitability under vendor guidance and do not rank candidates.
 
-1. **분류**
-   - summary 키워드와 `context_files` 확장자 규칙을 씁니다. 한 카테고리에서만 서로 다른 규칙이 2개 이상 맞아야 채택합니다.
-   - 나머지는 `general`로 분류하고 `fallback_reason`을 남깁니다.
-2. **하드 제약**: `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, `local_only`를 적용합니다. context가 있으면 `tokens.required_context`와 `max_estimated_cost_usd`도 적용합니다(`routing.CONSTRAINTS`). live는 executable/kind 일치·PATH와 agy 모델·선택적 CodeBurn도 검사합니다. 실행 adapter가 지원하지 않는 args는 제출 전에 거부합니다.
-3. **근거와 점수**
-   - 카테고리 가중치 `w`와 evidence 매핑 `v`로 evidence별 가중치 `a_b = Σ w_c·v_cb`를 구합니다.
-   - 같은 cohort 전체를 모집단으로 percentile 정규화(`(평균 rank − 1)/(N − 1)`, N=1이면 0.5)를 합니다.
-   - coverage `C`는 관측된 evidence의 가중치 합입니다.
-   - 품질 `Q = C·Q_obs + (1−C)·0.5 − 0.1·(1−C)`. 결측에는 사전값 0.5와 페널티 0.1이 붙고, 측정된 0점은 결측이 아닙니다.
-4. **선택**: `Q`와 `C`는 참고 근거이고 후보는 profile ID순입니다. `select`를 사용하려면 별도로 format 3 판단을 완료해야 합니다. format 1·2 기반의 수동 선택은 selection 2.0 override입니다. 실행 가능한 후보가 없으면 `no_eligible_profile`(exit 13)입니다.
+1. **Classification**
+   - Applies summary keyword and `context_files` extension rules. A category is adopted only when two or more distinct rules match within that single category.
+   - Unmatched tasks fall back to `general`, recording `fallback_reason`.
+2. **Hard Constraints**: Applies `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, and `local_only`. If context is provided, `tokens.required_context` and `max_estimated_cost_usd` are applied (`routing.CONSTRAINTS`). Live mode checks executable/kind consistency, PATH availability, `agy models`, and optional CodeBurn quota. Unsupported arguments are rejected prior to submission.
+3. **Evidence and Scoring**
+   - Category weights `w` and evidence mappings `v` compute evidence weights `a_b = Σ w_c·v_cb`.
+   - Normalizes percentiles across the cohort population (`(mean rank − 1)/(N − 1)`, or 0.5 if N=1).
+   - Coverage `C` represents the sum of observed evidence weights.
+   - Quality `Q = C·Q_obs + (1−C)·0.5 − 0.1·(1−C)`. Missing data receives a prior of 0.5 and a penalty of 0.1; an empirical score of 0 is not treated as missing.
+4. **Selection**: `Q` and `C` are informational evidence; candidates are ordered by profile ID. Using `select` requires completing format 3 decisions. Manual selections based on format 1 or 2 constitute schema 2.0 overrides. If no executable candidate exists, returns `no_eligible_profile` (exit 13).
 
-카테고리별 evidence 기본값(`categories.toml`):
+Default category evidence mappings (`categories.toml`):
 
-| 카테고리 | evidence(가중치) |
+| Category | Evidence (Weights) |
 |---|---|
 | coding_repo | swe_verified_exact 0.6, aa_coding 0.4 |
 | terminal_ops | terminal_exact 0.7, aa_coding 0.3 |
@@ -239,29 +243,29 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
 | vision_doc | arena_document 0.5, arena_vision 0.5 |
 | general | aa_intelligence 1.0 |
 
-기본 평가에서 후보별 `quality`, `coverage`, `coverage_band`, `exact_evidence_weight`와 evidence의 원값·정규화값·scope·cohort·평가 조건·revision·날짜·missing_reason을 제공합니다. format 2는 `candidates[].evaluations.benchmark`, format 1은 `candidates[]`에 펼칩니다. score·legacy_score·cost_proxy는 없습니다. 기본 route의 실제 의미 판단 근거는 `decision.evaluation` 또는 `selection.decision.evaluation`을 읽고, 전 후보 적합성은 format 3에서 확인하세요. CLI route의 첫 3개 후보 요약은 ID순이며 순위가 아닙니다.
+Default evaluations provide `quality`, `coverage`, `coverage_band`, `exact_evidence_weight`, raw values, normalized values, scopes, cohorts, conditions, revisions, timestamps, and `missing_reason` per candidate. Format 2 nests these under `candidates[].evaluations.benchmark`; format 1 flattens them into `candidates[]`. Composite scores, legacy scores, and cost proxies are omitted. Real semantic decision evidence resides in `decision.evaluation` or `selection.decision.evaluation`; full candidate suitability is inspected in format 3. The initial 3 candidates summarized in CLI route output follow profile ID order, not a quality ranking.
 
 ---
 
-## 데이터 수집 (refresh)
+## Data Collection (refresh)
 
-| source | 방식 | evidence | TTL / 최대 허용 경과 |
+| Source | Method | Evidence | TTL / Max Allowed Age |
 |---|---|---|---|
-| `aa` | Artificial Analysis Free API, 전체 페이지 순회 | `aa_intelligence`, `aa_coding` 및 활성 wiki unit(`aa:*`) | 24h / 7d |
-| `arena` | LMArena `leaderboard-dataset`(CC BY 4.0), revision sha에 고정한 config별 `latest` parquet(pyarrow로 디코드, category는 로컬 필터) | `arena_text`, `arena_text_math`, `arena_webdev`, `arena_document`, `arena_vision` 및 활성 wiki unit(`arena:*`) | 24h / 7d |
-| `mg` | The Model Gap(`themodelgap.com/data`, CC BY 4.0) JSON | 활성 wiki unit(`mg:*`) | 24h / 7d |
-| `swe` | `--import` 수동 결과, SWE-bench Verified로 고정 | `swe_verified_exact` | 168h / 30d |
-| `tb` | `--import` 수동 결과, Terminal-Bench 4.0으로 고정 | `terminal_exact` | 168h / 30d |
+| `aa` | Artificial Analysis Free API, full pagination | `aa_intelligence`, `aa_coding`, and active wiki units (`aa:*`) | 24h / 7d |
+| `arena` | LMArena `leaderboard-dataset` (CC BY 4.0), config-specific `latest` Parquet pinned to revision SHA (decoded via `pyarrow`, category filtered locally) | `arena_text`, `arena_text_math`, `arena_webdev`, `arena_document`, `arena_vision`, and active wiki units (`arena:*`) | 24h / 7d |
+| `mg` | The Model Gap (`themodelgap.com/data`, CC BY 4.0) JSON | Active wiki units (`mg:*`) | 24h / 7d |
+| `swe` | Manual `--import` results, pinned to SWE-bench Verified | `swe_verified_exact` | 168h / 30d |
+| `tb` | Manual `--import` results, pinned to Terminal-Bench 4.0 | `terminal_exact` | 168h / 30d |
 
-- **응답 처리**: 응답 크기 상한 20 MiB, 요청 수 상한(aa 50, arena 300, mg 4)을 둡니다. 401/403/429는 재시도하지 않고, 5xx와 네트워크 오류는 최대 2회 재시도합니다.
-- **시간 상한**: source마다 전체 **180초**(arena는 **600초**) 상한이 있습니다. 요청별 timeout과 재시도 대기도 남은 시간에 맞춰 줄어듭니다.
-- **실패 시**: 페이지 하나라도 실패하거나 스키마가 다르면 그 source의 새 데이터를 게시하지 않고 last-good을 유지합니다. 원본이 같으면 `unchanged`로 확인 시각만 갱신합니다.
-- **저장**: SQLite(`bench-router.db`: sources / snapshots / observations)에 source별 원본을 최근 3개까지 보관합니다. 동시 refresh는 운영체제 파일 잠금으로 막습니다.
-- **게시**: `snapshot.json`은 임시 파일에 쓰고 fsync한 뒤 `os.replace`로 교체합니다. 직전 유효본은 `snapshot.last-good.json`으로 옮기고, 재현용 사본은 `snapshots/`에 30일간 보관합니다.
-- **route 쪽 처리**: snapshot이 없거나 손상됐으면 last-good을 사용합니다. 그것도 없으면 기본 정책은 평가 결측을 표시해 잠정 판단을 요청합니다. route는 refresh를 시작하지 않습니다.
-- **Arena 중복 이름**: 원본에 같은 이름의 별개 항목이 있을 수 있습니다(실측 사례 있음). 이런 항목은 모집단에는 포함하되 `이름#rank=N`으로 구분해, 이름만으로 매칭되지 않게 합니다.
+- **Response Handling**: 20 MiB response cap; request limits: aa 50, arena 300, mg 4. Status 401, 403, and 429 are never retried; 5xx and network errors retry up to 2 times.
+- **Timeouts**: Global timeout of **180s** per source (**600s** for arena). Per-request timeouts and backoffs dynamically scale down within remaining budgets.
+- **Failure Recovery**: If any page fails or schemas diverge, new data for that source is not published, retaining last-good snapshots. Identical payloads mark `unchanged` and update check timestamps.
+- **Storage**: SQLite (`bench-router.db`: sources / snapshots / observations) retains the 3 most recent raw payloads per source. Concurrent refreshes are blocked via OS file locks.
+- **Publishing**: `snapshot.json` is written to a temporary file, fsynced, and swapped via `os.replace`. The prior valid snapshot moves to `snapshot.last-good.json`; reproducible copies remain in `snapshots/` for 30 days.
+- **Router Consumption**: If the snapshot is missing or corrupted, last-good is used. If unavailable, default policies flag missing evaluations and request provisional decisions. `route` never triggers refresh runs.
+- **Arena Name Collisions**: Multiple entries with identical names can occur in source data. They are included in cohorts but disambiguated as `name#rank=N` to prevent accidental name-only matches.
 
-수동 import 형식(`--import FILE`):
+Manual import format (`--import FILE`):
 
 ```json
 {"schema_version": "1.0", "evidence_id": "terminal_exact",
@@ -275,11 +279,13 @@ $BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator 
            "reasoning_effort": "high", "raw": 0.61}]}
 ```
 
-`harness_id`는 모델을 실행하는 에이전트 스캐폴드(예: Claude Code)이며, `evaluation_harness`는 평가 실행·채점 시스템입니다. `model_id`에는 평가한 모델의 정확한 버전을 사용합니다. 벤치마크 버전·데이터셋 개정판·변형·평가 하네스·스캐폴드·추론 노력·집계 방식이 같은 점수끼리만 하나의 정규화 코호트에 넣습니다. `model_id`, `harness_id`, `reasoning_effort`가 프로필과 모두 일치해야 exact evidence로 인정합니다. 새 조건이 없는 기존 캐시의 exact 점수는 재import 전까지 `missing_conditions`로 제외합니다. 자동 수집 지표에서 확인할 수 없는 조건은 `null`로 남기며 모델 수준 대리 근거로만 사용합니다.
+`harness_id` identifies the agent scaffold (e.g. Claude Code); `evaluation_harness` identifies the evaluation and scoring harness. `model_id` records the exact evaluated model version. Scores are grouped into normalized cohorts only when benchmark versions, dataset revisions, variants, evaluation harnesses, scaffolds, reasoning efforts, and aggregation methods match. Exact evidence requires matching profile `model_id`, `harness_id`, and `reasoning_effort`. Existing exact scores in cache lacking new conditions are excluded as `missing_conditions` until re-imported. Automated metrics lacking explicit conditions record `null` and serve strictly as model-level proxy evidence.
 
-### 정기 실행 (예시, 설치하지 않음)
+<a id="정기-실행-예시-설치하지-않음"></a>
+<a id="periodic-execution-example-not-installed"></a>
+### Periodic Execution (Example, Not Installed)
 
-`refresh`는 한 번 실행하고 종료합니다. 아래는 Linux/WSL2에서 systemd를 사용할 때의 예시이며, 정기 갱신을 원하면 서비스·타이머를 직접 작성하고 활성화해야 합니다. Windows에서는 작업 스케줄러를 사용하세요.
+`refresh` executes once and exits. The following systemd example applies to Linux or WSL2; users must configure and activate services and timers independently. On Windows, use Windows Task Scheduler.
 
 ```ini
 # ~/.config/systemd/user/bench-router-refresh.service
@@ -299,24 +305,24 @@ WantedBy=timers.target
 
 ---
 
-## live 위임과 결과 계약
+## Live Dispatch and Result Contracts
 
-`route`(dry-run 없이)는 다음 순서로 동작합니다.
+Live `route` (without `--dry-run`) proceeds as follows:
 
-1. PATH 가용성과 제약을 검사해 프로필을 선택합니다. Projects 버전과 session을 receipt에 고정합니다. 로그인·모델 접근은 실제 Agent에서 확인합니다.
-2. `<cwd>/.bench-router/dispatch.lock`을 잡습니다. cwd당 동시에 하나만 위임합니다.
-3. 같은 `(task_id, round)`의 receipt가 있으면 처리 방식이 갈립니다. 내용 hash가 같으면 **재전송 없이 collect**로 회수하고, 다르면 `conflict`입니다. 아직 정리되지 않은 다른 run이 있으면 새 위임을 막습니다(`unresolved_run`).
-4. `run_id`(UUID)와 128-bit nonce를 만들고 receipt를 원자적으로 기록합니다. 선택 근거는 `decision.json`에 남깁니다.
-5. 프로필 `kind/args`를 board 설정(`--worker.agent kind/model`, `--worker.effort`)으로 바꿉니다. 모델·effort 외의 args는 표현할 수 없어 제출하지 않습니다(`execution_failed`). `input.txt`를 원자 저장합니다.
-6. 제출 **전에** receipt에 `submission_attempted`를 fsync합니다. 그다음 `add br-<run_id> --desc PROMPT --repo CWD --delegate`를 **한 번만** 호출하고 반환된 board task ID(`thread_id`, 예: `repo/12`)를 기록합니다. review·attempts·plan·merge는 끄고(`--review.when never`, `--merge.by you` 등) `worker.access`는 board 설정을 따릅니다.
-7. board stage가 `approval`/`done`이 되면 task worktree의 결과 계약을 검사합니다. blocked면 board의 한 줄 상태(`diagnostic_tail`)를 반환합니다. timeout이나 stalled는 재전송하지 않고 `timed_out`/`delivery_uncertain`으로 남깁니다.
+1. Checks PATH availability and constraints to select a profile, pinning Projects version and session to the receipt. Live credentials and model access are verified by the target agent.
+2. Acquires `<cwd>/.bench-router/dispatch.lock`. Dispatches run serially per cwd.
+3. Existing receipts matching `(task_id, round)` branch based on content hash: identical hashes recover existing runs via **collect without retransmission**; divergent hashes trigger `conflict`. Unresolved prior runs block new delegations (`unresolved_run`).
+4. Generates a UUID `run_id` and 128-bit nonce, atomically writing the receipt. Selection rationale is recorded in `decision.json`.
+5. Translates profile `kind/args` into board configuration (`--worker.agent kind/model`, `--worker.effort`). Non-translatable arguments terminate with `execution_failed`. Atomically writes `input.txt`.
+6. Fsyncs `submission_attempted` to the receipt **prior** to submission. Invokes `add br-<run_id> --desc PROMPT --repo CWD --delegate` **exactly once** and records the returned board task ID (`thread_id`, e.g. `repo/12`). Disables automated review, attempts, plans, and merges (`--review.when never`, `--merge.by you`), adopting board `worker.access`.
+7. When board stage reaches `approval`/`done`, validates result contracts in the task worktree. Blocked states return single-line board diagnostics (`diagnostic_tail`). Timeouts and stalled runs record `timed_out`/`delivery_uncertain` without retransmitting.
 
-`completed`가 되면 그 task의 agent pane을 닫아 자원을 반환합니다(`release`). 작업 중·질문 대기 agent는 닫지 않습니다. 같은 대화를 이어가려면 `python3 -m bench_router.cli resume --cwd CWD --run-id RUN`으로 board task를 다시 열고 agent를 같은 session으로 재시작합니다.
+Reaching `completed` closes the agent pane to release system resources (`release`). Active or prompt-waiting agents are left open. Resuming conversation context uses `python3 -m bench_router.cli resume --cwd CWD --run-id RUN` to reopen the board task and restart the agent in the same session.
 
-프롬프트 끝에는 실행 계약이 붙습니다. Agent는 board가 만든 자기 worktree의 `.bench-router/runs/<run_id>/`에 다음 두 파일을 써야 합니다. 검증을 통과하면 라우터가 `<cwd>/.bench-router/runs/<run_id>/`로 복사합니다. `.bench-router/`는 `info/exclude`에 등록되어 board의 커밋에 섞이지 않습니다.
+The execution contract appends to the prompt. Agents must write two files to `.bench-router/runs/<run_id>/` inside their assigned worktree. Upon passing validation, the router copies them to `<cwd>/.bench-router/runs/<run_id>/`. The `.bench-router/` directory is registered in `info/exclude` to prevent pollution of board commits:
 
-- `result.md`: 결과·변경·검증·미완료 사항(최대 10 MiB, 비어 있으면 안 됨).
-- `result.json`: 마지막에 한 번에 작성(최대 64 KiB).
+- `result.md`: Report of findings, changes, verification, and open items (max 10 MiB, non-empty).
+- `result.json`: Manifest written once at completion (max 64 KiB).
 
 ```json
 {"schema_version": "1.0", "run_id": "...", "nonce": "...", "profile_fingerprint": "...",
@@ -325,23 +331,25 @@ WantedBy=timers.target
  "checks": [{"command": "...", "outcome": "passed|failed|not_run", "notes": "..."}]}
 ```
 
-라우터는 다음을 모두 확인한 뒤에야 `completed`를 반환합니다.
-- run_id, nonce, 지문 일치
-- 일반 파일이며 run 디렉터리 밖을 가리키는 symlink나 경로가 아님
-- 크기 상한, UTF-8, JSON 유효성
-- SHA-256 일치
+The router marks `completed` only when:
+- run_id, nonce, and profile fingerprint match
+- Target files are regular files (not symlinks or references outside the run directory)
+- File size, UTF-8 validity, and JSON syntax checks pass
+- SHA-256 hash matches `result.md`
 
-`completed`는 "계약대로 결과를 받았다"는 뜻일 뿐, 작업 성공을 뜻하지 않습니다. 작업 결과는 `task_outcome`(Agent 자기보고)으로 따로 표시합니다. 실제 성공 여부는 Orchestrator가 검증한 뒤 `feedback`으로 기록하세요. 평가 중에 Agent가 `success`라고 보고했지만 실제로는 틀린 사례가 있었습니다.
+`completed` certifies receipt compliance, not task correctness. Substantive results are reflected in `task_outcome` (agent self-report). Orchestrators must review substantive success and record verdicts via `feedback`. Evaluated agents have previously reported `success` despite incorrect code changes.
 
-run 디렉터리에는 `receipt.json`, `decision.json`, `input.txt`, `result.md`, `result.json`, `feedback.jsonl`이 남습니다. 출력의 `project`와 `thread_id`로 Projects에서 상태를 확인합니다. 진행 중인 thread를 정리하면 Agent도 종료될 수 있으므로 효과를 먼저 확인하세요.
+The run directory preserves `receipt.json`, `decision.json`, `input.txt`, `result.md`, `result.json`, and `feedback.jsonl`. Verify status in Projects using `project` and `thread_id`. Terminating active threads terminates the agent; inspect effects before cleanup.
 
-## 병렬 위임과 협업 수준
+<a id="병렬-위임과-협업-수준"></a>
+<a id="parallel-dispatch-and-collaboration-levels"></a>
+## Parallel Dispatch and Collaboration Levels
 
-`parallel --group FILE`은 여러 tasks와 실행 인스턴스를 묶습니다. group 2.0은 task별 context·명시적 selections를 받으며 같은 profile도 반복할 수 있습니다. task당 최대 8개·group 전체 16개이고 max_parallel은 1–4입니다. schema 1.0의 fanout도 같은 vendor-guided 정책을 사용하며 자동 점수 순위가 아닙니다.
+`parallel --group FILE` binds multiple tasks and execution instances. Group 2.0 accepts task contexts and explicit selections, permitting repeated profiles. Bounded by 8 tasks per group, 16 items total, and `max_parallel` 1–4. Schema 1.0 fanout uses the same vendor-guided policy without automated score rankings.
 
-member마다 `<cwd>/.bench-router/worktrees/<group_id>/<label>` router worktree(브랜치 `br/<group_id>/<label>`, HEAD 기준)를 만듭니다. 이곳이 receipt·잠금 공간이며 Agent는 Projects가 추가로 만든 실제 worktree에서 작업합니다. 같은 group 파일은 저장된 plan과 receipts를 회수하며 프롬프트를 다시 보내지 않습니다. 모든 선택 완료 전에는 worktree·group 파일·worker를 만들지 않습니다.
+For each member, a router worktree is created at `<cwd>/.bench-router/worktrees/<group_id>/<label>` (branch `br/<group_id>/<label>`, based on HEAD), providing receipt and lock isolation. Agents operate in additional worktrees created by Projects. Re-running the same group file recovers saved plans and receipts without retransmission. Worktrees, group files, and workers are never provisioned before all selections complete.
 
-아래는 schema 1.0 입력 모양입니다. 복수 적합 후보이면 상위 선택을 요청하므로 자동으로 2개를 선택한다는 예가 아닙니다. 명시적 selection 2.0·5.0·6.0을 쓰는 group 2.0 예는 [상위 연동](orchestrator.md#parallel-groups-with-orchestrator-selections)에 있습니다.
+Schema 1.0 input structure (illustrative; multiple candidates request upstream selection rather than auto-selecting two):
 
 ```json
 {"schema_version": "1.0", "group_id": "fix-pager", "cwd": "/home/me/project",
@@ -350,132 +358,136 @@ member마다 `<cwd>/.bench-router/worktrees/<group_id>/<label>` router worktree(
             "summary": "Fix paginate off-by-one", "prompt": "..."}]}
 ```
 
-- `cwd`는 git 저장소 최상위여야 하며, task에는 `cwd`를 넣지 않습니다. `tasks × fanout ≤ 16`, `fanout` 1–8, `max_parallel` 1–4(공유 admission 한도와 같음).
-- group 1.0은 선택한 profile을 다음 비교에서 제외하고 정책 6을 반복합니다. 추가 후보가 없으면 fanout_reduced, 복수 적합 후보가 남으면 decision_unavailable입니다. group 2.0은 선택 목록 그대로 실행하며 label은 `<task_id>-<k>`입니다.
-- **메인 repo를 각 Agent CLI에서 먼저 신뢰해야 합니다.** 상위 폴더가 신뢰돼 있어도 새 git repo는 다시 묻고, 그러면 agent start 단계에서 `blocked`가 됩니다(실측). 메인 repo를 한 번 신뢰하면 그 아래 worktree는 claude·codex 모두 다시 묻지 않았습니다.
-- 미커밋 변경은 worktree에 들어가지 않습니다(`dirty_base` 경고). router worktree는 member별 receipt 공간이고, 실제 작업은 board가 그 HEAD에서 만든 worktree·브랜치(`work/br-<run_id>`)에 커밋됩니다. member의 `worktree`/`branch`는 그 board 위치입니다. 비교·병합과 worktree·브랜치 정리는 Orchestrator가 맡습니다.
+- `cwd` must be the root of a Git repository; tasks do not specify `cwd`. `tasks × fanout ≤ 16`, `fanout` 1–8, `max_parallel` 1–4 (matching shared admission limits).
+- Group 1.0 repeats Policy 6 while excluding previously chosen profiles from subsequent comparisons. Depleted candidates return `fanout_reduced`; multiple viable candidates return `decision_unavailable`. Group 2.0 dispatches the explicit selection list with labels `<task_id>-<k>`.
+- **The root repository must be trusted by each Agent CLI beforehand.** Untrusted repositories trigger trust prompts during worker launch, pausing in `blocked`. Trusting the root repository covers child worktrees for both Claude and Codex.
+- Uncommitted changes do not carry into worktrees (`dirty_base` warning). Router worktrees provide receipt isolation, while real agent edits commit to board worktrees (`work/br-<run_id>`). Comparing, merging, and cleaning up worktrees is managed by the Orchestrator.
 
-| `isolation` | 동작 |
+| `isolation` | Behavior |
 |---|---|
-| `isolated` (기본) | worktree 격리만. 서로의 존재를 모름 |
-| `shared` | 공용 scratchpad `<cwd>/.bench-router/groups/<group_id>/shared/`. agent는 자기 `<label>.md`·`<label>/`에만 쓰고 동료 노트를 읽어, 실패한 접근·발견·중간 실험 결과를 공유합니다. scratchpad는 agent worktree 밖이므로 board의 `worker.access`가 `ask`이면 쓰기마다 승인(`blocked`)이 필요합니다 |
+| `isolated` (default) | Worktree isolation only. Agents remain unaware of each other |
+| `shared` | Shared scratchpad at `<cwd>/.bench-router/groups/<group_id>/shared/`. Agents write only to their own `<label>.md` and `<label>/` subdirectories and read peer notes to share dead ends, observations, and intermediate results. Because the scratchpad resides outside the worktree, board `worker.access ask` requires approval on each write (`blocked`) |
 
-실행 출력은 member별 profile·worktree·branch·rounds이며 rounds에는 status·run_id·receipt_path·result_path·task_outcome·delivery_state·reassignment가 포함됩니다. 결과는 groups/GROUP/group.json에 남습니다. 전체 completed면 0, 실행 이후 일부 미완료·실패는 partial_failure(16), group 충돌은 14입니다. 실행 전에는 판단 미완료/기권 17·stale 14·후보 없음 13을 반환할 수 있습니다. 전달이 불확실한 member는 collect_first를 따릅니다.
+Execution outputs contain member profiles, worktrees, branches, and rounds with status, run_id, receipt_path, result_path, task_outcome, delivery_state, and reassignment. Results persist in `groups/GROUP/group.json`. All completed returns 0; partial completions or failures return `partial_failure` (16); conflicts return 14. Pre-dispatch incomplete decisions return 17, stale inputs return 14, and empty candidate sets return 13. Uncertain members follow `collect_first`.
 
-### agent 간 통신
+<a id="agent-간-통신"></a>
+<a id="inter-agent-communication"></a>
+### Inter-Agent Communication
 
-Router는 multi-agent 패턴을 구현하지 않습니다. 패턴에 공통으로 나오는 통신 블록만 제공하고, 조합은 Orchestrator가 맡습니다.
+The router does not implement multi-agent patterns directly; it provides primitive communication building blocks composed by the Orchestrator.
 
-| 블록 | 방향 | 명령 |
+| Block | Direction | Command |
 |---|---|---|
-| 작업 전달 | Orchestrator → agent, 시작 | `route` / `parallel`. `--wait-ms 0`이면 제출 직후 `timed_out`(실행 중)과 run_id를 돌려줌 |
-| 결과 회수 | agent → Orchestrator, 끝 | `collect --cwd --run-id [--wait-ms]`, 결과 계약 검사. parallel은 같은 group 재실행 |
-| 실행 중 지시 | Orchestrator → agent, 실행 중 | `tell` (대화형 실행만) |
-| 공유 상태 | agent ↔ agent, 실행 중 | `isolation: shared` 공용 scratchpad |
-| 중간 보고·질문 | agent → Orchestrator, 실행 중 | `collect`의 `blocked`·board 상태, 공유 노트 |
+| Task Handoff | Orchestrator → Agent, start | `route` / `parallel`. `--wait-ms 0` returns `timed_out` (in progress) and run_id immediately after dispatch |
+| Result Collection | Agent → Orchestrator, end | `collect --cwd --run-id [--wait-ms]`, validates result contracts. Parallel re-runs group file |
+| Mid-Run Steering | Orchestrator → Agent, mid-run | `tell` (interactive execution only) |
+| Shared State | Agent ↔ Agent, mid-run | `isolation: shared` shared scratchpad |
+| Progress & Queries | Agent → Orchestrator, mid-run | `collect` `blocked` state, board diagnostics, shared notes |
 
-여기에 패턴에서 자주 쓰는 기초 제어 두 가지를 유틸리티로 제공합니다. 어느 run을 고르고 언제 멈출지는 여전히 Orchestrator가 정합니다.
+Two common orchestration utilities are provided:
 
-| 유틸리티 | 명령 | 동작 |
+| Utility | Command | Behavior |
 |---|---|---|
-| 여러 run 대기 | `collect --run CWD RUN_ID [--run …] --until any\|all [--wait-ms N]` | 각 run을 `collect`로 관찰. `any`는 하나라도, `all`은 전부 settle 또는 `blocked`가 되면 `ok`와 `ready`(run_id 목록)를 반환. 시간이 다 되면 `timed_out` |
-| 중단 | `stop --cwd CWD [--run-id RUN]` | 대화형은 board `stop`, 비대화형은 그 workspace를 닫아 CLI를 끝냄. `messages.jsonl`에 기록. 다음 `collect`에서 `execution_failed`가 되고 그 cwd의 동시 실행 자리를 반납 |
+| Multi-run Waiting | `collect --run CWD RUN_ID [--run …] --until any\|all [--wait-ms N]` | Polls runs via `collect`. `any` returns `ok` and `ready` (run_id list) when any run settles or blocks; `all` waits for all. Times out with `timed_out` |
+| Cancellation | `stop --cwd CWD [--run-id RUN]` | Invokes board `stop` (or closes workspace in headless mode), logging to `messages.jsonl`. Next `collect` marks `execution_failed` and releases concurrency admission |
 
-예: best-of-N은 `--wait-ms 0`으로 N개를 시작하고, `collect --run … --until any`로 먼저 끝난 결과를 검토하고, 나머지는 `stop`합니다. 투표·라운드 진행은 이전 산출물을 넣은 새 `route` round로 합니다.
+Example: In best-of-N, dispatch N attempts with `--wait-ms 0`, observe completion via `collect --run … --until any`, review the winning result, and `stop` remaining runs. Multi-round voting proceeds via new `route` rounds containing previous deliverables.
 
-member의 router worktree는 `<cwd>/.bench-router/worktrees/<group_id>/<label>`이며 `--dry-run` 출력에도 나옵니다. 그 안의 미완료 run은 하나뿐이라 `tell`을 `--run-id` 없이 보낼 수 있습니다.
+Member router worktrees reside at `<cwd>/.bench-router/worktrees/<group_id>/<label>`, displayed in `--dry-run` output. Because they hold only one incomplete run at a time, `tell` can be invoked without `--run-id`.
 
-### 비대화형 실행
+<a id="비대화형-실행"></a>
+<a id="headless-execution"></a>
+### Headless Execution
 
-task에 `"execution": "headless"`를 주면 board agent 대신 one-shot CLI로 실행합니다. 기본값은 `interactive`(board agent)입니다.
+Setting `"execution": "headless"` in the task runs one-shot CLIs instead of interactive board agents. Default is `interactive`.
 
-1. `herdr worktree create`로 `<cwd>/.bench-router/worktrees/runs/<run_id>` worktree(브랜치 `br/<run_id>`)와 pane을 만듭니다.
-2. board에 agent 없는 task(`br-<run_id>`)를 추가하고 `report`로 working → done/error를 표시합니다. board task는 보기 전용이며 실패해도 실행은 계속됩니다.
-3. pane에서 `claude -p` / `codex exec` / `agy -p`를 프로필의 model·effort로 실행합니다. 프롬프트는 명령줄이 아니라 `runs/<run_id>/input.txt`로 전달합니다. 종료 코드는 `runs/<run_id>/exit_code`에 남습니다.
-4. `collect`는 board stage가 아니라 `exit_code`와 결과 계약으로 판정합니다. 실행 중이면 `timed_out`, pane이 닫혔으면 `execution_failed`입니다. 완료되면 pane을 닫습니다.
+1. `herdr worktree create` builds `<cwd>/.bench-router/worktrees/runs/<run_id>` (branch `br/<run_id>`) and pane.
+2. Adds an agentless task (`br-<run_id>`) to the board, using `report` to show working → done/error status. Board tasks are display-only; board failures do not interrupt CLI execution.
+3. Runs `claude -p`, `codex exec`, or `agy -p` inside the pane with profile model and effort settings. Prompts pass via `runs/<run_id>/input.txt` rather than argv. Exit codes persist in `runs/<run_id>/exit_code`.
+4. `collect` validates `exit_code` and result contracts rather than board stages. Running processes return `timed_out`; closed panes return `execution_failed`. Panes close upon completion.
 
-- 지원 kind는 claude·codex·agy이고, 프로필 args는 model·effort뿐이어야 합니다(대화형과 같음).
-- **권한 확인을 끄고 실행합니다.** 답할 사람이 없기 때문입니다(`--dangerously-skip-permissions`, codex는 `--dangerously-bypass-approvals-and-sandbox`). 신뢰할 수 있는 저장소에만 쓰세요.
-- 실행 중 메시지는 받지 않습니다(`tell` 거부). 통신은 시작 입력, 결과, 공유 scratchpad뿐입니다.
+- Supported kinds: claude, codex, agy. Profile args are restricted to model and effort (identical to interactive mode).
+- **Executes with permission prompts bypassed** because no interactive user is present (`--dangerously-skip-permissions`, or `--dangerously-bypass-approvals-and-sandbox` in Codex). Restrict to trusted repositories.
+- Mid-run messages are rejected (`tell` unsupported). Communication is limited to initial inputs, result contracts, and shared scratchpads.
 
 ---
 
-## 테스트
+## Testing
 
 ```bash
 python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn
 ```
 
-| 파일 | 범위 |
+| File | Scope |
 |---|---|
-| `test_p0.py` | 입력·지표·제약·기본 평가, wiki/facet/evidence, 정책 6 단계·가이드·공개 평가·상위 선택 |
-| `test_p1.py` | 수집·캐시(V11–V18): 페이지 순회, 부분 실패 시 last-good, 해시 동일 시 no-op, HTTP 오류와 시간 상한, 잠금과 원자 게시, alias와 버전 cohort |
-| `test_p3.py` | 병렬 위임(V30–V34): worktree 격리, fanout, shared scratchpad, 재실행 시 재전송 없음 (git 필요) |
-| `test_p2.py` | 위임(V19–V29): argv 전달, 반환 ID 사용, 시작 실패, 전송 직전 상태, 결과 계약·경로 공격, timeout 후 재전송 없음, crash 복구, 충돌·잠금 |
-| `test_coordination.py` | 공유 admission·경로 중첩·소유권·채택·정지 확인 |
-| `test_codeburn.py` | 가용성·quota·사용량·프로필 discovery fixture |
+| `test_p0.py` | Inputs, metrics, constraints, default evaluation, wiki/facet/evidence, Policy 6 stages, guidelines, public evaluation, upstream selection |
+| `test_p1.py` | Ingestion and caching (V11–V18): pagination, last-good fallback, payload hashing, HTTP errors/timeouts, locking, atomic publish, aliases, and cohorting |
+| `test_p3.py` | Parallel dispatch (V30–V34): worktree isolation, fanout, shared scratchpads, re-run idempotency (requires git) |
+| `test_p2.py` | Delegation (V19–V29): argv handoff, task ID capture, launch failures, pre-submission states, result contracts, path traversal prevention, timeout idempotency, crash recovery, conflict locks |
+| `test_coordination.py` | Shared admission limits, path collision prevention, ownership, adoption records, stoppage verification |
+| `test_codeburn.py` | Availability, quota, usage metrics, profile discovery fixtures |
 
-현재 실행 테스트는 Projects 1.2.1 CLI(`src/cli/tasks.rs`)의 JSON 형태를 따르는 fake를 사용하며, task마다 실제 `git worktree`를 만듭니다. 아래의 직접 Herdr smoke 결과는 이전 실행 경로의 기록이며 Projects live 검증을 의미하지 않습니다. 실측 근거는 `docs/evidence/`에 있습니다(herdr help·API schema·skill, claude/codex `--help`).
+Live execution tests use test doubles conforming to Projects 1.2.1 CLI (`src/cli/tasks.rs`), constructing real temporary `git worktree` instances per task. Historical direct Herdr smoke tests reflect earlier execution pathways and do not certify Projects live operations. Empirical evidence resides in `docs/evidence/` (herdr help, API schema, skills, claude/codex `--help`).
 
 ---
 
-## 검증 현황 (2026-10-12)
+## Verification Status (2026-10-12)
 
-아래는 과거 직접 Herdr·legacy 선택 정책의 실측 기록입니다. 현재 검증(2026-10-24)은 전체 suite 164개 중 162개 통과·2개 skip이며 [구현 상태](implementation-status.md)에 범위·환경 한계를 기록했습니다. 과거 35/35 수치를 현재 테스트 수로 읽지 마세요. 현재 정책 6과 Projects live의 품질·비용 검증을 뜻하지 않습니다.
+The historical records below reflect direct Herdr execution under legacy policies. As of 2026-10-24, the offline test suite passes 163 of 165 tests (2 skipped); environmental limitations are detailed in [Implementation Status](implementation-status.md). Do not confuse historical 35/35 counts with the current test suite. These records do not validate quality or cost under Policy 6 and Projects live dispatch.
 
-| 항목 | 결과 |
+| Item | Result |
 |---|---|
-| 오프라인 테스트 | 35/35 통과 |
-| AA 실호출 | 성공 (Free tier, index v4.3, 4페이지, 697개 모델) |
-| Arena 실호출 | 성공 (revision `e16f9023…`). HF 장애 중에는 180초 상한에서 실패 처리되고 last-good 유지됨 |
-| herdr + Claude Code / Codex live 위임 | 성공. 미해결 run 차단, 재전송 없음, 결과 해시 일치, 정리 뒤 collect 확인 |
-| 두 후보를 점수로 비교한 live 선택 | general/balanced 작업에서 codex 선택 후 completed |
-| `parallel` live (2026-10-13, 현재는 제거된 deliberate 모드, fanout 2: claude + codex) | 두 worktree에서 동시 실행, 2라운드 모두 completed, scratchpad 노트 공유·투표 확인(서로에게 1표씩 → `winner=null`), 메인 작업 트리 깨끗. 약 2분 |
-| 작업군 비교 v1 (20 과제 × 2 프로필) | [eval/results/v1.md](../eval/results/v1.md), 비용: [v1-cost.md](../eval/results/v1-cost.md) |
+| Offline Tests | 35/35 passed |
+| AA Live Call | Success (Free tier, index v4.3, 4 pages, 697 models) |
+| Arena Live Call | Success (revision `e16f9023…`). During HF outages, failed at 180s timeout, retaining last-good snapshots |
+| herdr + Claude Code / Codex Live Delegation | Success. Blocked unresolved runs, zero duplicate transmissions, verified result hashes, clean collect |
+| Live Score Comparison between Two Candidates | Selected codex on general/balanced task; reached completed |
+| `parallel` Live (2026-10-13; deliberate mode, now removed; fanout 2: claude + codex) | Ran concurrently in two worktrees; both rounds completed; shared notes and voting confirmed (`winner=null`); clean main worktree (~2 min) |
+| Benchmark Suite v1 (20 tasks × 2 profiles) | [eval/results/v1.md](../eval/results/v1.md), Cost: [v1-cost.md](../eval/results/v1-cost.md) |
 
-작업군 비교 v1의 요약은 다음과 같습니다. 과제당 1회 실행이므로 통계적 결론은 아닙니다.
+Summary of benchmark suite v1 (single attempt per task; not a statistical proof):
 
-| 정책 | 성공 | 성공 1건당 API 환산 비용 |
+| Policy | Success Rate | API-Equivalent Cost per Success |
 |---|---|---|
-| 고정 default (claude) | 20/20 | $0.234 |
-| 저비용 우선 (codex) | 19/20 | $0.070 |
+| Fixed default (claude) | 20/20 | $0.234 |
+| Low-cost-first (codex) | 19/20 | $0.070 |
 | bench-router | 20/20 | $0.217 |
 
-과제가 쉬워 성공률이 천장에 붙었고, bench-router는 20개 중 18개에서 default와 같은 선택을 했습니다. 그중 12개는 근거 부족 때문입니다. 비용은 각 CLI 로그의 토큰을 실측해 API 단가로 환산한 값이며, 구독 실제 지출이 아닙니다(`eval/cost.py`).
+Simpler tasks caused success rate ceiling effects; bench-router matched default selections in 18 of 20 tasks (12 due to sparse evidence). Costs reflect token counts converted to API list prices, not actual subscription expenditures (`eval/cost.py`).
 
-### 평가 도구
+### Evaluation Tools
 
 ```bash
-python3 eval/workset.py            # 자체 검사: 초기 상태는 불합격, 참조 정답은 합격
-python3 eval/run.py --tag T        # (작업, 프로필)마다 live 위임 + hidden check (herdr session 'breval')
-python3 eval/cost.py --tag T       # 실행별 토큰·API 환산 비용
+python3 eval/workset.py            # Self-check: initial state fails, reference answers pass
+python3 eval/run.py --tag T        # Dispatches live per (task, profile) + hidden checks (session 'breval')
+python3 eval/cost.py --tag T       # Aggregates tokens and API-equivalent costs per run
 ```
 
 ---
 
-## 알려진 한계
+## Known Limitations
 
-- **근거는 결측일 수 있습니다.** AA coding null·수동 exact 미수집·harness/effort 차이를 진단으로 남깁니다. 결측을 default 자동 선택이나 측정 0으로 바꾸지 않습니다.
-- `cost_tier`는 정책상 상대값입니다. 실측 비용으로 보정하지 않았습니다.
-- 프로필 지문에는 CLI 버전이 들어가지 않습니다(`unknown`으로 고정).
-- 결정·피드백은 SQLite가 아니라 run 디렉터리 파일로 남깁니다. 실행별 토큰 사용량은 라우터에 기록하지 않습니다(평가 도구에서만 측정).
-- 원격 실행(`--machine`), 자동 Agent pool·임베딩은 구현하지 않았습니다. 대기 단축은 `--wait-ms`와 `collect`, 완료 대화 재개는 `resume`을 사용합니다. 제한된 LLM 의미 판단은 Jev/native 단계로 구현됐습니다.
-- 파일 잠금은 Linux/WSL2에서 `fcntl`, Windows에서 `msvcrt`를 사용합니다. 네이티브 Windows와 WSL이 같은 물리 캐시를 동시에 사용하지 않도록 실행 환경을 통일하세요. Projects live 실행 환경은 Linux/WSL2입니다.
-- 프롬프트가 herdr argv로 전달되므로 프로세스 목록에 노출될 수 있습니다.
+- **Evidence data may have gaps.** Missing AA coding metrics, uncollected manual exact benchmarks, and harness/effort differences are recorded as diagnostics. Missing data is never converted to default selections or treated as a score of zero.
+- `cost_tier` values are policy categories, not empirical billing amounts.
+- Profile fingerprints do not encode CLI versions (`unknown`).
+- Decisions and feedback are preserved as files in run directories rather than SQLite. Execution token consumption is not aggregated within the router (measured only in evaluation tools).
+- Remote dispatch (`--machine`), automated agent pools, and embedding classifiers are not implemented. Wait reductions use `--wait-ms` and `collect`; session resumption uses `resume`. Bounded LLM judgments operate via Jev/native decision stages.
+- File locks use `fcntl` on Linux/WSL2 and `msvcrt` on Windows. Do not share caches concurrently across native Windows and WSL. Projects live execution requires Linux or WSL2.
+- Prompts pass as Herdr argv parameters, visible in local process listings.
 
-## 초기 설계에서 달라진 결정
+## Decisions Changed from Initial Design
 
-| 초기 설계 | 현재 구현 | 이유 |
+| Initial Design | Current Implementation | Rationale |
 |---|---|---|
-| 결과 계약: `result.json`을 원자적으로 기록 | "마지막에 한 번에 작성, `sha256sum` 사용" | 원자적 쓰기 지시 때문에 Agent가 `mv`·검증 스크립트를 시도하다 승인 대기에 걸렸습니다. 라우터는 Agent가 끝난 뒤에만 검사하고 해시도 확인하므로 원자성은 실익이 없습니다 |
-| 결정·feedback을 SQLite에 저장 | run 디렉터리의 `decision.json`, `feedback.jsonl` | 집계 요구가 생기기 전까지 파일로 충분합니다 |
-| Arena parquet 처리용 의존성 허용 | pyarrow로 원본 parquet 직접 디코드 | datasets-server `/filter`가 페이지당 20-60초에 5xx가 잦아 wiki unit을 다 받지 못했습니다(2026-10-21). pyarrow가 없으면 arena만 실패하고 last-good을 유지합니다 |
-| conditional GET(304) | 원본 해시가 같으면 `unchanged` 처리 | AA/HF 문서에 ETag 관련 언급이 없습니다 |
-| refresh 재시도 상한만 규정 | source별 전체 180초, Arena는 600초 상한 | 요청·재시도·대기가 무한히 누적되지 않게 제한 |
+| Result contracts: write `result.json` atomically | "Write once at completion; compute `sha256sum`" | Demanding atomic writes prompted agents to execute helper scripts and `mv`, stalling in approval pauses. The router validates only after agent exit and verifies hashes, making atomic writing unnecessary |
+| Store decisions and feedback in SQLite | Files in run directories: `decision.json`, `feedback.jsonl` | Directory files suffice until aggregation queries are required |
+| Dependency-free Arena Parquet parsing | Direct Parquet decoding via `pyarrow` | Hugging Face datasets-server `/filter` endpoints suffered 20–60s latencies and frequent 5xx errors, dropping wiki units (2026-10-21). Environments without `pyarrow` fail only Arena refresh, falling back to last-good snapshots |
+| Conditional GET (304) | Mark `unchanged` when payload hashes match | AA and HF documentation lack ETag specifications |
+| Unbounded refresh retries | 180s global timeout per source (600s for Arena) | Prevents runaway accumulation of requests, retries, and backoff delays |
 
-## 라이선스와 출처
+## Licenses and Attribution
 
-- Arena 데이터: LMArena `leaderboard-dataset`, CC BY 4.0. 출처는 snapshot의 `sources.*.attribution`에 남습니다.
-- The Model Gap 데이터: `themodelgap.com`, CC BY 4.0.
-- AA 데이터: Artificial Analysis. 공유하거나 표시할 때 출처를 밝혀야 합니다.
-- API 키는 설정 파일(`env`, 권한 600)에만 두고, 저장소·로그·출력에는 남기지 않습니다.
+- Arena data: LMArena `leaderboard-dataset`, CC BY 4.0. Recorded in `sources.*.attribution` within snapshots.
+- The Model Gap data: `themodelgap.com`, CC BY 4.0.
+- AA data: Artificial Analysis. Attribution required when sharing or displaying.
+- API credentials must be stored strictly in configuration files (`env`, permissions `chmod 600`), never committed to repositories or exposed in logs.
