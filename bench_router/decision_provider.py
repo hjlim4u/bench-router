@@ -3,6 +3,7 @@ import http.client
 import json
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 from . import routing as r
 
@@ -94,4 +95,16 @@ def decide(request, env=None, response=None, host=None):
             reason = "jev_unavailable"
     return {"status": "subagent_required", "provider": "subagent", "agent": "bench-decider", "host": host, "model": cheap_model,
             "reason": reason, "request": request}
+
+
+def decide_many(requests, *, env, host):
+    """Independent Jev calls run concurrently; native packets are handed back together."""
+    requests = [validate_request(request) for request in requests]
+    if not requests:
+        return []
+    if not (env.get("TYPESAFE_API_KEY") or env.get("JEV_API_KEY")):
+        return [decide(request, env=env, host=host) for request in requests]
+    # ponytail: only three vendor calls today; keep a bounded pool if guides grow.
+    with ThreadPoolExecutor(max_workers=min(3, len(requests))) as pool:
+        return list(pool.map(lambda request: decide(request, env=env, host=host), requests))
 

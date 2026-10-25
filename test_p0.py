@@ -79,6 +79,11 @@ def config(profiles):
 
 def guided_reply(packet, chosen, **overrides):
     """Synthetic response to one stage, retaining the validated predecessor stages."""
+    if packet.get("decision", {}).get("requests"):
+        replies = [guided_reply({**packet, "decision_request": item["request"],
+                                 "decision": {"request_digest": item["request_digest"]}}, chosen, **overrides)["stages"][-1]
+                   for item in packet["decision"]["requests"]]
+        return {"stages": [*packet["decision"].get("completed", []), *replies]}
     request = packet["decision_request"]
     answers = {}
     for key, q in request["questions"].items():
@@ -804,7 +809,6 @@ class P0VendorGuidance(unittest.TestCase):
 
     def fit_packet(self, **kw):
         packet = self.route(**kw)
-        packet = self.route(response=guided_reply(packet, "__tie__"), **kw)
         return self.route(response=guided_reply(packet, "__tie__"), **kw)
 
     def indexed(self, ids=("u/coding",)):
@@ -832,7 +836,8 @@ class P0VendorGuidance(unittest.TestCase):
             self.assertEqual((packet["status"], packet["decision"]["stage"], assess.call_count), ("decision_required", "analysis", 1))
             self.assertNotIn("candidates", packet["decision_request"]["state"])
             fit = self.fit_packet()
-            self.assertEqual((fit["decision"]["stage"], fit["decision_request"]["state"]["vendor"]), ("guidance", "openai"))
+            self.assertEqual((fit["decision"]["stage"], {q["request"]["state"]["vendor"] for q in fit["decision"]["requests"]}),
+                             ("guidance", {"claude", "openai"}))
             self.assertNotIn("observations", json.dumps(fit["decision_request"]))
             self.assertNotIn("legacy_score", json.dumps(fit["decision_request"]))
             self.assertTrue(all("score" not in c for c in packet["candidates"]))
@@ -900,9 +905,13 @@ class P0VendorGuidance(unittest.TestCase):
 
     def test_v73_jev_stages_preserve_usage_and_failure_is_native_handoff(self):
         from unittest.mock import MagicMock, patch
+        from threading import Barrier
+        vendor_calls = Barrier(2)
         def respond(request, **kwargs):
             req = json.loads(request.data)
             req.pop("model")
+            if req["state"]["stage"] == "guidance":
+                vendor_calls.wait(timeout=2)  # sequential vendor calls cannot pass this barrier
             raw = guided_reply({"decision_request": req, "assessment_digest": r.canonical_hash(req)}, "light")["stages"][-1]
             raw.update(model="jev-1.13.0", usage={"input_tokens": 100, "output_tokens": 10})
             result = MagicMock()
@@ -1123,8 +1132,7 @@ class P0VendorGuidance(unittest.TestCase):
         analysis = fit["decision_request"]["state"]["analysis"]
         self.assertIn("task:coding", analysis["unresolved_facets"])
         self.assertIn({"axis": "task", "value": "repo_coding", "origin": "semantic"}, analysis["facets"])
-        effort = self.route(index=idx, response=guided_reply(fit, "light"))
-        out = self.route(index=idx, response=guided_reply(effort, "light"))
+        out = self.route(index=idx, response=guided_reply(fit, "light"))
         self.assertIn("u/repo", out["selection"]["decision"]["evaluation"]["units"])
 
     def test_v88_vendor_path_does_not_compute_legacy_benchmark_scores(self):
@@ -1180,8 +1188,7 @@ class P0VendorGuidance(unittest.TestCase):
         fit = self.d.evaluate(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response)
         response = guided_reply({**fit, "assessment_digest": fit["decision"]["request_digest"]}, "__tie__")
         effort = self.d.evaluate(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response)
-        response = guided_reply({**effort, "assessment_digest": effort["decision"]["request_digest"]}, "__tie__")
-        assessment = self.d.evaluate(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response)
+        assessment = effort
         self.assertEqual(assessment["status"], "ok")
         self.assertEqual([c["profile"] for c in assessment["candidates"]], ["disabled", "light", "strong"])
         self.assertFalse(assessment["candidates"][0]["eligible"])
@@ -1324,8 +1331,7 @@ class P0VendorGuidance(unittest.TestCase):
                 fit = self.route(index=idx, response=guided_reply(packet, "__tie__"))
                 analysis = fit["decision_request"]["state"]["analysis"]
                 self.assertNotIn(hint, [f["value"] for f in analysis["facets"]])
-                effort = self.route(index=idx, response=guided_reply(fit, "__tie__"))
-                out = self.route(index=idx, response=guided_reply(effort, "__tie__"))
+                out = self.route(index=idx, response=guided_reply(fit, "__tie__"))
                 evaluation = out["decision"]["evaluation"]
                 self.assertFalse(evaluation["comparisons"])
                 self.assertTrue(all(hint not in u["facets"].get("task", []) for uid, u in evaluation["units"].items()
@@ -1447,7 +1453,7 @@ class P0VendorGuidance(unittest.TestCase):
 
         d = finish(**{"guidance:openai": "gpt-6-luna:low"})
         self.assertEqual([(s["stage"], s["request"]["state"].get("vendor")) for s in d["stages"]],
-                         [("analysis", None), ("guidance", "claude"), ("guidance", "gemini"), ("guidance", "openai")])
+                          [("analysis", None), ("guidance", "claude"), ("guidance", "gemini"), ("guidance", "openai")])
         fits = d["evaluation"]["fits"]
         self.assertEqual({pid: f["status"] for pid, f in fits.items()},
                          {"l-low": "documented", "l-high": "alternative", "s-med": "documented", "s-max": "alternative",
@@ -1462,6 +1468,49 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertEqual((fits["l-low"]["status"], fits["s-med"]["status"], fits["s-max"]["status"]),
                          ("alternative", "unsuitable", "unsuitable"))
         self.assertEqual((fits["g-high"]["status"], fits["g-high"]["diagnostics"]), ("provisional", ["guidance_fit_unresolved"]))
+
+    def test_v106_parallel_guidance_accepts_unordered_and_partial_native_responses(self):
+        packet = self.fit_packet()
+        replies = guided_reply(packet, "__tie__")["stages"]
+        expected = self.route(response={"stages": replies})["decision"]
+        reversed_result = self.route(response={"stages": [replies[0], *reversed(replies[1:])]})
+        self.assertEqual(reversed_result["decision"], expected)
+        partial = self.route(response={"stages": [replies[0], replies[-1]]})
+        self.assertEqual(len(partial["decision"]["requests"]), 1)
+        self.assertEqual(partial["decision"]["requests"][0]["request"]["state"]["vendor"], "claude")
+        finished = self.route(response=guided_reply(partial, "__tie__"))
+        self.assertEqual(finished["decision"], expected)
+        with self.assertRaisesRegex(r.InputError, "duplicate guidance"):
+            self.route(response={"stages": [*replies, replies[-1]]})
+        wrong = {**replies[-1], "request_digest": "stale"}
+        with self.assertRaisesRegex(r.InputError, "current guidance"):
+            self.route(response={"stages": [replies[0], wrong]})
+        with self.assertRaisesRegex(r.InputError, "request_digest must be a string"):
+            self.route(response={"stages": [replies[0], {**wrong, "request_digest": []}]})
+
+    def test_v106_one_failed_vendor_keeps_completed_sibling_and_retries_only_missing(self):
+        from bench_router import decision_provider as provider
+        original = provider.decide
+        calls = []
+        def respond(request, **kwargs):
+            vendor = request["state"].get("vendor")
+            calls.append(vendor)
+            if vendor == "openai":
+                return original(request, env={}, host="codex")
+            raw = guided_reply({"decision_request": request, "assessment_digest": r.canonical_hash(request),
+                                "fit_profiles": [p["id"] for p in self.ps]}, "__tie__")["stages"][-1]
+            return {**raw, "status": "ok", "provider": "jev", "model": "test-jev", "usage": {"input_tokens": 10}}
+        with mock.patch.object(provider, "decide", side_effect=respond):
+            packet = r.route(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", allow_network=True,
+                             env={"JEV_API_KEY": "test"})
+        self.assertCountEqual(calls, [None, "claude", "openai"])
+        self.assertEqual(len(packet["decision"]["requests"]), 1)
+        self.assertEqual(packet["decision"]["completed"][-1]["usage"], {"input_tokens": 10})
+        with mock.patch("urllib.request.urlopen", side_effect=AssertionError("offline replay")):
+            result = self.route(response=guided_reply(packet, "__tie__"))
+        stages = result["decision"]["stages"]
+        self.assertEqual([stage["provider"] for stage in stages], ["jev", "jev", "subagent"])
+        self.assertEqual([stage["request"]["state"].get("vendor") for stage in stages], [None, "claude", "openai"])
 
     def test_v107_gemini_thinking_class_follows_each_models_configuration(self):
         levels = self.d.load_guidelines()["vendors"]["gemini"]["levels"]

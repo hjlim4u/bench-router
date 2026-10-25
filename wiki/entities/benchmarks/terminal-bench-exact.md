@@ -8,7 +8,7 @@ relationships:
     type: related_to
 sources: ["repo:bench_router/data.py"]
 summary: >-
-    Manual Terminal-Bench 4.0 import matched to the profile's harness and effort.
+    Manual exact import and official public-leaderboard model-proxy evidence for Terminal-Bench 4.0.
 base_confidence: 0.6
 lifecycle: reviewed
 lifecycle_changed: 2026-10-18
@@ -20,6 +20,8 @@ updated: 2026-10-18T00:00:00Z
 # Terminal-Bench 4.0 (exact import)
 
 Manual Terminal-Bench 4.0 import matched to the profile's harness and effort. The import contract is `EXACT_PINS` in `bench_router/data.py`.
+
+The automatic public leaderboard preserves its published model, agent and effort, but has no installed profile harness/version proof. It is model-proxy evidence; the manual import remains the only exact-profile path.
 
 Related: [[entities/benchmarks/mg/terminal-bench-4-0]]
 
@@ -33,6 +35,15 @@ metric = "pass_pct"
 status = "current"
 adoption = "active"
 reason = "Collected and matched per profile harness and effort; complements mg:terminal-bench-4-0/max (vals-ai mini-swe-agent model-proxy)"
+facets = { task = ["terminal_ops"] }
+
+[[unit]]
+id = "terminal_proxy"
+desc = "Official Terminal-Bench 4.0 public leaderboard completion rate, compared only within the published agent scaffold"
+metric = "pass_pct"
+status = "current"
+adoption = "active"
+reason = "Automatic source preserves model, effort, agent label and trial count but does not claim installed harness equivalence"
 facets = { task = ["terminal_ops"] }
 ```
 

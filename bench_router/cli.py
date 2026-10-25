@@ -368,6 +368,10 @@ TASK_EPILOG = """task file (replace cwd with your existing absolute repository p
   stable for recovery; inspect previous effects before starting a new round."""
 DECISION_EPILOG = """decision responses (offline calls may return exit 17; this is a handoff):
   Read decision_request (also decision.request) and decision.request_digest.
+  When decision.requests is present, run ALL its independent vendor requests
+  concurrently, one subagent per packet; send only each packet.request.
+  Each reply echoes its own packet.request_digest. Preserve completed siblings
+  and append the new replies to stages; reply order within guidance is arbitrary.
   Resolve only the current request using the requested decision provider or the
   calling agent's native decision subagent. --host identifies the CALLER, not
   the coding worker. Use the requested model and verify its actual identity;
@@ -607,7 +611,7 @@ def main(argv=None):
     xp.add_argument("--max-units", type=int, default=12, help="maximum benchmark measurement units to show; integer >= 1 (default: %(default)s)")
     xp.add_argument("--format", choices=["json", "table"], default="json", help="output as a JSON object or readable text table (default: %(default)s)")
     fp = sub.add_parser("refresh", help="fetch sources and publish the routing snapshot")
-    fp.add_argument("--source", help="aa, arena or mg for automatic collection; swe or tb requires --import FILE (default: all automatic sources)")
+    fp.add_argument("--source", help="aa, arena, mg or tb_auto for automatic collection; swe or tb requires --import FILE (default: all automatic sources)")
     fp.add_argument("--force", action="store_true", help="fetch again even if cached source data has not expired (ignore TTL)")
     fp.add_argument("--import", dest="import_file", help="JSON file of approved manual observations; requires --source swe or --source tb")
     fp.add_argument("--vault", type=Path, help="benchmark wiki to compile; defaults to the clone wiki or installed index")

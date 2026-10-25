@@ -12,13 +12,14 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 from datetime import datetime
 from pathlib import Path
 
 from . import locking
 from . import routing as r
 
-ADAPTER_VERSION = "5"  # 3: arena effort; 4: AA effort; 5: Model Gap effort in the matching key too
+ADAPTER_VERSION = "6"  # 3: arena effort; 4: AA effort; 5: Model Gap effort; 6: Terminal-Bench proxy rows
 DB_SCHEMA_VERSION = 2
 HTTP_TIMEOUT_S = 30
 HTTP_MAX_BYTES = 20 * 1024 * 1024
@@ -41,9 +42,11 @@ ARENA_COHORTS = {"arena_text": ("text_style_control", "overall"),
                  "arena_vision": ("vision_style_control", "overall")}
 # 수동 import로만 들어오는 exact_profile evidence. suite/version이 다르면 거부(점수 혼합 금지).
 MG_URL = "https://themodelgap.com/data"
+TB_URL = "https://www.tbench.ai/"
 EXACT_PINS = {"swe_verified_exact": {"source_id": "swe", "suite": "swe-bench", "version": "verified"},
               "terminal_exact": {"source_id": "tb", "suite": "terminal-bench", "version": "4.0"}}
-EVIDENCE_IDS = sorted([*AA_FIELDS, *ARENA_COHORTS, *EXACT_PINS])
+TB_PROXY = "terminal_proxy"
+EVIDENCE_IDS = sorted([*AA_FIELDS, *ARENA_COHORTS, *EXACT_PINS, TB_PROXY])
 
 SOURCES = {
     "aa": {"url": AA_URL, "ttl_hours": 24, "max_stale_hours": 168, "max_requests": 50,
@@ -57,6 +60,8 @@ SOURCES = {
             "attribution": "SWE-bench (manual import)"},
     "tb": {"url": "https://www.tbench.ai/", "ttl_hours": 168, "max_stale_hours": 720, "manual": True,
            "attribution": "Terminal-Bench (manual import)"},
+    "tb_auto": {"url": TB_URL, "ttl_hours": 168, "max_stale_hours": 720, "max_requests": 3,
+                "attribution": "Terminal-Bench 4.0 public leaderboard (model proxy)"},
 }
 AUTO_SOURCES = [s for s, m in SOURCES.items() if not m.get("manual")]
 
@@ -84,9 +89,9 @@ def _left_s(budget):
     return left
 
 
-def http_get_json(url, headers=None, budget=None):
-    """bounded GET. 401/403/429는 재시도 없음, 5xx/네트워크는 최대 HTTP_RETRIES회. 헤더(키)는 에러에 넣지 않는다.
-    URL이 .parquet이면 JSON 대신 행 dict 목록으로 디코드한다.
+def _http_get(url, headers=None, budget=None):
+    """Bounded raw-byte GET shared by JSON, Parquet and public HTML collection.
+    401/403/429는 재시도 없음, 5xx/네트워크는 최대 HTTP_RETRIES회. 헤더(키)는 에러에 넣지 않는다.
     budget: {"used", "max"} 요청 수 상한, 선택적으로 {"deadline"(monotonic), "max_seconds"} 전체 시간 상한."""
     for attempt in range(HTTP_RETRIES + 1):
         timeout = min(HTTP_TIMEOUT_S, _left_s(budget))
@@ -101,13 +106,7 @@ def http_get_json(url, headers=None, budget=None):
                 data = resp.read(HTTP_MAX_BYTES + 1)
             if len(data) > HTTP_MAX_BYTES:
                 raise SourceError("response too large")
-            if url.endswith(".parquet"):
-                return _parquet_rows(data)
-            try:
-                return json.loads(data.decode("utf-8"), object_pairs_hook=r._no_dupes,
-                                  parse_constant=r._reject_const)
-            except (UnicodeDecodeError, json.JSONDecodeError, r.InputError) as e:
-                raise SourceError(f"invalid JSON response: {e}")
+            return data
         except urllib.error.HTTPError as e:
             e.close()
             print(f"bench-router: GET {url.split('?')[0]} -> HTTP {e.code} (attempt {attempt + 1})", file=sys.stderr)
@@ -123,6 +122,23 @@ def http_get_json(url, headers=None, budget=None):
             if attempt == HTTP_RETRIES:
                 raise SourceError(f"network error: {getattr(e, 'reason', e)}")
         time.sleep(min(2 ** attempt, _left_s(budget)))
+
+
+def http_get_json(url, headers=None, budget=None):
+    data = _http_get(url, headers, budget)
+    if url.endswith(".parquet"):
+        return _parquet_rows(data)
+    try:
+        return json.loads(data.decode("utf-8"), object_pairs_hook=r._no_dupes, parse_constant=r._reject_const)
+    except (UnicodeDecodeError, json.JSONDecodeError, r.InputError) as e:
+        raise SourceError(f"invalid JSON response: {e}")
+
+
+def http_get_text(url, headers=None, budget=None):
+    try:
+        return _http_get(url, {"Accept": "text/html", **(headers or {})}, budget).decode("utf-8")
+    except UnicodeDecodeError:
+        raise SourceError("invalid UTF-8 response")
 
 
 def _parquet_rows(data):
@@ -365,8 +381,90 @@ def parse_mg(payload):
     return obs
 
 
+TB_FLIGHT = re.compile(r"self\.__next_f\.push\((\[.*?\])\)</script>", re.S)
+
+
+def fetch_tb_auto(get_text, env):
+    """Terminal-Bench embeds the official 4.0 leaderboard in a Next hydration packet."""
+    page = get_text(TB_URL, None)
+    chunks = []
+    for match in TB_FLIGHT.finditer(page):
+        try:
+            packet = json.loads(match.group(1), object_pairs_hook=r._no_dupes, parse_constant=r._reject_const)
+            if isinstance(packet, list) and len(packet) == 2 and packet[0] == 1 and isinstance(packet[1], str):
+                chunks.append(packet[1])
+        except (ValueError, r.InputError):
+            continue
+    # ponytail: parse the current public Flight records as JSON, never execute scripts; fail closed on layout changes.
+    for record in "".join(chunks).splitlines():
+        if "reasoning_effort" not in record:
+            continue
+        try:
+            tree = json.loads(record.split(":", 1)[1], object_pairs_hook=r._no_dupes, parse_constant=r._reject_const)
+            for query in tree[3]["state"]["queries"]:
+                data = query["state"].get("data")
+                if isinstance(data, dict) and isinstance(data.get("leaderboard"), dict) and isinstance(data.get("rows"), list):
+                    board = data["leaderboard"]
+                    if board.get("name") == "4-0-0":
+                        return data, board.get("id"), board.get("updated_at")
+        except (IndexError, KeyError, TypeError, ValueError, AttributeError, r.InputError):
+            continue
+    raise SourceError("Terminal-Bench: official leaderboard hydration data missing")
+
+
+def parse_tb_auto(payload):
+    board, rows = payload.get("leaderboard"), payload.get("rows")
+    if (not isinstance(board, dict) or board.get("name") != "4-0-0" or not isinstance(board.get("id"), str)
+            or not board["id"] or board.get("package", "terminal-bench/terminal-bench") != "terminal-bench/terminal-bench"
+            or not isinstance(rows, list) or not rows):
+        raise SourceError("Terminal-Bench: expected nonempty 4.0 leaderboard")
+    revision = board.get("dataset_version_ids") or [board["id"]]
+    if not isinstance(revision, list) or not all(isinstance(value, str) and value for value in revision):
+        raise SourceError("Terminal-Bench: invalid dataset revision")
+    seen, obs = set(), []
+    for row in rows:
+        meta, metrics = (row.get("metadata"), row.get("metrics")) if isinstance(row, dict) else (None, None)
+        display = meta.get("model_display") if isinstance(meta, dict) else None
+        scaffold = meta.get("agent_display") if isinstance(meta, dict) else None
+        model = display.get("label") if isinstance(display, dict) else None
+        agent = scaffold.get("label") if isinstance(scaffold, dict) else None
+        effort, score = (meta.get("reasoning_effort"), metrics.get("accuracy")) if isinstance(meta, dict) and isinstance(metrics, dict) else (None, None)
+        if effort == "none":  # explicit unsupported no-thinking rows stay in the stored raw payload
+            continue
+        trials = row.get("n_trials") if isinstance(row, dict) else None
+        if (not isinstance(model, str) or not model or not isinstance(agent, str) or not agent
+                or effort not in EFFORT_ORDER or type(trials) is not int or trials <= 0
+                or row.get("leaderboard_id", board["id"]) != board["id"]
+                or metrics.get("n_trials", trials) != trials
+                or type(score) not in (int, float) or not 0 <= score <= 100):
+            raise SourceError("Terminal-Bench: invalid leaderboard row")
+        model_url = display.get("url")
+        url = urlsplit(model_url) if isinstance(model_url, str) else None
+        if url and url.hostname in ("www.anthropic.com", "anthropic.com") and not model.lower().startswith("claude"):
+            model = "Claude " + model  # labels omit the vendor prefix; URL slugs can name a different release
+        key = (model, agent, effort)
+        if key in seen:
+            raise SourceError(f"Terminal-Bench: duplicate row {key}")
+        seen.add(key)
+        conditions = {"suite": "terminal-bench", "version": "4.0", "subset": "official", "metric": "accuracy",
+                      "direction": "higher", "variant": "leaderboard", "dataset_revision": ",".join(sorted(revision)),
+                      "evaluation_harness": "terminal-bench-official", "aggregation": "pass@1",
+                      "agent_scaffold": agent, "reasoning_effort": effort, "n_trials": trials,
+                      "model_display": display["label"], "model_url": model_url, "reported_metrics": metrics,
+                      "model_release_date": meta.get("date")}
+        obs.append({"evidence_id": TB_PROXY, "cohort_id": f"terminal-bench:4.0:{board['id']}:{agent}",
+                    "source_model": model, "raw": score / 100,
+                    "metric_version": "4.0", "scope": "model_proxy", "harness_id": None,
+                    "reasoning_effort": effort, "conditions": conditions, "published_at": row.get("updated_at"),
+                    "evaluated_at": None})  # metadata.date is the model release date, not an evaluation timestamp
+    if not obs:
+        raise SourceError("Terminal-Bench: no rows with a supported reasoning effort")
+    return obs
+
+
 FETCH = {"aa": fetch_aa, "arena": fetch_arena, "mg": fetch_mg}
-PARSE = {"aa": parse_aa, "arena": parse_arena, "mg": parse_mg, "swe": parse_import, "tb": parse_import}
+PARSE = {"aa": parse_aa, "arena": parse_arena, "mg": parse_mg, "swe": parse_import, "tb": parse_import,
+         "tb_auto": parse_tb_auto}
 
 
 def normalize(obs):
@@ -436,7 +534,9 @@ def refresh_source(db, sid, now, force=False, import_doc=None, get_json=None, en
             payload, revision, published = import_doc, None, import_doc.get("published_at") or import_doc.get("evaluated_at")
         else:
             get = lambda url, h: get_json(url, h, budget)
-            payload, revision, published = (fetch_arena(get, env, arena_spec) if sid == "arena" else FETCH[sid](get, env))
+            payload, revision, published = (fetch_arena(get, env, arena_spec) if sid == "arena" else
+                                            fetch_tb_auto(lambda url, h: http_get_text(url, h, budget), env) if sid == "tb_auto"
+                                            else FETCH[sid](get, env))
         obs = normalize(PARSE[sid](payload))
     except (SourceError, KeyError, TypeError, ValueError, AttributeError) as e:  # a malformed payload fails this source only
         err = str(e) if isinstance(e, SourceError) else repr(e)
@@ -469,6 +569,9 @@ def refresh_source(db, sid, now, force=False, import_doc=None, get_json=None, en
             db.execute("DELETE FROM observations WHERE snapshot_id=?", (oid,))
             db.execute("DELETE FROM snapshots WHERE id=?", (oid,))
     res = {"result": "unchanged" if unchanged else "updated", "requests": budget["used"], "snapshot": snap_id}
+    if sid == "tb_auto":
+        res["coverage"] = {"published_rows": len(payload["rows"]), "observations": len(obs),
+                           "unsupported_effort_rows": len(payload["rows"]) - len(obs)}
     if payload.get("failed"):
         res["skipped_units"] = payload["failed"]
     return res
