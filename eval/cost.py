@@ -119,7 +119,7 @@ def main():
     ap.add_argument("--tag", required=True)
     a = ap.parse_args()
     cfg = r.load_profiles(HOME / ".config/bench-router/profiles.toml")
-    kinds = {p["id"]: p["kind"] for p in cfg["profile"]}
+    kinds = {p["id"]: p.get("kind") for p in cfg["profile"]}  # None: caller-owned profiles 2.0 entry
     prices = aa_prices(cfg)
     root = HOME / "br-smoke/eval" / a.tag
     rows = [json.loads(l) for l in (root / "results.jsonl").read_text().splitlines()]

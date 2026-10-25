@@ -19,6 +19,9 @@ from . import routing as r
 PROJECTS_BIN = os.environ.get("BENCH_ROUTER_PROJECTS", "herdr-projects")
 HERDR_BIN = os.environ.get("BENCH_ROUTER_HERDR", "herdr")
 BACKEND = "projects-1.2"
+LOCAL_BACKEND = "local-1"  # one-shot CLI as a local subprocess (runners.py)
+EXTERNAL_BACKEND = "external-1"  # the caller runs the agent; the router keeps receipt and result contract
+RUNNERS = {"herdr": BACKEND, "local": LOCAL_BACKEND, "external": EXTERNAL_BACKEND}
 PROJECTS_VERSION_RE = re.compile(r"herdr-projects 1\.2\.1(?:[ +].*)?")
 SHORT_CALL_S = 15
 OBSERVE_FLOOR_S = 2  # one list/details round trip; keeps calls inside a 5s task budget
@@ -78,8 +81,31 @@ def project_binding(session=None, runner=subprocess.run):
     version, err = project_call(["version"], runner, raw=True)
     version = (version or "").strip()
     if err or not PROJECTS_VERSION_RE.fullmatch(version):
-        raise r.InputError(f"herdr-projects 1.2.1 is required (found {version or (err or {}).get('message')!r})")
+        raise r.InputError(f"herdr-projects 1.2.1 is required for live dispatch (found {version or (err or {}).get('message')!r}); "
+                           "without Herdr, use --runner local|external, or validate with "
+                           "'route --selection FILE --dry-run' and invoke the agent yourself (docs/execution-boundary.md)")
     return {"projects_version": version.split(" (")[0], "session": session}
+
+
+def resolve_runner(name=None, which=shutil.which):
+    """--runner → receipt backend. auto: Herdr when herdr-projects is on PATH, else a local subprocess."""
+    name = name or os.environ.get("BENCH_ROUTER_RUNNER") or "auto"
+    if name == "auto":
+        name = "herdr" if which(PROJECTS_BIN) else "local"
+    if name not in RUNNERS:
+        raise r.InputError(f"runner must be one of {['auto', *RUNNERS]} (got {name!r})")
+    return RUNNERS[name]
+
+
+def runner_binding(backend, session=None, runner=subprocess.run):
+    return project_binding(session, runner) if backend == BACKEND else {"runner": backend}
+
+
+def _availability(availability, cfg, which, backend):
+    """External callers own availability: leave it unverified instead of probing local CLIs."""
+    if availability is not None or backend == EXTERNAL_BACKEND:
+        return availability
+    return probe_profiles(cfg["profile"], which)
 
 
 def model_effort(profile):
@@ -128,6 +154,8 @@ def headless_argv(profile):
 
 
 def probe(p, which=shutil.which):
+    if "kind" not in p:  # profiles 2.0 caller-owned profile: Herdr runs CLIs only and never converts one
+        return "unsupported_execution_profile"
     if p["executable"] != p["kind"]:
         return "executable_kind_mismatch"
     return None if which(p["executable"]) else "executable_not_found"
@@ -155,7 +183,7 @@ def claude_efforts(runner=subprocess.run):
 def probe_profiles(profiles, which=shutil.which, runner=subprocess.run):
     """CLI preflight plus optional CodeBurn account/quota preflight."""
     out = {p["id"]: probe(p, which) for p in profiles}
-    agy = [p for p in profiles if p["kind"] == "agy" and out[p["id"]] is None]
+    agy = [p for p in profiles if out[p["id"]] is None and p["kind"] == "agy"]
     if agy:
         models = agy_models(runner)
         for p in agy:
@@ -172,7 +200,7 @@ def probe_profiles(profiles, which=shutil.which, runner=subprocess.run):
     except (OSError, ValueError, subprocess.SubprocessError):
         return out
     for p in profiles:
-        if p["kind"] == "agy" or out[p["id"]]:
+        if out[p["id"]] or p["kind"] == "agy":
             continue
         provider = providers.get(CODEBURN_KIND.get(p["kind"]))
         if provider is None:
@@ -274,6 +302,10 @@ def profiles_toml(profiles):
 
 def bench_dir(cwd):
     return Path(cwd) / ".bench-router"
+
+
+def run_worktree(rc):
+    return bench_dir(rc["cwd"]) / "worktrees" / "runs" / rc["run_id"]
 
 
 def run_dir(cwd, run_id):
@@ -429,6 +461,13 @@ def _report(rc, state, msg, runner):
             _observe(rc, rc.get("herdr_state"), error=err, note=f"board report {state} failed")
 
 
+def headless_script(rc, argv):
+    """sh script: the one-shot CLI in the worktree with the prompt from input.txt, then its exit code, atomically."""
+    q, rd = shlex.quote, Path(rc["run_dir"])
+    return (f"cd {q(rc['worktree'])} && {shlex.join(argv)} \"$(cat {q(str(rd / 'input.txt'))})\"; "
+            f"echo $? > {q(str(rd / 'exit_code.tmp'))} && mv {q(str(rd / 'exit_code.tmp'))} {q(str(rd / 'exit_code'))}")
+
+
 def _execute_headless(rc, prompt, profile, session, runner, wait_ms):
     """Board task (no agent) for visibility + a one-shot CLI in its own herdr worktree pane. The prompt reaches
     the CLI from input.txt, never through the typed command line."""
@@ -438,7 +477,7 @@ def _execute_headless(rc, prompt, profile, session, runner, wait_ms):
         _observe(rc, note=f"headless: no one-shot CLI for kind {profile['kind']!r} or args beyond model/effort")
         save(rc)
         return rc
-    rd, wt = Path(rc["run_dir"]), bench_dir(rc["cwd"]) / "worktrees" / "runs" / rc["run_id"]
+    wt = run_worktree(rc)
     obj, err = project_call(["worktree", "create", "--cwd", rc["cwd"], "--branch", f"br/{rc['run_id']}",
                              "--path", str(wt), "--label", f"bench-router {rc['task_id']} r{rc['round']}", "--no-focus"],
                             runner, timeout_s=START_CALL_S, exe=HERDR_BIN)
@@ -459,12 +498,10 @@ def _execute_headless(rc, prompt, profile, session, runner, wait_ms):
     else:
         _observe(rc, error=err, note="headless: board task not created; the run continues without it")
     _report(rc, "working", "headless run", runner)
-    q = shlex.quote
-    script = (f"cd {q(rc['worktree'])} && {shlex.join(argv)} \"$(cat {q(str(rd / 'input.txt'))})\"; "
-              f"echo $? > {q(str(rd / 'exit_code.tmp'))} && mv {q(str(rd / 'exit_code.tmp'))} {q(str(rd / 'exit_code'))}")
     rc["delivery_state"] = "submission_attempted"
     save(rc)  # Persist before typing the command: a lost response must never start a second CLI.
-    _, err = project_call(["pane", "run", rc["pane_id"], shlex.join(["sh", "-c", script])], runner, raw=True, exe=HERDR_BIN)
+    _, err = project_call(["pane", "run", rc["pane_id"], shlex.join(["sh", "-c", headless_script(rc, argv)])],
+                          runner, raw=True, exe=HERDR_BIN)
     if err:
         rc.update(status="delivery_uncertain", delivery_state="uncertain")
         _observe(rc, error=err, note="headless: pane run unconfirmed; inspect the pane, never rerun")
@@ -488,6 +525,9 @@ def _binding_unchanged(rc, session, runner):
 
 
 def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=None):
+    if rc["backend"] != BACKEND:
+        from . import runners
+        return runners.start(rc, prompt, profile, wait_ms)
     if not _binding_unchanged(rc, session, runner):
         return rc
     if rc.get("execution") == "headless":
@@ -525,15 +565,22 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
     return collect(rc, remaining, session, runner)
 
 
+def settle_exit(rc):
+    """Settle a one-shot CLI from its exit_code file; False while it has not exited."""
+    code = Path(rc["run_dir"]) / "exit_code"
+    if not code.exists():
+        return False
+    rc.update(exit_code=code.read_text("utf-8").strip(), delivery_state="activity_observed", process_exited=True)
+    settle(rc, "done")
+    if rc["status"] == "result_invalid" and rc["exit_code"] != "0":
+        rc["status"] = "execution_failed"
+        _observe(rc, "done", note=f"headless CLI exited {rc['exit_code']} without a valid result")
+    return True
+
+
 def _poll_headless(rc, runner, timeout_s):
     """One observation of a headless run: its exit_code file, else whether its pane still exists."""
-    code = Path(rc["run_dir"]) / "exit_code"
-    if code.exists():
-        rc.update(exit_code=code.read_text("utf-8").strip(), delivery_state="activity_observed", process_exited=True)
-        settle(rc, "done")
-        if rc["status"] == "result_invalid" and rc["exit_code"] != "0":
-            rc["status"] = "execution_failed"
-            _observe(rc, "done", note=f"headless CLI exited {rc['exit_code']} without a valid result")
+    if settle_exit(rc):
         if rc["status"] == "completed":
             release(rc, runner)
         _report(rc, "done" if rc["status"] == "completed" else "error", rc["status"], runner)
@@ -552,17 +599,18 @@ def _poll_headless(rc, runner, timeout_s):
 
 def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     """Observe the recorded board task only; never delegate, retry or re-prompt it."""
-    if rc.get("backend") != BACKEND:
+    if rc.get("backend") not in (BACKEND, LOCAL_BACKEND, EXTERNAL_BACKEND):
         raise r.InputError("legacy receipt: inspect the original worker; automatic backend migration is refused")
+    native = rc["backend"] == BACKEND
     if rc["status"] == "completed" and rc.get("settled_contract"):
-        if rc.get("release") is None:  # completed before releasing existed, or the last close failed
+        if native and rc.get("release") is None:  # completed before releasing existed, or the last close failed
             release(rc, runner)
             save(rc)
         return rc
     if rc["delivery_state"] == "not_attempted":
         return rc
     headless = rc.get("execution") == "headless"
-    if not headless and not rc.get("thread_id"):
+    if native and not headless and not rc.get("thread_id"):
         rc.update(status="delivery_uncertain", delivery_state="uncertain")
         save(rc)
         return rc
@@ -572,7 +620,10 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     timeout = lambda: min(SHORT_CALL_S, max(OBSERVE_FLOOR_S, deadline - time.monotonic())) if wait_ms > 0 else SHORT_CALL_S
     while True:
         try:
-            if headless:
+            if not native:
+                from . import runners
+                runners.poll(rc)
+            elif headless:
                 _poll_headless(rc, runner, timeout())
             elif project_binding(session, runner) != rc["project_binding"]:
                 raise r.InputError("Projects version or session changed; inspect the recorded worker")
@@ -620,8 +671,10 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
 
 def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
              profile_id=None, context=None, selection_mode="parallel_pinned",
-              selection=None, check_digest=True, decision_options=None, wait_ms=None, availability=None):
-    """wait_ms: how long to wait after submission (None = until the task deadline; 0 = return at once)."""
+              selection=None, check_digest=True, decision_options=None, wait_ms=None, availability=None,
+             backend=BACKEND):
+    """wait_ms: how long to wait after submission (None = until the task deadline; 0 = return at once).
+    backend: BACKEND (Herdr), LOCAL_BACKEND or EXTERNAL_BACKEND; a recorded run keeps its own backend."""
     from . import coordination as co
     key = co.key_for(t)
     try:
@@ -631,7 +684,11 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
                 raise co.Conflict("dispatch session differs from the recorded native run; use collect")
             if existing:
                 co.observe_receipt(existing[0])
-            availability = availability if availability is not None else probe_profiles(cfg["profile"], which)
+                backend = existing[0].get("backend", BACKEND)
+            elif backend == LOCAL_BACKEND and t["execution"] != "headless":
+                raise r.InputError('the local runner runs one-shot CLIs: set "execution": "headless", '
+                                   "or use --runner herdr|external")
+            availability = _availability(availability, cfg, which, backend)
             if not existing and profile_id is None and selection is None:
                 choice = r.route(t, cfg, mapping, snap, snap_warnings, _now(), availability, context,
                                  **(decision_options or {}))
@@ -641,14 +698,14 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
                     selection = {k: v for k, v in choice["selection"].items() if k != "source"}
                     profile_id = selection["profile"]
                     selection_mode = "vendor-guided"
-            binding = existing[0].get("project_binding") if existing else project_binding(session, runner)
-            rec, fresh = co.reserve(t, BACKEND, binding)
+            binding = existing[0].get("project_binding") if existing else runner_binding(backend, session, runner)
+            rec, fresh = co.reserve(t, backend, binding)
             if not fresh and not existing:
                 raise co.Conflict("recorded native submission has no receipt; inspect effects before resolving, never resend")
             try:
                 result = _dispatch(t, cfg, mapping, snap, snap_warnings, session, runner, which,
                                    profile_id, context, selection_mode, selection, check_digest, decision_options, wait_ms,
-                                   availability)
+                                   availability, backend)
             except BaseException:
                 if fresh and not any(x["task_id"] == t["task_id"] and x["round"] == t["round"] for x in receipts(t["cwd"])):
                     co.discard(key)  # failed before any receipt: nothing was sent, so release the admission record
@@ -664,7 +721,8 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
 
 def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
              profile_id=None, context=None, selection_mode="parallel_pinned",
-              selection=None, check_digest=True, decision_options=None, wait_ms=None, availability=None):
+              selection=None, check_digest=True, decision_options=None, wait_ms=None, availability=None,
+              backend=BACKEND):
     """live route. 선택 → receipt → herdr 실행. 같은 (task_id, round)는 재전송 없이 collect.
     profile_id: 제약·가용성을 통과한 후보 중 이 프로필로 고정(parallel fanout).
     selection: Orchestrator 선택 기록(validate_selection). digest가 지금 입력과 다르면 실행하지 않는다(stale_assessment).
@@ -688,14 +746,16 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                     return {**prior, "status": "conflict", "run_id": rc["run_id"],
                             "warnings": prior["warnings"] + [r.warn("profile_round_conflict",
                                                                   "same task_id/round already uses another profile")]}
-                rc = collect(rc, t["constraints"]["timeout_ms"] if wait_ms is None else wait_ms, session, runner)
+                if wait_ms is None:  # an external run finishes whenever the caller does: report, don't block
+                    wait_ms = 0 if rc.get("backend") == EXTERNAL_BACKEND else t["constraints"]["timeout_ms"]
+                rc = collect(rc, wait_ms, session, runner)
                 out = output(prior, rc, reused=True)
                 if selection is not None and any(prior.get("selection", {}).get(k) != v for k, v in selection.items()):
                     out["warnings"] = out.get("warnings", []) + [r.warn(
                         "selection_differs_from_recorded", "returning the recorded run; use a new round to act on a new selection")]
                 return out
             now = _now()
-            availability = availability if availability is not None else probe_profiles(cfg["profile"], which)
+            availability = _availability(availability, cfg, which, backend)
             if selection is not None and selection.get("schema_version") in r.GUIDED_SELECTIONS:
                 opts = {**(decision_options or {}), "allow_network": False}
                 opts.pop("response", None)
@@ -717,8 +777,8 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
             run_id = str(uuid.uuid4())
             rc = {"schema_version": r.SCHEMA_VERSION, "task_id": t["task_id"], "round": t["round"],
                   "semantic_task_hash": res["task_hash"], "run_id": run_id, "nonce": secrets.token_hex(16),
-                  "backend": BACKEND, "project_binding": project_binding(session, runner),
-                  "kind": profile["kind"], "thread_id": None, "execution": t["execution"],
+                  "backend": backend, "project_binding": runner_binding(backend, session, runner),
+                  "kind": profile.get("kind"), "thread_id": None, "execution": t["execution"],
                   "profile": profile["id"], "profile_fingerprint": res["selected"]["profile_fingerprint"],
                   "cwd": t["cwd"], "run_dir": str(run_dir(t["cwd"], run_id)),
                   "worktree": None, "branch": None,
@@ -830,6 +890,13 @@ def stop_run(cwd, run_id, runner=subprocess.run):
     rc = _target(os.path.realpath(cwd), run_id)
     if rc["status"] in SETTLED_STATUSES:
         raise r.InputError(f"run is already settled ({rc['status']}); nothing to stop")
+    if rc.get("backend") in (LOCAL_BACKEND, EXTERNAL_BACKEND):
+        from . import runners
+        _log_event(rc, {"state": "stop_attempted"})
+        err = runners.stop(rc)
+        log = _log_event(rc, {"state": "stop_uncertain" if err else "stop_sent", "error": err})
+        return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain" if err else "stop_sent",
+                "run_id": rc["run_id"], "thread_id": None, "messages_path": str(log), **({"error": err} if err else {})}
     if rc.get("execution") == "headless":
         if not rc.get("workspace_id"):
             raise r.InputError("headless run has no recorded workspace; inspect it before stopping")
@@ -920,10 +987,11 @@ def output(res, rc, reused=False):
                 "receipt_path": str(Path(rc["run_dir"]) / "receipt.json"), "deadline_at": rc["deadline_at"],
                 "thread_id": rc.get("thread_id"), "worktree": rc.get("worktree"), "branch": rc.get("branch"),
                 "last_observation": rc["last_observation"],
-                "diagnostic_tail": rc.get("diagnostic_tail"), "release": rc.get("release"), "reused_receipt": reused})
+                "diagnostic_tail": rc.get("diagnostic_tail"), "release": rc.get("release"), "reused_receipt": reused,
+                "backend": rc.get("backend"), "invocation": rc.get("invocation")})
     out["selected"] = {**(out.get("selected") or {}), "profile": rc["profile"],
                        "profile_fingerprint": rc["profile_fingerprint"]}
     out["reassignment"] = ("collect_first" if rc["delivery_state"] in ("submission_attempted", "uncertain")
-                            or rc["status"] in ("timed_out", "waiting", "delivery_uncertain") else
+                            or rc["status"] in ("timed_out", "waiting", "delivery_uncertain", "handed_off") else
                             "safe_to_retry" if rc["delivery_state"] == "not_attempted" else "review_result")
     return out

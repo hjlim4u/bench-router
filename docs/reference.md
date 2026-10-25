@@ -10,7 +10,8 @@ This document covers configuration formats, CLI commands, exit codes, evaluation
 
 - Offline evaluation and data refresh run on Linux, WSL2, and Windows. Live Projects execution runs on Linux or WSL2.
 - Python 3.11+.
-- Live delegation requires Herdr, herdr-projects **1.2.1** (board), and authenticated Agent CLIs. The task `cwd` must be the root of a Git repository containing at least one commit. See [docs/projects.md](projects.md).
+- Evaluation, selection and `route --dry-run` need no Herdr or Agent CLI.
+- Live delegation picks a runner with `--runner` (see [Runners](#runners)). `external` needs neither Herdr nor an agent CLI, `local` needs the authenticated Agent CLI, and `herdr` (the `auto` choice when `herdr-projects` is on PATH) requires Herdr, herdr-projects **1.2.1** (board), and authenticated Agent CLIs. The task `cwd` must be the root of a Git repository containing at least one commit. See [docs/projects.md](projects.md).
 - Refreshing Artificial Analysis data requires an API key (Free tier suffices).
 
 From a clone, `mise run install` installs the CLI as an editable uv tool (it follows the clone, so `wiki compile` finds `wiki/`) together with the global Agent Skill; rerun it after `git pull` to refresh the Skill copy. Alternatively, install the CLI with `uv tool install /absolute/path/to/bench-router`, then run `bench-router init` to create shared profiles and aliases without overwriting existing files. The installed `bench-router` command works from any directory; `init` is offline and data collection is separate (`bench-router refresh --source mg`). Arena refresh requires the optional extra: `uv tool install '/absolute/path/to/bench-router[arena]'`. Run `uv tool update-shell` and restart the shell if the command is not on PATH.
@@ -60,7 +61,7 @@ The default configuration directory is `$XDG_CONFIG_HOME/bench-router` (`~/.conf
 <a id="profilestoml"></a>
 ### profiles.toml
 
-Routing operates at the **profile** granularity (Agent CLI + model + execution configuration). All keys are required; unrecognized keys trigger configuration errors.
+Routing operates at the **profile** granularity (Agent CLI + model + execution configuration). In schema 1.0 all keys are required; unrecognized keys trigger configuration errors. Schema 2.0 adds caller-owned profiles (below).
 
 ```toml
 schema_version = "1.0"
@@ -101,6 +102,26 @@ The model names and effort levels above are illustrative. Confirm supported mode
 Permissions follow Projects `worker.access` (`full` | `ask`). Modify using `herdr-projects set worker.access ask [--repo NAME]`. Under `ask`, Claude requires approval on every file edit and Codex on writes outside the worktree, pausing in `blocked`. For details, see [Projects Profiles and Permissions](projects.md#profiles-and-permissions).
 
 Live `route` and `parallel` check PATH availability, and Antigravity checks the active model list via `agy models`. When `codeburn quota --format json` is available, provider status and quota window exhaustion are checked for Claude and Codex. CodeBurn installations under `.bench-router/codeburn` are detected automatically, overridable via PATH or `BENCH_ROUTER_CODEBURN`. When CodeBurn is unavailable, checks fall back to PATH while retaining agy model verification.
+
+#### Caller-owned profiles (schema 2.0)
+
+`schema_version = "2.0"` accepts the same keys, but `kind`, `executable` and `args` go all together or not at all. A profile with all three is a CLI profile, validated and fingerprinted exactly as in 1.0. A profile without them is caller-owned: the caller's executor (API, host Agent tool, external CLI) runs it by profile ID. Its fingerprint hashes only `model_id`, `harness_id`, `reasoning_effort` and `config_revision` (fingerprint version 2), so bump `config_revision` whenever the caller's execution setup changes. Do not put URLs, API keys or commands in profiles. The `herdr` and `local` runners exclude caller-owned profiles with `unsupported_execution_profile` and never convert them to a CLI; the `external` runner hands them to the caller. 1.0 files keep working unchanged.
+
+```toml
+schema_version = "2.0"
+
+[[profile]]
+id = "caller-agent-example"
+enabled = false
+model_id = "REPLACE_WITH_CANONICAL_MODEL_ID"
+harness_id = "caller-tool-harness"
+reasoning_effort = "unknown"
+config_revision = "replace-after-verification"
+cost_tier = "high"
+inference_local = false
+context_tokens = 0
+capabilities = []
+```
 
 `profiles discover [--force]` generates candidate configurations in `profiles.toml` from installed CLIs. Codex inspects `models_cache.json` and per-model effort; Claude inspects guidelines models and CLI help effort flags; agy inspects account model listings, merged with CodeBurn observed models. Generated profiles default to `enabled=true`, `cost_tier=high`, and `context_tokens=0`. Review permissions, capabilities, context limits, and live account invocation status before use. Overwriting existing files requires `--force`.
 
@@ -177,7 +198,7 @@ bench-router feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --e
 | 0 | `selected` (dry-run), `completed`, normal termination for refresh/status/feedback |
 | 2 | Invalid input, configuration, or argument error |
 | 10 | `blocked` — Agent is paused waiting on user approval or prompt response |
-| 11 | `timed_out` / `delivery_uncertain` — Execution may still be active; check via `collect` |
+| 11 | `timed_out` / `delivery_uncertain` — Execution may still be active; check via `collect`. `handed_off` — external runner: run the returned `invocation`, then `collect` |
 | 12 | `execution_failed` / `result_invalid` |
 | 13 | `no_eligible_profile` — Task not dispatched |
 | 14 | `conflict` — Incompatible task/round content, unresolved runs, or lock contention; `stale_assessment` — Task, config, snapshot, or context changed after evaluation |
@@ -307,6 +328,19 @@ WantedBy=timers.target
 ---
 
 ## Live Dispatch and Result Contracts
+
+<a id="runners"></a>
+### Runners
+
+The global `--runner auto|herdr|local|external` option (env `BENCH_ROUTER_RUNNER`, default `auto`) selects the executor of a new live `route`/`parallel` run. `auto` resolves to `herdr` when `herdr-projects` (`BENCH_ROUTER_PROJECTS`) is on PATH and to `local` otherwise. The choice is recorded as the receipt `backend` (`projects-1.2`, `local-1`, `external-1`). `collect`, `stop` and re-dispatch of the same task/round follow the recorded backend, not the current flag. Every runner shares the receipt, coordination (four-active limit, overlap guard), nonce and result contract below.
+
+| Runner | Executes | Tasks | Worktree | `stop` | `tell`/`resume` |
+|---|---|---|---|---|---|
+| `herdr` | Projects board agent or Herdr pane | interactive, headless | Projects/Herdr | board stop / workspace close | yes (board runs) |
+| `local` | profile one-shot CLI as a detached `sh -c` subprocess (own session, output in `runs/RUN/output.log`) | headless only | `git worktree add` under `.bench-router/worktrees/runs/RUN` | SIGTERM to the process group | no |
+| `external` | nothing; the caller runs the agent | any | same as local | records the caller's statement that its agent stopped | no |
+
+`external` returns `handed_off` (exit 11) plus `invocation`: `cwd` (worktree), `prompt_path` (prompt with result contract), `result_dir`, `argv` (suggested one-shot CLI for CLI profiles, else null), `model_id` and `deadline_at`. It does not probe local CLIs (availability stays unverified), so schema 2.0 caller-owned profiles are eligible; `local` and `herdr` exclude them as `unsupported_execution_profile`. `collect` on an external run completes once `result_dir` holds a valid `result.json`/`result.md` pair; a re-dispatch of the same round reports without waiting.
 
 Live `route` (without `--dry-run`) proceeds as follows:
 

@@ -8,6 +8,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -559,6 +560,69 @@ class P2(unittest.TestCase):
         self.assertEqual((out["status"], out["delivery_state"], fake.prompts), ("execution_failed", "not_attempted", []))
         missing = self.run_(FakeProjects(), self.task(task_id="missing"), w=lambda _: None)
         self.assertEqual(missing["excluded"], [{"profile": "a", "reasons": ["executable_not_found"]}])
+
+    def test_v111_caller_owned_profile_is_not_dispatched(self):
+        api = {k: v for k, v in profile("a").items() if k not in r.EXECUTION_KEYS}
+        self.cfg = {"schema_version": "2.0", "profile": [api]}
+        fake = FakeProjects()
+        out = self.run_(fake)
+        self.assertEqual(out["excluded"], [{"profile": "a", "reasons": ["unsupported_execution_profile"]}])
+        self.assertEqual((fake.prompts, hd.receipts(self.cwd)), ([], []))
+        ext = self.run_(fake, backend=hd.EXTERNAL_BACKEND)  # the caller owns its execution
+        self.assertEqual((ext["status"], ext["invocation"]["argv"]), ("handed_off", None))
+        def missing(*a, **kw):
+            raise FileNotFoundError("herdr-projects")
+        with self.assertRaisesRegex(r.InputError, "--dry-run"):
+            hd.project_binding(runner=missing)
+
+    def test_v112_external_runner_hands_off_and_collects(self):
+        fake = FakeProjects()
+        out = self.run_(fake, w=lambda _: None, backend=hd.EXTERNAL_BACKEND)  # the caller owns availability
+        inv = out["invocation"]
+        self.assertEqual((out["status"], out["reassignment"], out["backend"], fake.prompts),
+                         ("handed_off", "collect_first", hd.EXTERNAL_BACKEND, []))
+        from bench_router import cli
+        self.assertEqual(cli.EXIT["handed_off"], 11)
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0)["status"], "handed_off")
+        write_result()(SimpleNamespace(worktree_of=lambda _: inv["cwd"]), Path(inv["prompt_path"]).read_text("utf-8"))
+        done = hd.collect_run(self.cwd, out["run_id"], 0)
+        self.assertEqual((done["status"], done["task_outcome"]), ("completed", "success"))
+        again = self.run_(fake, backend=hd.LOCAL_BACKEND)  # a recorded run keeps its backend and is never resent
+        self.assertEqual((again["status"], again["reused_receipt"], again["backend"]), ("completed", True, hd.EXTERNAL_BACKEND))
+        out = self.run_(fake, self.task(task_id="t2"), backend=hd.EXTERNAL_BACKEND, wait_ms=0)
+        self.assertEqual(hd.stop_run(self.cwd, out["run_id"])["status"], "stop_sent")
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0)["status"], "execution_failed")
+
+    def test_v113_local_runner_runs_a_subprocess(self):
+        self.enterContext(patch.object(hd, "time", time))  # a real process needs real waiting
+        writer = (f"import os, sys; sys.path.insert(0, {str(Path(__file__).parent)!r}); from test_p2 import write_result; "
+                  "from types import SimpleNamespace; write_result()(SimpleNamespace(worktree_of=lambda _: os.getcwd()), sys.argv[1])")
+        cases = (([sys.executable, "-c", writer], "completed", "0"), (["sh", "-c", "exit 3", "x"], "execution_failed", "3"))
+        for i, (argv, status, code) in enumerate(cases):
+            with patch.object(hd, "headless_argv", return_value=argv):
+                out = self.run_(FakeProjects(), self.task(task_id=f"t{i}", execution="headless"), backend=hd.LOCAL_BACKEND)
+            self.assertEqual((out["status"], self.receipt(out)["exit_code"]), (status, code), out["last_observation"])
+        with patch.object(hd, "headless_argv", return_value=["sleep", "30"]):
+            out = self.run_(FakeProjects(), self.task(task_id="slow", execution="headless"), backend=hd.LOCAL_BACKEND, wait_ms=0)
+        self.assertEqual(out["status"], "timed_out")
+        self.assertEqual(hd.stop_run(self.cwd, out["run_id"])["status"], "stop_sent")
+        for _ in range(50):  # SIGTERM is asynchronous
+            res = hd.collect_run(self.cwd, out["run_id"], 0)
+            if res["status"] != "timed_out":
+                break
+            time.sleep(0.1)
+        self.assertEqual((res["status"], self.receipt(res)["process_exited"]), ("execution_failed", True))
+        with self.assertRaisesRegex(r.InputError, "headless"):
+            self.run_(FakeProjects(), self.task(task_id="board"), backend=hd.LOCAL_BACKEND)
+
+    def test_v114_auto_runner_follows_herdr_projects_on_path(self):
+        self.assertEqual(hd.resolve_runner("auto", which), hd.BACKEND)
+        self.assertEqual(hd.resolve_runner("auto", lambda _: None), hd.LOCAL_BACKEND)
+        self.assertEqual(hd.resolve_runner("external", lambda _: None), hd.EXTERNAL_BACKEND)
+        with patch.dict(os.environ, {"BENCH_ROUTER_RUNNER": "local"}):
+            self.assertEqual(hd.resolve_runner(None, which), hd.LOCAL_BACKEND)
+        with self.assertRaises(r.InputError):
+            hd.resolve_runner("cloud", which)
 
     def test_worker_settings(self):
         p = lambda kind, args: {"kind": kind, "args": args}

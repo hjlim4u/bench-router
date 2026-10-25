@@ -22,7 +22,7 @@ GROUP_KEYS = ("schema_version", "group_id", "cwd", "isolation", "fanout", "max_p
 GROUP_SCHEMA_VERSION = "2.0"  # tasks[i] = {task, context?, selections[]}: Orchestrator가 고른 프로필로 fanout
 MAX_AGENTS = 16
 ROUND_KEYS = ("status", "round", "run_id", "result_path", "task_outcome", "worktree", "branch", "receipt_path",
-              "delivery_state", "reassignment")
+              "delivery_state", "reassignment", "invocation")
 
 
 def validate_group(raw):
@@ -176,10 +176,10 @@ def collab_text(g, m, labels, shared):
 
 
 def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
-              dry_run=False, decision_options=None, responses=None, wait_ms=None):
+              dry_run=False, decision_options=None, responses=None, wait_ms=None, backend=herdr.BACKEND):
     gdir = herdr.bench_dir(g["cwd"]) / "groups" / g["group_id"]
     shared = gdir / "shared"
-    availability = None if dry_run else herdr.probe_profiles(cfg["profile"], which)
+    availability = None if dry_run else herdr._availability(None, cfg, which, backend)
     # Freeze the original input and selections once, then recover from this plan without new provider calls.
     plan_path = gdir / "plan.json"
     group_hash = r.canonical_hash(g)
@@ -246,7 +246,7 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                                  context=g["contexts"][m["index"]], selection=sel,
                                  selection_mode="orchestrator_pinned" if sel else "parallel_pinned",
                                   check_digest=False, decision_options=decision_options, wait_ms=wait_ms,
-                                  availability=availability)
+                                  availability=availability, backend=backend)
             rnd = {k: res.get(k) for k in ROUND_KEYS}
             rnd["round"] = t["round"]
             if res["status"] != "completed":

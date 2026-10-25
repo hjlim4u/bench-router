@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import routing as r
 
-EXIT = {"selected": 0, "completed": 0, "ok": 0, "recorded": 0, "sent": 0, "stop_sent": 0, "blocked": 10, "timed_out": 11, "waiting": 11,
+EXIT = {"selected": 0, "completed": 0, "ok": 0, "recorded": 0, "sent": 0, "stop_sent": 0, "blocked": 10, "timed_out": 11, "waiting": 11, "handed_off": 11,
         "delivery_uncertain": 11, "execution_failed": 12, "result_invalid": 12, "no_eligible_profile": 13,
         "conflict": 14, "stale_assessment": 14, "partial_failure": 16, "failed": 16,
         "decision_required": 17, "decision_unavailable": 17}
@@ -66,7 +66,7 @@ def _load(args):
         return herdr.dispatch(task, cfg, mapping, snap, snap_warnings, args.herdr_session,
                               profile_id=args.profile, context=context, selection_mode="orchestrator_pinned",
                               selection=selection, decision_options={**options, "allow_network": True},
-                              wait_ms=args.wait_ms)
+                              wait_ms=args.wait_ms, backend=herdr.resolve_runner(args.runner))
     now = datetime.now(timezone.utc)
     if args.cmd == "evaluate":
         if args.format == "3":
@@ -111,7 +111,7 @@ def _select(args):
 
 
 def _parallel(args):
-    from . import parallel
+    from . import herdr, parallel
     g = parallel.validate_group(r.load_json_strict(args.group, r.TASK_MAX_BYTES * 16))
     cfg, mapping = _config(args)
     snap, snap_warnings = r.load_snapshot(args.cache_dir)
@@ -120,6 +120,7 @@ def _parallel(args):
     if not isinstance(responses, dict):
         raise r.InputError("parallel decision response: object keyed by member label required")
     return parallel.run_group(g, cfg, mapping, snap, snap_warnings, args.herdr_session, dry_run=args.dry_run, wait_ms=args.wait_ms,
+                              backend=herdr.resolve_runner(args.runner),
                               decision_options={"host": args.host,
                                                 "index": evidence.load_index(args.cache_dir),
                                                 "allow_network": not args.dry_run,
@@ -413,7 +414,7 @@ output and recovery:
 exit codes:
   0 selected/completed/ok/recorded/sent/stop_sent
   2 invalid input   10 blocked (approval/question)
-  11 timed_out/waiting/delivery_uncertain (collect existing run; may still run)
+  11 timed_out/waiting/delivery_uncertain/handed_off (collect existing run; may still run)
   12 execution_failed/result_invalid   13 no eligible profile
   14 conflict/stale assessment   15 I/O or storage error
   16 refresh failed/partially failed or parallel partially failed
@@ -555,6 +556,11 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
     ap.add_argument("--herdr-session", default=os.environ.get("BENCH_ROUTER_HERDR_SESSION") or None,
                     help="Herdr session for dispatch; if supplied on collect, must match the run (default: BENCH_ROUTER_HERDR_SESSION, else unset)")
+    ap.add_argument("--runner", choices=("auto", "herdr", "local", "external"),
+                    default=os.environ.get("BENCH_ROUTER_RUNNER") or "auto",
+                    help="live route/parallel executor: herdr board/pane, local one-shot CLI subprocess (headless tasks), "
+                         "or external (returns an invocation; you run the agent, then collect). auto = herdr when "
+                         "herdr-projects is on PATH, else local. Recorded runs keep theirs (default: %(default)s)")
     rp = sub.add_parser("route", help="select a profile and delegate via Projects (--dry-run: select only)")
     rp.add_argument("--task", required=True, help=TASK_HELP)
     rp.add_argument("--context", help="optional context JSON file (1.0|2.0) of caller-supplied estimates, prices and signals; see docs/routing-contracts.md")
@@ -650,7 +656,7 @@ def main(argv=None):
             sections.append(TASK_EPILOG)
         if parser in (rp, pp, cp):
             sections.append(RECOVERY_EPILOG)
-        sections.append("Global options (--config-dir, --cache-dir, --herdr-session) go BEFORE the command.")
+        sections.append("Global options (--config-dir, --cache-dir, --herdr-session, --runner) go BEFORE the command.")
         parser.epilog = "\n\n".join(sections)
     args = ap.parse_args(argv)
 
