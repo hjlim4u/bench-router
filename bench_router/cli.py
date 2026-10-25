@@ -330,98 +330,328 @@ def explain_text(res):
     return "\n".join(lines)
 
 
+TASK_HELP = 'UTF-8 JSON file; required: schema_version="1.0", task_id, round, summary, prompt, cwd'
+TASK_EPILOG = """task file (replace cwd with your existing absolute repository path):
+  {"schema_version":"1.0","task_id":"my-task-001","round":1,
+   "summary":"Describe the requested change","prompt":"Full task instructions",
+   "cwd":"/absolute/path/to/repo"}
+  task_id: unique ID using letters/digits/underscore/hyphen (1..64 characters,
+  starting with a letter/digit); round: integer >= 1; summary/prompt: nonempty.
+  Optional: context_files (paths within cwd), constraints, priority
+  (quality|balanced|cost; default balanced), exclude_profiles, facets,
+  execution (interactive|headless; default interactive).
+  interactive uses a board agent conversation; headless runs a one-shot CLI
+  without approval prompts and cannot receive tell messages.
+  facets are task tags as {axis: [value]}; obtain allowed values with wiki facets.
+  constraints defaults: max_cost_tier=high (low|medium|high),
+  min_context_tokens=0, local_only=false, timeout_ms=900000 (1000..3600000),
+  required_capabilities=[]. See examples/task.synthetic.json and docs/reference.md.
+  Live execution needs a git repository with a commit; worktrees start at HEAD,
+  so uncommitted changes are not included. Keep task_id, round and task content
+  stable for recovery; inspect previous effects before starting a new round."""
+DECISION_EPILOG = """decision responses (offline calls may return exit 17; this is a handoff):
+  Read decision_request (also decision.request) and decision.request_digest.
+  Resolve only the current request using the requested decision provider or the
+  calling agent's native decision subagent. --host identifies the CALLER, not
+  the coding worker. Use the requested model and verify its actual identity;
+  never recursively delegate this decision through bench-router.
+  Native replies need --host or an explicit BENCH_ROUTER_DECISION_MODEL override.
+  Save a response with every supplied question ID and its requested answer type:
+    {"request_digest":"<decision.request_digest>","provider":"subagent",
+     "model":"<actual model from host metadata>","answers":{...}}
+  Answer shapes: {"type":"choice","choice":"<one supplied criteria key>"}
+  or {"type":"noul","noul":0.9} (number 0..1), matching the question's type.
+  provider is subagent or jev. Preserve decision.completed entries unchanged;
+  append the new response in RESPONSE.json as {"stages":[<completed>,<response>]}.
+  Rerun the same command with --decision-response RESPONSE.json. Repeat for each
+  analysis, vendor guidance and benchmark stage until no request remains.
+  Do not invent model metadata, digests or future stages. For provider setup and
+  typed answers, see skills/bench-router/references/decision.md (installed skill:
+  references/decision.md); docs/reference.md describes the command contracts."""
+RECOVERY_EPILOG = """recovery and verification:
+  Read JSON status even on a nonzero exit. Retain run_id and the input cwd.
+  For timed_out, waiting or delivery_uncertain, collect the existing run;
+  it may still be working. Do not resend the prompt with a new task ID.
+  For blocked, inspect the reported approval/question. For conflict, inspect
+  the warning and existing receipt before retrying. completed means the result
+  artifact contract passed; verify the work before recording feedback.
+  Example: bench-router collect --cwd /absolute/path/to/repo --run-id RUN --wait-ms 10000"""
+CLI_EPILOG = """choose a command:
+  evidence                  inspect benchmark observations without selecting
+  evaluate --format 3       assess candidates, then choose with select
+  route --dry-run           request a decision or validate a saved selection
+  route / collect           execute a task / recover its existing result
+  explain                   inspect a human-readable routing diagnosis
+
+first use:
+  A profile is a named agent CLI + model + effort configuration in profiles.toml.
+  Live dispatch needs Herdr/Projects and the target agent CLI configured on
+  Linux/WSL2, and a trusted git repository with a commit. See docs/projects.md.
+  1. bench-router init
+  2. Create task.json; see "bench-router evaluate --help" for a minimal task.
+  3. bench-router evaluate --format 3 --task task.json --host codex > assessment.json
+     Replace codex with your calling host. If exit 17 requests a decision,
+     follow "evaluate --help" and repeat with --decision-response responses.json.
+  4. Once assessment status is ok, choose an eligible suitable profile, then:
+     bench-router select --assessment assessment.json --profile PROFILE --policy-id caller --policy-version 1 --reason "Reason for choice" > choice.json
+     Save ONLY choice.json's selection object as selection.json (not the wrapper).
+  5. bench-router route --task task.json --selection selection.json --dry-run
+  6. bench-router route --task task.json --selection selection.json --wait-ms 0
+  7. bench-router collect --run-id RUN --cwd DIR --wait-ms 10000
+     Use route's run_id and task.json's cwd; repeat collect while still working.
+  8. Inspect result_path, verify the work, then record success, partial or fail:
+     bench-router feedback --run-id RUN --cwd DIR --outcome success
+  Benchmark refresh is separate and uses the network; run it when requested:
+     bench-router refresh --source mg
+  Routing reads cached evidence and never refreshes it automatically.
+
+output and recovery:
+  stdout is one JSON object, except explain and evidence --format table.
+  Read status even when exit is nonzero. completed requires verification before
+  feedback. For timed_out/delivery_uncertain, collect; keep task_id/round stable.
+
+exit codes:
+  0 selected/completed/ok/recorded/sent/stop_sent
+  2 invalid input   10 blocked (approval/question)
+  11 timed_out/waiting/delivery_uncertain (collect existing run; may still run)
+  12 execution_failed/result_invalid   13 no eligible profile
+  14 conflict/stale assessment   15 I/O or storage error
+  16 refresh failed/partially failed or parallel partially failed
+  17 decision_required (answer current stage) or decision_unavailable
+     (inspect reason; multiple candidates need evaluate --format 3 and select)
+
+Put global options BEFORE the command, e.g. bench-router --cache-dir DIR status.
+Run "bench-router COMMAND --help" for standalone instructions and examples."""
+
+COMMAND_EPILOGS = {
+    "route": """Use --selection with the selection object returned by select, or omit it to
+request vendor-guided selection of a sole suitable profile. Multiple suitable
+candidates require evaluate --format 3 and an explicit select. --profile is a
+legacy explicit pin that bypasses the staged vendor-guided selection workflow.
+--decision-response cannot be combined with --selection or --profile.
+Example: bench-router route --task task.json --selection selection.json --dry-run
+Then omit --dry-run to execute; --wait-ms 0 returns immediately after submission.
+The JSON candidate list is capped at three; use explain to inspect all.""",
+    "evaluate": """Start with format 3 for caller-owned profile selection:
+  bench-router evaluate --task task.json --format 3 --host codex > assessment.json
+  # After resolving the current decision request and saving responses.json:
+  bench-router evaluate --task task.json --format 3 --host codex --decision-response responses.json > assessment.json
+When status is ok, inspect candidates, suitability, observations and diagnostics;
+choose a profile and use select --assessment assessment.json (see select --help).
+--decision-response requires --format 3; --host is unused for formats 1 and 2.
+All formats are offline: no dispatch, network access or file writes by the router.""",
+    "select": """Example (replace PROFILE with a candidate ID from the completed assessment):
+  bench-router select --assessment assessment.json --profile PROFILE --policy-id caller --policy-version 1 --reason "Fits task requirements" > choice.json
+Save only the output's selection object as selection.json, then:
+  bench-router route --task task.json --selection selection.json --dry-run
+The assessment_digest binds the record to its evidence; preserve the entire
+selection object. Changed inputs may require a new assessment.
+provisional means vendor guidance is missing; alternative means the vendor's
+other configurations. Either requires explicit --accept-provisional.""",
+    "explain": """Example: bench-router explain --task task.json --host codex
+Prints all candidates, evidence, constraints and any pending decision as text.
+Use evaluate --format 3 for a machine-readable assessment to pass to select.
+Offline: no dispatch, network access or file writes.""",
+    "evidence": """Example: bench-router evidence --task task.json --format table
+Uses cached benchmark observations for task facets (tags); display order is
+not a profile ranking. Missing/stale evidence appears in warnings.
+Offline: no selection, dispatch, network access or file writes.""",
+    "refresh": """Examples:
+  bench-router refresh --source mg
+  bench-router refresh --source swe --import observations.json
+Automatic sources: aa = Artificial Analysis (ARTIFICIAL_ANALYSIS_API_KEY needed),
+arena = LMArena (pyarrow needed), mg = The Model Gap. Omitting --source refreshes
+all automatic sources. Manual sources swe = SWE-bench and tb = Terminal-Bench
+require --import; --import requires --source swe or --source tb.
+Compiles the wiki index and updates the shared snapshot. Failed sources keep
+last-good data; partial_failure means some sources failed. See docs/reference.md
+for the manual observation JSON contract. Run network refresh when requested.""",
+    "wiki": """Examples:
+  bench-router wiki compile --check
+  bench-router wiki compile
+  bench-router wiki facets
+compile validates reviewed wiki pages and writes the cached index.json unless
+--check is set. facets reads the existing cached index and returns allowed
+task tags and detection rules; --vault and --check have no effect on facets.""",
+    "prompt-guidance": """Choose exactly one target: --profile is an ID from profiles.toml; --model is
+a model ID without profile lookup. Prints the vendor guide as JSON; a missing
+guide is reported in warnings. No model call or prompt rewrite is performed.
+Example: bench-router prompt-guidance --model gpt-6.1""",
+    "status": """Example: bench-router status
+Inspects the shared cache without fetching benchmarks or executing agents.
+Check source ages, failures and warnings before relying on cached evidence.""",
+    "init": """Example: bench-router init
+Creates profiles.toml and aliases.toml under --config-dir, preserving existing
+files. Offline; benchmark refresh and live agent setup are separate steps.""",
+    "profiles": """Example: bench-router profiles discover
+Queries supported local agent CLIs to build profiles.toml. Existing configuration
+is preserved unless --force is supplied. This discovers execution profiles,
+not benchmark data; init provides bundled defaults without discovery.""",
+    "parallel": """Prefer group schema 2.0 with explicit selections from evaluate/select:
+  {"schema_version":"2.0","group_id":"group-001","cwd":"/absolute/path/to/repo",
+   "tasks":[{"task":<task object without cwd>,"selections":[<selection object>]}]}
+Each task may have optional context. Selection count sets fanout (workers per
+task, 1..8); profile IDs may repeat. Do not set a top-level fanout in schema 2.0.
+Schema 1.0 also accepts tasks directly and top-level fanout (default 1).
+For schema 1.0 pending decisions, read members[].decision.request and
+request_digest; preserve each member's completed stages in a response file
+keyed by its label: {"task-001-1":{"stages":[<completed>,<response>]}}.
+Only include labels already requested; later fanout choices depend on earlier
+ones. Schema 2.0 replays its supplied selections instead of taking responses.
+Optional isolation: isolated (default) or shared (shared scratchpad);
+max_parallel defaults to 4 (1..4), with at most 16 workers across the group.
+Example: bench-router parallel --group group.json --dry-run
+Then omit --dry-run to execute. Rerun the SAME group to recover existing runs.
+No workers start while decisions are pending or stale. Review/merge the member
+branches yourself. See docs/reference.md for full group contracts.""",
+    "collect": """Supply either --cwd DIR AND --run-id RUN, or one or more --run DIR RUN pairs.
+Do not mix these forms. --until applies only to --run; both modes stop at the
+wait limit even if their requested completion condition is not yet met.
+Examples:
+  bench-router collect --cwd /absolute/path/to/repo --run-id RUN --wait-ms 10000
+  bench-router collect --run /repo/a RUN_A --run /repo/b RUN_B --until all --wait-ms 10000
+For a parallel member, cwd is its router worktree from the group output.""",
+    "stop": """Example: bench-router stop --cwd /absolute/path/to/repo --run-id RUN
+Requests an explicit stop; subsequent collect reports execution_failed.
+For a parallel member use its router worktree, not the agent's inner worktree.""",
+    "resume": """Example: bench-router resume --cwd /absolute/path/to/repo --run-id RUN
+Reopens the completed agent's conversation without sending a message. Use tell
+afterwards to provide new instructions. For parallel use the router worktree.""",
+    "tell": """Exactly one of --message or --message-file is required.
+Example: bench-router tell --cwd /absolute/path/to/repo --run-id RUN --message "Check the edge case too"
+The message file must be nonempty UTF-8 text (at most 120 KiB). A settled run needs
+resume first. Headless execution does not accept tell.
+For parallel use the member's router worktree, not the agent's inner worktree.""",
+    "feedback": """Verify the work yourself before choosing success, partial or fail; completed
+only confirms the result artifact contract. Writes feedback for an existing run.
+Example: bench-router feedback --cwd /absolute/path/to/repo --run-id RUN --outcome partial --note "One requirement remains"
+For parallel use the member's router worktree. Admission acceptance is recorded
+separately with coordination feedback.""",
+    "coordination": """Shared admission records prevent duplicate/overlapping execution.
+  status: inspect records to obtain key, request_hash, active and status.
+  release: requires --key, --note and --confirmed-stopped AFTER inspecting the
+    worker and its effects. Releases admission only; does not stop a worker.
+  feedback: requires --key, --note, --input-hash and --decision. Copy input-hash
+    from the record's request_hash. accepted requires completed and inactive.
+Examples:
+  bench-router coordination status
+  bench-router coordination release --key KEY --confirmed-stopped --note "Worker stopped; effects inspected"
+  bench-router coordination feedback --key KEY --input-hash HASH --decision accepted --note "Result verified"
+This acceptance record is separate from per-run feedback --outcome.""",
+}
+
+
 def main(argv=None):
     if hasattr(sys.stdout, "reconfigure"):  # WSL은 이미 UTF-8; Windows 콘솔 대비
         sys.stdout.reconfigure(encoding="utf-8")
-    ap = argparse.ArgumentParser(prog="bench-router")
-    ap.add_argument("--config-dir", type=Path, default=_xdg("XDG_CONFIG_HOME", ".config"))
-    ap.add_argument("--cache-dir", type=Path, default=_xdg("XDG_CACHE_HOME", ".cache"))
+    ap = argparse.ArgumentParser(prog="bench-router", formatter_class=argparse.RawDescriptionHelpFormatter,
+                                 description="Pick an AI coding agent profile for a task from vendor guides and "
+                                             "benchmark evidence, run it in an isolated git worktree, and collect its result.",
+                                 epilog=CLI_EPILOG)
+    ap.add_argument("--config-dir", type=Path, default=_xdg("XDG_CONFIG_HOME", ".config"),
+                    help="shared profiles.toml, aliases.toml and optional categories.toml/env; set before command (default: %(default)s)")
+    ap.add_argument("--cache-dir", type=Path, default=_xdg("XDG_CACHE_HOME", ".cache"),
+                    help="holds the benchmark snapshot and index (default: %(default)s)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     ap.add_argument("--herdr-session", default=os.environ.get("BENCH_ROUTER_HERDR_SESSION") or None,
-                    help="record this Herdr session with each run and require it on collect")
+                    help="Herdr session for dispatch; if supplied on collect, must match the run (default: BENCH_ROUTER_HERDR_SESSION, else unset)")
     rp = sub.add_parser("route", help="select a profile and delegate via Projects (--dry-run: select only)")
-    rp.add_argument("--task", required=True)
-    rp.add_argument("--context", help="Orchestrator metrics: estimates, prices, signals (context JSON 1.0|2.0)")
+    rp.add_argument("--task", required=True, help=TASK_HELP)
+    rp.add_argument("--context", help="optional context JSON file (1.0|2.0) of caller-supplied estimates, prices and signals; see docs/routing-contracts.md")
     pin = rp.add_mutually_exclusive_group()
-    pin.add_argument("--selection", help="Orchestrator selection record (JSON: profile, assessment_digest, policy, reason)")
-    pin.add_argument("--profile", help="execute this eligible profile without a selection record (warns)")
-    rp.add_argument("--dry-run", action="store_true")
-    rp.add_argument("--wait-ms", type=_wait_ms, help="after submission, wait at most this long (0: return at once; collect later)")
+    pin.add_argument("--selection", help="JSON file containing the complete selection object from select, not its output wrapper; mutually exclusive with --profile")
+    pin.add_argument("--profile", help="explicit eligible profile ID from profiles.toml; legacy pin without a selection record (warns); exclusive with --selection")
+    rp.add_argument("--dry-run", action="store_true", help="select only; no network, herdr or file writes")
+    rp.add_argument("--wait-ms", type=_wait_ms, help="nonnegative milliseconds to wait after submission; default: task deadline (constraints.timeout_ms, default 900000); 0: return at once, collect later; unused with --dry-run")
     vp = sub.add_parser("evaluate", help="report facts, constraint results and evaluations for every profile; no selection")
-    vp.add_argument("--task", required=True)
-    vp.add_argument("--context", help="Orchestrator metrics: estimates, prices, signals (context JSON 1.0|2.0)")
+    vp.add_argument("--task", required=True, help=TASK_HELP)
+    vp.add_argument("--context", help="optional context JSON file (1.0|2.0) of caller-supplied estimates, prices and signals; see docs/routing-contracts.md")
     vp.add_argument("--format", choices=["1", "2", "3"], default="2",
-                    help="output schema; 3 = staged vendor-guided candidate assessment (offline)")
+                    help="output format: 1 = legacy candidate evidence; 2 = facts, constraints and benchmark evaluations (default); 3 = staged vendor-guided assessment for select; all offline")
     selp = sub.add_parser("select", help="record an upstream choice from an evaluate --format 3 assessment; no dispatch")
-    selp.add_argument("--assessment", required=True)
-    selp.add_argument("--profile", required=True)
-    selp.add_argument("--policy-id", required=True)
-    selp.add_argument("--policy-version", required=True)
-    selp.add_argument("--reason", required=True)
-    selp.add_argument("--accept-provisional", action="store_true")
+    selp.add_argument("--assessment", required=True, help="saved output of evaluate --format 3 (status ok)")
+    selp.add_argument("--profile", required=True, help="the chosen profile ID from the assessment")
+    selp.add_argument("--policy-id", required=True, help="name of the caller's selection policy")
+    selp.add_argument("--policy-version", required=True, help="version of that policy")
+    selp.add_argument("--reason", required=True, help="why this profile was chosen; stored in the record")
+    selp.add_argument("--accept-provisional", action="store_true",
+                      help="allow a provisional or alternative (not vendor-documented) profile")
     ep = sub.add_parser("explain", help="human-readable dry-run with all candidates")
-    ep.add_argument("--task", required=True)
-    ep.add_argument("--context", help="Orchestrator metrics: estimates, prices, signals (context JSON 1.0|2.0)")
+    ep.add_argument("--task", required=True, help=TASK_HELP)
+    ep.add_argument("--context", help="optional context JSON file (1.0|2.0) of caller-supplied estimates, prices and signals; see docs/routing-contracts.md")
     xp = sub.add_parser("evidence", help="benchmark evidence for the task's facets, per profile; no selection")
-    xp.add_argument("--task", required=True)
-    xp.add_argument("--max-units", type=int, default=12)
-    xp.add_argument("--format", choices=["json", "table"], default="json")
+    xp.add_argument("--task", required=True, help=TASK_HELP)
+    xp.add_argument("--max-units", type=int, default=12, help="maximum benchmark measurement units to show; integer >= 1 (default: %(default)s)")
+    xp.add_argument("--format", choices=["json", "table"], default="json", help="output as a JSON object or readable text table (default: %(default)s)")
     fp = sub.add_parser("refresh", help="fetch sources and publish the routing snapshot")
-    fp.add_argument("--source")
-    fp.add_argument("--force", action="store_true", help="ignore TTL")
-    fp.add_argument("--import", dest="import_file", help="approved manual observations (swe/tb)")
+    fp.add_argument("--source", help="aa, arena or mg for automatic collection; swe or tb requires --import FILE (default: all automatic sources)")
+    fp.add_argument("--force", action="store_true", help="fetch again even if cached source data has not expired (ignore TTL)")
+    fp.add_argument("--import", dest="import_file", help="JSON file of approved manual observations; requires --source swe or --source tb")
     fp.add_argument("--vault", type=Path, help="benchmark wiki to compile; defaults to the clone wiki or installed index")
     wp = sub.add_parser("wiki", help="compile reviewed benchmark wiki pages into index.json, or list taggable facets")
-    wp.add_argument("action", choices=["compile", "facets"])
-    wp.add_argument("--vault", type=Path, default=WIKI_VAULT)
-    wp.add_argument("--check", action="store_true", help="validate only; do not write index.json")
+    wp.add_argument("action", choices=["compile", "facets"], help="compile reviewed pages into the cache, or list allowed task facet tags from the cached index")
+    wp.add_argument("--vault", type=Path, default=WIKI_VAULT, help="wiki directory for compile only; ignored by facets (default: %(default)s)")
+    wp.add_argument("--check", action="store_true", help="compile: validate only, without writing index.json; ignored by facets")
     pgp = sub.add_parser("prompt-guidance", help="the selected model's vendor prompting guide, quoted; offline, rewrites nothing")
     target = pgp.add_mutually_exclusive_group(required=True)
-    target.add_argument("--profile")
-    target.add_argument("--model")
+    target.add_argument("--profile", help="profile ID from profiles.toml; look up its model's guide; choose this or --model")
+    target.add_argument("--model", help="model ID whose vendor guide to quote; no profile lookup; choose this or --profile")
     sub.add_parser("status", help="source age, failures, unmatched models, snapshot/config state")
     sub.add_parser("init", help="create shared default profiles and aliases offline; keep existing files")
     profiles = sub.add_parser("profiles", help="create profiles.toml from every model each CLI's model flag accepts")
-    profiles.add_argument("action", choices=["discover"])
+    profiles.add_argument("action", choices=["discover"], help="discover model/effort execution profiles from supported local agent CLIs and write profiles.toml")
     profiles.add_argument("--force", action="store_true", help="replace an existing profiles.toml")
     pp = sub.add_parser("parallel", help="dispatch tasks × fanout agents concurrently, each in its own git worktree")
-    pp.add_argument("--group", required=True)
-    pp.add_argument("--dry-run", action="store_true")
-    pp.add_argument("--wait-ms", type=_wait_ms, help="per member, wait at most this long after submission; rerun the group to collect")
+    pp.add_argument("--group", required=True, help="group JSON file (1.0|2.0) of tasks and worker allocations; schema 2.0 uses selections per task; see example below")
+    pp.add_argument("--dry-run", action="store_true", help="plan/validate only; no network, herdr calls, worktrees or file writes")
+    pp.add_argument("--wait-ms", type=_wait_ms, help="nonnegative milliseconds to wait per member; default: each task deadline (constraints.timeout_ms, default 900000); 0: return after submission; rerun the same group to collect; unused with --dry-run")
     for parser in (rp, ep, pp, vp):
-        parser.add_argument("--host", choices=["antigravity", "codex", "claude"], help="native decision agent host")
-        parser.add_argument("--decision-response", help="saved ordered stages array of responses (digest, provider, actual model, answers); parallel: keyed by member label")
+        parser.add_argument("--host", choices=["antigravity", "codex", "claude"], help="calling agent's host for native decision model selection/verification (not worker profile); default: generic host policy; evaluate: format 3 only")
+        parser.add_argument("--decision-response", help='JSON file: {"stages":[responses in request order]} or one response; parallel: keyed by member label; evaluate requires --format 3; see decision workflow below')
     cp = sub.add_parser("collect", help="observe/collect an existing run; never re-sends the prompt")
-    cp.add_argument("--run-id")
-    cp.add_argument("--cwd")
+    cp.add_argument("--run-id", help="existing run ID printed by route; requires --cwd; cannot combine with --run")
+    cp.add_argument("--cwd", help="the run's input repository path; requires --run-id; for parallel use the member's router worktree")
     cp.add_argument("--run", nargs=2, action="append", metavar=("CWD", "RUN_ID"),
                     help="repeatable: collect several runs, returning when --until is met")
-    cp.add_argument("--until", choices=["any", "all"], default="any", help="with --run: first settled/blocked, or all")
-    cp.add_argument("--wait-ms", type=_wait_ms, default=0, help="wait while the agent is still working")
+    cp.add_argument("--until", choices=["any", "all"], default="any", help="with --run only: wait for first settled/blocked run (any) or all runs (all), up to --wait-ms (default: %(default)s)")
+    cp.add_argument("--wait-ms", type=_wait_ms, default=0, help="nonnegative milliseconds to observe/wait for existing runs; 0 checks once (default: %(default)s)")
     stp = sub.add_parser("stop", help="stop a live run: board stop, or close a headless run's pane; logged, never automatic")
     stp.add_argument("--cwd", required=True, help="run cwd; a parallel member's router worktree when --run-id is omitted")
     stp.add_argument("--run-id", help="defaults to the only unsettled run under --cwd")
     sp = sub.add_parser("resume", help="reopen a completed run's agent in the same conversation; sends nothing")
-    sp.add_argument("--run-id", required=True)
-    sp.add_argument("--cwd", required=True)
+    sp.add_argument("--run-id", required=True, help="completed run ID whose agent conversation to reopen")
+    sp.add_argument("--cwd", required=True, help="the run's input repository path; for parallel use the member's router worktree")
     tp = sub.add_parser("tell", help="relay one explicit message to a live run's agent (board tell); logged, never automatic")
     tp.add_argument("--cwd", required=True, help="run cwd; a parallel member's worktree when --run-id is omitted")
     tp.add_argument("--run-id", help="defaults to the only unsettled run under --cwd")
-    tp.add_argument("--message")
-    tp.add_argument("--message-file")
+    tp.add_argument("--message", help="nonempty text to send (up to 120 KiB); exactly one of --message or --message-file is required")
+    tp.add_argument("--message-file", help="UTF-8 text file to send (up to 120 KiB); exactly one of --message or --message-file is required")
     bp = sub.add_parser("feedback", help="record the orchestrator's verified outcome")
-    bp.add_argument("--run-id", required=True)
-    bp.add_argument("--cwd", required=True)
-    bp.add_argument("--outcome", required=True, choices=["success", "partial", "fail"])
-    bp.add_argument("--evaluator")
-    bp.add_argument("--note")
+    bp.add_argument("--run-id", required=True, help="run ID printed by route")
+    bp.add_argument("--cwd", required=True, help="the task's repository root")
+    bp.add_argument("--outcome", required=True, choices=["success", "partial", "fail"], help="verified task result")
+    bp.add_argument("--evaluator", help="who verified it, e.g. orchestrator")
+    bp.add_argument("--note", help="free-text note")
     cc = sub.add_parser("coordination", help="shared admission records and explicit post-inspection resolution")
-    cc.add_argument("action", choices=["status", "release", "feedback"])
-    cc.add_argument("--key")
-    cc.add_argument("--confirmed-stopped", action="store_true")
-    cc.add_argument("--note")
-    cc.add_argument("--input-hash")
-    cc.add_argument("--decision", choices=["accepted", "withheld", "rejected"])
+    cc.add_argument("action", choices=["status", "release", "feedback"], help="inspect admission records, release an inspected stopped worker's admission, or record acceptance")
+    cc.add_argument("--key", help="record key from coordination status; required for release and feedback")
+    cc.add_argument("--confirmed-stopped", action="store_true", help="release only: required confirmation that the worker stopped and its effects were inspected; does not stop it")
+    cc.add_argument("--note", help="nonempty inspection/verification reason; required for release and feedback")
+    cc.add_argument("--input-hash", help="feedback only: required request_hash from the inspected record; must match")
+    cc.add_argument("--decision", choices=["accepted", "withheld", "rejected"], help="feedback only: required acceptance decision; accepted requires completed and inactive")
+    for command in sub._choices_actions:
+        parser = sub.choices[command.dest]
+        parser.description = command.help
+        parser.formatter_class = argparse.RawDescriptionHelpFormatter
+        sections = [COMMAND_EPILOGS[command.dest]]
+        if parser in (rp, ep, pp, vp):
+            sections.append(DECISION_EPILOG)
+        if parser in (rp, ep, xp, vp):
+            sections.append(TASK_EPILOG)
+        if parser in (rp, pp, cp):
+            sections.append(RECOVERY_EPILOG)
+        sections.append("Global options (--config-dir, --cache-dir, --herdr-session) go BEFORE the command.")
+        parser.epilog = "\n\n".join(sections)
     args = ap.parse_args(argv)
 
     try:

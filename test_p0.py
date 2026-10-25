@@ -6,6 +6,7 @@ import os
 import re
 import tempfile
 import unittest
+from unittest import mock
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,6 +20,49 @@ MAPPING = r.load_categories(cli.BUNDLED_CATEGORIES)
 
 # Guidance requests carry no profile IDs; the synthetic responder maps a chosen profile to its guide option through this.
 PROFILES = {}
+
+
+class P0Help(unittest.TestCase):
+    def test_v96_all_command_help_is_standalone_and_offline(self):
+        parsers = []
+        original = cli.argparse.ArgumentParser.parse_args
+
+        def capture(parser, *args, **kwargs):
+            parsers.append(parser)
+            return original(parser, *args, **kwargs)
+
+        with mock.patch.object(cli.argparse.ArgumentParser, "parse_args", capture):
+            with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as exited:
+                cli.main(["--help"])
+        self.assertEqual(exited.exception.code, 0)
+        root = parsers[0]
+        commands = next(a for a in root._actions if isinstance(a, cli.argparse._SubParsersAction))
+        self.assertEqual(set(commands.choices), set(cli.COMMAND_EPILOGS))
+        for name, parser in commands.choices.items():
+            self.assertTrue(parser.description, name)
+            for action in parser._actions:
+                self.assertTrue(action.help, (name, action.dest))
+        with tempfile.TemporaryDirectory() as tmp:
+            for command in [[], *[[name] for name in commands.choices]]:
+                for flag in ("-h", "--help"):
+                    with self.subTest(command=command, flag=flag):
+                        out = io.StringIO()
+                        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit) as exited:
+                            cli.main(["--config-dir", tmp, "--cache-dir", tmp, *command, flag])
+                        self.assertEqual(exited.exception.code, 0)
+                        self.assertIn("BEFORE", out.getvalue())
+                        self.assertIn("bench-router", out.getvalue())
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+
+    def test_v96_documented_minimal_task_satisfies_input_contract(self):
+        task, _ = json.JSONDecoder().raw_decode(cli.TASK_EPILOG[cli.TASK_EPILOG.index("{"):])
+        self.assertEqual(set(task), set(r.TASK_REQUIRED))
+        with tempfile.TemporaryDirectory() as tmp:
+            task["cwd"] = tmp
+            validated = r.validate_task(task)
+            self.assertEqual(validated["round"], 1)
+        for key in (*r.TASK_REQUIRED, *r.TASK_OPTIONAL, *r.CONSTRAINT_DEFAULTS):
+            self.assertIn(key, cli.TASK_EPILOG)
 
 
 def profile(pid, tier="medium", **kw):
