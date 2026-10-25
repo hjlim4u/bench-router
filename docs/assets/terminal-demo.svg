@@ -58,17 +58,17 @@
     <circle cx="20" cy="18" r="6" fill="#ff5f56"/>
     <circle cx="40" cy="18" r="6" fill="#ffbd2e"/>
     <circle cx="60" cy="18" r="6" fill="#27c93f"/>
-    <text class="title" x="430" y="22">vendor-guided policy 6 · synthetic summary · BR="python3 -m bench_router.cli"</text>
+    <text class="title" x="430" y="22">vendor-guided policy 6 · synthetic summary · BR="bench-router"</text>
 
-    <!-- Step 1: explain command -->
+    <!-- Step 1: evaluate command -->
     <g class="step1">
       <text class="code" x="24" y="68">
         <tspan class="prompt">$</tspan>
-        <tspan class="cmd"> $BR evaluate --format 3 --task task.json --decision-response responses.json</tspan>
+        <tspan class="cmd"> $BR evaluate --format 3 --task task.json --host codex --decision-response responses.json</tspan>
       </text>
     </g>
 
-    <!-- Step 2: explain output -->
+    <!-- Step 2: evaluate output -->
     <g class="step2">
       <text class="code dim" x="24" y="94">completed analysis → vendor guidance → benchmark relevance · schema 4.0 · status ok</text>
       <text class="code" x="24" y="116">
@@ -115,8 +115,8 @@
       </text>
       <text class="code" x="24" y="414">}</text>
 
-      <rect class="badge-bg" x="595" y="400" width="240" height="28"/>
-      <text class="code green" x="610" y="419">✓ 결과 계약 및 SHA-256 검증 통과</text>
+      <rect class="badge-bg" x="535" y="400" width="300" height="28"/>
+      <text class="code green" x="550" y="419">✓ result contract + SHA-256 verified</text>
     </g>
   </g>
 </svg>

@@ -45,7 +45,7 @@ sequenceDiagram
 
 > [!NOTE]
 > **Offline Reproducibility and Local Snapshots**
-> Benchmark scores are never fetched per request. Running `refresh` fetches scores and stores them in a local snapshot; subsequent routing and evaluation read strictly from this file. Selection is fast and completely reproducible offline. To refresh periodically (e.g. daily), [schedule a periodic job](docs/reference.md#정기-실행-예시-설치하지-않음) independently. No automated scheduler is installed by the application.
+> Benchmark scores are never fetched per request. Running `refresh` fetches scores and stores them in a local snapshot; subsequent routing and evaluation read strictly from this file. Selection is fast and completely reproducible offline. To refresh periodically (e.g. daily), [schedule a periodic job](docs/reference.md#periodic-execution-example-not-installed) independently. No automated scheduler is installed by the application.
 
 ---
 
