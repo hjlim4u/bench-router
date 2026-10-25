@@ -18,7 +18,7 @@ flowchart TD
   F --> S
 ```
 
-The request path never queries benchmark sources over the network or triggers automatic refresh. It reads snapshots, indices, and guidelines locally. `dry-run`, `explain`, `evaluate`, and `evidence` perform zero network requests, Herdr invocations, or file writes. Live `route`/`parallel` may use a configured Jev instance for semantic decisions; when unavailable, it outputs a native decision packet. These decision calls are entirely distinct from benchmark data refresh.
+The request path reads snapshots, indices, and guidelines locally and never triggers automatic benchmark refresh. `dry-run`, `explain`, `evaluate`, and `evidence` are offline by default. Explicit initial `evaluate --refresh` checks due sources and publishes a snapshot before assessment; response replay stays offline. Live `route`/`parallel` may use a configured Jev instance for semantic decisions; when unavailable, it outputs a native decision packet. These decision calls are distinct from benchmark data refresh.
 
 ## Storage Locations and Persistence
 
@@ -62,6 +62,12 @@ Evaluation conditions preserve suite, version, subset, metric, variant, dataset 
 ## Freshness and Missing Data
 
 Source `last_success_at` determines TTL and max_stale, while published/evaluated dates are preserved independently. Exceeding TTL emits a stale warning; exceeding max_stale excludes observations. Publication timestamp alone does not guarantee evaluation freshness.
+
+TTL and max_stale boundaries are inclusive. Evidence tables, format 3 comparison and source status share this policy. Last-good measurements remain comparable between TTL and max_stale, with a stale warning. A recent failed attempt never resets measurement age. Sources without any success have no usable observations.
+
+For a missing/null cell, format 3 and evidence tables may use a nearest same-vendor measured proxy only after the donor source was checked within its TTL. Prefer the same model, then the same model family, name similarity and nearby measured effort, with a stable ID tie-break. Donors come from enabled, non-excluded registered profiles and must pass fingerprint/conditions/max_stale checks. Unknown vendors remain missing. The original gap, donor model/profile/effort, measured conditions, stale flag and refresh outcome are retained; proxies never become exact profile measurements. This is a heuristic comparison, not a predicted performance guarantee. Compatible subsets can be compared without requiring every candidate to have a value; `comparison_profiles` exposes coverage. Separate protocols are never merged.
+
+Use `evaluate --refresh --format 3 --task task.json` initially, or run `refresh` separately. Review `benchmark_refresh.sources`: `failed` means a collection failure with last-good retention; a successful check with absent/null metrics means the source did not supply a usable cell, not a failed download. Manual SWE/TB sources still require explicit imports; automatic refresh does not fetch them. After adapter upgrades, `refresh --force` reparses unchanged payloads immediately.
 
 When a snapshot is missing or corrupted, the system attempts recovery from last-known-good. Profiles passing hard constraints can still be evaluated alongside recorded data gaps even if no benchmark data is available. Configured default/fallback profiles are never executed automatically. If no viable profile exists at all, the router terminates with `no_eligible_profile` (exit code 13). Incomplete decisions, abstentions, or upstream selection requirements are distinguished by exit code 17.
 

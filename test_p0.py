@@ -1445,7 +1445,7 @@ class P0VendorGuidance(unittest.TestCase):
             response = guided_responses(self.route(), lambda x: self.route(response=x), "__tie__", **answers)
             return self.route(response=response)["decision"]
 
-        d = finish()
+        d = finish(**{"guidance:openai": "gpt-6-luna:low"})
         self.assertEqual([(s["stage"], s["request"]["state"].get("vendor")) for s in d["stages"]],
                          [("analysis", None), ("guidance", "claude"), ("guidance", "gemini"), ("guidance", "openai")])
         fits = d["evaluation"]["fits"]

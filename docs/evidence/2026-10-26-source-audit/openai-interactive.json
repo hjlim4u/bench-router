@@ -1,0 +1,14 @@
+[
+  {
+    "priority": "Lower latency & costs",
+    "text": "What type of work are you doing?\nCreating deliverables\nSoftware engineering\n3D and design\nResearch & analysis\nComputer use\nWhat type of task are you doing?\nWhat type of task are you doing?\nFix a well-scoped bug\nWhat do you want to prioritize?\nLower latency & costs\nHigher quality outputs\nRecommended model\nLuna\nReasoning effort\nLow\nView model\n"
+  },
+  {
+    "priority": "Balanced",
+    "text": "What type of work are you doing?\nCreating deliverables\nSoftware engineering\n3D and design\nResearch & analysis\nComputer use\nWhat type of task are you doing?\nWhat type of task are you doing?\nFix a well-scoped bug\nWhat do you want to prioritize?\nLower latency & costs\nHigher quality outputs\nRecommended model\nLuna\nReasoning effort\nMedium\nView model\n"
+  },
+  {
+    "priority": "Higher quality outputs",
+    "text": "What type of work are you doing?\nCreating deliverables\nSoftware engineering\n3D and design\nResearch & analysis\nComputer use\nWhat type of task are you doing?\nWhat type of task are you doing?\nFix a well-scoped bug\nWhat do you want to prioritize?\nLower latency & costs\nHigher quality outputs\nRecommended model\nLuna\nReasoning effort\nHigh\nView model\n"
+  }
+]

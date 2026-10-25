@@ -630,10 +630,17 @@ def load_snapshot(cache_dir):
 def source_status(snap, now):
     out = {}
     for sid, src in sorted(snap["sources"].items()):
-        age_h = (now - _parse_time(src["last_success_at"], sid)).total_seconds() / 3600
-        out[sid] = {"last_success_at": src["last_success_at"], "age_hours": round(age_h, 2),
+        success = src.get("last_success_at")
+        age_h = (now - _parse_time(success, sid)).total_seconds() / 3600 if success else None
+        attempt = src.get("last_attempt_at") or success
+        checked = bool(attempt and (now - _parse_time(attempt, sid)).total_seconds() / 3600 <= src["ttl_hours"])
+        out[sid] = {"last_success_at": success, "age_hours": round(age_h, 2) if age_h is not None else None,
                     "published_at": src.get("published_at"), "attribution": src.get("attribution"),
-                    "stale": age_h > src["ttl_hours"], "excluded": age_h > src["max_stale_hours"]}
+                    "stale": age_h is None or age_h > src["ttl_hours"],
+                    "excluded": age_h is None or age_h > src["max_stale_hours"],
+                    "refresh_checked": checked, "last_attempt_at": attempt,
+                    "refresh_result": ("failed" if src.get("last_error") else "succeeded") if checked else "required",
+                    "last_error": src.get("last_error")}
     return out
 
 

@@ -18,7 +18,7 @@ from pathlib import Path
 from . import locking
 from . import routing as r
 
-ADAPTER_VERSION = "4"  # 3: arena rows carry the effort parsed from the model name; 4: AA rows too
+ADAPTER_VERSION = "5"  # 3: arena effort; 4: AA effort; 5: Model Gap effort in the matching key too
 DB_SCHEMA_VERSION = 2
 HTTP_TIMEOUT_S = 30
 HTTP_MAX_BYTES = 20 * 1024 * 1024
@@ -361,7 +361,7 @@ def parse_mg(payload):
                                    "variant": variant, "dataset_revision": None, "evaluation_harness": x.get("harness"),
                                    "aggregation": None, "agent_scaffold": None, "reasoning_effort": x.get("effort"),
                                    "source_type": x.get("source_type"), "source_url": x.get("source_url")},
-                    "harness_id": None, "reasoning_effort": None, "published_at": None, "evaluated_at": x["date_observed"]})
+                    "harness_id": None, "reasoning_effort": x.get("effort"), "published_at": None, "evaluated_at": x["date_observed"]})
     return obs
 
 
@@ -425,7 +425,7 @@ def refresh_source(db, sid, now, force=False, import_doc=None, get_json=None, en
     src = db.execute("SELECT * FROM sources WHERE id=?", (sid,)).fetchone()
     if import_doc is None and not force and src["last_success_at"]:
         age_h = (now - datetime.fromisoformat(src["last_success_at"])).total_seconds() / 3600
-        if age_h < meta["ttl_hours"]:
+        if age_h <= meta["ttl_hours"]:
             return {"result": "skipped_fresh", "requests": 0}
     max_s = meta.get("max_seconds", SOURCE_MAX_SECONDS)
     budget = {"used": 0, "max": meta.get("max_requests", 0), "max_seconds": max_s, "deadline": time.monotonic() + max_s}
@@ -521,13 +521,16 @@ def auto_canonical(cfg):
 def build_snapshot(db, cfg, mapping, aliases, now):
     sources, cohorts, index, unmatched, ambiguous = {}, {}, {}, {}, []
     auto = auto_canonical(cfg)
-    rows = db.execute("SELECT s.id, s.last_success_at, sn.source_revision, sn.published_at, sn.fetched_at, sn.id AS snap "
+    rows = db.execute("SELECT s.id, s.last_success_at, s.last_attempt_at, s.last_error, s.failure_count, "
+                      "sn.source_revision, sn.published_at, sn.fetched_at, sn.id AS snap "
                       "FROM sources s JOIN snapshots sn ON sn.id = s.current_snapshot ORDER BY s.id").fetchall()
     for x in rows:
         meta = SOURCES[x["id"]]
         sources[x["id"]] = {"last_success_at": x["last_success_at"], "ttl_hours": meta["ttl_hours"],
                             "max_stale_hours": meta["max_stale_hours"], "published_at": x["published_at"],
                             "attribution": meta["attribution"], "url": meta["url"],
+                            "last_attempt_at": x["last_attempt_at"], "last_error": x["last_error"],
+                            "failure_count": x["failure_count"],
                             "source_revision": x["source_revision"], "snapshot": x["snap"]}
         for o in db.execute("SELECT * FROM observations WHERE snapshot_id=? ORDER BY cohort_id, source_model",
                             (x["snap"],)):
@@ -650,13 +653,10 @@ def status(cache_dir, now, cfg_hash=None):
         finally:
             db.close()
         for x in rows:
-            meta, age = SOURCES[x["id"]], None
-            if x["last_success_at"]:
-                age = round((now - datetime.fromisoformat(x["last_success_at"])).total_seconds() / 3600, 2)
+            freshness = r.source_status({"sources": {x["id"]: {**SOURCES[x["id"]], **dict(x)}}}, now)[x["id"]]
             um = (snap or {}).get("unmatched", {}).get(x["id"], [])
             out["sources"][x["id"]] = {
-                "last_success_at": x["last_success_at"], "last_attempt_at": x["last_attempt_at"], "age_hours": age,
-                "stale": age is None or age > meta["ttl_hours"], "too_stale": age is None or age > meta["max_stale_hours"],
+                **freshness, "too_stale": freshness["excluded"],
                 "failure_count": x["failure_count"], "last_error": x["last_error"], "last_requests": x["last_requests"],
                 "published_at": x["published_at"], "source_revision": x["source_revision"],
                 "unmatched_count": len(um), "unmatched_sample": um[:20]}
