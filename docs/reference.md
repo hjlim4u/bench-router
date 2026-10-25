@@ -159,16 +159,15 @@ All commands emit a **single JSON object** to stdout (except `explain` and `evid
 ```bash
 export PATH="$HOME/.local/bin:$PATH"                 # herdr, claude, codex
 set -a; . ~/.config/bench-router/env; set +a          # AA API key
-BR="python3 -m bench_router.cli"
 
-$BR refresh                       # aa, arena, mg + wiki index
-$BR status
-$BR route --task task.json --dry-run
-$BR explain --task task.json
-$BR evidence --task task.json --format table
-$BR --herdr-session work route --task task.json      # live delegation
-$BR collect --run-id <RUN_ID> --cwd /abs/project --wait-ms 60000
-$BR feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator orchestrator
+bench-router refresh                       # aa, arena, mg + wiki index
+bench-router status
+bench-router route --task task.json --dry-run
+bench-router explain --task task.json
+bench-router evidence --task task.json --format table
+bench-router --herdr-session work route --task task.json      # live delegation
+bench-router collect --run-id <RUN_ID> --cwd /abs/project --wait-ms 60000
+bench-router feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator orchestrator
 ```
 
 ### Exit Codes

@@ -38,10 +38,10 @@ sequenceDiagram
     BR-->>Orch: ④ Collect Validated Result (JSON & SHA-256 Verified)
 ```
 
-1. **Request**: The Orchestrator (an upstream Agent or human that decomposes tasks and decides delegation) submits work specifications in `task.json`.
-2. **Selection**: Assesses candidate suitability via `analysis` and vendor-specific `guidance`, querying comparable evaluations. If multiple candidates remain, upstream selects via `evaluate --format 3` → `select` → `route --selection`. A single viable candidate with no unverified conditions can be selected automatically by the router.
-3. **Execution**: Runs the selected Agent inside an isolated Git worktree within a [herdr](https://herdr.dev) and `herdr-projects` terminal session. Upon completion, the Agent writes result files adhering to the contract format.
-4. **Collection**: bench-router validates the format and integrity (SHA-256) of result files and returns them to the Orchestrator. Substantive success is judged by the Orchestrator and recorded via `feedback`.
+1. **Request**: The Orchestrator (the agent or person handing off work) describes the task in a small `task.json` file.
+2. **Selection**: bench-router finds which of your configured agents fit the task and shows the evidence. If exactly one fits, it picks it; if several fit, the Orchestrator chooses.
+3. **Execution**: The chosen agent works in its own copy of the repository (a Git worktree), launched through [herdr](https://herdr.dev) and `herdr-projects`, and writes `result.md` and `result.json` when done.
+4. **Collection**: bench-router checks that the result files are complete and untampered (SHA-256) and hands them back. Whether the work is actually correct is the Orchestrator's call, recorded with `bench-router feedback`.
 
 > [!NOTE]
 > **Offline Reproducibility and Local Snapshots**
@@ -65,56 +65,50 @@ sequenceDiagram
 
 ## Core Concepts and Selection Flow
 
-The default selection policy is **Vendor-guided Selection (`vendor-guided`, Policy 6)**. Instead of collapsing heterogeneous benchmarks into an arbitrary weighted sum, `bench-router` narrows and evaluates candidates through a transparent **6-step pipeline**:
+bench-router does not add up benchmark scores into one magic number. It narrows your agents down in plain, checkable steps, and when the evidence does not clearly favor one agent, it says so and lets the Orchestrator decide.
 
 ```mermaid
 flowchart TD
-    T["① task.json Input"] --> F["② Hard Constraints Filter<br/>(cost tier, context, capabilities, quota)"]
-    F --> P1["③ Stage 1: Task & Workload Analysis<br/>(facets, clarity, reasoning, autonomy, deliverable)"]
-    P1 --> P2["④ Stage 2: Per-Vendor Official Guidance<br/>(1 request per vendor → documented / alternative / provisional)"]
-    P2 --> P3["⑤ Stage 3: Comparable Evidence & Blinded Relevance<br/>(protocol-matched snapshot lookup + relevance ≥ 0.8 check)"]
-    P1 & P2 & P3 -- "Pending stage response<br/>(decision_required, exit 17)" --> D["Lightweight Judge<br/>Jev API or bench-decider<br/>(haiku / gpt-6-luna / flash)"]
-    D -- "--decision-response" --> P1
-    P3 -- "All stages complete" --> C{"⑥ Viable Candidates?"}
-    C -- "1 Candidate<br/>(no pending conditions)" --> A["Auto-Selection<br/>(selection 5.0)"]
-    C -- "2+ Candidates<br/>(upstream_selection_required, exit 17)" --> U["Upstream Orchestrator<br/>evaluate --format 3 → select (selection 6.0)"]
-    M["Explicit Override<br/>(--profile / manual selection 2.0)"] --> R
-    A --> R["Re-verify Digest & Constraints<br/>→ Isolated Worktree Dispatch"]
+    T["Task description"] --> F["1. Drop agents that can't do the job<br/>(too expensive, too small a context, missing a capability)"]
+    F --> A["2. Understand the task<br/>(what kind of work, how hard, how long)"]
+    A --> G["3. Ask each vendor's official guide<br/>which model and effort to start with"]
+    G --> E["4. Look up benchmarks that measured<br/>this kind of work"]
+    E --> V["5. Keep only benchmarks that really<br/>match the task"]
+    V --> C{"6. How many good<br/>candidates are left?"}
+    C -- "exactly one" --> R["bench-router picks it and runs it"]
+    C -- "several" --> U["Orchestrator compares the evidence<br/>and picks one"]
     U --> R
 ```
 
-### Step-by-Step Routing Walkthrough
+### How Routing Works, Step by Step
 
-1. **Step 1 — Hard Constraints Filtering (`routing.CONSTRAINTS`)**:
-   - Filters `profiles.toml` against non-negotiable requirements: `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, `local_only`, `max_estimated_cost_usd` (when `context.json` is supplied), and live CLI/quota availability. Candidates failing any hard constraint are immediately excluded.
-2. **Step 2 — Semantic Task & Workload Analysis (`analysis` stage)**:
-   - Evaluates the task `summary` and `prompt` to confirm task facets (e.g., `task:repo_coding`, `lang:ko`) and classify four workload dimensions: **`clarity`** (`clear` / `ambiguous`), **`reasoning`** (`bounded` / `multistep` / `demanding`), **`autonomy`** (`short` / `extended`), and **`deliverable`** (`revisable` / `finished` / `exacting`).
-   - Heuristic keyword and file-extension `rule_hints` are verified and can be rejected by semantic analysis so false-positive rules never pollute benchmark retrieval.
-3. **Step 3 — Per-Vendor Official Guidance (`guidance:<vendor>` stage)**:
-   - Sends **one request per eligible vendor** (Anthropic, OpenAI, Google) containing verbatim excerpts from that vendor's official model & effort documentation (`bench_router/guidelines.toml`).
-   - Selects the documented baseline `(model, effort)` starting point for the task's workload:
-     - **`documented`**: Profiles matching the vendor's recommended starting point (eligible for direct comparison and auto-routing).
-     - **`alternative`**: Other profiles from the same vendor (e.g., higher-cost escalations meant only for post-evaluation use). Excluded from auto-selection, but selectable by the Orchestrator via `select --accept-provisional`.
-     - **`provisional`**: Models not yet listed in official vendor guides (`guidance_missing`), retained with explicit uncertainty warnings.
-4. **Step 4 — Comparable Benchmark Evidence Lookup**:
-   - Queries the local snapshot (`snapshot.json`) and pre-compiled facet index (`index.json`) for benchmark units matching the confirmed task facets.
-   - Compares fresh observations strictly when measurement protocols match (`suite`, `version`, `subset`, `metric`, `evaluation_harness`, `reasoning_effort`), or records `model_proxy_comparison` when comparing base models within the same cohort. Missing scores are never treated as zero, and disparate cohorts are never merged into synthetic rankings.
-5. **Step 5 — Blinded Benchmark Relevance Verification (`benchmark` stage)**:
-   - When comparable benchmark units exist across candidates, the router issues a `benchmark` decision request containing only the task requirements and each benchmark unit's measurement description—**blinding model names, profile IDs, and raw scores** to prevent judge bias.
-   - Only units judged directly relevant to a core task requirement (`score ≥ 0.8`) are marked `accepted: true`.
-6. **Step 6 — Final Selection & Isolated Worktree Dispatch**:
-   - **Pending phase responses (`exit 17`)**: If any stage above still needs an answer, the CLI outputs `decision_required` with the bounded question packet until completed via `--decision-response`.
-   - **Single viable candidate**: When exactly one `documented` candidate remains with no unverified conditions, `bench-router` automatically produces a `selection 5.0` record and dispatches the worker.
-   - **Multiple viable candidates (`exit 17`)**: Rather than guessing by cost tier or arbitrary fallback order, the router returns `upstream_selection_required`. The Orchestrator inspects the side-by-side evidence (`evaluate --format 3`), binds its final choice (`select` → `selection 6.0`), and dispatches (`route --selection`) into an isolated `herdr-projects` Git worktree.
+1. **Drop agents that can't do the job.** Each agent you configure (a *profile*, e.g. Claude Code + Opus + high effort) has a cost tier, context size and capabilities. Any profile that breaks a hard limit in the task — too expensive, too small, can't write files, disabled, out of quota — is removed before anything else happens.
+2. **Understand the task.** A small, cheap model reads the task description and answers a few fixed questions: what kind of work it is (coding, writing, math…), which language, whether the request is clear or vague, how much reasoning it needs, and how polished the result must be. Guesses from keywords or file extensions are only hints; the model can reject them.
+3. **Ask each vendor's guide.** Anthropic, OpenAI and Google each publish advice on which model and effort level to use for which kind of work. bench-router quotes that advice word for word and asks, once per vendor, which starting point fits this task. Agents that match the advice become the main candidates; the vendor's other settings stay available as alternatives, and models the guides don't mention yet are kept but flagged as uncertain.
+4. **Look up benchmarks.** bench-router searches its local benchmark copy for scores that measured this kind of work. Scores are only compared when they were measured the same way; a missing score is reported as missing, never as zero.
+5. **Keep only benchmarks that really match.** The cheap model sees just the task and what each benchmark measures — not model names or scores, so it can't play favorites — and keeps only benchmarks that directly test what the task needs.
+6. **Choose.** If exactly one good candidate is left and nothing is uncertain, bench-router picks it and runs it. If several are left, it does not guess by price or list order: it hands the side-by-side evidence to the Orchestrator, who picks one (`bench-router evaluate --format 3` → `bench-router select` → `bench-router route --selection`).
+
+Steps 2, 3 and 5 need short answers from a model. bench-router does not call one on its own: it returns the question (exit code 17) and the caller answers it, automatically when you use the Agent Skill. You can also skip routing and name a profile yourself with `--profile`.
 
 > [!TIP]
-> **Token Efficiency via Lightweight Decision Models (`Jev` & `bench-decider`)**
-> Routing should never cost as much as executing the task itself. `bench-router` maximizes token efficiency during the semantic evaluation stages (`analysis`, `guidance`, `benchmark`) through three design choices:
-> 1. **Dedicated Low-Cost Judge Models**: Phased decisions are delegated to **Jev** (`jev-1.13.0`, a fast bounded decision endpoint via `decide.py`) or the host CLI's native **`bench-decider` subagent** pinned to each vendor's lightweight tier (**`haiku`** on Claude Code, **`gpt-6-luna`** on Codex, **`flash`** on Antigravity; customizable via `BENCH_ROUTER_DECISION_MODEL`).
-> 2. **Per-Vendor Batching**: `guidance` is evaluated **once per vendor** rather than once per profile, cutting decision calls and token volume by ~75–80% on multi-profile setups.
-> 3. **Minimal Context & Digest Caching**: Decision packets send only structured task summaries, facet criteria, and short verbatim guide rows—never repository file contents, full wiki pages, or raw score tables. Stage digests are cached so snapshot refreshes never re-trigger task analysis.
+> **Routing stays cheap.** The questions go to a small model — `haiku` on Claude Code, `gpt-6-luna` on Codex, `flash` on Antigravity (the bundled `bench-decider` agent), or the optional Jev API — and contain only a task summary and short guide quotes, never your code or full benchmark tables. Vendor advice is asked once per vendor, not once per profile, and finished answers are reused when benchmark data is refreshed.
 
-For detailed response schemas and replay rules, see [Vendor-guided Routing Policy](docs/vendor-guided-routing.md).
+<details>
+<summary><b>Implementation terms for each step</b></summary>
+
+| Step | Stage / field names you will see in JSON output |
+|---|---|
+| 1 | hard constraints: `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, `local_only`, `max_estimated_cost_usd` |
+| 2 | `analysis` stage: facets such as `task:repo_coding`, `lang:ko`; workload `clarity`, `reasoning`, `autonomy`, `deliverable`; keyword guesses are `rule_hints` |
+| 3 | `guidance:<vendor>` stage; candidates are `documented`, `alternative` (needs `select --accept-provisional`) or `provisional` (`guidance_missing`) |
+| 4 | snapshot `snapshot.json` + facet index `index.json`; exact protocol match or `model_proxy_comparison` |
+| 5 | `benchmark` stage; a unit is `accepted` at relevance ≥ 0.8 tied to a core requirement |
+| 6 | pending answer: `decision_required`; several candidates: `upstream_selection_required` (both exit 17); decision models configurable with `BENCH_ROUTER_DECISION_MODEL` |
+
+</details>
+
+For response formats and replay rules, see [Vendor-guided Routing Policy](docs/vendor-guided-routing.md).
 
 <details>
 <summary><b>🔖 Schema & Format Version Reference (<code>evaluate</code> / <code>select</code> / <code>route</code>)</b></summary>
@@ -173,7 +167,7 @@ bench-router status
 
 ```bash
 uv tool install --force --editable "$PWD[arena]"                     # CLI on PATH, follows this clone
-bench-router init && bench-router refresh --source mg                 # = mise run setup
+bench-router init && bench-router refresh --source mg                # = mise run setup
 npx -y skills add "$PWD" -g -a claude-code codex antigravity -y       # global Agent Skill
 ```
 
@@ -250,17 +244,14 @@ Delegated runs write state and worktrees to `<repo>/.bench-router/`; add `.bench
 
 ### 3) Quick Start with the CLI
 
-Use the installed `bench-router` command from any directory. Without a package install, use
-`python3 -m bench_router.cli` from the clone root, or the absolute path to an installed Skill's `scripts/cli.py`.
+The examples use the installed `bench-router` command, which works from any directory. Without the CLI install, replace `bench-router` with `python3 -m bench_router.cli` from the clone root, or with `python3 <skill path>/scripts/cli.py`.
 
 ```bash
-BR="bench-router"
-
 # 1. Prepare Agent profiles (copy ready-to-run default profiles, or use profiles discover)
-$BR init
+bench-router init
 ```
 
-`init` installs defaults matching `examples/profiles.default.toml`, with active profiles for standard Claude (`claude-opus-high`), Codex (`codex-sol-high`), and Gemini (`agy-argon-medium`). It never overwrites existing files. Alternatively, `$BR profiles discover` scans locally available model/effort configurations from installed CLIs; replacing existing profiles requires `--force`.
+`init` installs defaults matching `examples/profiles.default.toml`, with active profiles for standard Claude (`claude-opus-high`), Codex (`codex-sol-high`), and Gemini (`agy-argon-medium`). It never overwrites existing files. Alternatively, `bench-router profiles discover` scans locally available model/effort configurations from installed CLIs; replacing existing profiles requires `--force`.
 
 > [!NOTE]
 > If using `examples/profiles.example.toml` instead, note that it contains disabled placeholders (`enabled = false`) for custom setups. At least one profile must be enabled to prevent `no_eligible_profile` (exit 13). Live dispatch `args` must contain only model and effort flags; execution permissions follow Projects `worker.access`. See [Profile Configuration Reference](docs/reference.md#profilestoml).
@@ -311,21 +302,21 @@ To map external benchmark model names to profile `model_id`, configure `~/.confi
 ```bash
 # 2. Refresh benchmark data
 # - Public sources (mg, arena) can be retrieved without API credentials:
-$BR refresh --source mg                                    # The Model Gap public scores (no key needed)
+bench-router refresh --source mg  # The Model Gap public scores (no key needed)
 # Requires installation with the [arena] extra shown above:
-$BR refresh --source arena                                # Fetch Arena data (no key needed)
+bench-router refresh --source arena  # Fetch Arena data (no key needed)
 
 # - With an Artificial Analysis API key, refresh all sources at once:
 set -a; [ -f ~/.config/bench-router/env ] && . ~/.config/bench-router/env; set +a
-$BR refresh                                               # Refreshes aa, arena, and mg
-$BR status                                                # Inspect data status and unmatched models
+bench-router refresh  # Refreshes aa, arena, and mg
+bench-router status   # Inspect data status and unmatched models
 
 # 3. Inspect decision requests without execution (substitute cwd with current absolute path)
 # Run this sample-generation command from the clone; elsewhere, provide your own task.json.
 sed "s|/ABSOLUTE/PATH/TO/SMOKE_PROJECT|$PWD|" examples/task.synthetic.json > task.json
-$BR route --task task.json --host codex --dry-run         # decision_required: outputs decision packet, exit 17
-$BR explain --task task.json                              # Human-readable explanation of selection rationale
-$BR evidence --task task.json --format table              # Tabulate benchmark evidence matching task facets
+bench-router route --task task.json --host codex --dry-run  # decision_required: outputs decision packet, exit 17
+bench-router explain --task task.json                       # Human-readable explanation of selection rationale
+bench-router evidence --task task.json --format table       # Tabulate benchmark evidence matching task facets
 ```
 
 `--dry-run`, `explain`, `evaluate`, and `evidence` run without network access, Herdr invocations, or file writes. Default dry-run outputs the decision packet for the current stage. Supply `{"stages": [...]}` containing completed responses via `--decision-response` to advance phases, and validate finalized `--selection` offline. Even without a snapshot, decision requests with recorded data gaps can still be produced. Weighted-sum automated selection and `--policy legacy` have been removed.
@@ -333,11 +324,11 @@ $BR evidence --task task.json --format table              # Tabulate benchmark e
 When multiple viable candidates remain, complete evaluation with the same response file and select via upstream policy. Extract only the inner `selection` object from `select` output:
 
 ```bash
-$BR evaluate --format 3 --task task.json --host codex --decision-response responses.json > assessment.json
-$BR select --assessment assessment.json --profile PROFILE --policy-id my-policy --policy-version 1 \
+bench-router evaluate --format 3 --task task.json --host codex --decision-response responses.json > assessment.json
+bench-router select --assessment assessment.json --profile PROFILE --policy-id my-policy --policy-version 1 \
   --reason "Selection based on task requirements and candidate evidence" > selection-output.json
 python3 -c 'import json; print(json.dumps(json.load(open("selection-output.json"))["selection"]))' > selection.json
-$BR route --task task.json --selection selection.json --dry-run
+bench-router route --task task.json --selection selection.json --dry-run
 ```
 
 Use `assessment.json` only when `status: "ok"`. Accepting provisional or alternative candidates requires `select --accept-provisional`. Refer to [Upstream Integration](docs/orchestrator.md) for response construction.
@@ -406,9 +397,9 @@ Live delegation requires Herdr, **herdr-projects 1.2.1**, and authenticated Agen
 
 ```bash
 # 4. Live execution, collection, and verification (Linux/WSL2 with herdr, herdr-projects, and Agent CLIs)
-$BR --herdr-session work route --task task.json --selection selection.json # 'work' is the herdr session name
-$BR --herdr-session work collect --run-id <RUN_ID> --cwd "$PWD"          # Check state & collect without resubmission on timeout
-$BR feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success            # Record Orchestrator's final verification verdict
+bench-router --herdr-session work route --task task.json --selection selection.json  # 'work' is the herdr session name
+bench-router --herdr-session work collect --run-id <RUN_ID> --cwd "$PWD"             # Check state & collect without resubmission on timeout
+bench-router feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success               # Record Orchestrator's final verification verdict
 ```
 
 ---
