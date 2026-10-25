@@ -60,6 +60,18 @@ def _load(args):
                "env": r.env_with_dotenv(args.config_dir, task["cwd"])}
     if response is not None and (selection or getattr(args, "profile", None)):
         raise r.InputError("--decision-response cannot be combined with --selection or --profile")
+    refresh_report = None
+    if getattr(args, "refresh", False):
+        if response is not None:
+            raise r.InputError("--refresh is only for the initial assessment; replay responses offline")
+        from . import data
+        try:
+            refresh_report = data.refresh(args.cache_dir, cfg, mapping,
+                                          data.load_aliases(args.config_dir / "aliases.toml"),
+                                          datetime.now(timezone.utc), env=options["env"], index=options["index"])
+        except data.LockBusy as e:
+            return {"schema_version": r.SCHEMA_VERSION, "status": "conflict",
+                    "error": {"code": "lock", "message": str(e)}}
     snap, snap_warnings = r.load_snapshot(args.cache_dir)
     if args.cmd == "route" and not args.dry_run:
         from . import herdr  # live 경로에서만
@@ -71,11 +83,15 @@ def _load(args):
     if args.cmd == "evaluate":
         if args.format == "3":
             from . import decision
-            return decision.evaluate(task, cfg, mapping, snap, snap_warnings, now, context=context, **options)
-        if response is not None:
-            raise r.InputError("--decision-response requires evaluate --format 3")
-        return (r.evaluate_v1 if args.format == "1" else r.evaluate)(task, cfg, mapping, snap, snap_warnings, now,
-                                                                     context=context)
+            result = decision.evaluate(task, cfg, mapping, snap, snap_warnings, now, context=context, **options)
+        else:
+            if response is not None:
+                raise r.InputError("--decision-response requires evaluate --format 3")
+            result = (r.evaluate_v1 if args.format == "1" else r.evaluate)(task, cfg, mapping, snap, snap_warnings, now,
+                                                                         context=context)
+        if refresh_report is not None:
+            result["benchmark_refresh"] = refresh_report
+        return result
     if args.cmd == "route" and (args.profile or selection):
         if selection and selection["schema_version"] in r.GUIDED_SELECTIONS:
             return r.route(task, cfg, mapping, snap, snap_warnings, now, context=context,
@@ -572,8 +588,9 @@ def main(argv=None):
     vp = sub.add_parser("evaluate", help="report facts, constraint results and evaluations for every profile; no selection")
     vp.add_argument("--task", required=True, help=TASK_HELP)
     vp.add_argument("--context", help="optional context JSON file (1.0|2.0) of caller-supplied estimates, prices and signals; see docs/routing-contracts.md")
+    vp.add_argument("--refresh", action="store_true", help="check due benchmark sources before the initial assessment; report failures and keep last-good data; omit when replaying decision responses")
     vp.add_argument("--format", choices=["1", "2", "3"], default="2",
-                    help="output format: 1 = legacy candidate evidence; 2 = facts, constraints and benchmark evaluations (default); 3 = staged vendor-guided assessment for select; all offline")
+                    help="output format: 1 = legacy candidate evidence; 2 = facts, constraints and benchmark evaluations (default); 3 = staged vendor-guided assessment for select; offline unless --refresh")
     selp = sub.add_parser("select", help="record an upstream choice from an evaluate --format 3 assessment; no dispatch")
     selp.add_argument("--assessment", required=True, help="saved output of evaluate --format 3 (status ok)")
     selp.add_argument("--profile", required=True, help="the chosen profile ID from the assessment")

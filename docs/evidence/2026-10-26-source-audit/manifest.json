@@ -1,0 +1,235 @@
+{
+  "checked_date": "2026-10-26",
+  "browser": "Windows Ego browser controlled from WSL; taskSpace 1, page p1",
+  "extraction": "npx --yes defuddle parse CAPTURE.html --md -o CAPTURE.md",
+  "captures": [
+    {
+      "name": "openai-selection",
+      "url": "https://developers.openai.com/api/docs/guides/model-selection",
+      "captured_at": "2026-10-25T22:50:15.155721+00:00",
+      "html_file": "openai-selection.html.gz",
+      "decoded_html_sha256": "fbf117d7642ed5d7160011715896ccfc269eeab520cfcc62df06c79a92f25c62",
+      "browser_text_file": "openai-selection.txt",
+      "defuddle_markdown_file": "openai-selection.md"
+    },
+    {
+      "name": "claude-selection",
+      "url": "https://platform.claude.com/docs/en/about-claude/models/choosing-a-model",
+      "captured_at": "2026-10-25T22:50:19.106633+00:00",
+      "html_file": "claude-selection.html.gz",
+      "decoded_html_sha256": "3faf91028c062559cf8ed2ce06547781807ea957e619ca760692dce813411048",
+      "browser_text_file": "claude-selection.txt",
+      "defuddle_markdown_file": "claude-selection.md"
+    },
+    {
+      "name": "claude-effort",
+      "url": "https://platform.claude.com/docs/en/build-with-claude/effort",
+      "captured_at": "2026-10-25T22:50:21.992753+00:00",
+      "html_file": "claude-effort.html.gz",
+      "decoded_html_sha256": "95a721fc76baba176042a80a195492f1c1dce90d875f548e1e0eeb9eaf20473e",
+      "browser_text_file": "claude-effort.txt",
+      "defuddle_markdown_file": "claude-effort.md"
+    },
+    {
+      "name": "gemini-models",
+      "url": "https://ai.google.dev/gemini-api/docs/models",
+      "captured_at": "2026-10-25T22:50:25.981399+00:00",
+      "html_file": "gemini-models.html.gz",
+      "decoded_html_sha256": "dc7f5ba3bf7b31bb992d17970494d65199986fd7c1d8c1937d8466d254494645",
+      "browser_text_file": "gemini-models.txt",
+      "defuddle_markdown_file": "gemini-models.md"
+    },
+    {
+      "name": "gemini-thinking",
+      "url": "https://ai.google.dev/gemini-api/docs/thinking",
+      "captured_at": "2026-10-25T22:50:28.413823+00:00",
+      "html_file": "gemini-thinking.html.gz",
+      "decoded_html_sha256": "f0f66affb912348794d9cc6925ccc951e1d7b8ccce84dc2cd2bcf7ac0995f3f9",
+      "browser_text_file": "gemini-thinking.txt",
+      "defuddle_markdown_file": "gemini-thinking.md"
+    },
+    {
+      "name": "terminal-bench",
+      "url": "https://www.tbench.ai/",
+      "captured_at": "2026-10-25T22:50:30.588064+00:00",
+      "html_file": "terminal-bench.html.gz",
+      "decoded_html_sha256": "b8cef1e4883b8105fbd8202bb0983ceb0e0a317b897b95f4bdf59df8c637c34f",
+      "browser_text_file": "terminal-bench.txt",
+      "defuddle_markdown_file": "terminal-bench.md"
+    },
+    {
+      "name": "claude-prompt-fable",
+      "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-1",
+      "captured_at": "2026-10-25T22:56:32.008680+00:00",
+      "html_file": "claude-prompt-fable.html.gz",
+      "decoded_html_sha256": "46a1fbf38ea315f56c8858eb0dc5b188e95ca3f156b0aeefc533408fa50c9d35",
+      "browser_text_file": "claude-prompt-fable.txt",
+      "defuddle_markdown_file": "claude-prompt-fable.md"
+    },
+    {
+      "name": "claude-prompt-opus",
+      "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5",
+      "captured_at": "2026-10-25T22:56:35.022120+00:00",
+      "html_file": "claude-prompt-opus.html.gz",
+      "decoded_html_sha256": "637d5755ddb612f5a1badd6c27b2020bb9f87ac77def0d2800af23ab4166425e",
+      "browser_text_file": "claude-prompt-opus.txt",
+      "defuddle_markdown_file": "claude-prompt-opus.md"
+    },
+    {
+      "name": "claude-prompt-sonnet",
+      "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5-5",
+      "captured_at": "2026-10-25T22:56:37.754444+00:00",
+      "html_file": "claude-prompt-sonnet.html.gz",
+      "decoded_html_sha256": "4fcec30677460e4860467ad6f670b2e44598f8efa21d0e36cb8ecd68708f0fb6",
+      "browser_text_file": "claude-prompt-sonnet.txt",
+      "defuddle_markdown_file": "claude-prompt-sonnet.md"
+    },
+    {
+      "name": "claude-prompt-haiku",
+      "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-haiku-5-5",
+      "captured_at": "2026-10-25T22:56:40.680678+00:00",
+      "html_file": "claude-prompt-haiku.html.gz",
+      "decoded_html_sha256": "f52afe3c79782931674ad83dd03fd0638dd22d37083325653d466bd2c0b992e8",
+      "browser_text_file": "claude-prompt-haiku.txt",
+      "defuddle_markdown_file": "claude-prompt-haiku.md"
+    }
+  ],
+  "files": {
+    "claude-effort.html.gz": {
+      "sha256": "b353df3ade127a4f0bda9fa2a8ff768b3925f0963f809c1cdbd532018a57d47b",
+      "bytes": 368898
+    },
+    "claude-effort.md": {
+      "sha256": "dad6063aa41686d9f5e626b0693867681b927966fbe34bc70ad48e5c2a3bc751",
+      "bytes": 24133
+    },
+    "claude-effort.txt": {
+      "sha256": "9657b082c645af6dccc9f2ad9661d9327a32ba1c311c14e42577628e5dc9d96c",
+      "bytes": 26093
+    },
+    "claude-prompt-fable.html.gz": {
+      "sha256": "59ad8f05b0a0a1cc4220e9f47d5cc0d09db1bcfd20c9e1d97646a71347b6904a",
+      "bytes": 389039
+    },
+    "claude-prompt-fable.md": {
+      "sha256": "68230d3adf790f66cf2ffb74da62de58a5d7dff3797670014935f3f9793e2acc",
+      "bytes": 30898
+    },
+    "claude-prompt-fable.txt": {
+      "sha256": "30c77ae3406db6033ce1fef84fc067af9e2e060254ca7bd5a34d0ebd92b3a98b",
+      "bytes": 31986
+    },
+    "claude-prompt-haiku.html.gz": {
+      "sha256": "d945db058d83cdf0d24da3d0b19a18ef24482d7d018325a7ea88e59321856691",
+      "bytes": 333115
+    },
+    "claude-prompt-haiku.md": {
+      "sha256": "de2ddae987f58237eb40f13e5e2d1ace634d7b6987127f387d3e898187c236a1",
+      "bytes": 12508
+    },
+    "claude-prompt-haiku.txt": {
+      "sha256": "55535e94f452b6bb36769bdd46a818235dcb490000fc4812ac2e198a8279ce61",
+      "bytes": 14085
+    },
+    "claude-prompt-opus.html.gz": {
+      "sha256": "2f1d8197b453ee179c6c2b3cc4a0efa70e49c134e30014c760b0ca2148378e72",
+      "bytes": 348855
+    },
+    "claude-prompt-opus.md": {
+      "sha256": "6f8823f1042c45ca3084d4d213497cfbfb2f24f6e639eb500275ef11a5df13fa",
+      "bytes": 25883
+    },
+    "claude-prompt-opus.txt": {
+      "sha256": "b95cadae13f67d71d8b4418b9981ddb57cec70d583ec039955db26123995bbb0",
+      "bytes": 26199
+    },
+    "claude-prompt-sonnet.html.gz": {
+      "sha256": "3198395348d56974e4e89c67bd760386e1588e859be2ee12e7857503ee167d82",
+      "bytes": 347375
+    },
+    "claude-prompt-sonnet.md": {
+      "sha256": "cb9625abf0f3856c57a64c8c5f3274afaf01103a442de15194af6df31ae8877a",
+      "bytes": 25049
+    },
+    "claude-prompt-sonnet.txt": {
+      "sha256": "13f7c22412bc5438dae9632b41bc47d8397a9c8b0198bdb4e6a08d8b0f83e4ed",
+      "bytes": 25204
+    },
+    "claude-selection.html.gz": {
+      "sha256": "a6ac8157e423dee3369810a8d9bd119f63265b58313b1859bcad830a723c6301",
+      "bytes": 326585
+    },
+    "claude-selection.md": {
+      "sha256": "8654d8bc4517f939e2ad802452d3d29e4d009d5b67c53c00e88b24b405e0ded7",
+      "bytes": 6982
+    },
+    "claude-selection.txt": {
+      "sha256": "247eaf1ed64745aec452b472f74d136168d9a23ff3f2ad8b2b228abdf755a0c1",
+      "bytes": 7934
+    },
+    "gemini-models.html.gz": {
+      "sha256": "c732b11e33e8d040fa09b82b6f8d7d1fbc691587a720ea8d73940fc4a926225c",
+      "bytes": 28634
+    },
+    "gemini-models.md": {
+      "sha256": "d22ec843adbe45d5006e53f93b57ac0cb0456ec7d843dc21811d6f551a2fbf7c",
+      "bytes": 17608
+    },
+    "gemini-models.txt": {
+      "sha256": "b8a248f816a437fe501faf454238cd6f0bd6fa7870282efbb064b731d19616e6",
+      "bytes": 16595
+    },
+    "gemini-thinking.html.gz": {
+      "sha256": "d9fb266abd546d65260e6d9a5af8b73f89ae0bc4a4b5736e70953b97e967b727",
+      "bytes": 38094
+    },
+    "gemini-thinking.md": {
+      "sha256": "753ff2540321d95b996693fcc8f671a11be8a0ae6bdbb49d8ed9df9788a2c03d",
+      "bytes": 31312
+    },
+    "gemini-thinking.txt": {
+      "sha256": "71fd7de547393701c902b6b6597a04029d6c17b4320f41266e1979daf4a43282",
+      "bytes": 14434
+    },
+    "guideline-comparison.json": {
+      "sha256": "55c956493d6aa8c3e2628126212b4188e51b7ce41b0fa9866ad8b1666ec4239b",
+      "bytes": 10091
+    },
+    "openai-interactive.json": {
+      "sha256": "9ab9db34999ee610283897c69438b0695432e797c29e09395573e32e8b776890",
+      "bytes": 1269
+    },
+    "openai-selection.html.gz": {
+      "sha256": "520c78d34971f96b0d2e466bf13982009232fa5273371aafc23ac05f50ab1b85",
+      "bytes": 60328
+    },
+    "openai-selection.md": {
+      "sha256": "9002ff16b9257b079e2e0b156f618c23369955ebcba7cc50ed2035f6ff949dbf",
+      "bytes": 6540
+    },
+    "openai-selection.txt": {
+      "sha256": "621cf4616d4cf86b6867ef0770f5533ecdd05231e25cdcd49ed7cdbc85dc7774",
+      "bytes": 4321
+    },
+    "terminal-bench.html.gz": {
+      "sha256": "941cece397ef7de7fe5a3bbf585b73de0b14dbfdf0234583678489e5e28f0bf9",
+      "bytes": 23129
+    },
+    "terminal-bench.md": {
+      "sha256": "4c39e1a2461ee1a10eb216d4ece299a9ef1edcaa00c56e24a0fe93a068cb4f24",
+      "bytes": 4355
+    },
+    "terminal-bench.txt": {
+      "sha256": "aa062248aa43c6c42cf32b3783337957a50bd3c6b006e14e5e6450e2f8689088",
+      "bytes": 2207
+    },
+    "terminal-leaderboard-data.json": {
+      "sha256": "d351bdb6b96a7ac1a850637c33bb94c4312b38182ccfb9f7a7e473c49fc88d2f",
+      "bytes": 62936
+    },
+    "wiki-quote-comparison.json": {
+      "sha256": "86e1309c55b037231b90fb25f8ed16d9d5c8bae4fad874e81cb5ddfca786430f",
+      "bytes": 58534
+    }
+  }
+}

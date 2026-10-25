@@ -7,7 +7,7 @@ from . import evidence
 from . import routing as r
 from .routing import EFFORT_ORDER
 
-POLICY = {"id": "vendor-guided", "version": "6"}
+POLICY = {"id": "vendor-guided", "version": "7"}
 # ponytail: fixed relevance cutoff; calibrate on labeled task/unit pairs before adding tuning knobs.
 RELEVANCE_THRESHOLD = 0.8
 RELEVANCE_BASES = {
@@ -80,7 +80,8 @@ def load_guidelines():
                 oid = f"{row['model']}:{_effort(row['effort'], row['model'])}"
                 if oid in entry["options"]:
                     raise r.InputError(f"guideline starting point duplicated: {oid}")
-                entry["options"][oid] = {"model": row["model"], "effort": row["effort"], "when": row["when"]}
+                entry["options"][oid] = {"model": row["model"], "effort": row["effort"], "when": row["when"],
+                                        **({"context": row["context"]} if row.get("context") else {})}
             for mid in dict.fromkeys(o["model"] for o in entry["options"].values()):
                 add_model(mid, vid, v, {**{e: w for (m, e), w in escalations.items() if m == mid},
                                         **{o["effort"]: o["when"] for o in entry["options"].values() if o["model"] == mid}},
@@ -204,7 +205,7 @@ def _analysis(t, request, answers):
             "task_facts": request["state"]["task_facts"],
             "facets": list(facets.values()), "unresolved_facets": unresolved,
             # Labels cannot express all qualifiers; keep the original requirements available.
-            "requirements": {k: t[k] for k in ("summary", "prompt", "constraints")}}
+            "requirements": {k: t[k] for k in ("summary", "prompt", "constraints", "priority")}}
 
 
 def _guidance_groups(profiles, guide):
@@ -223,7 +224,8 @@ def guidance_request(analysis, vendor, guide):
     v = guide["vendors"][vendor]
     if v["kind"] == "combos":
         questions = {f"guidance:{vendor}": {"type": "choice", "instructions": "Choose the starting point this guide assigns to the requirements.",
-                                            "criteria": {**{oid: o["when"] for oid, o in v["options"].items()}, **GUIDANCE_OPTIONS}}}
+                                            "criteria": {**{oid: (o["context"] + ": " if o.get("context") else "") + o["when"]
+                                                            for oid, o in v["options"].items()}, **GUIDANCE_OPTIONS}}}
     else:
         questions = {f"guidance:{vendor}:model": {"type": "choice", "instructions": "Choose the model whose published role covers the requirements.",
                                                   "criteria": {**{f"model:{m}": role for m, role in v["models"].items()}, **GUIDANCE_OPTIONS}},
@@ -277,8 +279,8 @@ def guided_fits(vendor, profiles, answers, guide):
 
 
 def comparable(a, b):
-    """Compare current exact profiles under one protocol; never compare percentiles."""
-    if any(not row.get("exact_profile") or row.get("stale") or row.get("raw") is None for row in (a, b)):
+    """Compare usable exact profiles under one protocol; freshness exclusion happens at retrieval."""
+    if any(not row.get("exact_profile") or row.get("raw") is None for row in (a, b)):
         return False
     ac, bc = a.get("conditions") or {}, b.get("conditions") or {}
     return (ac.get("direction") in ("higher", "lower") and
@@ -294,13 +296,20 @@ def _winners(rows, gap=0):
 
 def _model_comparable(a, b):
     """A shared source cohort supports a model comparison, not an exact effort claim."""
-    if any(row.get("scope") != "model_proxy" or row.get("stale") or row.get("raw") is None for row in (a, b)):
+    if any((row.get("scope") != "model_proxy" and not row.get("exact_profile"))
+           or row.get("raw") is None for row in (a, b)):
         return False
     ac, bc = a.get("conditions") or {}, b.get("conditions") or {}
     return (all(a.get(k) is not None and a[k] == b.get(k) for k in ("source_id", "cohort_id", "metric_version"))
             and ac.get("direction") in ("higher", "lower")
             and all(ac.get(k) is not None for k in ("suite", "subset", "metric"))
             and all(ac.get(k) == bc.get(k) for k in PROTOCOL))
+
+
+def _comparable_rows(rows, compare):
+    # ponytail: quadratic grouping is small at profile scale; index protocols if this grows.
+    groups = [{pid: row for pid, row in rows.items() if compare(seed, row)} for seed in rows.values()]
+    return min(groups, key=lambda group: (-len(group), tuple(sorted(group)))) if groups else {}
 
 
 def evaluations(t, analysis, fits, cfg, snap, snap_warnings, index, now):
@@ -323,7 +332,10 @@ def evaluations(t, analysis, fits, cfg, snap, snap_warnings, index, now):
                 missing[pid][uid] = cell["missing_reason"]
             else:
                 observations[pid][uid] = {k: v for k, v in cell.items() if k not in ("normalized", "missing_reason") and v is not None}
-        rows = {pid: observations[pid].get(uid, {}) for pid in ids}
+        rows = {pid: observations[pid][uid] for pid in ids if uid in observations[pid]}
+        exact_rows = _comparable_rows(rows, comparable)
+        proxy_rows = _comparable_rows(rows, _model_comparable)
+        enough = lambda group: len(group) >= 2 or (len(ids) == 1 and bool(group))
         if unit["facets"].get("agent_signal"):
             auxiliary.append(uid)
             prefiltered[uid] = "agent_reliability_only"
@@ -331,12 +343,14 @@ def evaluations(t, analysis, fits, cfg, snap, snap_warnings, index, now):
             prefiltered[uid] = "no_task_specific_match"
         elif unit["status"] != "current":
             prefiltered[uid] = "benchmark_not_current"
-        elif rows and all(comparable(next(iter(rows.values())), row) for row in rows.values()):
-            comparisons[uid] = _winners(rows, unit.get("meaningful_gap", 0))
+        elif enough(exact_rows):
+            comparisons[uid] = _winners(exact_rows, unit.get("meaningful_gap", 0))
             scopes[uid] = "exact_profile"
-        elif rows and all(_model_comparable(next(iter(rows.values())), row) for row in rows.values()):
-            comparisons[uid] = _winners(rows, unit.get("meaningful_gap", 0))
+            units[uid]["comparison_profiles"] = sorted(exact_rows)
+        elif enough(proxy_rows):
+            comparisons[uid] = _winners(proxy_rows, unit.get("meaningful_gap", 0))
             scopes[uid] = "model_proxy"
+            units[uid]["comparison_profiles"] = sorted(proxy_rows)
         else:
             prefiltered[uid] = "no_comparable_observations"
     return {"units": units, "observations": observations, "missing": missing, "fits": fits,
@@ -349,7 +363,7 @@ def comparison_request(analysis, evaluation, index):
     suites, questions, requirements = {}, {}, {}
     for uid in sorted(evaluation["comparisons"]):
         unit = evaluation["units"][uid]
-        suite = next(o[uid]["conditions"]["suite"] for o in evaluation["observations"].values() if uid in o)
+        suite = evaluation["observations"][unit["comparison_profiles"][0]][uid]["conditions"]["suite"]
         suites.setdefault(suite, {})[uid] = {k: unit[k] for k in ("desc", "metric", "facets")}
         bases = {key: None for key in unit["matched_facets"]
                  if key != "task:general" and not key.startswith("agent_signal:")}
@@ -601,14 +615,21 @@ def candidate_diagnostics(decision, pid, facts):
     if fit.get("status") == "provisional":
         codes.append("provisional_suitability")
     codes += fit.get("diagnostics", [])
-    if any(scope == "model_proxy" and (ev.get("benchmark_relevance") or {}).get(uid)
+    if any(scope == "model_proxy" and pid in ev["units"][uid].get("comparison_profiles", [])
+           and (ev.get("benchmark_relevance") or {}).get(uid)
            for uid, scope in ev["comparison_scopes"].items()):
         codes.append("model_proxy_comparison")
     if fit.get("status") in ("documented", "provisional"):
-        if not any(row.get("exact_profile") and not row.get("stale") and (ev.get("benchmark_relevance") or {}).get(uid)
+        if not any(row.get("exact_profile") and pid in ev["units"][uid].get("comparison_profiles", [])
+                   and (ev.get("benchmark_relevance") or {}).get(uid)
                    for uid, row in ev["observations"].get(pid, {}).items()):
             codes.append("task_quality_unverified")
-        codes.append("task_specific_evaluation_missing")
+        if not any((ev.get("benchmark_relevance") or {}).get(uid)
+                   and pid in ev["units"][uid].get("comparison_profiles", [])
+                   for uid in ev["observations"].get(pid, {})):
+            codes.append("task_specific_evaluation_missing")
+        if any(row.get("stale") for row in ev["observations"].get(pid, {}).values()):
+            codes.append("stale_evidence")
     if facts.get(pid, {}).get("cost.estimated_usd", {}).get("freshness") != "fresh":
         codes.append("cost_unknown")
     return codes

@@ -1,0 +1,267 @@
+{
+  "guidelines_version": "2026-10-24.5",
+  "normalization": "ASCII letters/digits, casefold, sentence boundaries; layout and punctuation ignored; match is not proof of complete coverage",
+  "rows": [
+    {
+      "vendor": "openai",
+      "kind": "start",
+      "model": "gpt-6-luna",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Fine-grained edits, well-scoped problem-solving, and simple data extraction."
+    },
+    {
+      "vendor": "openai",
+      "kind": "start",
+      "model": "gpt-6-luna",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Finding current context across multiple apps, prioritizing work, and solving problems with clear constraints."
+    },
+    {
+      "vendor": "openai",
+      "kind": "start",
+      "model": "gpt-6.1-sol",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Complex technical work and coordinated deliverables you expect to revise."
+    },
+    {
+      "vendor": "openai",
+      "kind": "start",
+      "model": "gpt-6.1-sol",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Polished deliverables, connected visual systems, and decisions built from conflicting evidence."
+    },
+    {
+      "vendor": "openai",
+      "kind": "start",
+      "model": "gpt-6-astra",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Concise writing and content adaptation that preserve facts and nuance."
+    },
+    {
+      "vendor": "openai",
+      "kind": "start",
+      "model": "gpt-6-astra",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Ambitious projects that need broad context, reliable interactions, and complete results."
+    },
+    {
+      "vendor": "openai",
+      "kind": "start",
+      "model": "gpt-6-astra",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Demanding analysis and complex deliverables with exacting requirements."
+    },
+    {
+      "vendor": "claude",
+      "kind": "start",
+      "model": "claude-fable-5-1",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Start with `high`, the default."
+    },
+    {
+      "vendor": "claude",
+      "kind": "start",
+      "model": "claude-opus-5-5",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Claude Opus 5.5 supports all five effort levels, and `medium` is the default."
+    },
+    {
+      "vendor": "claude",
+      "kind": "start",
+      "model": "claude-sonnet-5-5",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Start with `high` unless your workload is agentic or latency-sensitive. For agentic coding and multistep tool use, start with `medium` for well-specified tasks and move to `high` for harder or longer ones."
+    },
+    {
+      "vendor": "claude",
+      "kind": "start",
+      "model": "claude-sonnet-5-5",
+      "field": "when",
+      "match_ignoring_formatting": false,
+      "missing_sentences": [],
+      "stored": "For agentic coding and multistep tool use, start with `medium` for well-specified tasks and move to `high` for harder or longer ones. For chat and other latency-sensitive work, start with `medium` or `low`. At `low` and `medium`, on long agentic tasks, it's more likely to stop and check in with the user before it completes its work."
+    },
+    {
+      "vendor": "claude",
+      "kind": "start",
+      "model": "claude-sonnet-5-5",
+      "field": "when",
+      "match_ignoring_formatting": false,
+      "missing_sentences": [],
+      "stored": "For chat and other latency-sensitive work, start with `medium` or `low`. At `low`, it keeps its thinking short and can skip verifying a change."
+    },
+    {
+      "vendor": "claude",
+      "kind": "start",
+      "model": "claude-haiku-5-5",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Start with `medium` for most work, including agentic coding."
+    },
+    {
+      "vendor": "claude",
+      "kind": "start",
+      "model": "claude-haiku-5-5",
+      "field": "when",
+      "match_ignoring_formatting": false,
+      "missing_sentences": [],
+      "stored": "Use `low`, the cheapest and fastest level, for chat, short tool tasks, and simple, high-volume requests. In long agent prompts, the model is more likely to skip a search, stop early, or skip a check at this level."
+    },
+    {
+      "vendor": "claude",
+      "kind": "start",
+      "model": "claude-haiku-5-5",
+      "field": "when",
+      "match_ignoring_formatting": false,
+      "missing_sentences": [],
+      "stored": "Use `high` for knowledge work, longer agent tasks, and strict instruction following. When instruction following matters most, also use `high` effort."
+    },
+    {
+      "vendor": "claude",
+      "kind": "model",
+      "model": "claude-fable-5-1",
+      "field": "role",
+      "match_ignoring_formatting": false,
+      "missing_sentences": [],
+      "stored": "The highest available capability. Agent sessions that run for hours, multistep deep research, analysis carried through to a finished document, spreadsheet, or deck"
+    },
+    {
+      "vendor": "claude",
+      "kind": "model",
+      "model": "claude-opus-5-5",
+      "field": "role",
+      "match_ignoring_formatting": false,
+      "missing_sentences": [],
+      "stored": "Complex agentic coding and enterprise work. Multihour autonomous coding agents, large-scale refactoring, complex systems engineering, vision-heavy workflows, computer use"
+    },
+    {
+      "vendor": "claude",
+      "kind": "model",
+      "model": "claude-sonnet-5-5",
+      "field": "role",
+      "match_ignoring_formatting": false,
+      "missing_sentences": [],
+      "stored": "Speed and capability for everyday coding, agent, and enterprise workloads. Code generation, data analysis, content creation, visual understanding, agentic tool use"
+    },
+    {
+      "vendor": "claude",
+      "kind": "model",
+      "model": "claude-haiku-5-5",
+      "field": "role",
+      "match_ignoring_formatting": false,
+      "missing_sentences": [],
+      "stored": "The lowest latency and price. Real-time applications, high-volume intelligent processing, cost-sensitive deployments needing strong reasoning, subagent tasks"
+    },
+    {
+      "vendor": "claude",
+      "kind": "escalation",
+      "model": "claude-fable-5-1",
+      "field": "when",
+      "match_ignoring_formatting": false,
+      "missing_sentences": [],
+      "stored": "Step up to `xhigh` or `max` for the most capability-sensitive agentic and coding work, and step down to `medium` or `low` for routine or latency-sensitive work once your evals show quality holds. At `medium`, results roughly match Claude Fable 5 at lower cost, so step down to `medium` or `low` where your evals show quality holds."
+    },
+    {
+      "vendor": "claude",
+      "kind": "escalation",
+      "model": "claude-opus-5-5",
+      "field": "when",
+      "match_ignoring_formatting": false,
+      "missing_sentences": [],
+      "stored": "Run an effort sweep on your own evals rather than carrying settings over from an earlier model. Reserve `xhigh` and `max` for work where you've measured a quality gain."
+    },
+    {
+      "vendor": "claude",
+      "kind": "escalation",
+      "model": "claude-sonnet-5-5",
+      "field": "when",
+      "match_ignoring_formatting": false,
+      "missing_sentences": [],
+      "stored": "Use `xhigh` or `max` only where your evals show a quality gain. Reserve `xhigh` and `max` for work where you've measured a quality gain, because thinking and replies get much longer there."
+    },
+    {
+      "vendor": "claude",
+      "kind": "escalation",
+      "model": "claude-haiku-5-5",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Use `xhigh` or `max` only where your evals show a quality gain, and compare them with Claude Sonnet 5.5 on performance, cost, and speed."
+    },
+    {
+      "vendor": "gemini",
+      "kind": "model",
+      "model": "gemini-3.5-flash-lite",
+      "field": "role",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Our fastest, most cost-effective 3.5 model for high-throughput execution."
+    },
+    {
+      "vendor": "gemini",
+      "kind": "model",
+      "model": "gemini-3.8-flash",
+      "field": "role",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Our most intelligent Flash model, engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows."
+    },
+    {
+      "vendor": "gemini",
+      "kind": "model",
+      "model": "gemini-4-argon",
+      "field": "role",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Our flagship reasoning model with a unified 1M context window and long decodes up to 1M tokens."
+    },
+    {
+      "vendor": "gemini",
+      "kind": "effort_class",
+      "model": "lookup",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Use minimal or low thinking for fact retrieval or classification"
+    },
+    {
+      "vendor": "gemini",
+      "kind": "effort_class",
+      "model": "ordinary",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Use default thinking for comparing concepts or creative reasoning"
+    },
+    {
+      "vendor": "gemini",
+      "kind": "effort_class",
+      "model": "advanced",
+      "field": "when",
+      "match_ignoring_formatting": true,
+      "missing_sentences": [],
+      "stored": "Use maximum thinking for advanced coding, math, or multi-step planning"
+    }
+  ]
+}

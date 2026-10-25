@@ -1,6 +1,7 @@
 """벤치마크 Wiki index(index.json) → 작업에 맞는 증거 표. 요청 경로: routing만 import, 네트워크·SQLite 없음.
 점수를 합산하지 않는다. unit 표시 순서는 순위가 아니다."""
 import re
+from difflib import SequenceMatcher
 from pathlib import Path
 
 from . import routing as r
@@ -151,10 +152,51 @@ def _cell(p, uid, snap, sources, warned):
             "missing_reason": None}
 
 
+def _vendor(model):
+    # ponytail: explicit known vendors; unknown families stay unestimated.
+    return next((vendor for prefix, vendor in (("gpt-", "openai"), ("claude-", "anthropic"),
+                                                ("gemini-", "google"), ("gemma-", "google"))
+                 if model.startswith(prefix)), None)
+
+
+def _nearby_proxy(p, uid, profiles, snap, sources, warned):
+    """Borrow an observed same-vendor value only after a recent source check.
+
+    No invented score/regression: retain the donor's measured protocol and effort.
+    """
+    vendor = _vendor(p["model_id"])
+    if vendor is None:
+        return None
+    # ponytail: name similarity is a labeled proxy heuristic; replace with curated neighbors if evaluations show poor matches.
+    family = lambda model: re.sub(r"[^a-z]+", "-", model.lower()).strip("-")
+    candidates = []
+    for donor in profiles:
+        if donor["id"] == p["id"] or _vendor(donor["model_id"]) != vendor:
+            continue
+        cell = _cell(donor, uid, snap, sources, warned)
+        if cell.get("missing_reason") or not sources[cell["source_id"]]["refresh_checked"]:
+            continue
+        effort = cell.get("effort")
+        distance = (abs(r.EFFORT_ORDER.index(effort) - r.EFFORT_ORDER.index(p["reasoning_effort"]))
+                    if effort in r.EFFORT_ORDER and p["reasoning_effort"] in r.EFFORT_ORDER else len(r.EFFORT_ORDER))
+        rank = (donor["model_id"] != p["model_id"], family(donor["model_id"]) != family(p["model_id"]),
+                -SequenceMatcher(None, donor["model_id"], p["model_id"]).ratio(), distance, donor["id"])
+        candidates.append((rank, donor, cell))
+    if not candidates:
+        return None
+    _, donor, cell = min(candidates, key=lambda item: item[0])
+    return {**cell, "scope": "model_proxy", "exact_profile": False,
+            "effort_matches": cell.get("effort") == p["reasoning_effort"] if cell.get("effort") else None,
+            "proxy": {"method": "nearest_same_vendor", "donor_profile": donor["id"],
+                      "donor_model": donor["model_id"], "measured_effort": cell.get("effort"),
+                      "requested_model": p["model_id"], "requested_effort": p["reasoning_effort"],
+                      "refresh_result": sources[cell["source_id"]]["refresh_result"]}}
+
+
 def build(t, cfg, snap, snap_warnings, index, now, max_units=12, profile_ids=None, *, infer_rules=True):
     warnings = list(snap_warnings)
-    profiles = sorted((p for p in cfg["profile"] if p["enabled"] and p["id"] not in t.get("exclude_profiles", [])
-                       and (profile_ids is None or p["id"] in profile_ids)), key=lambda p: p["id"])
+    donors = sorted((p for p in cfg["profile"] if p["enabled"] and p["id"] not in t.get("exclude_profiles", [])), key=lambda p: p["id"])
+    profiles = [p for p in donors if profile_ids is None or p["id"] in profile_ids]
     res = {"schema_version": r.SCHEMA_VERSION, "status": "ok", "task_id": t["task_id"], "round": t["round"],
            "snapshot_id": snap["snapshot_id"] if snap else None, "wiki_hash": (index or {}).get("wiki_hash"),
            "facets": [], "units": [], "omitted_units": 0, "withheld_units": [], "profiles": {p["id"]: {"reasoning_effort": p["reasoning_effort"]}
@@ -186,6 +228,14 @@ def build(t, cfg, snap, snap_warnings, index, now, max_units=12, profile_ids=Non
                 and not any(f.startswith("agent_signal:") for f in facets)):
             continue
         cells = {p["id"]: _cell(p, uid, snap, sources, warned) for p in profiles}
+        for p in profiles:
+            cell = cells[p["id"]]
+            if cell.get("missing_reason") in ("no_observation", "null_value"):
+                proxy = _nearby_proxy(p, uid, donors, snap, sources, warned)
+                if proxy:
+                    cells[p["id"]] = {**proxy, "original_missing_reason": cell["missing_reason"]}
+                else:
+                    cell["refresh_check"] = "refresh_required_or_no_same_vendor_observation"
         rows.append({"id": uid, "desc": u["desc"], "metric": u["metric"], "status": u["status"], "page": u["page"],
                      "facets": u["facets"], "matched_facets": facets, "profiles": cells,
                      **{k: u[k] for k in ("meaningful_gap", "trust_grade") if k in u}})
@@ -213,6 +263,8 @@ def _cell_text(c, profile_effort):
     if c["missing_reason"]:
         return "—"
     s = f"{c['raw']:.4g} p{round(c['normalized'] * 100)}"
+    if c.get("proxy"):
+        s += f" proxy:{c['proxy']['donor_profile']}"
     if c["effort"]:
         s += f" {c['effort']}" + (f"≠{profile_effort}" if c["effort_matches"] is False else "")
     return s + ("*" if c["stale"] else "")

@@ -6,7 +6,7 @@ Updated: 2026-10-24. Implementation: `routing.py`, `decision.py`, `cli.py`, `her
 
 The Router provides facts collation, hard constraint checking, official guide suitability, comparable evaluations, selection records, and execution dispatch. The upstream Orchestrator decides task decomposition, team formation, final selection, global budget allocation, and result adoption. There is no general-purpose plugin loader, rule engine, unit-conversion DSL, or workflow scheduler.
 
-The default selection policy is [Vendor-guided Policy 6](vendor-guided-routing.md). Multiple viable candidates require upstream selection and are never reduced via weighted sums, near-tie logic, or default/fallback priorities.
+The default selection policy is [Vendor-guided Policy 7](vendor-guided-routing.md). Multiple viable candidates require upstream selection and are never reduced via weighted sums, near-tie logic, or default/fallback priorities.
 
 ## 1. Contract A — Separation of Candidate Assessment and Selection
 
@@ -19,10 +19,10 @@ The default selection policy is [Vendor-guided Policy 6](vendor-guided-routing.m
 | `routing.evaluate_v1()` / `evaluate --format 1` | Schema 1.0 candidates/excluded compatibility format. |
 | `decision.evaluate()` / `evaluate --format 3` | Schema 4.0 phased semantic judgments, candidate suitability, observations, comparisons, and diagnostics. |
 | `decision.bind()` / `select` | Generates upstream selection record 6.0 from a completed format 3 assessment. |
-| `routing.route()` → `decision.route()` | Policy 6 decision packets, bounded single-candidate selection 5.0, and selection replay. |
+| `routing.route()` → `decision.route()` | Policy 7 decision packets, bounded single-candidate selection 5.0, and selection replay. |
 | `routing.apply_selection()` | Explicit override for selection 2.0 or `--profile`; checks current constraints. |
 
-CLI `--format 3` is distinct from JSON schema version `4.0`. `select` does not accept format 1 or 2 results. All evaluate formats run offline without executing workers, writing files, or calling external decision APIs.
+CLI `--format 3` is distinct from JSON schema version `4.0`. `select` does not accept format 1 or 2 results. All evaluate formats run offline by default without executing workers, writing files, or calling external decision APIs. Initial `evaluate --refresh` explicitly checks due benchmark sources and publishes the resulting snapshot before assessment, reporting source failures in `benchmark_refresh`. It cannot be combined with `--decision-response`; replay uses the already checked snapshot.
 
 ### 1.2 Default Benchmark Evaluation
 

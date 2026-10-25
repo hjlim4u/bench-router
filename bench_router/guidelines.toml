@@ -1,4 +1,4 @@
-# Verbatim extraction from each vendor's official pages (fetched 2026-10-24); not a wiki compilation.
+# Extraction from each vendor's official pages; selection passages rechecked 2026-10-26 in Windows Ego.
 # Every `strategy`, `role`, `when` text is quoted from that vendor's own page only; never mix vendors.
 # No prefix matching or cross-version aliases. These are model IDs, not CLI flags.
 # `start` rows: (model, effort) starting points as the guide states them. `escalation` rows: effort changes the
@@ -7,8 +7,8 @@
 # take part in selection or hashes). `when` is verbatim page text; `text` is the prompt snippet the page supplies.
 # Gemini gives model roles and a model-independent thinking rule (`effort_class`), resolved per model from
 # that page's `default`/`supported` levels.
-version = "2026-10-24.5"
-as_of = "2026-10-24"
+version = "2026-10-26.1"
+as_of = "2026-10-26"
 
 [sources.openai]
 url = "https://developers.openai.com/api/docs/guides/model-selection"
@@ -59,9 +59,22 @@ url = "https://ai.google.dev/gemini-api/docs/thinking"
 wiki = "references/sources/google-gemini-thinking.md"
 
 [vendor.openai]
-revision = "2026-10-24.1"
+revision = "2026-10-26.1"
 sources = ["openai"]
 strategy = "If cost and latency aren’t a concern, you can default to Astra. To reduce costs or latency, use the guidance below to choose a model and reasoning effort for your needs. If you can, experiment using the same inputs to compare results and keep the lightest setting that meets your quality bar."
+
+# Interactive recommendation inputs are context, not invented task descriptions.
+# Capture: docs/evidence/2026-10-26-source-audit/openai-interactive.json
+[[vendor.openai.start]]
+model = "gpt-6-luna"
+effort = "medium"
+when = "Fix a well-scoped bug"
+context = "Software engineering; Balanced"
+[[vendor.openai.start]]
+model = "gpt-6-luna"
+effort = "high"
+when = "Fix a well-scoped bug"
+context = "Software engineering; Higher quality outputs"
 
 [[vendor.openai.start]]
 model = "gpt-6-luna"
