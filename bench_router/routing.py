@@ -489,6 +489,8 @@ def semantic_task_hash(t):
 
 PROFILE_KEYS = ("id", "enabled", "kind", "executable", "args", "model_id", "harness_id", "reasoning_effort",
                 "config_revision", "cost_tier", "inference_local", "context_tokens", "capabilities")
+EXECUTION_KEYS = ("kind", "executable", "args")
+PROFILE_SCHEMAS = ("1.0", "2.0")
 
 
 def _load_toml(path):
@@ -506,21 +508,27 @@ def load_profiles(path):
     unknown = set(cfg) - {"schema_version", "profile"}
     if unknown:
         raise InputError(f"profiles: unknown keys {sorted(unknown)}")
-    if cfg.get("schema_version") != SCHEMA_VERSION:
-        raise InputError(f"profiles.schema_version must be {SCHEMA_VERSION!r}")
+    version = cfg.get("schema_version")
+    if version not in PROFILE_SCHEMAS:
+        raise InputError(f"profiles.schema_version must be one of {list(PROFILE_SCHEMAS)}")
     profiles = cfg.get("profile", [])
     if not isinstance(profiles, list):
         raise InputError("profiles: [[profile]] array required")
     ids = set()
     for p in profiles:
-        if set(p) != set(PROFILE_KEYS):
-            raise InputError(f"profile {p.get('id')!r}: keys must be exactly {list(PROFILE_KEYS)}")
+        # 2.0: kind/executable/args all present (CLI) or all absent (the caller owns execution)
+        cli = version == "1.0" or bool(set(EXECUTION_KEYS) & set(p))
+        keys = [k for k in PROFILE_KEYS if cli or k not in EXECUTION_KEYS]
+        if set(p) != set(keys):
+            raise InputError(f"profile {p.get('id')!r}: keys must be exactly {keys}"
+                             + ("; kind/executable/args go all together or not at all" if version == "2.0" else ""))
         if not isinstance(p["id"], str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", p["id"]) or p["id"] in ids:
             raise InputError(f"profile id invalid or duplicate: {p['id']!r}")
         ids.add(p["id"])
         for k in ("kind", "executable", "model_id", "harness_id", "reasoning_effort", "config_revision"):
-            _str(p[k], f"profile {p['id']}.{k}")
-        if not isinstance(p["args"], list) or not all(isinstance(a, str) for a in p["args"]):
+            if k in p:
+                _str(p[k], f"profile {p['id']}.{k}")
+        if "args" in p and (not isinstance(p["args"], list) or not all(isinstance(a, str) for a in p["args"])):
             raise InputError(f"profile {p['id']}.args: array of strings (argv) required")
         _bool(p["enabled"], f"profile {p['id']}.enabled")
         _bool(p["inference_local"], f"profile {p['id']}.inference_local")
@@ -528,7 +536,7 @@ def load_profiles(path):
         _str_list(p["capabilities"], f"profile {p['id']}.capabilities")
         if p["cost_tier"] not in TIERS:
             raise InputError(f"profile {p['id']}.cost_tier: low|medium|high")
-    return {"schema_version": SCHEMA_VERSION, "profile": profiles}
+    return {"schema_version": version, "profile": profiles}
 
 
 def load_categories(path):
@@ -552,6 +560,9 @@ def config_hash(cfg, mapping):
 def profile_fingerprint(p):
     # ponytail: CLI 버전 미포함("unknown") — dry-run은 프로세스를 띄우지 않는다.
     # P2에서 --version probe를 넣으면 refresh의 snapshot fingerprint도 같은 입력으로 계산해야 한다.
+    if "kind" not in p:  # caller-owned (profiles 2.0): identity only, never disguised as a CLI
+        keys = ("model_id", "harness_id", "reasoning_effort", "config_revision")
+        return canonical_hash({**{k: p[k] for k in keys}, "fingerprint_version": "2"})
     keys = ("kind", "executable", "args", "model_id", "harness_id", "reasoning_effort", "config_revision")
     return canonical_hash({**{k: p[k] for k in keys}, "cli_version": "unknown"})
 

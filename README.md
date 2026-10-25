@@ -198,7 +198,7 @@ Without a clone, install the CLI with `uv tool install 'bench-router[arena] @ gi
 
 > [!NOTE]
 > **Live Dispatch Environment Setup (Linux / WSL2)**
-> `--dry-run`, `explain`, `evaluate`, and `evidence` require no Herdr installation. Launching live agents (`route`, `parallel`) requires the following environment ([Details](docs/projects.md)):
+> `--dry-run`, `explain`, `evaluate`, and `evidence` require no Herdr installation. Live runs without Herdr use `--runner local` (one-shot CLI subprocess for `"execution": "headless"` tasks; the `auto` default when `herdr-projects` is missing) or `--runner external` (the router returns an `invocation`, your API/host-tool executor runs it, then `collect`); schema 2.0 profiles can describe caller-owned agents ([runners](docs/reference.md#runners)). Launching Herdr-backed live agents (`route`, `parallel`) requires the following environment ([Details](docs/projects.md)):
 > ```bash
 > export PATH="$HOME/.local/bin:$PATH"
 > herdr --version                                      # Confirm 0.9.3+ (https://herdr.dev)
@@ -446,6 +446,7 @@ python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeb
 | [docs/vendor-guided-routing.md](docs/vendor-guided-routing.md) | EN | Vendor-guided routing policy (Policy 6), phased decision packets, and selection rules |
 | [docs/projects.md](docs/projects.md) | EN | Live execution setup (herdr-projects 1.2.1), permissions, collection, and session resumption contracts |
 | [docs/orchestrator.md](docs/orchestrator.md) · [docs/routing-contracts.md](docs/routing-contracts.md) | EN | Orchestrator integration (`evaluate`, `context.json`, `selection.json`) and I/O contracts |
+| [docs/execution-boundary.md](docs/execution-boundary.md) | KO | Herdr-optional execution boundary: selection-only use, caller-owned profiles, local/external runners and auto detection (implemented), external availability (proposed) |
 | [wiki/AGENTS.md](wiki/AGENTS.md) · [docs/benchmark-index-analysis.md](docs/benchmark-index-analysis.md) | EN | Benchmark wiki (`wiki/`) schema and multi-attribute index architecture |
 | [skills/bench-router/SKILL.md](skills/bench-router/SKILL.md) · [decision.md](skills/bench-router/references/decision.md) | EN | Multi-agent Skill usage and lightweight decision workflows (`decide.py` / `bench-decider`) |
 | [00_START_HERE.md](00_START_HERE.md) ~ [06_VALIDATION_AND_OPEN_ITEMS.md](06_VALIDATION_AND_OPEN_ITEMS.md) | EN | Architectural and design specification documents |

@@ -1269,7 +1269,8 @@ class P0VendorGuidance(unittest.TestCase):
             return code, json.loads(out.getvalue())
         command = ["evaluate", "--format", "3", "--task", str(task), "--host", "codex"]
         with patch.object(r, "env_with_dotenv", return_value={}), patch("urllib.request.urlopen") as network, \
-                patch("bench_router.herdr.dispatch") as dispatch, patch.object(r, "atomic_write") as writes:
+                patch("bench_router.herdr.dispatch") as dispatch, patch.object(r, "atomic_write") as writes, \
+                patch("subprocess.run") as proc, patch("subprocess.Popen") as popen:
             code, assessment = run(command)
             self.assertEqual(code, 17)
             for _ in range(5):
@@ -1291,6 +1292,8 @@ class P0VendorGuidance(unittest.TestCase):
             network.assert_not_called()
             dispatch.assert_not_called()
             writes.assert_not_called()
+            proc.assert_not_called()  # selection-only works without Herdr, Projects or any agent CLI
+            popen.assert_not_called()
             self.assertFalse((root / "cache").exists())
 
     def test_v92_majority_winner_is_evidence_for_upstream_selection(self):
@@ -1507,6 +1510,29 @@ class P0VendorGuidance(unittest.TestCase):
             path.write_text('schema_version = "1.0"\ndefault_profile = "a"\n', "utf-8")
             with self.assertRaisesRegex(r.InputError, "default_profile"):
                 r.load_profiles(path)
+
+    def test_v110_caller_owned_profiles_2_0(self):
+        cli_p, api = profile("a"), {k: v for k, v in profile("api").items() if k not in r.EXECUTION_KEYS}
+        # The v1 CLI fingerprint is pinned: existing snapshots and selections must keep matching.
+        self.assertEqual(r.profile_fingerprint(cli_p), "9f06ffeab172fb096e59756b929e7e84d9331c7f25e3b2cbf21cf22458d7f2ab")
+        self.assertNotEqual(r.profile_fingerprint(api), r.profile_fingerprint({**api, "config_revision": "u"}))
+        self.assertEqual(r.profile_fingerprint(api), r.profile_fingerprint({**api, "cost_tier": "high"}))
+        toml = lambda version, *ps: f'schema_version = "{version}"\n' + "".join(
+            "[[profile]]\n" + "".join(f"{k} = {json.dumps(v)}\n" for k, v in p.items()) for p in ps)
+        path = Path(self.tmp.name) / "profiles.toml"
+        path.write_text(toml("2.0", cli_p, api), "utf-8")
+        cfg = r.load_profiles(path)
+        self.assertEqual((cfg["schema_version"], cfg["profile"]), ("2.0", [cli_p, api]))
+        for version, p, msg in (("2.0", {**api, "kind": "codex"}, "all together"), ("1.0", api, "keys must be exactly")):
+            path.write_text(toml(version, p), "utf-8")
+            with self.assertRaisesRegex(r.InputError, msg):
+                r.load_profiles(path)
+        # Evidence binds to the v2 fingerprint; a new config_revision invalidates it.
+        snap = snapshot({"api": {"aa_intelligence": 0.7}}, [api])
+        for p, reason in ((api, None), ({**api, "config_revision": "u"}, "stale_config")):
+            res = r.evaluate_v1(r.validate_task({"schema_version": "1.0", **self.task}),
+                                {"schema_version": "2.0", "profile": [p]}, MAPPING, snap, [], NOW)
+            self.assertEqual(res["candidates"][0]["evidence"][0]["missing_reason"], reason)
 
 
 if __name__ == "__main__":

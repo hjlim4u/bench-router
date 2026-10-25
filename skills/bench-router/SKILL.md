@@ -1,11 +1,11 @@
 ---
 name: bench-router
-description: Select and delegate a bounded task to a local coding agent through bench-router, then collect its result, or fan out several subtasks or best-of-N attempts to agents in isolated git worktrees that can share a scratchpad. Use when an orchestrator wants a benchmark-informed agent handoff; do not invoke from inside a bench-router delegated run.
+description: Select a benchmark-informed coding agent for a bounded task through bench-router, then run it through Herdr, a local CLI subprocess, or the caller's own executor (API, host Agent tool; no Herdr needed) and collect its result, or fan out several subtasks or best-of-N attempts to agents in isolated git worktrees that can share a scratchpad. Use when an orchestrator wants a benchmark-informed agent handoff; do not invoke from inside a bench-router delegated run.
 ---
 
 # Bench-router handoff
 
-Use this skill only for a task the caller wants to hand off. The router validates the selected profile, owns dispatch receipts, and collects results. The caller still verifies the work and records feedback.
+Use this skill only for a task the caller wants to hand off. The router evaluates and validates the selected profile, then dispatches through Herdr, a local subprocess or the caller (external runner), owns receipts and collects results. The caller still verifies the work and records feedback.
 
 ## Setup
 
@@ -13,7 +13,7 @@ Use this skill only for a task the caller wants to hand off. The router validate
 - Run `scripts/cli.py` with Python 3.11+ from this skill's installed path. It works standalone from a copied or linked skill directory in any working directory.
 - Run `python3 /absolute/path/to/this/skill/scripts/cli.py init` once to create shared default profiles and aliases offline; existing files are preserved. Benchmark data is fetched separately with `refresh --source mg` when requested.
 - Use the same runtime user's default config (`~/.config/bench-router`) and cache (`~/.cache/bench-router`) across agents, unless the operator has deliberately set shared `XDG_CONFIG_HOME` and `XDG_CACHE_HOME`. Keep all agents sharing a cache on one OS runtime; native Windows and WSL use different lock implementations and must not concurrently point at the same physical cache. Do not create agent-specific caches or copy snapshots.
-- `profiles.toml`, Herdr, herdr-projects 1.2.1 and the target agent CLI must already be configured for live dispatch on Linux/WSL2. The task `cwd` must be the top level of a git repository with a commit. Profile `args` may only carry a model (`--model`/`-m`) and an effort; agent permissions follow the board's `worker.access` setting. See [Projects setup](../../docs/projects.md). Run `python scripts/cli.py status` to inspect snapshot health. See the [reference](../../docs/reference.md) for setup and command contracts.
+- Selection needs only `profiles.toml` (schema 2.0 can list caller-owned API or host-tool agents without CLI fields). Live dispatch runs on Linux/WSL2. The Herdr runner needs Herdr, herdr-projects 1.2.1 and the agent CLI; the `local` runner needs only the agent CLI, and `external` needs neither (see Runners). The task `cwd` must be the top level of a git repository with a commit. Profile `args` may only carry a model (`--model`/`-m`) and an effort; agent permissions follow the board's `worker.access` setting. See [Projects setup](../../docs/projects.md). Run `python scripts/cli.py status` to inspect snapshot health. See the [reference](../../docs/reference.md) for setup and command contracts.
 
 ## Delegate and recover
 
@@ -25,6 +25,16 @@ Use the [vendor-guided decision workflow](references/decision.md) for semantic f
 3. For `blocked`, address the reported approval or question through the normal caller workflow. For `timed_out` or `delivery_uncertain`, run `collect --run-id RUN_ID --cwd CWD --wait-ms N`; never generate a fresh task ID or resend the prompt to resolve uncertainty. For `conflict`, inspect the warning and existing receipt before another dispatch. A completed result means the artifact contract passed, not that the task succeeded.
 4. A `completed` run's agent panes are closed automatically so finished agents stop holding resources (`release` in the output; agents still working or blocked are left open). To continue that agent's conversation, run `python scripts/cli.py resume --run-id RUN_ID --cwd CWD`; it reopens the board task's space and restarts the agent in the same session without sending anything.
 5. Inspect the returned result and verify the requested work. Record the verified outcome with `feedback --run-id RUN_ID --cwd CWD --outcome success|partial|fail` when there is a run to assess.
+
+## Runners (Herdr optional)
+
+The global `--runner auto|herdr|local|external` option (default `auto`, or `BENCH_ROUTER_RUNNER`) picks the executor for live `route`/`parallel`. `auto` uses Herdr when `herdr-projects` is on PATH, otherwise `local`. Every runner keeps the same receipt, admission limit, `collect` and result contract, and a recorded run always recovers through its own runner (`backend` in the output).
+
+- `herdr`: board agent (`interactive`) or Herdr pane (`headless`), as described below.
+- `local`: runs the profile's one-shot CLI (`claude -p`, `codex exec`, `agy -p`) as a local subprocess in a router worktree. Only `"execution": "headless"` tasks are accepted. `stop` ends the process; `tell` and `resume` are not available.
+- `external`: the router prepares the worktree, prompt and receipt and returns `handed_off` (exit 11) with an `invocation` (`cwd`, `prompt_path`, `result_dir`, suggested `argv`, `model_id`, `deadline_at`). Run the agent yourself (API, subprocess, host Agent tool), have it write the result files into `result_dir`, then `collect`. Use `stop` to record that your agent stopped. Local CLI availability is not probed, and schema 2.0 caller-owned profiles are eligible.
+
+To only select, finish steps 1–2 and run `route --task TASK_FILE --selection SELECTION_FILE --dry-run`. See [execution boundary](../../docs/execution-boundary.md).
 
 ## Parallel handoff
 
