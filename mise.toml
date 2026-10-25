@@ -7,10 +7,15 @@ node = "lts"
 description = "one-stop environment setup (uv sync, default profiles/aliases, and initial public data)"
 run = """
 uv sync --extra arena
-mkdir -p ~/.config/bench-router
-[ -f ~/.config/bench-router/profiles.toml ] || cp examples/profiles.default.toml ~/.config/bench-router/profiles.toml
-[ -f ~/.config/bench-router/aliases.toml ] || cp examples/aliases.example.toml ~/.config/bench-router/aliases.toml
+uv run bench-router init
 uv run python -m bench_router.cli refresh --source mg
+"""
+
+[tasks.install]
+description = "install the bench-router CLI (editable, follows this clone) and the global agent skill; rerun after git pull"
+run = """
+uv tool install --force --editable "$PWD[arena]"
+npx -y skills add "$PWD" -g -a claude-code codex antigravity -y
 """
 
 [tasks.test]

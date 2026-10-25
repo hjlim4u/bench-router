@@ -27,6 +27,24 @@ def _config(args):
     return cfg, r.load_categories(cats if cats.exists() else BUNDLED_CATEGORIES)
 
 
+def _init(args):
+    """Create shared defaults offline, preserving existing configuration."""
+    defaults = Path(__file__).with_name("defaults")
+    args.config_dir.mkdir(parents=True, exist_ok=True)
+    created, kept = [], []
+    for name in ("profiles.toml", "aliases.toml"):
+        content = (defaults / name).read_bytes()
+        path = args.config_dir / name
+        try:
+            with path.open("xb") as f:
+                f.write(content)
+        except FileExistsError:
+            kept.append(str(path))
+        else:
+            created.append(str(path))
+    return {"schema_version": r.SCHEMA_VERSION, "status": "ok", "created": created, "kept": kept}
+
+
 def _load(args):
     task = r.validate_task(r.load_json_strict(args.task, r.TASK_MAX_BYTES))
     cfg, mapping = _config(args)
@@ -190,8 +208,15 @@ def _refresh(args):
         raise r.InputError(f"--source must be one of {data.AUTO_SOURCES} (manual sources need --import)")
     from . import wiki
     try:  # Wiki 오류는 snapshot 갱신을 막지 않는다. 이전 index.json을 그대로 두고 그 수집 대상을 쓴다
-        idx = wiki.compile_wiki(args.vault)
-        wiki_status = {"status": "ok", **wiki.summary(idx)}
+        vault = args.vault if args.vault is not None else WIKI_VAULT
+        if args.vault is None and not vault.exists():  # installed package has only the compiled index
+            idx = wiki.load_index(args.cache_dir)
+            if idx is None:
+                raise r.InputError("no usable compiled benchmark index")
+            wiki_status = {"status": "ok", "source": "compiled_index", **wiki.summary(idx)}
+        else:
+            idx = wiki.compile_wiki(vault)
+            wiki_status = {"status": "ok", **wiki.summary(idx)}
     except r.InputError as e:
         idx, wiki_status = wiki.load_index(args.cache_dir), {"status": "error", "error": {"code": "validation", "message": str(e)}}
     try:
@@ -345,7 +370,7 @@ def main(argv=None):
     fp.add_argument("--source")
     fp.add_argument("--force", action="store_true", help="ignore TTL")
     fp.add_argument("--import", dest="import_file", help="approved manual observations (swe/tb)")
-    fp.add_argument("--vault", type=Path, default=WIKI_VAULT, help="benchmark wiki compiled into index.json")
+    fp.add_argument("--vault", type=Path, help="benchmark wiki to compile; defaults to the clone wiki or installed index")
     wp = sub.add_parser("wiki", help="compile reviewed benchmark wiki pages into index.json, or list taggable facets")
     wp.add_argument("action", choices=["compile", "facets"])
     wp.add_argument("--vault", type=Path, default=WIKI_VAULT)
@@ -355,6 +380,7 @@ def main(argv=None):
     target.add_argument("--profile")
     target.add_argument("--model")
     sub.add_parser("status", help="source age, failures, unmatched models, snapshot/config state")
+    sub.add_parser("init", help="create shared default profiles and aliases offline; keep existing files")
     profiles = sub.add_parser("profiles", help="create profiles.toml from every model each CLI's model flag accepts")
     profiles.add_argument("action", choices=["discover"])
     profiles.add_argument("--force", action="store_true", help="replace an existing profiles.toml")
@@ -399,7 +425,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     try:
-        res = {"refresh": _refresh, "status": _status, "profiles": _profiles, "collect": _collect, "resume": _resume, "tell": _tell, "stop": _stop, "feedback": _feedback,
+        res = {"init": _init, "refresh": _refresh, "status": _status, "profiles": _profiles, "collect": _collect, "resume": _resume, "tell": _tell, "stop": _stop, "feedback": _feedback,
                 "parallel": _parallel, "select": _select, "coordination": _coordination, "wiki": _wiki,
                 "evidence": _evidence, "prompt-guidance": _prompt_guidance}.get(
             args.cmd, _load)(args)

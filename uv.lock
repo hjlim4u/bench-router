@@ -5,7 +5,7 @@ requires-python = ">=3.11"
 [[package]]
 name = "bench-router"
 version = "0.0.0"
-source = { virtual = "." }
+source = { editable = "." }
 
 [package.optional-dependencies]
 arena = [

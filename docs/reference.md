@@ -13,7 +13,9 @@ This document covers configuration formats, CLI commands, exit codes, evaluation
 - Live delegation requires Herdr, herdr-projects **1.2.1** (board), and authenticated Agent CLIs. The task `cwd` must be the root of a Git repository containing at least one commit. See [docs/projects.md](projects.md).
 - Refreshing Artificial Analysis data requires an API key (Free tier suffices).
 
-The core CLI runs directly as a Python module from the repository root without installation. Arena refresh requires `pyarrow`. Set up using `mise install && mise run setup` or `uv sync --extra arena`, and invoke via `uv run python -m bench_router.cli refresh`. `mise run test` executes the complete offline test suite, and `mise run refresh` performs a `--force` refresh across all sources.
+From a clone, `mise run install` installs the CLI as an editable uv tool (it follows the clone, so `wiki compile` finds `wiki/`) together with the global Agent Skill; rerun it after `git pull` to refresh the Skill copy. Alternatively, install the CLI with `uv tool install /absolute/path/to/bench-router`, then run `bench-router init` to create shared profiles and aliases without overwriting existing files. The installed `bench-router` command works from any directory; `init` is offline and data collection is separate (`bench-router refresh --source mg`). Arena refresh requires the optional extra: `uv tool install '/absolute/path/to/bench-router[arena]'`. Run `uv tool update-shell` and restart the shell if the command is not on PATH.
+
+The core CLI also runs directly as a Python module from the repository root without installation. Set up the development environment using `mise install && mise run setup` or `uv sync --extra arena`. `mise run test` executes the complete offline test suite, and `mise run refresh` performs a `--force` refresh across all sources. Installed packages include the compiled index but not the original wiki; recompilation needs `bench-router wiki compile --vault /absolute/path/to/bench-router/wiki`.
 
 ```bash
 cd /path/to/bench-router

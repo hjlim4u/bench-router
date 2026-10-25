@@ -9,15 +9,15 @@ Use the host Orchestrator's native subagent tool for fallback. This helper does 
 - Pass `--host antigravity`, `--host codex`, or `--host claude` on helper calls. Fallback packets identify the native `bench-decider` and its explicit model using the table below. `BENCH_ROUTER_DECISION_MODEL` overrides that model; apply the override with the host's per-invocation model selector when supported. If neither a named agent nor an explicit native model selector can honor it, report `decision_unavailable`. Do not inherit a more expensive parent model or silently execute a legacy automatic choice. Omitting `--host` retains the generic `cheapest_available` policy for other hosts; that value is a policy, not automatic price discovery.
 - Respect host restrictions on subagents. A `subagent_required` packet is a handoff, not evidence that a subagent ran. No API key needs to be installed for fallback.
 
-| Current host | Native agent definition (repository root) | Default model |
-|---|---|---|
-| Antigravity | `.agents/agents/bench-decider.md` | `flash` tier |
-| Codex | `.codex/agents/bench-decider.toml` | `gpt-6-luna`, low effort |
-| Claude Code | `.claude/agents/bench-decider.md` | `haiku` |
+| Current host | Native agent definition (repository root) | Bundled copy (this skill) | Default model |
+|---|---|---|---|
+| Antigravity | `.agents/agents/bench-decider.md` | `references/agents/antigravity.md` | `flash` tier |
+| Codex | `.codex/agents/bench-decider.toml` | `references/agents/codex.toml` | `gpt-6-luna`, low effort |
+| Claude Code | `.claude/agents/bench-decider.md` | `references/agents/claude.md` | `haiku` |
 
 Invoke the named agent through the current host's native subagent tool, supplying the helper's `request` as its entire task. Codex model overrides require a fresh context (`fork_turns="none"` where supported); do not fork the parent's full conversation. For Claude Code, explicitly select the packet's model at invocation so a host-wide default cannot change it. Antigravity's agent definition fixes the `flash` tier. Confirm the actual model in host execution metadata; if the host substitutes a different model, report `decision_unavailable` rather than treating the requested model as the one used.
 
-These definitions are project-scoped. When using the linked Skill from another workspace and `bench-decider` is not discovered, read the matching definition from this repository and invoke an equivalent fresh native subagent with its explicit model and instructions. Antigravity can use `define_subagent`; Codex and Claude Code can use their per-invocation model selector. If unsupported, stop at `decision_unavailable`. Do not create a separate CLI process, worktree, or recursively delegated Router task for this short decision.
+The repository definitions are project-scoped. When using the installed Skill from another workspace and `bench-decider` is not discovered, read the matching bundled copy under this skill's `references/agents/` and invoke an equivalent fresh native subagent with its explicit model and instructions. Antigravity can use `define_subagent`; Codex and Claude Code can use their per-invocation model selector. If unsupported, stop at `decision_unavailable`. Do not create a separate CLI process, worktree, or recursively delegated Router task for this short decision.
 
 ## Decision flow
 

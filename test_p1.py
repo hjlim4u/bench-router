@@ -600,5 +600,60 @@ class P1Wiki(unittest.TestCase):
         self.assertTrue(set(d.EVIDENCE_IDS) & set(idx["units"]))
 
 
+class P1Installation(unittest.TestCase):
+    def test_v62_init_creates_valid_defaults_and_preserves_existing_files(self):
+        from bench_router import cli
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            config_dir = base / "config" / "bench-router"
+            env = {"XDG_CONFIG_HOME": str(base / "config"), "XDG_CACHE_HOME": str(base / "cache")}
+            with mock.patch.dict(os.environ, env), \
+                    mock.patch("urllib.request.urlopen", side_effect=AssertionError("offline init")):
+                output = io.StringIO()
+                with mock.patch("sys.stdout", output):
+                    self.assertEqual(cli.main(["init"]), 0)
+                self.assertEqual(len(json.loads(output.getvalue())["created"]), 2)
+                self.assertTrue(r.load_profiles(config_dir / "profiles.toml")["profile"])
+                self.assertTrue(d.load_aliases(config_dir / "aliases.toml"))
+                profiles = config_dir / "profiles.toml"
+                profiles.write_text("# user configuration\n", encoding="utf-8")
+                (config_dir / "aliases.toml").unlink()
+                output = io.StringIO()
+                with mock.patch("sys.stdout", output):
+                    self.assertEqual(cli.main(["init"]), 0)
+                result = json.loads(output.getvalue())
+                self.assertEqual(result["kept"], [str(profiles)])
+                self.assertEqual(result["created"], [str(config_dir / "aliases.toml")])
+                self.assertEqual(profiles.read_text(), "# user configuration\n")
+                self.assertFalse((base / "cache").exists())
+            override = base / "override"
+            with mock.patch("sys.stdout", io.StringIO()):
+                self.assertEqual(cli.main(["--config-dir", str(override), "init"]), 0)
+            self.assertTrue((override / "profiles.toml").is_file())
+
+    def test_v63_bundled_defaults_match_examples(self):
+        from bench_router import cli
+        root = Path(__file__).parent
+        defaults = Path(cli.__file__).with_name("defaults")
+        for example, bundled in (("profiles.default.toml", "profiles.toml"),
+                                 ("aliases.example.toml", "aliases.toml")):
+            self.assertEqual((root / "examples" / example).read_bytes(), (defaults / bundled).read_bytes())
+
+    def test_v64_installed_refresh_uses_bundled_index_without_a_vault(self):
+        import argparse
+        from bench_router import cli, evidence
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            args = argparse.Namespace(config_dir=base / "config", cache_dir=base / "cache",
+                                      vault=None, import_file=None, source="mg", force=False)
+            cli._init(args)
+            with mock.patch.object(cli, "WIKI_VAULT", base / "missing-wiki"), \
+                    mock.patch.object(d, "refresh", return_value={"status": "ok"}) as refresh:
+                result = cli._refresh(args)
+            self.assertEqual(result["wiki_index"]["status"], "ok")
+            self.assertEqual(result["wiki_index"]["source"], "compiled_index")
+            self.assertEqual(refresh.call_args.kwargs["index"], evidence.load_index(args.cache_dir))
+
+
 if __name__ == "__main__":
     unittest.main()

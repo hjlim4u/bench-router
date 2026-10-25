@@ -156,14 +156,37 @@ Choose the integration mode that matches your workflow before configuring prereq
 
 | Workflow Mode | Best For | How Phased Decisions (`exit 17`) Are Handled | Entry Point |
 |---|---|---|---|
-| **Agent Skill Mode** *(Recommended)* | Using `bench-router` inside Claude Code, Codex, Antigravity, or Cursor | Automated by the host agent's native `bench-decider` subagent or `decide.py` helper | `npx skills add hjlim4u/bench-router -g` ([Step 2](#2-installing-as-a-skill-across-environments-npx-skills)) |
-| **Direct CLI Mode** | Custom orchestrator scripts, CI pipelines, or manual benchmark inspection | Caller inspects JSON decision packets and passes `--decision-response` / `--selection` explicitly | `python3 -m bench_router.cli` ([Step 3](#3-quick-start-with-the-cli)) |
+| **Agent Skill Mode** *(Recommended)* | Using `bench-router` inside Claude Code, Codex, Antigravity, or Cursor | Automated by the host agent's native `bench-decider` subagent or `decide.py` helper | `mise run install` ([Step 2](#2-installing-as-a-skill-across-environments-npx-skills)) |
+| **Direct CLI Mode** | Custom orchestrator scripts, CI pipelines, or manual benchmark inspection | Caller inspects JSON decision packets and passes `--decision-response` / `--selection` explicitly | `bench-router` ([Step 3](#3-quick-start-with-the-cli)) |
+
+**Quick install (Python 3.11+, `uv`, `mise`, Node for `npx`):** the `bench-router` CLI is for you and your scripts; the Agent Skill is how Claude Code / Codex / Antigravity call it. Both share `~/.config/bench-router/` and `~/.cache/bench-router/`.
+
+```bash
+git clone https://github.com/hjlim4u/bench-router ~/bench-router && cd ~/bench-router
+mise install && mise run setup   # profiles, aliases (bench-router init) and initial public data
+mise run install                 # editable CLI (follows this clone) + global Agent Skill
+# Now run from any project directory:
+bench-router status
+```
+
+`mise` only wraps plain commands. With just `uv` and Node (e.g. `brew install uv node` on macOS/Linuxbrew, or the [uv installer](https://docs.astral.sh/uv/getting-started/installation/)), run the same steps directly from the clone:
+
+```bash
+uv tool install --force --editable "$PWD[arena]"                     # CLI on PATH, follows this clone
+bench-router init && bench-router refresh --source mg                 # = mise run setup
+npx -y skills add "$PWD" -g -a claude-code codex antigravity -y       # global Agent Skill
+```
+
+After `git pull`, rerun `mise run install` (or the `uv tool install` and `npx skills add` lines): the editable CLI already follows the clone, but the Skill is a copy.
+If `bench-router` is not on PATH, run `uv tool update-shell` and restart the shell.
+`init` creates shared profiles and aliases, preserves existing files, and needs no network or Herdr.
+Without a clone, install the CLI with `uv tool install 'bench-router[arena] @ git+https://github.com/hjlim4u/bench-router'` (rerun with `--force` to update) and the Skill as in [Step 2](#2-installing-as-a-skill-across-environments-npx-skills) B. Such installs carry the compiled facet index but not `wiki/`; `wiki compile` then needs `--vault /absolute/path/to/bench-router/wiki`.
 
 ### 1) Prerequisites Checklist
 
 > [!TIP]
 > **One-Stop Setup (`mise` or `uv`)**:
-> Run `mise install && mise run setup` (or manually: `uv sync --extra arena && mkdir -p ~/.config/bench-router && cp -n examples/profiles.default.toml ~/.config/bench-router/profiles.toml && cp -n examples/aliases.example.toml ~/.config/bench-router/aliases.toml`).
+> Run `mise install && mise run setup` (or manually from the clone: `uv sync --extra arena && uv run bench-router init && uv run bench-router refresh --source mg`).
 > This provisions the virtual environment, copies ready-to-run profiles and aliases for standard Claude / Codex / Gemini CLI models, and fetches initial public benchmark data in one command.
 
 | Component | Item | Required? | Version & Setup Instructions |
@@ -203,33 +226,41 @@ Choose the integration mode that matches your workflow before configuring prereq
 
 ### 2) Installing as a Skill Across Environments (`npx skills`)
 
-Install into supported coding agents or project repositories via [`npx skills`](https://skills.sh/). The `skills/bench-router/` directory bundles the complete core engine (`bench_router/`, `index.json`, `guidelines.toml`), operating **autonomously without requiring the original repository or wiki directories**.
+Install into supported coding agents via [`npx skills`](https://skills.sh/). The installer copies `skills/bench-router/` once into `~/.agents/skills/bench-router` (Codex and Antigravity read it there; Claude Code gets a symlink). The copy bundles the core engine (`bench_router/`, `index.json`, `guidelines.toml`) and the `bench-decider` definitions (`references/agents/`), so **any repository can route with it without the clone, `wiki/`, or a per-repo install**.
+
+**Recommended layout**: keep one clone at a fixed path for setup, `refresh`, and `wiki compile`, and install the skill globally from it. Shared state lives outside the skill (`~/.config/bench-router/` for profiles, `~/.cache/bench-router/` for snapshots), so every repository sees the same profiles and data.
 
 ```bash
-# A. Global installation for all projects on this machine (recommended)
-npx skills add hjlim4u/bench-router -g
-# (Or from a local clone: npx skills add . -g)
+# A. Global installation from a fixed clone (recommended)
+cd ~/bench-router && mise run setup       # profiles, aliases, initial data (once)
+mise run install                          # editable CLI + npx skills add "$PWD" -g -a claude-code codex antigravity -y
+# After `git pull`, rerun `mise run install`; the installed Skill copy is not linked to the clone.
+# Keep data current with one scheduled `mise run refresh` in this clone (needs pyarrow from `mise run setup`).
 
-# B. Install locally into a specific project (/path/to/my-app)
-cd /path/to/my-app && npx skills add hjlim4u/bench-router
+# B. Without a clone (another machine)
+npx skills add hjlim4u/bench-router -g -a claude-code codex antigravity -y
+# Prepare shared configuration once, then fetch public benchmark data:
+python3 ~/.agents/skills/bench-router/scripts/cli.py init
+python3 ~/.agents/skills/bench-router/scripts/cli.py refresh --source mg
 ```
+
+Delegated runs write state and worktrees to `<repo>/.bench-router/`; add `.bench-router/` to your global gitignore. When `bench-decider` is not discovered in a repository, the host reads the bundled definition and invokes an equivalent subagent ([decision.md](skills/bench-router/references/decision.md)).
 
 ---
 
 ### 3) Quick Start with the CLI
 
-Run directly from the repository root (or via `scripts/cli.py` in an installed Skill).
+Use the installed `bench-router` command from any directory. Without a package install, use
+`python3 -m bench_router.cli` from the clone root, or the absolute path to an installed Skill's `scripts/cli.py`.
 
 ```bash
-BR="python3 -m bench_router.cli"
+BR="bench-router"
 
 # 1. Prepare Agent profiles (copy ready-to-run default profiles, or use profiles discover)
-mkdir -p ~/.config/bench-router
-cp -n examples/profiles.default.toml ~/.config/bench-router/profiles.toml
-cp -n examples/aliases.example.toml ~/.config/bench-router/aliases.toml
+$BR init
 ```
 
-`examples/profiles.default.toml` comes pre-configured with active profiles for standard Claude (`claude-opus-high`), Codex (`codex-sol-high`), and Gemini (`agy-argon-medium`). Alternatively, `$BR profiles discover` scans locally available model/effort configurations from installed CLIs. Existing configurations are never overwritten without `--force`.
+`init` installs defaults matching `examples/profiles.default.toml`, with active profiles for standard Claude (`claude-opus-high`), Codex (`codex-sol-high`), and Gemini (`agy-argon-medium`). It never overwrites existing files. Alternatively, `$BR profiles discover` scans locally available model/effort configurations from installed CLIs; replacing existing profiles requires `--force`.
 
 > [!NOTE]
 > If using `examples/profiles.example.toml` instead, note that it contains disabled placeholders (`enabled = false`) for custom setups. At least one profile must be enabled to prevent `no_eligible_profile` (exit 13). Live dispatch `args` must contain only model and effort flags; execution permissions follow Projects `worker.access`. See [Profile Configuration Reference](docs/reference.md#profilestoml).
@@ -281,15 +312,16 @@ To map external benchmark model names to profile `model_id`, configure `~/.confi
 # 2. Refresh benchmark data
 # - Public sources (mg, arena) can be retrieved without API credentials:
 $BR refresh --source mg                                    # The Model Gap public scores (no key needed)
-uv sync --extra arena                                     # Set up Arena Parquet decoder
-uv run python -m bench_router.cli refresh --source arena # Fetch Arena data (no key needed)
+# Requires installation with the [arena] extra shown above:
+$BR refresh --source arena                                # Fetch Arena data (no key needed)
 
 # - With an Artificial Analysis API key, refresh all sources at once:
 set -a; [ -f ~/.config/bench-router/env ] && . ~/.config/bench-router/env; set +a
-uv run python -m bench_router.cli refresh                 # Refreshes aa, arena, and mg
+$BR refresh                                               # Refreshes aa, arena, and mg
 $BR status                                                # Inspect data status and unmatched models
 
 # 3. Inspect decision requests without execution (substitute cwd with current absolute path)
+# Run this sample-generation command from the clone; elsewhere, provide your own task.json.
 sed "s|/ABSOLUTE/PATH/TO/SMOKE_PROJECT|$PWD|" examples/task.synthetic.json > task.json
 $BR route --task task.json --host codex --dry-run         # decision_required: outputs decision packet, exit 17
 $BR explain --task task.json                              # Human-readable explanation of selection rationale
@@ -395,7 +427,7 @@ $BR feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success            # Recor
 - **Parallel Dispatch (`parallel`)**:
   - Dispatches an explicit list of selections from group 2.0 into isolated worktrees. Repeated profiles run as separate workers, bounded by 8 tasks per group, 16 items per group, and `max_parallel` 1–4. Group 1.0 also uses vendor-guided selection without automatic fan-out across multiple candidates. → [Detailed Reference](docs/reference.md#parallel-dispatch-and-collaboration-levels)
 - **Multi-Agent Skill Integration**:
-  - Install [`skills/bench-router`](skills/bench-router/SKILL.md) across all agents with `npx skills add hjlim4u/bench-router -g`. Enables automated decision workflows via the host's native `bench-decider` subagent or the optional `decide.py` API helper ([`decision.md`](skills/bench-router/references/decision.md)) from any project path. → [Skill Setup Guide](docs/reference.md#using-as-a-skill-across-multiple-agents)
+  - Install [`skills/bench-router`](skills/bench-router/SKILL.md) across agents with `mise run install` (or `npx skills add hjlim4u/bench-router -g` without a clone). Enables automated decision workflows via the host's native `bench-decider` subagent or the optional `decide.py` API helper ([`decision.md`](skills/bench-router/references/decision.md)) from any project path. → [Skill Setup Guide](docs/reference.md#using-as-a-skill-across-multiple-agents)
 
 ---
 

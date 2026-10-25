@@ -1,0 +1,21 @@
+# Ready-to-use alias mappings for standard benchmark models to canonical profile model_ids.
+# Format: [source] "exact source model string" = "canonical model_id"
+
+[arena]
+"Claude Opus 5.5 (High)" = "claude-opus-5-5"
+"claude-opus-5.5-high" = "claude-opus-5-5"
+"Claude Opus 5.5 (Max)" = "claude-opus-5-5"
+"claude-opus-5.5-medium" = "claude-opus-5-5"
+"Gemini 4 Argon (High)" = "gemini-4-argon"
+"gpt-6.1-sol-max" = "gpt-6.1-sol"
+"GPT-6.1 Sol (Max)" = "gpt-6.1-sol"
+
+[mg]
+"claude-opus-5-5" = "claude-opus-5-5"
+"gpt-6-1-sol" = "gpt-6.1-sol"
+"gemini-4-argon" = "gemini-4-argon"
+
+[aa]
+"claude-opus-5-5-high" = "claude-opus-5-5"
+"gpt-6-1-sol-high" = "gpt-6.1-sol"
+"gemini-4-argon" = "gemini-4-argon"
