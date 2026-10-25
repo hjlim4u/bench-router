@@ -68,15 +68,16 @@ sequenceDiagram
 bench-router does not add up benchmark scores into one magic number. It narrows your agents down in plain, checkable steps, and when the evidence does not clearly favor one agent, it says so and lets the Orchestrator decide.
 
 ```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 400}}}%%
 flowchart TD
-    T["Task description"] --> F["1. Drop agents that can't do the job<br/>(too expensive, too small a context, missing a capability)"]
-    F --> A["2. Understand the task<br/>(what kind of work, how hard, how long)"]
-    A --> G["3. Ask each vendor's official guide<br/>which model and effort to start with"]
-    G --> E["4. Look up benchmarks that measured<br/>this kind of work"]
-    E --> V["5. Keep only benchmarks that really<br/>match the task"]
-    V --> C{"6. How many good<br/>candidates are left?"}
+    T["Task description"] --> F["1. Drop agents that can't do the job (too expensive, too small a context, missing a capability)"]
+    F --> A["2. Understand the task (what kind of work, how hard, how long)"]
+    A --> G["3. Ask each vendor's official guide which model and effort to start with"]
+    G --> E["4. Look up benchmarks that measured this kind of work"]
+    E --> V["5. Keep only benchmarks that really match the task"]
+    V --> C{"6. How many good candidates are left?"}
     C -- "exactly one" --> R["bench-router picks it and runs it"]
-    C -- "several" --> U["Orchestrator compares the evidence<br/>and picks one"]
+    C -- "several" --> U["Orchestrator compares the evidence and picks one"]
     U --> R
 ```
 
