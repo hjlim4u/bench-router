@@ -15,6 +15,7 @@ uv run python -m bench_router.cli refresh --source mg
 description = "install the bench-router CLI (editable, follows this clone) and the global agent skill; rerun after git pull"
 run = """
 uv tool install --force --editable "$PWD[arena]"
+bench-router init
 npx -y skills add "$PWD" -g -a claude-code codex antigravity -y
 """
 

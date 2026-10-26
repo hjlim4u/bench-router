@@ -694,9 +694,10 @@ class P1Installation(unittest.TestCase):
                 output = io.StringIO()
                 with mock.patch("sys.stdout", output):
                     self.assertEqual(cli.main(["init"]), 0)
-                self.assertEqual(len(json.loads(output.getvalue())["created"]), 2)
+                self.assertEqual(len(json.loads(output.getvalue())["created"]), 3)
                 self.assertTrue(r.load_profiles(config_dir / "profiles.toml")["profile"])
                 self.assertTrue(d.load_aliases(config_dir / "aliases.toml"))
+                self.assertTrue((config_dir / "env").is_file())
                 profiles = config_dir / "profiles.toml"
                 profiles.write_text("# user configuration\n", encoding="utf-8")
                 (config_dir / "aliases.toml").unlink()
@@ -704,7 +705,7 @@ class P1Installation(unittest.TestCase):
                 with mock.patch("sys.stdout", output):
                     self.assertEqual(cli.main(["init"]), 0)
                 result = json.loads(output.getvalue())
-                self.assertEqual(result["kept"], [str(profiles)])
+                self.assertEqual(sorted(result["kept"]), sorted([str(profiles), str(config_dir / "env")]))
                 self.assertEqual(result["created"], [str(config_dir / "aliases.toml")])
                 self.assertEqual(profiles.read_text(), "# user configuration\n")
                 self.assertFalse((base / "cache").exists())
@@ -712,6 +713,7 @@ class P1Installation(unittest.TestCase):
             with mock.patch("sys.stdout", io.StringIO()):
                 self.assertEqual(cli.main(["--config-dir", str(override), "init"]), 0)
             self.assertTrue((override / "profiles.toml").is_file())
+            self.assertTrue((override / "env").is_file())
 
     def test_v63_bundled_defaults_match_examples(self):
         from bench_router import cli
@@ -720,6 +722,7 @@ class P1Installation(unittest.TestCase):
         for example, bundled in (("profiles.default.toml", "profiles.toml"),
                                  ("aliases.example.toml", "aliases.toml")):
             self.assertEqual((root / "examples" / example).read_bytes(), (defaults / bundled).read_bytes())
+        self.assertEqual((root / ".env.example").read_bytes(), (defaults / "env").read_bytes())
 
     def test_v64_installed_refresh_uses_bundled_index_without_a_vault(self):
         import argparse

@@ -93,7 +93,7 @@ flowchart TD
 Steps 2, 3 and 5 need short answers from a model. bench-router does not call one on its own: it returns the question (exit code 17) and the caller answers it, automatically when you use the Agent Skill. You can also skip routing and name a profile yourself with `--profile`.
 
 > [!TIP]
-> **Routing stays cheap.** The questions go to a small model — `haiku` on Claude Code, `gpt-6-luna` on Codex, `flash` on Antigravity (the bundled `bench-decider` agent), or the optional Jev API — and contain only a task summary and short guide quotes, never your code or full benchmark tables. Vendor advice is asked once per vendor, not once per profile, and finished answers are reused when benchmark data is refreshed.
+> **Routing stays cheap.** The questions go to a small model — `haiku` on Claude Code, `gpt-6-luna` on Codex, `flash` on Antigravity (the bundled `bench-decider` agent), or the optional Jev API — and contain only a task summary and short guide quotes, never your code or full benchmark tables. Vendor advice is asked once per vendor, not once per profile, in one independent guidance round; finished answers are reused when benchmark data is refreshed.
 
 <details>
 <summary><b>Implementation terms for each step</b></summary>
@@ -102,7 +102,7 @@ Steps 2, 3 and 5 need short answers from a model. bench-router does not call one
 |---|---|
 | 1 | hard constraints: `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, `local_only`, `max_estimated_cost_usd` |
 | 2 | `analysis` stage: facets such as `task:repo_coding`, `lang:ko`; workload `clarity`, `reasoning`, `autonomy`, `deliverable`; keyword guesses are `rule_hints` |
-| 3 | `guidance:<vendor>` stage; candidates are `documented`, `alternative` (needs `select --accept-provisional`) or `provisional` (`guidance_missing`) |
+| 3 | one `guidance` stage containing independent `guidance:<vendor>` questions; candidates are `documented`, `alternative` (needs `select --accept-provisional`) or `provisional` (`guidance_missing`) |
 | 4 | snapshot `snapshot.json` + facet index `index.json`; exact protocol match or `model_proxy_comparison` |
 | 5 | `benchmark` stage; a unit is `accepted` at relevance ≥ 0.8 tied to a core requirement |
 | 6 | pending answer: `decision_required`; several candidates: `upstream_selection_required` (both exit 17); decision models configurable with `BENCH_ROUTER_DECISION_MODEL` |
@@ -191,7 +191,7 @@ Without a clone, install the CLI with `uv tool install 'bench-router[arena] @ gi
 | **Router Config** | **`profiles.toml`** | **Required** | `~/.config/bench-router/profiles.toml` — Handled automatically by `mise run setup` (or copy from `examples/profiles.default.toml`) |
 | **Router Config** | **`aliases.toml`** | Recommended | `~/.config/bench-router/aliases.toml` — Handled automatically by `mise run setup` (or copy from `examples/aliases.example.toml`) |
 | **Live Dispatch** | **[Herdr](https://herdr.dev)** | Only for `--runner herdr` | **Linux / WSL2**, version **0.9.3+** (`herdr --version`, default `~/.local/bin/herdr`) |
-| **Live Dispatch** | **`herdr-projects` plugin** | Only for `--runner herdr` | Pinned to version **1.2.1** (`herdr plugin install eliasstravik/herdr-projects` → verify `herdr-projects version`). Its presence on PATH is what makes `auto` choose `herdr` |
+| **Live Dispatch** | **`herdr-projects` plugin** | Only for `--runner herdr` | Version **1.x+** (recommended 1.2+; `herdr plugin install eliasstravik/herdr-projects` → verify `herdr-projects version`). Its presence on PATH is what makes `auto` choose `herdr` |
 | **Live Dispatch** | **Target Agent CLIs** | Required for `herdr` and `local` runs | Target CLIs (`claude`, `codex`, `agy`, etc.) installed, authenticated, and project directories trusted. Not needed by `external`, where your executor runs the agent |
 | **Optional API Key** | **`ARTIFICIAL_ANALYSIS_API_KEY`** | Optional (for `refresh`) | For fetching Artificial Analysis scores ([free key](https://artificialanalysis.ai)). **LMArena and The Model Gap public data work without it** |
 | **Optional API Key** | **`TYPESAFE_API_KEY` (`JEV_API_KEY`)** | Optional (Skill helper) | Optional external LLM decision API key for `decide.py` in Skill workflows. **Not needed if using the host agent's built-in `bench-decider` subagent** |
@@ -203,7 +203,7 @@ Without a clone, install the CLI with `uv tool install 'bench-router[arena] @ gi
 > export PATH="$HOME/.local/bin:$PATH"
 > herdr --version                                      # Confirm 0.9.3+ (https://herdr.dev)
 > herdr plugin install eliasstravik/herdr-projects     # Install herdr-projects plugin
-> herdr-projects version                               # Confirm 1.2.1
+> herdr-projects version                               # Confirm 1.x+ (1.2+ recommended)
 > ```
 
 > [!TIP]
@@ -401,7 +401,7 @@ Live `route` and `parallel` run through a *runner*, chosen with the global `--ru
 
 | Runner | Needs | Runs | Notes |
 |---|---|---|---|
-| `herdr` | Herdr, `herdr-projects` 1.2.1, Agent CLI | Board agent (`interactive`) or Herdr pane (`headless`) | Permission waiting (`blocked`), `tell`, `resume`; see [Projects Setup Guide](docs/projects.md) |
+| `herdr` | Herdr, `herdr-projects` 1.x+, Agent CLI | Board agent (`interactive`) or Herdr pane (`headless`) | Permission waiting (`blocked`), `tell`, `resume`; see [Projects Setup Guide](docs/projects.md) |
 | `local` | Agent CLI only | The profile's one-shot CLI (`claude -p`, `codex exec`, `agy -p`) as a local subprocess | `"execution": "headless"` tasks only; approvals are off; `stop` ends the process; no `tell`/`resume` |
 | `external` | Nothing | Nothing: the router returns `handed_off` (exit 11) with an `invocation` | Your API/host-tool executor runs the agent and writes the result files into `invocation.result_dir`, then you `collect`. Caller-owned schema 2.0 profiles are eligible |
 

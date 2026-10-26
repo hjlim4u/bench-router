@@ -130,10 +130,13 @@ def plan(g, cfg, mapping, snap, snap_warnings, availability, decision_options=No
     return members, warnings
 
 
-def _git(cwd, *args):
-    p = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, encoding="utf-8",
-                       errors="replace", shell=False)
-    if p.returncode:
+def _git(cwd, *args, check=True):
+    try:
+        p = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", shell=False)
+    except FileNotFoundError:
+        raise r.InputError("git is not installed. Please install git to use bench-router live dispatch.")
+    if check and p.returncode:
         raise r.InputError(f"git {args[0]}: {(p.stderr or p.stdout).strip()[:300]}")
     return p.stdout.strip()
 
@@ -143,14 +146,41 @@ def _same(a, b):
 
 
 def prepare_repo(cwd):
-    """cwd는 git 최상위여야 한다. run/worktree 디렉터리가 diff에 섞이지 않게 info/exclude에 등록."""
-    if not _same(_git(cwd, "rev-parse", "--show-toplevel"), cwd):
-        raise r.InputError("cwd: must be the top level of a git repository")
+    """cwd는 git 최상위여야 한다. git 미초기화 또는 커밋 부재 시 자동 init/commit 수행. info/exclude 등록."""
+    if not shutil.which("git"):
+        raise r.InputError("git is not installed. Please install git to use bench-router live dispatch.")
+
+    is_git_repo = False
+    try:
+        top = _git(cwd, "rev-parse", "--show-toplevel")
+        if _same(top, cwd):
+            is_git_repo = True
+        else:
+            raise r.InputError("cwd: must be the top level of a git repository")
+    except r.InputError as e:
+        if "must be the top level" in str(e):
+            raise
+        is_git_repo = False
+
+    if not is_git_repo:
+        _git(cwd, "init")
+
     exclude = Path(cwd) / _git(cwd, "rev-parse", "--git-common-dir") / "info" / "exclude"
     text = exclude.read_text("utf-8") if exclude.exists() else ""
     if ".bench-router/" not in text.split():
         exclude.parent.mkdir(parents=True, exist_ok=True)
         exclude.write_text(text + ("" if text.endswith("\n") or not text else "\n") + ".bench-router/\n", "utf-8")
+
+    has_commit = bool(_git(cwd, "rev-parse", "--verify", "HEAD", check=False))
+    if not has_commit:
+        _git(cwd, "add", "-A")
+        has_user = bool(_git(cwd, "config", "user.name", check=False))
+        commit_cmd = []
+        if not has_user:
+            commit_cmd.extend(["-c", "user.name=bench-router", "-c", "user.email=bench-router@local"])
+        commit_cmd.extend(["commit", "--allow-empty", "-m", "chore: initialize repository for bench-router live dispatch"])
+        _git(cwd, *commit_cmd)
+
     return bool(_git(cwd, "status", "--porcelain"))
 
 

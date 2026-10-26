@@ -1,13 +1,13 @@
 # Projects Execution and Collaboration
 
-The current execution pathway is `route` / `parallel` → herdr-projects 1.2.1 public CLI (board) → Herdr → Agent CLI.
+The current execution pathway is `route` / `parallel` → herdr-projects 1.x+ public CLI (board) → Herdr → Agent CLI.
 The upstream agent decides task decomposition, profile selection, subsequent rounds, and result adoption.
 bench-router maintains benchmark evaluations, hard constraints, execution logs, and result contract validation.
 
 ## Setup
 
 - Live dispatch runs within the same user and Herdr session on Linux or WSL2.
-- The certified contract version is Projects **1.2.1** (`herdr-projects version`). Other versions are rejected prior to submission; active runs are held as `delivery_uncertain` if the recorded version changes.
+- The supported contract version is Projects **1.x+** (recommended 1.2+; `herdr-projects version`). Versions below 1.0 are rejected prior to submission; active runs are held as `delivery_uncertain` if the recorded version changes.
 - Plugin installation and user configuration are managed by the operator. The router does not modify installations, credentials, or board configuration.
 - The task `cwd` must be the root of a Git repository containing at least one commit. The board branches an agent-specific worktree from that HEAD (uncommitted changes are omitted, emitting a `dirty_base` warning).
 - The router registers `.bench-router/` in the `cwd`'s `info/exclude` to prevent result files from polluting board commits.
@@ -17,7 +17,7 @@ bench-router maintains benchmark evaluations, hard constraints, execution logs, 
 export PATH="$HOME/.local/bin:$PATH"
 herdr --version                                   # herdr 0.9.3+ (https://herdr.dev)
 herdr plugin install eliasstravik/herdr-projects  # Install Projects plugin
-herdr-projects version                            # herdr-projects 1.2.1 (...)
+herdr-projects version                            # herdr-projects 1.x+ (...)
 # Optional: export BENCH_ROUTER_PROJECTS=/absolute/path/to/herdr-projects
 python3 -m bench_router.cli route --task task.json
 ```
