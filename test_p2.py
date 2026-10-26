@@ -764,10 +764,15 @@ class P2(unittest.TestCase):
 
     def test_v60_version_drift_blocks_submission(self):
         fake = FakeProjects(on_prompt=write_result())
-        fake.version = "herdr-projects 1.3.0 (/fake)"
+        fake.version = "herdr-projects 1.2.0 (/fake)"
         with self.assertRaises(r.InputError):
             self.run_(fake)
         self.assertEqual((fake.prompts, hd.receipts(self.cwd)), ([], []))
+
+    def test_newer_projects_version_is_accepted(self):
+        fake = FakeProjects(on_prompt=write_result())
+        fake.version = "herdr-projects 1.3.0 (/fake)"
+        self.assertEqual(self.run_(fake)["status"], "completed")
 
     def test_prompt_size_limit(self):
         with self.assertRaises(r.InputError):

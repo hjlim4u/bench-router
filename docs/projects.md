@@ -7,7 +7,7 @@ bench-router maintains benchmark evaluations, hard constraints, execution logs, 
 ## Setup
 
 - Live dispatch runs within the same user and Herdr session on Linux or WSL2.
-- The certified contract version is Projects **1.2.1** (`herdr-projects version`). Other versions are rejected prior to submission; active runs are held as `delivery_uncertain` if the recorded version changes.
+- The certified contract version is Projects **1.2.1**; newer versions (>= 1.2.1) are accepted (`herdr-projects version`). Older versions are rejected prior to submission; active runs are held as `delivery_uncertain` if the recorded version changes.
 - Plugin installation and user configuration are managed by the operator. The router does not modify installations, credentials, or board configuration.
 - The task `cwd` must be the root of a Git repository containing at least one commit. The board branches an agent-specific worktree from that HEAD (uncommitted changes are omitted, emitting a `dirty_base` warning).
 - The router registers `.bench-router/` in the `cwd`'s `info/exclude` to prevent result files from polluting board commits.
