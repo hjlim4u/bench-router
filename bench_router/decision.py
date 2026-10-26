@@ -537,6 +537,52 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
         cache[digest] = record
         return record["answers"]
 
+    def ask_guidance(requests):
+        nonlocal cursor, pending
+        by_digest = {r.canonical_hash(request): request for request in requests}
+        raw = {}
+        # Parallel native responses may arrive in any order; persist them in vendor order.
+        while cursor < len(supplied):
+            digest = supplied[cursor].get("request_digest")
+            if not isinstance(digest, str):
+                raise r.InputError("decision response: request_digest must be a string")
+            if digest not in by_digest:
+                break
+            if digest in raw:
+                raise r.InputError("decision response: duplicate guidance response")
+            raw[digest] = supplied[cursor]
+            cursor += 1
+        raw = {**{digest: cache[digest] for digest in by_digest if digest in cache}, **raw}
+        records = {digest: _stage_response(by_digest[digest], value, host, env, verify_model=selection is None)
+                   for digest, value in raw.items()}
+        unresolved = [request for digest, request in by_digest.items() if digest not in raw]
+        if unresolved and cursor < len(supplied):
+            raise r.InputError("decision response: request_digest does not match current guidance")
+        results = provider.decide_many(unresolved,
+            env=env if allow_network and selection is None else offline_env, host=host)
+        packets = []
+        for request, result in zip(unresolved, results):
+            digest = r.canonical_hash(request)
+            if result["status"] == "ok":
+                records[digest] = _stage_response(request, {**result, "request_digest": digest}, host, env,
+                                                  verify_model=selection is None)
+            else:
+                packets.append({**result, "request": request, "request_digest": digest, "stage": "guidance"})
+        answers = {}
+        for digest, request in by_digest.items():
+            if digest in records:
+                record = records[digest]
+                cache[digest] = record
+                completed.append(record)
+                answers[request["state"]["vendor"]] = record["answers"]
+        if packets:
+            first = packets[0]
+            pending = {**base, "status": "stale_assessment" if selection else "decision_required",
+                "assessment_digest": first["request_digest"], "decision_request": first["request"],
+                "decision": {**first, "requests": packets, "completed": completed}}
+            return None
+        return answers
+
     try:
         req = analysis_request(semantic_task, index, base["task_facts"])
         answers = ask(req)
@@ -545,16 +591,18 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
         analysis = _analysis(semantic_task, req, answers)
         # Suitability is independent of fanout omissions, so reuse the same fit stages.
         profiles = [p for p in cfg["profile"] if p["id"] in base["fit_profiles"]]
-        fits = {}
-        for vendor, group in _guidance_groups(profiles, guide):
+        groups, fits = _guidance_groups(profiles, guide), {}
+        guided = [(vendor, group) for vendor, group in groups if vendor is not None]
+        if guided:
+            answers = ask_guidance([guidance_request(analysis, vendor, guide) for vendor, _ in guided])
+            if answers is None:
+                return pending
+            for vendor, group in guided:
+                fits.update(guided_fits(vendor, group, answers[vendor], guide))
+        for vendor, group in groups:
             if vendor is None:  # nothing to ask without guidance
                 fits.update({p["id"]: {"status": "provisional", "rule": None, "guided": None, "guidance": {},
                                        "diagnostics": ["guidance_missing"]} for p in group})
-                continue
-            answers = ask(guidance_request(analysis, vendor, guide))
-            if answers is None:
-                return pending
-            fits.update(guided_fits(vendor, group, answers, guide))
         fits = {pid: fit for pid, fit in fits.items() if pid not in omit_profiles}
         evaluation = evaluations(semantic_task, analysis, fits, cfg, snap, snap_warnings, index, now)
         relevance = None

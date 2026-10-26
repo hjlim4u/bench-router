@@ -55,7 +55,7 @@ The default configuration directory is `$XDG_CONFIG_HOME/bench-router` (`~/.conf
 | `aliases.toml` | No (Recommended) | Source model string → profile `model_id` mapping (refer to `unmatched_sample` in `status`) |
 | `categories.toml` | No | Uses internal `bench_router/categories.toml` if absent |
 | `env` | No | API key storage (recommended permissions: `chmod 600`). Load via `set -a; . ~/.config/bench-router/env; set +a` |
-| `ARTIFICIAL_ANALYSIS_API_KEY` | No (for `aa` refresh) | Free API key for Artificial Analysis. Public `arena` and `mg` data and `wiki compile` work without it |
+| `ARTIFICIAL_ANALYSIS_API_KEY` | No (for `aa` refresh) | Free API key for Artificial Analysis. Public `arena`, `mg` and `tb_auto` data and `wiki compile` work without it |
 | `TYPESAFE_API_KEY` (or `JEV_API_KEY`) | No (for Skill decisions) | Optional external API key for Jev in live route/parallel or `decide.py`. If absent or failed, falls back to native decision packets handled by the host agent's `bench-decider` |
 
 <a id="profilestoml"></a>
@@ -153,7 +153,7 @@ All commands emit a **single JSON object** to stdout (except `explain` and `evid
 
 | Command | Action |
 |---|---|
-| `refresh [--source aa\|arena\|mg] [--force] [--vault DIR]` | Fetches automated sources and compiles reviewed wiki pages (`index.json`) → publishes snapshot. Skips if within TTL |
+| `refresh [--source aa\|arena\|mg\|tb_auto] [--force] [--vault DIR]` | Fetches automated sources and compiles reviewed wiki pages (`index.json`) → publishes snapshot. Skips if within TTL |
 | `refresh --source swe\|tb --import FILE` | Imports approved manual benchmark results |
 | `wiki compile [--vault DIR] [--check]` | Compiles reviewed benchmark wiki pages into `index.json` (`--check` validates only) |
 | `wiki facets` | Emits vocabulary, descriptions, and rule mappings available for tagging in `task.facets` |
@@ -181,7 +181,7 @@ All commands emit a **single JSON object** to stdout (except `explain` and `evid
 export PATH="$HOME/.local/bin:$PATH"                 # herdr, claude, codex
 set -a; . ~/.config/bench-router/env; set +a          # AA API key
 
-bench-router refresh                       # aa, arena, mg + wiki index
+bench-router refresh                       # aa, arena, mg, tb_auto + wiki index
 bench-router status
 bench-router route --task task.json --dry-run
 bench-router explain --task task.json
@@ -278,8 +278,9 @@ Default evaluations provide `quality`, `coverage`, `coverage_band`, `exact_evide
 | `mg` | The Model Gap (`themodelgap.com/data`, CC BY 4.0) JSON | Active wiki units (`mg:*`) | 24h / 7d |
 | `swe` | Manual `--import` results, pinned to SWE-bench Verified | `swe_verified_exact` | 168h / 30d |
 | `tb` | Manual `--import` results, pinned to Terminal-Bench 4.0 | `terminal_exact` | 168h / 30d |
+| `tb_auto` | Official Terminal-Bench 4.0 page hydration, published model/effort/agent retained as model proxies | `terminal_proxy` | 168h / 30d |
 
-- **Response Handling**: 20 MiB response cap; request limits: aa 50, arena 300, mg 4. Status 401, 403, and 429 are never retried; 5xx and network errors retry up to 2 times.
+- **Response Handling**: 20 MiB response cap; request limits: aa 50, arena 300, mg 4, tb_auto 3. Status 401, 403, and 429 are never retried; 5xx and network errors retry up to 2 times.
 - **Timeouts**: Global timeout of **180s** per source (**600s** for arena). Per-request timeouts and backoffs dynamically scale down within remaining budgets.
 - **Failure Recovery**: If any page fails or schemas diverge, new data for that source is not published, retaining last-good snapshots. Identical payloads mark `unchanged` and update check timestamps.
 - **Storage**: SQLite (`bench-router.db`: sources / snapshots / observations) retains the 3 most recent raw payloads per source. Concurrent refreshes are blocked via OS file locks.

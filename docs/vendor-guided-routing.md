@@ -46,7 +46,7 @@ The host forwards only the current packet's `request` to the native decision age
 }
 ```
 
-Repeat the command with `--decision-response` to resolve subsequent stages. `decision.stage` proceeds through `analysis`, `guidance` per vendor (in vendor ID order), and `benchmark` if required. The initial stage can also be submitted as a single response object. Facet questions use `noul` responses. Separate facet decisions do not need to be invoked beforehand.
+Repeat the command with `--decision-response` to resolve subsequent stages. `decision.stage` proceeds through `analysis`, `guidance` per vendor (concurrent calls, recorded in vendor ID order), and `benchmark` if required. The initial stage can also be submitted as a single response object. Facet questions use `noul` responses. Separate facet decisions do not need to be invoked beforehand.
 
 A matching `--host` argument is required. If the executing model differs from the requested model, `decision_unavailable` is returned.
 `--decision-response` also accepts stored Jev responses (`provider: "jev"`).
@@ -107,3 +107,7 @@ Because guidelines are bundled within the package, Skills installed via copy ope
 Items consist of `topic`, verbatim `when` (the context of the advice), recommended prompt `text` (if provided), and provenance (`url`, wiki reference note, verbatim capture). Models absent from the guide return `prompt_guidance: null` with a `prompt_guidance_missing` warning.
 The router never alters prompts or rewrites prompts passed to `route`. Formulating improvements and presenting them to users is decided by upstream layers. Because vendor advice can conflict (e.g. adding vs. stripping instructions), only items from the selected model's vendor are shown, and applying them requires task-specific judgment.
 These items reside in `[[vendor.*.prompt_guidance]]` in `guidelines.toml` and do not affect selections, digests, or hashes. `when` and `text` must match verbatim captures in `wiki/_raw/_archived/`, verified by unit tests. The effectiveness of guides is not verified by this project; reported numbers reflect vendor self-reported results.
+
+## Concurrent vendor guidance
+
+After analysis, independent vendor packets are issued together. Live Jev calls run in a bounded standard-library thread pool. Native handoff exposes all unresolved packets in `decision.requests`; the host launches one cheap `bench-decider` per packet concurrently and sends only that vendor request. The first packet remains mirrored in `decision_request` for older callers. Append all replies to `decision.completed` in the response envelope; guidance replies may arrive in any order and are canonicalized by vendor ID. A failed vendor does not discard successful siblings, which remain in `completed`; only missing packets are retried. Request digests, provider/model validation and per-call usage remain separate. No combined cross-vendor prompt is used.

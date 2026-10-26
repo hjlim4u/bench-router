@@ -1,0 +1,22 @@
+{
+  "checked_at": "2026-10-25T23:32:15.107568+00:00",
+  "source_url": "https://www.tbench.ai/",
+  "source": "tb_auto",
+  "snapshot_id": "184d1daff2daa007459b9d76773610017e07765889e84fbe24b64fa78a2bba2c",
+  "configured_profiles": 73,
+  "direct_snapshot_profiles": 59,
+  "table_profiles": 73,
+  "borrowed_proxies": 14,
+  "missing_profiles": 0,
+  "scopes": [
+    "model_proxy"
+  ],
+  "published_rows": 35,
+  "observations": 34,
+  "unsupported_effort_rows": 1,
+  "model_scaffolds": [
+    "Claude Code",
+    "Codex",
+    "mini-SWE-agent"
+  ]
+}

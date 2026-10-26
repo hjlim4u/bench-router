@@ -39,7 +39,8 @@ SQLite maintains `sources`, `snapshots`, and `observations`. Selection, executio
 | AA | Free API full pagination; baseline Intelligence/Coding and active `aa:*` wiki units | 24h / 7d |
 | Arena | Revision SHA pinned config-specific `latest` Parquet, pyarrow decoding, local category filtering | 24h / 7d |
 | The Model Gap (`mg`) | Active `mg:*` wiki units from public JSON | 24h / 7d |
-| SWE / TB | Approved manual imports; SWE-bench Verified / Terminal-Bench 4.0 pinned | 168h / 30d |
+| SWE / TB exact | Approved manual imports; SWE-bench Verified / Terminal-Bench 4.0 pinned | 168h / 30d |
+| TB public | Official Terminal-Bench 4.0 page hydration; model proxy retaining its published agent/effort | 168h / 30d |
 
 1. OS file locking restricts refresh to a single writer. Linux/WSL2 uses `fcntl`; Windows uses `msvcrt`. The two environments must never share the same physical cache concurrently.
 2. Skips if within TTL. `--force` bypasses TTL. No automatic timers are installed by the application.
@@ -49,7 +50,7 @@ SQLite maintains `sources`, `snapshots`, and `observations`. Selection, executio
 6. Changes to profiles, aliases, or wiki index trigger a snapshot rebuild. Snapshots are published via `os.replace` after temp file flush/fsync, archiving the prior valid snapshot as last-good.
 7. Retains the latest 3 successful payloads per source, and 30 days of routing snapshot replay copies.
 
-Only Arena refresh requires `pyarrow`. Offline evaluation, routing, and manual imports function purely on standard library. Installation is via `mise install` followed by `mise run setup`, or `uv sync --extra arena`.
+Only Arena refresh requires `pyarrow`. Offline evaluation, routing, manual imports and Terminal-Bench public-leaderboard parsing function purely on standard library. Installation is via `mise install` followed by `mise run setup`, or `uv sync --extra arena`.
 
 ## Model and Evaluation Identity
 

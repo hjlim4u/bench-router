@@ -269,6 +269,88 @@ class P1(unittest.TestCase):
         self.refresh(force=True, now=NOW + timedelta(minutes=1))
         self.assertNotIn("terminal_exact", self.snap()["profiles"]["a"]["evidence"])
 
+    def test_v18_terminal_public_rows_are_model_proxies(self):
+        payload = {"leaderboard": {"name": "4-0-0", "id": "board"}, "rows": [{
+            "metadata": {"model_display": {"label": "GPT-6 Astra"}, "agent_display": {"label": "Codex"},
+                         "reasoning_effort": "xhigh", "date": "2026-09-03"},
+            "metrics": {"accuracy": 57.88}, "n_trials": 330, "updated_at": "2026-09-10T21:58:00+00:00"}]}
+        row = d.parse_tb_auto(payload)[0]
+        self.assertEqual((row["evidence_id"], row["scope"], row["raw"], row["reasoning_effort"]),
+                         ("terminal_proxy", "model_proxy", .5788, "xhigh"))
+        self.assertEqual((row["conditions"]["agent_scaffold"], row["conditions"]["n_trials"]), ("Codex", 330))
+        for bad in ({**payload, "leaderboard": {"name": "2-0-0"}},
+                    {**payload, "rows": [{**payload["rows"][0], "metrics": {"accuracy": 101}}]}):
+            with self.subTest(bad=bad), self.assertRaises(d.SourceError):
+                d.parse_tb_auto(bad)
+
+    def test_v18_terminal_public_refresh_publishes_proxy_without_exact_claim(self):
+        row = {"metadata": {"model_display": {"label": "Model A"}, "agent_display": {"label": "Codex"},
+                            "reasoning_effort": "high", "date": "2026-09-03"},
+               "metrics": {"accuracy": 60}, "n_trials": 330, "updated_at": "2026-09-10T21:58:00+00:00"}
+        data = {"leaderboard": {"name": "4-0-0", "id": "board", "updated_at": "2026-09-10T21:58:00+00:00"}, "rows": [row]}
+        tree = [None, None, None, {"state": {"queries": [{"state": {"data": data}}]}}]
+        html = "<script>self.__next_f.push(" + json.dumps([1, "1:" + json.dumps(tree)]) + ")</script>"
+        with mock.patch.object(d, "http_get_text", return_value=html):
+            result = d.refresh(self.cache, self.cfg, MAPPING, {"tb_auto": {"Model A": "model-a"}}, NOW, only="tb_auto")
+        self.assertEqual(result["sources"]["tb_auto"]["result"], "updated")
+        cell = self.snap()["profiles"]["a"]["evidence"]["terminal_proxy"]
+        self.assertEqual((cell["scope"], cell["raw"], cell["conditions"]["agent_scaffold"]), ("model_proxy", .6, "Codex"))
+        self.assertNotIn("terminal_exact", self.snap()["profiles"]["a"]["evidence"])
+
+    def test_v18_terminal_streamed_records_keep_all_efforts_and_reject_protocol_changes(self):
+        from copy import deepcopy
+        row = {"metadata": {"model_display": {"label": "Fable 5.1", "url": "https://www.anthropic.com/news/claude-fable-5-mythos-5"},
+                            "agent_display": {"label": "Claude Code"}, "reasoning_effort": "high"},
+               "metrics": {"accuracy": 0, "n_trials": 330}, "n_trials": 330}
+        payload = {"leaderboard": {"id": "board", "name": "4-0-0", "dataset_version_ids": ["dataset-4"]}, "rows": [row]}
+        for effort in ("low", "medium", "xhigh", "max"):
+            next_row = deepcopy(row)
+            next_row["metadata"]["reasoning_effort"] = effort
+            payload["rows"].append(next_row)
+        tree = [None, None, None, {"state": {"queries": [{"state": {"data": {"other": True}}}, {"state": {"data": payload}}]}}]
+        record = "1:" + json.dumps(tree) + "\n"
+        parts = [record[:100], record[100:1000], record[1000:]]
+        html = "".join("<script>self.__next_f.push(" + json.dumps([1, part]) + ")</script>" for part in parts)
+        fetched, _, _ = d.fetch_tb_auto(lambda *args: html, {})
+        observations = d.parse_tb_auto(fetched)
+        self.assertEqual(len(observations), 5)
+        self.assertEqual(observations[0]["raw"], 0)
+        self.assertEqual(d.model_key(observations[0]["source_model"])[0], "claude-fable-5-1")
+        self.assertEqual(observations[0]["conditions"]["dataset_revision"], "dataset-4")
+        other_agent = deepcopy(payload)
+        other_agent["rows"] = [deepcopy(row)]
+        other_agent["rows"][0]["metadata"]["agent_display"]["label"] = "different agent"
+        self.assertNotEqual(d.parse_tb_auto(other_agent)[0]["cohort_id"], observations[0]["cohort_id"])
+        for change in ("trials", "effort", "model", "duplicate", "revision"):
+            bad = deepcopy(payload)
+            if change == "trials": bad["rows"][0]["n_trials"] = 0
+            if change == "effort": bad["rows"][0]["metadata"]["reasoning_effort"] = "new-unknown-effort"
+            if change == "model": bad["rows"][0]["metadata"]["model_display"] = []
+            if change == "duplicate": bad["rows"].append(deepcopy(row))
+            if change == "revision": bad["leaderboard"]["dataset_version_ids"] = [None]
+            with self.subTest(change=change), self.assertRaises(d.SourceError):
+                d.parse_tb_auto(bad)
+
+    def test_v18_terminal_failed_refresh_retains_last_good_and_profile_effort(self):
+        rows = [{"metadata": {"model_display": {"label": "GPT-6 Astra"}, "agent_display": {"label": "Codex"},
+                              "reasoning_effort": effort}, "metrics": {"accuracy": value}, "n_trials": 330}
+                for effort, value in (("high", 50), ("xhigh", 60))]
+        payload = {"leaderboard": {"id": "board", "name": "4-0-0"}, "rows": rows}
+        tree = [None, None, None, {"state": {"queries": [{"state": {"data": payload}}]}}]
+        html = "<script>self.__next_f.push(" + json.dumps([1, "1:" + json.dumps(tree)]) + ")</script>"
+        cfg = config([profile("astra", model_id="gpt-6-astra", reasoning_effort="xhigh")])
+        with mock.patch.object(d, "http_get_text", return_value=html):
+            d.refresh(self.cache, cfg, MAPPING, {}, NOW, only="tb_auto")
+        cell = self.snap()["profiles"]["astra"]["evidence"]["terminal_proxy"]
+        self.assertEqual(cell["raw"], .6)
+        self.assertEqual(cell["conditions"]["reasoning_effort"], "xhigh")
+        for bad in (d.SourceError("HTTP 503"), "<html>changed layout</html>"):
+            with mock.patch.object(d, "http_get_text", **({"side_effect": bad} if isinstance(bad, Exception) else {"return_value": bad})):
+                result = d.refresh(self.cache, cfg, MAPPING, {}, NOW + timedelta(days=8), only="tb_auto", force=True)
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(self.snap()["profiles"]["astra"]["evidence"]["terminal_proxy"]["raw"], .6)
+            self.assertEqual(self.snap()["sources"]["tb_auto"]["last_success_at"], NOW.isoformat(timespec="seconds"))
+
     def test_v18_effort_rows_pick_profile_effort(self):
         pages = aa_pages()
         pages[0]["data"][0]["slug"], pages[0]["data"][1]["slug"] = "m-a-high", "m-a"
