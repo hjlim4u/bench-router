@@ -258,7 +258,7 @@ def discover_profiles(which=shutil.which, runner=subprocess.run, codex_cache=COD
         kind, harness_id, model_flag = spec
         efforts = efforts or (claude_efforts(runner) if kind == "claude" else ("low", "medium", "high", "xhigh"))
         for effort in efforts or ("unknown",):
-            profile_id = re.sub(r"[^a-z0-9_-]", "-", f"{kind}-{model.lower()}-{effort}")[:48].rstrip("-")
+            profile_id = re.sub(r"[^a-z0-9_-]", "-", f"{kind}-{model.lower()[:48 - len(kind) - len(effort) - 2]}-{effort}").rstrip("-")
             if not profile_id or any(p["id"] == profile_id for p in profiles):
                 continue
             args = [model_flag, model]
@@ -892,8 +892,19 @@ def stop_run(cwd, run_id, runner=subprocess.run):
         raise r.InputError(f"run is already settled ({rc['status']}); nothing to stop")
     if rc.get("backend") in (LOCAL_BACKEND, EXTERNAL_BACKEND):
         from . import runners
-        _log_event(rc, {"state": "stop_attempted"})
-        err = runners.stop(rc)
+        external = rc["backend"] == EXTERNAL_BACKEND
+        try:
+            # An external stop rewrites the receipt; under the lock a running collect cannot overwrite it afterwards.
+            with dispatch_lock(rc["cwd"]) if external else contextlib.nullcontext():
+                if external:
+                    rc = load_receipt(rc["cwd"], rc["run_id"])
+                    if rc["status"] in SETTLED_STATUSES:
+                        raise r.InputError(f"run is already settled ({rc['status']}); nothing to stop")
+                _log_event(rc, {"state": "stop_attempted"})
+                err = runners.stop(rc)
+        except Busy as e:
+            return {"schema_version": r.SCHEMA_VERSION, "status": "conflict", "run_id": rc["run_id"],
+                    "warnings": [r.warn("dispatch_lock", f"{e}; retry stop when collect returns")]}
         log = _log_event(rc, {"state": "stop_uncertain" if err else "stop_sent", "error": err})
         return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain" if err else "stop_sent",
                 "run_id": rc["run_id"], "thread_id": None, "messages_path": str(log), **({"error": err} if err else {})}

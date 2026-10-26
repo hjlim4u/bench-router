@@ -16,7 +16,7 @@ python3 -m bench_router.cli status
 python3 -m bench_router.cli route --task task.json --dry-run
 python3 -m bench_router.cli wiki compile --check
 python3 -m bench_router.cli evidence --task task.json --format table
-python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn
+python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn test_evidence_policy
 ```
 
 `--help` lists CLI options. `status` inspects cached sources and snapshots. The default dry run produces an offline vendor-guided decision packet, or validates a supplied response/selection, without network access, herdr calls, or file writes; it needs a valid task and `profiles.toml`. Pending/unavailable decisions return exit 17. The final command runs the offline test suite. Refresh and live dispatch require Linux or WSL2 because locking uses `fcntl`.
