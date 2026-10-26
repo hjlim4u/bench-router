@@ -80,9 +80,10 @@ def _overlap(a, b):
         return False
 
 
-def reserve(t, backend, binding):
+def reserve(t, backend, binding, workspace=None):
     key = key_for(t)
     digest = r.semantic_task_hash(t)
+    workspace = workspace or t["cwd"]
     with gate():
         if _path(key).exists():
             rec = load(key)
@@ -92,9 +93,12 @@ def reserve(t, backend, binding):
         active = [x for x in _records() if x["active"]]
         if len(active) >= MAX_ACTIVE:
             raise Conflict(f"combined active task limit ({MAX_ACTIVE}) reached; collect or inspect existing tasks")
-        if any(_overlap(t["cwd"], x["cwd"]) for x in active):
+        paths = [x.get("workspace", x["cwd"]) for x in active]
+        paths += [x["worktree"] for x in active if x.get("worktree")]
+        if any(_overlap(workspace, path) for path in paths):
             raise Conflict("workspace overlaps an active writer or review; use isolated worktrees or collect first")
         rec = {"schema_version": "1.0", "key": key, "backend": backend, "cwd": t["cwd"],
+               "workspace": workspace,
                "task_id": t["task_id"], "round": t["round"], "request_hash": digest, "binding": binding,
                "active": True, "status": "delivery_uncertain", "reference": None,
                "acceptance": {"decision": "withheld", "reason": "not assessed"}}
@@ -125,6 +129,7 @@ def observe_receipt(rc):
         if rec["backend"] != rc.get("backend", "herdr"):
             raise Conflict("receipt conflicts with the recorded backend")
         rec.update(status=rc["status"], reference={"cwd": rc["cwd"], "run_id": rc["run_id"]},
+                   workspace=rc["cwd"], repo_cwd=rc.get("repo_cwd", rc["cwd"]), worktree=rc.get("worktree"),
                    profile=rc["profile"], profile_fingerprint=rc["profile_fingerprint"],
                    active=not rec.get("released", False) and (rc["status"] not in {"completed", "result_invalid", "execution_failed"}
                            or (rc["status"] == "execution_failed" and rc["delivery_state"] != "not_attempted"

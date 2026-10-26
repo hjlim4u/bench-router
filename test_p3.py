@@ -12,6 +12,7 @@ from pathlib import Path
 
 from bench_router import parallel as pl
 from bench_router import routing as r
+from bench_router import herdr as hd
 from test_p0 import MAPPING, config, profile, guided_reply, guided_responses, NOW
 from test_p2 import FakeProjects, which, write_result, projects_environment, cleanup_temp
 
@@ -202,18 +203,38 @@ class P3(unittest.TestCase):
         again = self.run_(g, fake)
         self.assertEqual((again["status"], len(fake.prompts)), ("partial_failure", 1))
 
-    def test_v30_isolated_worktrees(self):
+    def test_v30_one_worktree_per_member(self):
         fake = FakeProjects(on_prompt=write_result())
         out = self.run_(self.group2(), fake)
         self.assertEqual(out["status"], "completed", out)
-        routed = sorted(str(Path(self.cwd, ".bench-router/worktrees/g1", m["label"])) for m in out["members"])
-        self.assertEqual(sorted(fake.ws_cwds), routed)  # 각 board task의 repo = 자기 router worktree
-        wts = [m["worktree"] for m in out["members"]]  # 보고되는 worktree는 board가 만든 agent 작업 위치
+        self.assertEqual(fake.ws_cwds, [self.cwd] * len(out["members"]))
+        receipt_cwds = [m["receipt_cwd"] for m in out["members"]]
+        self.assertEqual(len(set(receipt_cwds)), len(out["members"]))
+        self.assertTrue(all(Path(cwd).is_dir() and not (Path(cwd) / ".git").exists() for cwd in receipt_cwds))
+        wts = [m["worktree"] for m in out["members"]]
         self.assertEqual(sorted(wts), sorted(t["worktree"] for t in fake.tasks.values()))
+        for member in out["members"]:
+            receipt = json.loads(Path(member["rounds"][0]["receipt_path"]).read_text("utf-8"))
+            self.assertEqual((receipt["cwd"], receipt["repo_cwd"]), (member["receipt_cwd"], self.cwd))
+        listed = subprocess.run(["git", "-C", self.cwd, "worktree", "list", "--porcelain"],
+                                capture_output=True, text=True, check=True).stdout
+        self.assertEqual(len([line for line in listed.splitlines() if line.startswith("worktree ")]), 1 + len(wts))
         self.assertTrue(all(Path(w, "a.txt").exists() for w in wts))
         self.assertNotIn("공용 scratchpad", fake.prompts[0])
         self.assertEqual(subprocess.run(["git", "-C", self.cwd, "status", "--porcelain"], capture_output=True,
                                         text=True).stdout, "")  # .bench-router는 exclude
+
+    def test_v30_recovery_keeps_saved_runner(self):
+        g, fake = self.group2(), FakeProjects(on_prompt=write_result())
+        self.run_(g, fake)
+        out = self.run_(g, fake, backend=hd.EXTERNAL_BACKEND)
+        self.assertEqual((out["status"], out["warnings"][0]["code"], len(fake.prompts)), ("conflict", "runner_conflict", 2))
+
+    def test_v30_dry_run_reports_receipt_cwds_without_creating_them(self):
+        out = self.run_(self.group2(), FakeProjects(), dry_run=True)
+        self.assertEqual(out["status"], "selected")
+        self.assertTrue(all(m["worktree"] is None and m["branch"] is None and "receipt_cwd" in m for m in out["members"]))
+        self.assertFalse((Path(self.cwd) / ".bench-router").exists())
 
     def test_v31_fanout_distinct_profiles(self):
         one = [{"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "p"}]

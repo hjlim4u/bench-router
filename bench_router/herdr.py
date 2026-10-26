@@ -308,6 +308,11 @@ def run_worktree(rc):
     return bench_dir(rc["cwd"]) / "worktrees" / "runs" / rc["run_id"]
 
 
+def repo_cwd(rc):
+    """The checkout a runner operates on; old receipts used their receipt cwd for both."""
+    return rc.get("repo_cwd", rc["cwd"])
+
+
 def run_dir(cwd, run_id):
     if not RUN_ID_RE.fullmatch(run_id or ""):
         raise r.InputError("run_id: UUID required")
@@ -478,7 +483,7 @@ def _execute_headless(rc, prompt, profile, session, runner, wait_ms):
         save(rc)
         return rc
     wt = run_worktree(rc)
-    obj, err = project_call(["worktree", "create", "--cwd", rc["cwd"], "--branch", f"br/{rc['run_id']}",
+    obj, err = project_call(["worktree", "create", "--cwd", repo_cwd(rc), "--branch", f"br/{rc['run_id']}",
                              "--path", str(wt), "--label", f"bench-router {rc['task_id']} r{rc['round']}", "--no-focus"],
                             runner, timeout_s=START_CALL_S, exe=HERDR_BIN)
     res = (obj or {}).get("result") if isinstance(obj, dict) else None
@@ -491,7 +496,7 @@ def _execute_headless(rc, prompt, profile, session, runner, wait_ms):
         save(rc)
         return rc
     save(rc)
-    obj, err = project_call(["add", "br-" + rc["run_id"], "--desc", prompt, "--repo", rc["cwd"], "--json"],
+    obj, err = project_call(["add", "br-" + rc["run_id"], "--desc", prompt, "--repo", repo_cwd(rc), "--json"],
                             runner, timeout_s=SHORT_CALL_S)
     if not err and isinstance(obj, dict) and re.fullmatch(r"[^/\s]+/[0-9]+", str(obj.get("id", ""))):
         rc["thread_id"] = obj["id"]  # agent-less board task: a view of this run, never delegated
@@ -548,7 +553,7 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
         return rc
     rc["delivery_state"] = "submission_attempted"
     save(rc)  # Persist before add: a lost response must never create a second task.
-    obj, err = project_call(["add", "br-" + rc["run_id"], "--desc", prompt, "--repo", rc["cwd"], "--delegate",
+    obj, err = project_call(["add", "br-" + rc["run_id"], "--desc", prompt, "--repo", repo_cwd(rc), "--delegate",
                              *settings, *WORK_SETTINGS, "--json"], runner, timeout_s=min(START_CALL_S, remaining))
     if err or not isinstance(obj, dict) or not re.fullmatch(r"[^/\s]+/[0-9]+", str(obj.get("id", ""))):
         rc.update(status="delivery_uncertain", delivery_state="uncertain")
@@ -671,8 +676,8 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
 
 def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
              profile_id=None, context=None, selection_mode="parallel_pinned",
-              selection=None, check_digest=True, decision_options=None, wait_ms=None, availability=None,
-             backend=BACKEND):
+             selection=None, check_digest=True, decision_options=None, wait_ms=None, availability=None,
+             backend=BACKEND, repo_cwd=None, repo_prepared=False):
     """wait_ms: how long to wait after submission (None = until the task deadline; 0 = return at once).
     backend: BACKEND (Herdr), LOCAL_BACKEND or EXTERNAL_BACKEND; a recorded run keeps its own backend."""
     from . import coordination as co
@@ -705,7 +710,7 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
             try:
                 result = _dispatch(t, cfg, mapping, snap, snap_warnings, session, runner, which,
                                    profile_id, context, selection_mode, selection, check_digest, decision_options, wait_ms,
-                                   availability, backend)
+                                   availability, backend, repo_cwd, repo_prepared)
             except BaseException:
                 if fresh and not any(x["task_id"] == t["task_id"] and x["round"] == t["round"] for x in receipts(t["cwd"])):
                     co.discard(key)  # failed before any receipt: nothing was sent, so release the admission record
@@ -721,8 +726,8 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
 
 def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
              profile_id=None, context=None, selection_mode="parallel_pinned",
-              selection=None, check_digest=True, decision_options=None, wait_ms=None, availability=None,
-              backend=BACKEND):
+             selection=None, check_digest=True, decision_options=None, wait_ms=None, availability=None,
+             backend=BACKEND, repo_cwd=None, repo_prepared=False):
     """live route. 선택 → receipt → herdr 실행. 같은 (task_id, round)는 재전송 없이 collect.
     profile_id: 제약·가용성을 통과한 후보 중 이 프로필로 고정(parallel fanout).
     selection: Orchestrator 선택 기록(validate_selection). digest가 지금 입력과 다르면 실행하지 않는다(stale_assessment).
@@ -780,7 +785,7 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                   "backend": backend, "project_binding": runner_binding(backend, session, runner),
                   "kind": profile.get("kind"), "thread_id": None, "execution": t["execution"],
                   "profile": profile["id"], "profile_fingerprint": res["selected"]["profile_fingerprint"],
-                  "cwd": t["cwd"], "run_dir": str(run_dir(t["cwd"], run_id)),
+                  "cwd": t["cwd"], "repo_cwd": repo_cwd or t["cwd"], "run_dir": str(run_dir(t["cwd"], run_id)),
                   "worktree": None, "branch": None,
                   "herdr_session": session, "status": "dispatching", "delivery_state": "not_attempted",
                   "timeout_ms": t["constraints"]["timeout_ms"], "created_at": _iso(now),
@@ -791,7 +796,7 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
             if len(prompt.encode("utf-8")) > MAX_PROMPT_ARG_BYTES:
                 raise r.InputError(f"prompt + contract exceeds {MAX_PROMPT_ARG_BYTES} bytes (argument limit)")
             from . import parallel  # keeps .bench-router/ out of the board's commit of the agent's work
-            if parallel.prepare_repo(t["cwd"]):
+            if not repo_prepared and parallel.prepare_repo(repo_cwd or t["cwd"]):
                 res["warnings"] = res["warnings"] + [r.warn(
                     "dirty_base", "uncommitted changes in cwd are not in the board worktree (based on HEAD)")]
             Path(rc["run_dir"]).mkdir(parents=True)
@@ -984,7 +989,8 @@ def output(res, rc, reused=False):
     out.update({"status": rc["status"], "run_id": rc["run_id"], "result_path": rc["result_path"],
                 "manifest_path": rc["manifest_path"], "task_outcome": rc["task_outcome"],
                 "herdr_state": rc["herdr_state"], "delivery_state": rc["delivery_state"],
-                "receipt_path": str(Path(rc["run_dir"]) / "receipt.json"), "deadline_at": rc["deadline_at"],
+                "receipt_path": str(Path(rc["run_dir"]) / "receipt.json"), "receipt_cwd": rc["cwd"],
+                "deadline_at": rc["deadline_at"],
                 "thread_id": rc.get("thread_id"), "worktree": rc.get("worktree"), "branch": rc.get("branch"),
                 "last_observation": rc["last_observation"],
                 "diagnostic_tail": rc.get("diagnostic_tail"), "release": rc.get("release"), "reused_receipt": reused,

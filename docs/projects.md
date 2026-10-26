@@ -72,8 +72,8 @@ Status is determined via `stage` / `state` from `list --all --json`; mismatched 
 
 ## Parallel Dispatch
 
-`parallel` creates a router worktree at `<cwd>/.bench-router/worktrees/GROUP/LABEL` for each member, serving as receipt storage and `--repo` for the board task.
-Because the board branches an agent worktree from that HEAD, the member's `worktree`/`branch` updates to the location reported by the board.
+`parallel` stores each member's receipt at `<cwd>/.bench-router/groups/GROUP/members/LABEL`; this is `receipt_cwd` in the output and the value used with `collect`, `tell`, `stop`, `resume`, and `feedback`.
+The board receives the original repository as `--repo` and creates the member's only worktree. Until the runner creates it, `worktree` and `branch` are `null`; the confirmed path and branch then replace them in the member output and receipt.
 The `shared` scratchpad resides outside the agent worktree, requiring approval on each write under `worker.access ask`.
 Comparing, merging, and pruning worktrees is managed by the upstream agent. Execution resources are never provisioned before all selections complete. Group 2.0 allows repeated selections with identical profiles, assigning distinct labels and receipts. Bounded by 8 tasks per group, 16 items per group total, and `max_parallel` 1–4. Preserves Policy 6, bulk rejection of stale assessments, replay of frozen plans, and partial failure retention, passing `delivery_state` and `reassignment` to member rounds. See [Routing Contracts](routing-contracts.md) for version specifications.
 

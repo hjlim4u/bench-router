@@ -383,7 +383,7 @@ The run directory preserves `receipt.json`, `decision.json`, `input.txt`, `resul
 
 `parallel --group FILE` binds multiple tasks and execution instances. Group 2.0 accepts task contexts and explicit selections, permitting repeated profiles. Bounded by 8 tasks per group, 16 items total, and `max_parallel` 1–4. Schema 1.0 fanout uses the same vendor-guided policy without automated score rankings.
 
-For each member, a router worktree is created at `<cwd>/.bench-router/worktrees/<group_id>/<label>` (branch `br/<group_id>/<label>`, based on HEAD), providing receipt and lock isolation. Agents operate in additional worktrees created by Projects. Re-running the same group file recovers saved plans and receipts without retransmission. Worktrees, group files, and workers are never provisioned before all selections complete.
+For each member, the router creates a receipt directory at `<cwd>/.bench-router/groups/<group_id>/members/<label>`, providing receipt and lock isolation. The selected runner receives the original repository and creates the member's single working worktree. Re-running the same group file recovers saved plans and receipts without retransmission. Receipt directories, worktrees, and workers are never provisioned before all selections complete.
 
 Schema 1.0 input structure (illustrative; multiple candidates request upstream selection rather than auto-selecting two):
 
@@ -397,14 +397,14 @@ Schema 1.0 input structure (illustrative; multiple candidates request upstream s
 - `cwd` must be the root of a Git repository; tasks do not specify `cwd`. `tasks × fanout ≤ 16`, `fanout` 1–8, `max_parallel` 1–4 (matching shared admission limits).
 - Group 1.0 repeats Policy 6 while excluding previously chosen profiles from subsequent comparisons. Depleted candidates return `fanout_reduced`; multiple viable candidates return `decision_unavailable`. Group 2.0 dispatches the explicit selection list with labels `<task_id>-<k>`.
 - **The root repository must be trusted by each Agent CLI beforehand.** Untrusted repositories trigger trust prompts during worker launch, pausing in `blocked`. Trusting the root repository covers child worktrees for both Claude and Codex.
-- Uncommitted changes do not carry into worktrees (`dirty_base` warning). Router worktrees provide receipt isolation, while real agent edits commit to board worktrees (`work/br-<run_id>`). Comparing, merging, and cleaning up worktrees is managed by the Orchestrator.
+- Uncommitted changes do not carry into worktrees (`dirty_base` warning). Member receipt directories provide isolation for router state, while real agent edits commit to runner worktrees (`work/br-<run_id>` for Projects). Comparing, merging, and cleaning up worktrees is managed by the Orchestrator.
 
 | `isolation` | Behavior |
 |---|---|
 | `isolated` (default) | Worktree isolation only. Agents remain unaware of each other |
 | `shared` | Shared scratchpad at `<cwd>/.bench-router/groups/<group_id>/shared/`. Agents write only to their own `<label>.md` and `<label>/` subdirectories and read peer notes to share dead ends, observations, and intermediate results. Because the scratchpad resides outside the worktree, board `worker.access ask` requires approval on each write (`blocked`) |
 
-Execution outputs contain member profiles, worktrees, branches, and rounds with status, run_id, receipt_path, result_path, task_outcome, delivery_state, and reassignment. Results persist in `groups/GROUP/group.json`. All completed returns 0; partial completions or failures return `partial_failure` (16); conflicts return 14. Pre-dispatch incomplete decisions return 17, stale inputs return 14, and empty candidate sets return 13. Uncertain members follow `collect_first`.
+Execution outputs contain member profiles, `receipt_cwd`, worktrees, branches, and rounds with status, run_id, receipt_path, result_path, task_outcome, delivery_state, and reassignment. Use `receipt_cwd` with `collect`, `tell`, `stop`, `resume`, and `feedback`. Before the runner has made a real space, `worktree` and `branch` are `null`. Results persist in `groups/GROUP/group.json`. All completed returns 0; partial completions or failures return `partial_failure` (16); conflicts return 14. Pre-dispatch incomplete decisions return 17, stale inputs return 14, and empty candidate sets return 13. Uncertain members follow `collect_first`.
 
 <a id="agent-간-통신"></a>
 <a id="inter-agent-communication"></a>
@@ -429,7 +429,7 @@ Two common orchestration utilities are provided:
 
 Example: In best-of-N, dispatch N attempts with `--wait-ms 0`, observe completion via `collect --run … --until any`, review the winning result, and `stop` remaining runs. Multi-round voting proceeds via new `route` rounds containing previous deliverables.
 
-Member router worktrees reside at `<cwd>/.bench-router/worktrees/<group_id>/<label>`, displayed in `--dry-run` output. Because they hold only one incomplete run at a time, `tell` can be invoked without `--run-id`.
+Member receipt directories reside at `<cwd>/.bench-router/groups/<group_id>/members/<label>`, displayed as `receipt_cwd` in the output. Because each holds only one incomplete run at a time, `tell` can be invoked without `--run-id`.
 
 <a id="비대화형-실행"></a>
 <a id="headless-execution"></a>
