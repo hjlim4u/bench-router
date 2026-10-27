@@ -353,10 +353,10 @@ class P1(unittest.TestCase):
 
     def test_v18_effort_rows_pick_profile_effort(self):
         pages = aa_pages()
-        pages[0]["data"][0]["slug"], pages[0]["data"][1]["slug"] = "m-a-high", "m-a"
+        pages[0]["data"][0]["slug"], pages[0]["data"][1]["slug"] = "model-a-high", "model-a"
         self.cfg = config([profile("a", model_id="model-a", reasoning_effort="high"),
                            profile("lo", model_id="model-a", reasoning_effort="low"), profile("dflt")])
-        self.aliases = {"aa": {"m-a-high": "model-a", "m-a": "model-a"}}
+        self.aliases = {}
         self.refresh(http=FakeHTTP(pages))
         snap = self.snap()
         a, lo = (snap["profiles"][p]["evidence"]["aa_intelligence"] for p in ("a", "lo"))
@@ -377,6 +377,25 @@ class P1(unittest.TestCase):
         k = d.model_key
         self.assertEqual({k(n)[1] for n in ("Claude Opus 5.5 (High)", "claude-opus-5.5-high", "claude-opus-5-5")}, {"claude-opus-5-5"})
         self.assertEqual(k("GPT-6 Luna (xHigh, Codex Harness)")[1], "gpt-6-luna-xhigh-codex-harness")  # 변형은 자동 매칭 안 함
+        # 기존 aliases.toml의 모델(Opus 5.5, Sol 6.1, Argon, Terra)이 정규화 규칙으로 자동 매칭되는지 검증
+        cfg = config([profile("opus", model_id="claude-opus-5-5"),
+                      profile("sol", model_id="gpt-6.1-sol"),
+                      profile("argon", model_id="gemini-4-argon"),
+                      profile("terra", model_id="gpt-6.1-terra")])
+        auto = d.auto_canonical(cfg)
+        for src, target in (("Claude Opus 5.5 (High)", "claude-opus-5-5"),
+                            ("claude-opus-5.5-high", "claude-opus-5-5"),
+                            ("Claude Opus 5.5 (Max)", "claude-opus-5-5"),
+                            ("Claude Opus 5.5 (Medium)", "claude-opus-5-5"),
+                            ("Gemini 4 Argon (High)", "gemini-4-argon"),
+                            ("gemini-4-argon", "gemini-4-argon"),
+                            ("gpt-6.1-sol-max", "gpt-6.1-sol"),
+                            ("GPT-6.1 Sol (Max)", "gpt-6.1-sol"),
+                            ("gpt-6-1-sol", "gpt-6.1-sol"),
+                            ("gpt-6-1-sol-high", "gpt-6.1-sol"),
+                            ("gpt-6-1-terra-high", "gpt-6.1-terra"),
+                            ("GPT-6.1 Terra (Low)", "gpt-6.1-terra")):
+            self.assertEqual(next((auto[key] for key in k(src) if key in auto), None), target)
         pages = aa_pages()
         pages[0]["data"][0]["slug"], pages[0]["data"][1]["slug"] = "Model-A-High", "model-b"
         self.cfg = config([profile("a", model_id="model-a", reasoning_effort="high"), profile("dflt")])
