@@ -5,10 +5,10 @@ category: references
 tags: [source, agentic, reasoning]
 sources: ["url:https://developers.openai.com/api/docs/guides/model-selection"]
 created: 2026-10-19T01:52:29Z
-updated: 2026-10-24T12:45:00Z
-as_of: 2026-10-24
+updated: 2026-10-27T13:28:00Z
+as_of: 2026-10-27
 summary: >-
-  OpenAI's documented model/effort starting points, quoted verbatim, and its advice to keep the lightest setting that meets the quality bar.
+  OpenAI's documented model/effort starting points, quoted verbatim, and its advice to keep the lightest setting that meets the quality bar. Includes GPT-6.1 Terra consideration guidance.
 provenance:
   extracted: 1.0
   inferred: 0.0
@@ -20,6 +20,7 @@ tier: supporting
 snapshots:
   - "[[_raw/_archived/2026-10-19-openai-model-selection|2026-10-19-openai-model-selection]]"
   - "[[_raw/_archived/2026-10-24-openai-model-selection|2026-10-24-openai-model-selection]]"
+  - "[[_raw/_archived/2026-10-27-openai-model-selection|2026-10-27-openai-model-selection]]"
 ---
 
 # OpenAI model and reasoning-effort selection
@@ -27,6 +28,12 @@ snapshots:
 OpenAI's Model selection guide, checked on 2026-10-24, pairs workloads with a model and a reasoning effort. Quotations below are verbatim.
 
 > If cost and latency aren’t a concern, you can default to Astra. To reduce costs or latency, use the guidance below to choose a model and reasoning effort for your needs.
+
+## When to consider GPT-6.1 Terra
+
+> Try GPT-6.1 Terra for concise writing based on supplied material, computer-use tasks with a defined outcome, and scoped code fixes. Provide clear inputs, requirements, and a way to verify the result, such as checking saved records or running regression tests.
+
+> Compare it with GPT-6.1 Sol on the same inputs and reasoning effort. For writing, judge audience fit, voice, and useful detail as well as accuracy and length. For computer use, check the saved result and the accuracy of the completion report.
 
 ## Documented starting points
 
@@ -60,5 +67,6 @@ These are dated starting points. The page distinguishes product/version availabi
 
 ## Sources
 
+- [[_raw/_archived/2026-10-27-openai-model-selection]] — defuddle markdown capture of updated guide including GPT-6.1 Terra.
 - [[_raw/_archived/2026-10-24-openai-model-selection]] — verbatim excerpts of every quoted row and sentence.
 - [[_raw/_archived/2026-10-19-openai-model-selection]] — earlier bounded excerpt; canonical link and capture scope are recorded there.
