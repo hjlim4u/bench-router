@@ -13,6 +13,7 @@ as_of = "2026-10-26"
 [sources.openai]
 url = "https://developers.openai.com/api/docs/guides/model-selection"
 wiki = "references/sources/openai-model-selection.md"
+capture = "_raw/_archived/2026-10-27-openai-model-selection.md"
 [sources.claude_models]
 url = "https://platform.claude.com/docs/en/about-claude/models/choosing-a-model"
 wiki = "references/sources/anthropic-model-selection.md"
@@ -104,6 +105,14 @@ when = "Ambitious projects that need broad context, reliable interactions, and c
 model = "gpt-6-astra"
 effort = "xhigh"
 when = "Demanding analysis and complex deliverables with exacting requirements."
+[[vendor.openai.start]]
+model = "gpt-6.1-terra"
+effort = "low"
+when = "Concise writing based on supplied material, computer-use tasks with a defined outcome, and scoped code fixes."
+[[vendor.openai.start]]
+model = "gpt-6.1-terra"
+effort = "medium"
+when = "Scoped code fixes and computer-use tasks with a defined outcome."
 
 [vendor.claude]
 revision = "2026-10-24.2"
@@ -253,6 +262,12 @@ Run tests appropriate to the change and complete required checks. Once those pas
 source = "openai_codex_prompting"
 topic = "Codex prompt contents"
 when = "A useful Codex prompt names the behavior you want, points to the relevant code or reproduction steps, preserves important constraints, and says how to verify the change."
+
+[[vendor.openai.prompt_guidance]]
+models = ["gpt-6.1-terra"]
+source = "openai"
+topic = "GPT-6.1 Terra evaluation"
+when = "Compare it with GPT-6.1 Sol on the same inputs and reasoning effort. For writing, judge audience fit, voice, and useful detail as well as accuracy and length. For computer use, check the saved result and the accuracy of the completion report."
 # --- vendor: claude
 
 [[vendor.claude.prompt_guidance]]
