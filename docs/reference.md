@@ -27,7 +27,7 @@ python3 -m bench_router.cli --help
 <a id="using-as-a-skill-across-multiple-agents"></a>
 ### Using as a Skill Across Multiple Agents (Global or Project-Local Installation)
 
-The `skills/bench-router/` directory bundles the complete `bench_router` engine (with built-in `index.json` and `guidelines.toml`) via symlinks. When [`npx skills`](https://skills.sh/) copies (`dereferences`) the skill directory during installation, it operates **fully autonomously without requiring the original repository or `wiki/` directory**.
+The `skills/bench-router/` directory contains instructions and agent references only. Install the CLI once per user with `uv tool install /absolute/path/to/bench-router` (or `uv tool install git+https://github.com/hjlim4u/bench-router.git`). This provides `bench-router` and `bench-router-decide` on PATH. Skill installation never bundles the engine, executable scripts, or benchmark index. Global and project-local instruction copies may coexist and use the same runtime.
 
 ```bash
 # 1. Global installation (-g): connect across all detected agents (Claude Code, Codex, Cursor, Gemini CLI, etc.)
@@ -41,7 +41,7 @@ cd /abs/path/to/my-project && npx skills add hjlim4u/bench-router
 ln -s "$REPO/skills/bench-router" "$AGENT_SKILLS/bench-router"
 ```
 
-The Skill's `scripts/cli.py` and `scripts/decide.py` directly invoke the bundled `bench_router` package. Agents running within the same OS environment share user configuration (`~/.config/bench-router`) and cache (`~/.cache/bench-router`). Because native Windows and WSL implement distinct file-locking primitives, do not share the same physical cache between Windows and WSL concurrently. Running within a single unified environment allows safe sharing without duplication. `route` never modifies the cache; schedule periodic `refresh` runs in only one place per user. Manual `refresh` shares the same locks and cache. On Windows, register the `refresh` command once in Windows Task Scheduler.
+The Skill invokes the shared `bench-router` and `bench-router-decide` commands. Replace an older installed skill directory completely to remove its bundled `bench_router/` and `scripts/`; update project scripts that import that local engine before removing it. If the old skill engine was committed, remove it from tracking to prevent future worktree copies. Existing worktrees keep their previous checkout. Agents running within the same OS environment share user configuration (`~/.config/bench-router`) and cache (`~/.cache/bench-router`). Because native Windows and WSL implement distinct file-locking primitives, do not share the same physical cache between Windows and WSL concurrently. Running within a single unified environment allows safe sharing without duplication. `route` never modifies the cache; schedule periodic `refresh` runs in only one place per user. Manual `refresh` shares the same locks and cache. On Windows, register the `refresh` command once in Windows Task Scheduler.
 
 ---
 

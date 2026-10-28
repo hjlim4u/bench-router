@@ -14,6 +14,7 @@ arena = ["pyarrow"]  # needed only for `refresh --source arena`
 
 [project.scripts]
 bench-router = "bench_router.cli:main"
+bench-router-decide = "bench_router.decide:main"
 
 [tool.setuptools]
 packages = ["bench_router"]

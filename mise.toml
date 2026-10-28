@@ -12,11 +12,16 @@ uv run python -m bench_router.cli refresh --source mg
 """
 
 [tasks.install]
-description = "install the bench-router CLI (editable, follows this clone) and the global agent skill; rerun after git pull"
-run = """
-uv tool install --force --editable "$PWD[arena]"
-npx -y skills add "$PWD" -g -a claude-code codex antigravity -y
-"""
+description = "install the shared CLI and global skill instructions; rerun after git pull"
+depends = ["install-cli", "install-skill"]
+
+[tasks.install-cli]
+description = "install the CLI once per user (editable, follows this clone)"
+run = 'uv tool install --force --editable "$PWD[arena]"'
+
+[tasks.install-skill]
+description = "install global skill instructions only (no CLI or engine)"
+run = 'npx -y skills add "$PWD" -g -a claude-code codex antigravity -y'
 
 [tasks.test]
 description = "offline test suite"

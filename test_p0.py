@@ -672,8 +672,9 @@ class P0Dotenv(unittest.TestCase):
 class P0Decision(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        import runpy
-        cls.helper = runpy.run_path(str(Path(__file__).parent / "skills/bench-router/scripts/decide.py"))
+        from bench_router import decide
+        from bench_router import decision_provider
+        cls.helper = {**vars(decision_provider), "main": decide.main}
 
     def setUp(self):
         self.req = {"state": "Fix a bug", "questions": {
@@ -773,19 +774,18 @@ class P0Decision(unittest.TestCase):
                 self.helper["decide"](self.req, env={}, host="unknown")
             post.assert_not_called()
 
-    def test_v66_copied_skill_runs_standalone(self):
+    def test_v66_skill_copies_contain_only_instructions(self):
         import shutil
-        import subprocess
-        import sys
         with tempfile.TemporaryDirectory() as tmp:
-            copied = Path(tmp) / "bench-router"
-            shutil.copytree(Path(__file__).parent / "skills/bench-router", copied, symlinks=False)
-            self.assertTrue((copied / "bench_router/cli.py").is_file())
-            self.assertTrue((copied / "bench_router/index.json").is_file())
-            self.assertFalse((copied / "wiki").exists())
-            p = subprocess.run([sys.executable, str(copied / "scripts/cli.py"), "--cache-dir", tmp, "wiki", "facets"],
-                               cwd=tmp, capture_output=True, text=True, check=True)
-            self.assertEqual(json.loads(p.stdout)["status"], "ok")
+            for scope in ("global", "project"):
+                copied = Path(tmp) / scope / "bench-router"
+                shutil.copytree(Path(__file__).parent / "skills/bench-router", copied, symlinks=False)
+                self.assertTrue((copied / "SKILL.md").is_file())
+                self.assertTrue((copied / "references/decision.md").is_file())
+                files = [p for p in copied.rglob("*") if p.is_file()]
+                self.assertTrue(all(p.suffix in {".md", ".toml", ".yaml"} for p in files))
+                self.assertFalse((copied / "bench_router").exists())
+                self.assertFalse((copied / "scripts").exists())
 
 
 class P0VendorGuidance(unittest.TestCase):
@@ -926,8 +926,7 @@ class P0VendorGuidance(unittest.TestCase):
             self.assertEqual(out["decision"]["reason"], "jev_unavailable")
             self.assertNotIn("secret", json.dumps(out))
 
-    def test_v74_cli_and_copied_skill_use_the_same_staged_policy(self):
-        import shutil
+    def test_v74_module_cli_uses_the_same_staged_policy(self):
         import subprocess
         import sys
         root = Path(self.tmp.name)
@@ -954,12 +953,9 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertEqual((out["status"], out["selected"]), ("decision_unavailable", None))
         self.assertIn("upstream_selection_required", out["decision"]["uncertainty"])
         self.assertTrue(all(f["diagnostics"] == ["guidance_missing"] for f in out["decision"]["evaluation"]["fits"].values()))
-        copied = root / "copied"
-        shutil.copytree(Path(__file__).parent / "skills/bench-router", copied, symlinks=False)
-        proc = subprocess.run([sys.executable, str(copied / "scripts/cli.py"), *argv], capture_output=True, text=True)
+        proc = subprocess.run([sys.executable, "-m", "bench_router.cli", *argv], capture_output=True, text=True)
         self.assertEqual(proc.returncode, 17, proc.stderr)
         self.assertEqual(json.loads(proc.stdout)["assessment_digest"], packet["assessment_digest"])
-        self.assertEqual((copied / "bench_router/guidelines.toml").read_bytes(), self.d.GUIDELINES.read_bytes())
 
     def test_v75_guidance_matches_only_exact_models_and_efforts(self):
         for model, effort in (("claude-sonnet-5-5", "medium"), ("claude-opus-5-5", "medium"),
