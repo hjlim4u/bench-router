@@ -62,6 +62,17 @@ class P3(unittest.TestCase):
         fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
         return pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which, **kw)
 
+    def test_v100_legacy_worktree_recovery_checks_identity(self):
+        existing = pl.worktree(self.cwd, "old", "member")
+        self.assertEqual(pl.worktree(self.cwd, "old", "member"), existing)
+        subprocess.run(["git", "-C", str(existing), "checkout", "-qb", "different"], check=True)
+        with self.assertRaises(r.InputError):
+            pl.worktree(self.cwd, "old", "member")
+        other = Path(self.cwd, ".bench-router/worktrees/old/unrelated")
+        other.mkdir(parents=True)
+        with self.assertRaises(r.InputError):
+            pl.worktree(self.cwd, "old", "unrelated")
+
     def test_max_parallel_cannot_exceed_admission_limit(self):
         with self.assertRaises(r.InputError):
             self.group(max_parallel=5)

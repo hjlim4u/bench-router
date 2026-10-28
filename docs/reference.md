@@ -45,6 +45,14 @@ The Skill's `scripts/cli.py` and `scripts/decide.py` directly invoke the bundled
 
 ---
 
+## Inspecting retained worktrees
+
+The router preserves worktrees, branches, receipts, and results for review and recovery; completion does not mean the changes were accepted. Start with `git -C REPO worktree list --porcelain` and the run or group records under `REPO/.bench-router/`. Match each worktree to its runner and receipt, and use `collect` or the Herdr board to establish that the worker has stopped. A missing or uncertain receipt is not proof it is safe to remove.
+
+For each candidate, inspect `git -C WORKTREE status --short --untracked-files=all`, `git -C WORKTREE status --short --ignored` (ignored files may include results), and its branch commits and unmerged changes. Save or adopt needed changes and results, and check whether `resume` or old-group recovery still needs the checkout. Inspect nested worktrees independently. Only after these checks, explicitly run `git -C REPO worktree remove WORKTREE`; do not use `--force` to discard changes. Branches and receipts are separate and are not removed by this command. Herdr-owned worktrees also require checking the board's lifecycle before removal. Never recursively delete `.bench-router` to clean worktrees.
+
+---
+
 ## Configuration
 
 The default configuration directory is `$XDG_CONFIG_HOME/bench-router` (`~/.config/bench-router`), configurable via `--config-dir`. The default cache directory is `$XDG_CACHE_HOME/bench-router` (`~/.cache/bench-router`), configurable via `--cache-dir`.
