@@ -15,7 +15,6 @@ packets가 decide 요청을 쓰고, 운영자가 decide.py(Jev) 또는 native be
 """
 import argparse
 import copy
-import importlib.util
 import json
 import math
 import statistics
@@ -31,9 +30,7 @@ from workset import TASKS  # noqa: E402
 
 from bench_router import evidence, routing as r  # noqa: E402
 
-_spec = importlib.util.spec_from_file_location("decide", HERE.parent / "skills/bench-router/scripts/decide.py")
-decide = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(decide)
+from bench_router import decision_provider as decide  # noqa: E402
 
 OUT = HERE / "results" / "retrieval"
 CASES = HERE / "retrieval_cases.json"  # --cases로 교체(보류 검증 세트 등)
