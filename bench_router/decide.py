@@ -1,15 +1,10 @@
 """Optional Jev decisions, or a request for the host's cheap native subagent. No dispatch or file writes."""
 import argparse
 import json
-import sys
-from pathlib import Path
 
-_SKILL = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(_SKILL if (_SKILL / "bench_router").is_dir() else _SKILL.parents[1]))
-from bench_router import routing as r  # noqa: E402
-
-from bench_router.decision_provider import (  # noqa: E402,F401
-    JEV_URL, MAX_BYTES, NATIVE_MODELS, decide, validate_request, validate_response,
+from bench_router import routing as r
+from bench_router.decision_provider import (
+    MAX_BYTES, NATIVE_MODELS, decide,
 )
 
 

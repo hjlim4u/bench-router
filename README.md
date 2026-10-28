@@ -221,7 +221,7 @@ Without a clone, install the CLI with `uv tool install 'bench-router[arena] @ gi
 
 ### 2) Installing as a Skill Across Environments (`npx skills`)
 
-Install into supported coding agents via [`npx skills`](https://skills.sh/). The installer copies `skills/bench-router/` once into `~/.agents/skills/bench-router` (Codex and Antigravity read it there; Claude Code gets a symlink). The copy bundles the core engine (`bench_router/`, `index.json`, `guidelines.toml`) and the `bench-decider` definitions (`references/agents/`), so **any repository can route with it without the clone, `wiki/`, or a per-repo install**.
+Install into supported coding agents via [`npx skills`](https://skills.sh/). The installer copies `skills/bench-router/` once into `~/.agents/skills/bench-router` (Codex and Antigravity read it there; Claude Code gets a symlink). The skill contains instructions and `bench-decider` definitions (`references/agents/`) only. Install the CLI once per user; every skill scope invokes that shared runtime. Global and project-local instruction copies may coexist without copying the engine, index, or executable scripts. `mise run install-cli` installs only the shared runtime; `mise run install-skill` installs only global instructions; `mise run install` runs both.
 
 **Recommended layout**: keep one clone at a fixed path for setup, `refresh`, and `wiki compile`, and install the skill globally from it. Shared state lives outside the skill (`~/.config/bench-router/` for profiles, `~/.cache/bench-router/` for snapshots), so every repository sees the same profiles and data.
 
@@ -233,11 +233,14 @@ mise run install                          # editable CLI + npx skills add "$PWD"
 # Keep data current with one scheduled `mise run refresh` in this clone (needs pyarrow from `mise run setup`).
 
 # B. Without a clone (another machine)
+uv tool install git+https://github.com/hjlim4u/bench-router.git
 npx skills add hjlim4u/bench-router -g -a claude-code codex antigravity -y
 # Prepare shared configuration once, then fetch public benchmark data:
-python3 ~/.agents/skills/bench-router/scripts/cli.py init
-python3 ~/.agents/skills/bench-router/scripts/cli.py refresh --source mg
+bench-router init
+bench-router refresh --source mg
 ```
+
+For project-scoped instructions, run `npx skills add hjlim4u/bench-router` without `-g`; the CLI installation remains shared. When migrating an older skill, replace its whole directory so the old bundled `bench_router/` and `scripts/` are removed. Update any scripts importing the project-local engine to invoke the shared CLI before removing that engine. If the old engine was committed, remove it from Git tracking too; existing worktrees retain their earlier checkout.
 
 Delegated runs write state and worktrees to `<repo>/.bench-router/`; add `.bench-router/` to your global gitignore. When `bench-decider` is not discovered in a repository, the host reads the bundled definition and invokes an equivalent subagent ([decision.md](skills/bench-router/references/decision.md)).
 
@@ -245,7 +248,7 @@ Delegated runs write state and worktrees to `<repo>/.bench-router/`; add `.bench
 
 ### 3) Quick Start with the CLI
 
-The examples use the installed `bench-router` command, which works from any directory. Without the CLI install, replace `bench-router` with `python3 -m bench_router.cli` from the clone root, or with `python3 <skill path>/scripts/cli.py`.
+The examples use the installed `bench-router` command, which works from any directory. Without the CLI install, replace `bench-router` with `python3 -m bench_router.cli` from the clone root, and `bench-router-decide` with `python3 -m bench_router.decide`.
 
 ```bash
 # 1. Prepare Agent profiles (copy ready-to-run default profiles, or use profiles discover)

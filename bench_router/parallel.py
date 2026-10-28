@@ -146,49 +146,31 @@ def _same(a, b):
 
 
 def prepare_repo(cwd):
-    """cwd는 git 최상위여야 한다. git 미초기화 또는 커밋 부재 시 자동 init/commit 수행. info/exclude 등록."""
+    """Require a committed Git root and exclude router state from agent commits."""
     if not shutil.which("git"):
         raise r.InputError("git is not installed. Please install git to use bench-router live dispatch.")
-
-    is_git_repo = False
-    try:
-        top = _git(cwd, "rev-parse", "--show-toplevel")
-        if _same(top, cwd):
-            is_git_repo = True
-        else:
-            raise r.InputError("cwd: must be the top level of a git repository")
-    except r.InputError as e:
-        if "must be the top level" in str(e):
-            raise
-        is_git_repo = False
-
-    if not is_git_repo:
-        _git(cwd, "init")
-
+    if not _same(_git(cwd, "rev-parse", "--show-toplevel"), cwd):
+        raise r.InputError("cwd: must be the top level of a git repository")
+    _git(cwd, "rev-parse", "--verify", "HEAD")
     exclude = Path(cwd) / _git(cwd, "rev-parse", "--git-common-dir") / "info" / "exclude"
     text = exclude.read_text("utf-8") if exclude.exists() else ""
     if ".bench-router/" not in text.split():
         exclude.parent.mkdir(parents=True, exist_ok=True)
         exclude.write_text(text + ("" if text.endswith("\n") or not text else "\n") + ".bench-router/\n", "utf-8")
-
-    has_commit = bool(_git(cwd, "rev-parse", "--verify", "HEAD", check=False))
-    if not has_commit:
-        _git(cwd, "add", "-A")
-        has_user = bool(_git(cwd, "config", "user.name", check=False))
-        commit_cmd = []
-        if not has_user:
-            commit_cmd.extend(["-c", "user.name=bench-router", "-c", "user.email=bench-router@local"])
-        commit_cmd.extend(["commit", "--allow-empty", "-m", "chore: initialize repository for bench-router live dispatch"])
-        _git(cwd, *commit_cmd)
-
     return bool(_git(cwd, "status", "--porcelain"))
 
 
 def worktree(cwd, gid, label):
     """Projects starts immediately: prepare the cwd before durable task submission."""
     wt = Path(cwd) / ".bench-router" / "worktrees" / gid / label
+    branch = f"br/{gid}/{label}"
     if not wt.exists():
-        _git(cwd, "worktree", "add", "-b", f"br/{gid}/{label}", str(wt), "HEAD")
+        _git(cwd, "worktree", "add", "-b", branch, str(wt), "HEAD")
+    elif (not _same(_git(wt, "rev-parse", "--show-toplevel"), wt)
+          or not _same(wt / _git(wt, "rev-parse", "--git-common-dir"),
+                       Path(cwd) / _git(cwd, "rev-parse", "--git-common-dir"))
+          or _git(wt, "branch", "--show-current") != branch):
+        raise r.InputError(f"worktree: existing path is not the expected worktree for {branch}")
     return wt
 
 
