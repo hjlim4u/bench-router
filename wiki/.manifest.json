@@ -66,6 +66,13 @@
         "synthesis/vendor-guided-model-selection.md",
         "projects/bench-router/synthesis/vendor-guided-routing-proposal.md"
       ]
+    },
+    "_raw/_archived/2026-10-27-openai-model-selection.md": {
+      "content_hash": "7cd0d1ca9a44ff5326a3f1f8e27dc2c7b3271df4b1b4eee295aa14a6de7e7663",
+      "last_ingested": "2026-10-27T15:41:43.221481+00:00",
+      "pages_produced": [
+        "references/sources/openai-model-selection.md"
+      ]
     }
   }
 }

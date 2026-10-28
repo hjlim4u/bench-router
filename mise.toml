@@ -21,7 +21,7 @@ npx -y skills add "$PWD" -g -a claude-code codex antigravity -y
 
 [tasks.test]
 description = "offline test suite"
-run = "uv run python -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn"
+run = "uv run python -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn test_evidence_policy"
 
 [tasks.refresh]
 description = "fetch all sources and publish the routing snapshot"

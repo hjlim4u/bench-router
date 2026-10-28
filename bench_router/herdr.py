@@ -22,7 +22,8 @@ BACKEND = "projects-1.2"
 LOCAL_BACKEND = "local-1"  # one-shot CLI as a local subprocess (runners.py)
 EXTERNAL_BACKEND = "external-1"  # the caller runs the agent; the router keeps receipt and result contract
 RUNNERS = {"herdr": BACKEND, "local": LOCAL_BACKEND, "external": EXTERNAL_BACKEND}
-PROJECTS_VERSION_RE = re.compile(r"herdr-projects (?:[1-9]\d*)\.\d+(?:\.\d+)?(?:[ +].*)?")
+PROJECTS_MIN_VERSION = (1, 2, 1)
+PROJECTS_VERSION_RE = re.compile(r"herdr-projects (\d+)\.(\d+)\.(\d+)(?:[ +-].*)?")
 SHORT_CALL_S = 15
 OBSERVE_FLOOR_S = 2  # one list/details round trip; keeps calls inside a 5s task budget
 START_CALL_S = 60  # add --delegate starts the agent before it answers
@@ -80,8 +81,9 @@ def project_binding(session=None, runner=subprocess.run):
     """The board this run belongs to: the Projects build and the caller's Herdr session."""
     version, err = project_call(["version"], runner, raw=True)
     version = (version or "").strip()
-    if err or not PROJECTS_VERSION_RE.fullmatch(version):
-        raise r.InputError(f"herdr-projects >= 1.0 (recommended 1.2+) is required for live dispatch (found {version or (err or {}).get('message')!r}); "
+    m = PROJECTS_VERSION_RE.fullmatch(version)
+    if err or not m or tuple(map(int, m.groups())) < PROJECTS_MIN_VERSION:
+        raise r.InputError(f"herdr-projects >= 1.2.1 is required for live dispatch (found {version or (err or {}).get('message')!r}); "
                            "without Herdr, use --runner local|external, or validate with "
                            "'route --selection FILE --dry-run' and invoke the agent yourself (docs/execution-boundary.md)")
     return {"projects_version": version.split(" (")[0], "session": session}
@@ -258,7 +260,7 @@ def discover_profiles(which=shutil.which, runner=subprocess.run, codex_cache=COD
         kind, harness_id, model_flag = spec
         efforts = efforts or (claude_efforts(runner) if kind == "claude" else ("low", "medium", "high", "xhigh"))
         for effort in efforts or ("unknown",):
-            profile_id = re.sub(r"[^a-z0-9_-]", "-", f"{kind}-{model.lower()}-{effort}")[:48].rstrip("-")
+            profile_id = re.sub(r"[^a-z0-9_-]", "-", f"{kind}-{model.lower()[:48 - len(kind) - len(effort) - 2]}-{effort}").rstrip("-")
             if not profile_id or any(p["id"] == profile_id for p in profiles):
                 continue
             args = [model_flag, model]
@@ -846,7 +848,7 @@ def resume_run(cwd, run_id, runner=subprocess.run):
     with dispatch_lock(cwd):
         rc = load_receipt(cwd, run_id)
         if rc.get("backend") != BACKEND or not rc.get("thread_id"):
-            raise r.InputError("only a Projects 1.x+ run with a board task can be resumed")
+            raise r.InputError("only a Projects >= 1.2.1 run with a board task can be resumed")
         if project_binding(rc["herdr_session"], runner) != rc["project_binding"]:
             raise r.InputError("Projects version or session changed; inspect the recorded worker")
         obj, err = project_call(["reopen", rc["thread_id"], "--json"], runner, timeout_s=START_CALL_S)
@@ -866,7 +868,7 @@ def tell_run(cwd, run_id, text, runner=subprocess.run):
     if rc.get("execution") == "headless":
         raise r.InputError("headless runs take no messages; use the shared scratchpad or a new round")
     if rc.get("backend") != BACKEND or not rc.get("thread_id"):
-        raise r.InputError("only a Projects 1.x+ run with a board task can receive a message")
+        raise r.InputError("only a Projects >= 1.2.1 run with a board task can receive a message")
     if rc["status"] in SETTLED_STATUSES and not rc.get("resumed"):
         raise r.InputError("run is settled; `resume` it first (tell on a finished board task starts a new agent)")
     if project_binding(rc["herdr_session"], runner) != rc["project_binding"]:
@@ -897,8 +899,19 @@ def stop_run(cwd, run_id, runner=subprocess.run):
         raise r.InputError(f"run is already settled ({rc['status']}); nothing to stop")
     if rc.get("backend") in (LOCAL_BACKEND, EXTERNAL_BACKEND):
         from . import runners
-        _log_event(rc, {"state": "stop_attempted"})
-        err = runners.stop(rc)
+        external = rc["backend"] == EXTERNAL_BACKEND
+        try:
+            # An external stop rewrites the receipt; under the lock a running collect cannot overwrite it afterwards.
+            with dispatch_lock(rc["cwd"]) if external else contextlib.nullcontext():
+                if external:
+                    rc = load_receipt(rc["cwd"], rc["run_id"])
+                    if rc["status"] in SETTLED_STATUSES:
+                        raise r.InputError(f"run is already settled ({rc['status']}); nothing to stop")
+                _log_event(rc, {"state": "stop_attempted"})
+                err = runners.stop(rc)
+        except Busy as e:
+            return {"schema_version": r.SCHEMA_VERSION, "status": "conflict", "run_id": rc["run_id"],
+                    "warnings": [r.warn("dispatch_lock", f"{e}; retry stop when collect returns")]}
         log = _log_event(rc, {"state": "stop_uncertain" if err else "stop_sent", "error": err})
         return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain" if err else "stop_sent",
                 "run_id": rc["run_id"], "thread_id": None, "messages_path": str(log), **({"error": err} if err else {})}
@@ -908,7 +921,7 @@ def stop_run(cwd, run_id, runner=subprocess.run):
         argv, exe = ["workspace", "close", rc["workspace_id"]], HERDR_BIN  # every pane, not just the CLI's
     else:
         if rc.get("backend") != BACKEND or not rc.get("thread_id"):
-            raise r.InputError("only a Projects 1.x+ run with a board task can be stopped")
+            raise r.InputError("only a Projects >= 1.2.1 run with a board task can be stopped")
         argv, exe = ["stop", rc["thread_id"]], None
     _log_event(rc, {"state": "stop_attempted"})
     _, err = project_call(argv, runner, raw=True, exe=exe)

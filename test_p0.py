@@ -1548,6 +1548,9 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertEqual(self.d.prompt_guidance(guide, "claude-haiku-5-5")["vendor"], "claude")
         self.assertEqual({i["source"]["id"].split("_")[0] for i in self.d.prompt_guidance(guide, "gpt-6-luna")["items"]}, {"openai"})
         self.assertIsNone(self.d.prompt_guidance(guide, "gpt-7-new"))
+        terra = guide["models"]["gpt-6.1-terra"]
+        self.assertEqual((terra["vendor"], set(terra["efforts"])), ("openai", {"low", "medium"}))
+        self.assertIn("GPT-6.1 Terra evaluation", {i["topic"] for i in self.d.prompt_guidance(guide, "gpt-6.1-terra")["items"]})
         # prompt guidance is output only: it never changes the hashes that selection records bind
         self.assertEqual(guide["vendors"]["claude"]["hash"],
                          r.canonical_hash({k: v for k, v in r._load_toml(self.d.GUIDELINES)["vendor"]["claude"].items()

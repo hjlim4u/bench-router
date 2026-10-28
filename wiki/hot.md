@@ -1,6 +1,6 @@
 ---
 title: Hot Cache
-updated: 2026-10-24T13:52:27Z
+updated: 2026-10-27T15:42:27Z
 pages: 100
 generated_by: obsidian-wiki memory hot
 ---
@@ -11,9 +11,9 @@ generated_by: obsidian-wiki memory hot
 
 ## Recent Activity
 
-- [2026-10-24] LINT scope=whole vault issues_found=70 fixed=7 ...
 - [2026-10-24] WIKI_RESEARCH topic=Anthropic per-model prompting guides: effort guidance rounds=1 sources_fetched=5 ...
 - [2026-10-24] WIKI_RESEARCH topic=Vendor prompting guides (Gemini, OpenAI/Codex, Anthropic) f... rounds=1 sources_fetched=8 ...
+- [2026-10-27] INGEST source=_raw/_archived/2026-10-27-openai-model-selection.md pages=references/sources/openai-model-selection.md scope=openai model selection update (GPT-6.1 Terra)
 
 ## Active Threads
 

@@ -290,6 +290,15 @@ class P2(unittest.TestCase):
         self.assertEqual(by_id["claude-claude-opus-5-5-low"]["config_revision"], "codeburn-discovery")
         self.assertEqual(hd.codex_models(Path(self.tmp.name) / "missing.json"), {})
 
+    def test_v97b_long_model_names_keep_distinct_effort_ids(self):
+        runner = lambda cmd, **kw: SimpleNamespace(returncode=0 if cmd[0] == "claude" else 1, stderr="",
+                                                   stdout="  --effort <level>  Effort level (low, medium, max)\n")
+        profiles = hd.discover_profiles(which=lambda name: "/usr/bin/tool", runner=runner,
+                                        codex_cache=Path(self.tmp.name) / "none.json", claude_models=["claude-" + "x" * 45])
+        ids = [p["id"] for p in profiles]
+        self.assertEqual((len(ids), len(set(ids))), (len(profiles), len(profiles)))
+        self.assertTrue(len(profiles) > 1 and all(len(i) <= 48 for i in ids))
+
     def _write_profiles(self, profiles):
         path = Path(self.tmp.name) / "profiles.toml"
         path.write_text(hd.profiles_toml(profiles), "utf-8")
@@ -593,6 +602,13 @@ class P2(unittest.TestCase):
         self.assertEqual(hd.stop_run(self.cwd, out["run_id"])["status"], "stop_sent")
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0)["status"], "execution_failed")
 
+    def test_v112b_external_stop_yields_to_a_running_collect(self):
+        out = self.run_(FakeProjects(), w=lambda _: None, backend=hd.EXTERNAL_BACKEND)
+        with hd.dispatch_lock(self.cwd):
+            res = hd.stop_run(self.cwd, out["run_id"])
+        self.assertEqual(res["status"], "conflict")
+        self.assertEqual(hd.stop_run(self.cwd, out["run_id"])["status"], "stop_sent")
+
     def test_v113_local_runner_runs_a_subprocess(self):
         self.enterContext(patch.object(hd, "time", time))  # a real process needs real waiting
         writer = (f"import os, sys; sys.path.insert(0, {str(Path(__file__).parent)!r}); from test_p2 import write_result; "
@@ -748,16 +764,15 @@ class P2(unittest.TestCase):
 
     def test_v60_version_drift_blocks_submission(self):
         fake = FakeProjects(on_prompt=write_result())
-        fake.version = "herdr-projects 0.9.0 (/fake)"
+        fake.version = "herdr-projects 1.2.0 (/fake)"
         with self.assertRaises(r.InputError):
             self.run_(fake)
         self.assertEqual((fake.prompts, hd.receipts(self.cwd)), ([], []))
 
-    def test_v60_version_supports_1_plus(self):
+    def test_newer_projects_version_is_accepted(self):
         fake = FakeProjects(on_prompt=write_result())
-        fake.version = "herdr-projects 1.2.26 (/fake)"
-        out = self.run_(fake)
-        self.assertEqual(out["status"], "completed")
+        fake.version = "herdr-projects 1.3.0 (/fake)"
+        self.assertEqual(self.run_(fake)["status"], "completed")
 
     def test_prompt_size_limit(self):
         with self.assertRaises(r.InputError):

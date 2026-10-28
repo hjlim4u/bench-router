@@ -7,3 +7,4 @@ eval/results/retrieval/
 build/
 dist/
 *.egg-info/
+.agent/

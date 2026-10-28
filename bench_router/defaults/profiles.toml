@@ -45,3 +45,18 @@ cost_tier = "medium"
 inference_local = false
 context_tokens = 1000000
 capabilities = ["filesystem_write"]
+
+[[profile]]
+id = "codex-terra-low"
+enabled = true
+kind = "codex"
+executable = "codex"
+args = ["-m", "gpt-6.1-terra", "-c", "model_reasoning_effort=\"low\""]
+model_id = "gpt-6.1-terra"
+harness_id = "codex-cli"
+reasoning_effort = "low"
+config_revision = "2026-10-27"
+cost_tier = "low"
+inference_local = false
+context_tokens = 200000
+capabilities = ["filesystem_write"]
