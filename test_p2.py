@@ -778,6 +778,33 @@ class P2(unittest.TestCase):
         with self.assertRaises(r.InputError):
             self.run_(FakeProjects(), self.task(prompt="x" * hd.MAX_PROMPT_ARG_BYTES))
 
+    def test_prepare_repo_auto_inits_and_commits_on_uninitialized_directory(self):
+        from bench_router import parallel
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "hello.txt").write_text("world", encoding="utf-8")
+            self.assertFalse(parallel.prepare_repo(tmp))
+            head = parallel._git(tmp, "rev-parse", "--verify", "HEAD")
+            self.assertTrue(bool(head))
+            msg = parallel._git(tmp, "log", "-1", "--pretty=%B")
+            self.assertIn("bench-router", msg)
+            wt = parallel.worktree(tmp, "g1", "worker1")
+            self.assertTrue((wt / "hello.txt").is_file())
+
+    def test_prepare_repo_auto_commits_on_empty_git_repo(self):
+        from bench_router import parallel
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(["git", "-C", tmp, "init", "-q"], check=True)
+            self.assertFalse(parallel.prepare_repo(tmp))
+            head = parallel._git(tmp, "rev-parse", "--verify", "HEAD")
+            self.assertTrue(bool(head))
+
+    def test_prepare_repo_fails_when_git_missing(self):
+        from bench_router import parallel
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(parallel.shutil, "which", return_value=None):
+                with self.assertRaisesRegex(r.InputError, "git is not installed"):
+                    parallel.prepare_repo(tmp)
+
 
 class P2Availability(unittest.TestCase):
     def test_agy_native_model_list_overrides_codeburn_quota(self):

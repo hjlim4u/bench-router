@@ -32,12 +32,20 @@ def _init(args):
     defaults = Path(__file__).with_name("defaults")
     args.config_dir.mkdir(parents=True, exist_ok=True)
     created, kept = [], []
-    for name in ("profiles.toml", "aliases.toml"):
-        content = (defaults / name).read_bytes()
+    for name in ("profiles.toml", "aliases.toml", "env"):
+        src = defaults / name
+        if not src.exists() and name == "env":
+            src = Path(__file__).resolve().parents[1] / ".env.example"
+        content = src.read_bytes()
         path = args.config_dir / name
         try:
             with path.open("xb") as f:
                 f.write(content)
+            if name == "env":
+                try:
+                    path.chmod(0o600)
+                except OSError:
+                    pass
         except FileExistsError:
             kept.append(str(path))
         else:

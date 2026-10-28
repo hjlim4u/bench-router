@@ -3,7 +3,7 @@
 isolation 수준:
   isolated   — worktree만 공유하지 않음(완전 격리)
   shared     — 그룹 공용 scratchpad(agent별 노트·실험 결과)를 서로 읽음 → 같은 시행착오 방지
-각 worktree를 task.cwd로 넘겨 herdr.dispatch의 receipt·잠금·재전송 방지·결과 계약을 그대로 쓴다.
+새 그룹은 member 기록 디렉터리를 task.cwd로 넘기고, 실행기에는 원본 repo_cwd를 따로 준다.
 """
 import json
 import os
@@ -21,6 +21,7 @@ ISOLATION = ("isolated", "shared")
 GROUP_KEYS = ("schema_version", "group_id", "cwd", "isolation", "fanout", "max_parallel", "tasks")
 GROUP_SCHEMA_VERSION = "2.0"  # tasks[i] = {task, context?, selections[]}: Orchestrator가 고른 프로필로 fanout
 MAX_AGENTS = 16
+LAYOUT_VERSION = 2
 ROUND_KEYS = ("status", "round", "run_id", "result_path", "task_outcome", "worktree", "branch", "receipt_path",
               "delivery_state", "reassignment", "invocation")
 
@@ -129,10 +130,13 @@ def plan(g, cfg, mapping, snap, snap_warnings, availability, decision_options=No
     return members, warnings
 
 
-def _git(cwd, *args):
-    p = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, encoding="utf-8",
-                       errors="replace", shell=False)
-    if p.returncode:
+def _git(cwd, *args, check=True):
+    try:
+        p = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", shell=False)
+    except FileNotFoundError:
+        raise r.InputError("git is not installed. Please install git to use bench-router live dispatch.")
+    if check and p.returncode:
         raise r.InputError(f"git {args[0]}: {(p.stderr or p.stdout).strip()[:300]}")
     return p.stdout.strip()
 
@@ -142,14 +146,41 @@ def _same(a, b):
 
 
 def prepare_repo(cwd):
-    """cwd는 git 최상위여야 한다. run/worktree 디렉터리가 diff에 섞이지 않게 info/exclude에 등록."""
-    if not _same(_git(cwd, "rev-parse", "--show-toplevel"), cwd):
-        raise r.InputError("cwd: must be the top level of a git repository")
+    """cwd는 git 최상위여야 한다. git 미초기화 또는 커밋 부재 시 자동 init/commit 수행. info/exclude 등록."""
+    if not shutil.which("git"):
+        raise r.InputError("git is not installed. Please install git to use bench-router live dispatch.")
+
+    is_git_repo = False
+    try:
+        top = _git(cwd, "rev-parse", "--show-toplevel")
+        if _same(top, cwd):
+            is_git_repo = True
+        else:
+            raise r.InputError("cwd: must be the top level of a git repository")
+    except r.InputError as e:
+        if "must be the top level" in str(e):
+            raise
+        is_git_repo = False
+
+    if not is_git_repo:
+        _git(cwd, "init")
+
     exclude = Path(cwd) / _git(cwd, "rev-parse", "--git-common-dir") / "info" / "exclude"
     text = exclude.read_text("utf-8") if exclude.exists() else ""
     if ".bench-router/" not in text.split():
         exclude.parent.mkdir(parents=True, exist_ok=True)
         exclude.write_text(text + ("" if text.endswith("\n") or not text else "\n") + ".bench-router/\n", "utf-8")
+
+    has_commit = bool(_git(cwd, "rev-parse", "--verify", "HEAD", check=False))
+    if not has_commit:
+        _git(cwd, "add", "-A")
+        has_user = bool(_git(cwd, "config", "user.name", check=False))
+        commit_cmd = []
+        if not has_user:
+            commit_cmd.extend(["-c", "user.name=bench-router", "-c", "user.email=bench-router@local"])
+        commit_cmd.extend(["commit", "--allow-empty", "-m", "chore: initialize repository for bench-router live dispatch"])
+        _git(cwd, *commit_cmd)
+
     return bool(_git(cwd, "status", "--porcelain"))
 
 
@@ -159,6 +190,10 @@ def worktree(cwd, gid, label):
     if not wt.exists():
         _git(cwd, "worktree", "add", "-b", f"br/{gid}/{label}", str(wt), "HEAD")
     return wt
+
+
+def member_dir(gdir, label):
+    return gdir / "members" / label
 
 
 def collab_text(g, m, labels, shared):
@@ -179,7 +214,6 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
               dry_run=False, decision_options=None, responses=None, wait_ms=None, backend=herdr.BACKEND):
     gdir = herdr.bench_dir(g["cwd"]) / "groups" / g["group_id"]
     shared = gdir / "shared"
-    availability = None if dry_run else herdr._availability(None, cfg, which, backend)
     # Freeze the original input and selections once, then recover from this plan without new provider calls.
     plan_path = gdir / "plan.json"
     group_hash = r.canonical_hash(g)
@@ -188,14 +222,24 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
         if saved["group_hash"] != group_hash:
             return {"schema_version": g["schema_version"], "group_id": g["group_id"], "status": "conflict",
                     "warnings": [r.warn("group_conflict", "group inputs differ from the saved execution plan")]}
+        layout_version = saved.get("layout_version")
+        if layout_version == LAYOUT_VERSION:
+            if saved.get("backend") != backend:
+                return {"schema_version": g["schema_version"], "group_id": g["group_id"], "status": "conflict",
+                        "warnings": [r.warn("runner_conflict", "group was already started with another runner")]}
+        elif layout_version is not None:
+            return {"schema_version": g["schema_version"], "group_id": g["group_id"], "status": "conflict",
+                    "warnings": [r.warn("group_layout", "saved group has an unsupported execution layout")]}
+        availability = herdr._availability(None, cfg, which, backend)
         members, warnings = saved["members"], saved["warnings"]
         # Existing receipts are recovered even after guide/config changes. Unstarted members must
         # still pass one group-wide preflight, so stale choices cannot produce a partial new fanout.
         for m in members:
             i = m["index"]
-            wt = Path(g["cwd"]) / ".bench-router" / "worktrees" / g["group_id"] / m["label"]
+            receipt_cwd = member_dir(gdir, m["label"]) if layout_version == LAYOUT_VERSION else \
+                Path(g["cwd"]) / ".bench-router" / "worktrees" / g["group_id"] / m["label"]
             if any(rc["task_id"] == g["tasks"][i]["task_id"] and rc["round"] == g["tasks"][i]["round"]
-                   for rc in herdr.receipts(wt)):
+                   for rc in herdr.receipts(receipt_cwd)):
                 continue
             sel = m.get("selection")
             if sel and sel["schema_version"] in r.GUIDED_SELECTIONS:
@@ -209,14 +253,21 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
             if chk["status"] != "selected":
                 m["status"] = chk["status"]
     else:
+        layout_version = LAYOUT_VERSION
+        availability = None if dry_run else herdr._availability(None, cfg, which, backend)
         members, warnings = plan(g, cfg, mapping, snap, snap_warnings, availability, decision_options, responses)
     out = {"schema_version": g["schema_version"], "group_id": g["group_id"], "isolation": g["isolation"],
            "fanout": g["fanout"], "shared_dir": None if g["isolation"] == "isolated" else str(shared),
            "members": members, "warnings": warnings}
     labels = [m["label"] for m in members if m["status"] == "planned"]
     for m in members:
-        m["worktree"] = str(Path(g["cwd"]) / ".bench-router" / "worktrees" / g["group_id"] / m["label"])
-        m["branch"] = f"br/{g['group_id']}/{m['label']}"
+        if layout_version == LAYOUT_VERSION:
+            m["receipt_cwd"] = str(member_dir(gdir, m["label"]))
+            m.setdefault("worktree", None)
+            m.setdefault("branch", None)
+        else:  # old frozen groups retain their router-created intermediate checkout.
+            m["worktree"] = str(Path(g["cwd"]) / ".bench-router" / "worktrees" / g["group_id"] / m["label"])
+            m["branch"] = f"br/{g['group_id']}/{m['label']}"
     if any(m["status"] == "stale_assessment" for m in members):  # 일부만 옛 판단으로 돌리지 않는다
         return {**out, "status": "stale_assessment", "warnings": warnings + [r.warn(
             "stale_assessment", "a selection's assessment_digest no longer matches; re-evaluate the group's tasks")]}
@@ -236,8 +287,12 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
     def run(m):
         rt = g["raw_tasks"][m["index"]]
         try:
-            wt = worktree(g["cwd"], g["group_id"], m["label"])
-            t = r.validate_task({**rt, "cwd": str(wt), "prompt": rt["prompt"] + collab_text(g, m, labels, shared)})
+            if layout_version == LAYOUT_VERSION:
+                receipt_cwd, repo_cwd = member_dir(gdir, m["label"]), g["cwd"]
+                receipt_cwd.mkdir(parents=True, exist_ok=True)
+            else:
+                receipt_cwd, repo_cwd = worktree(g["cwd"], g["group_id"], m["label"]), None
+            t = r.validate_task({**rt, "cwd": str(receipt_cwd), "prompt": rt["prompt"] + collab_text(g, m, labels, shared)})
             # worker task는 구조상 cwd(worktree)·prompt(협업 안내)가 group task와 달라 digest를 다시 비교하지 않는다.
             # 판단 입력 검사는 plan에서 끝났고, context·제약·가용성은 dispatch가 다시 검사한다.
             sel = m.get("selection")
@@ -246,7 +301,8 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                                  context=g["contexts"][m["index"]], selection=sel,
                                  selection_mode="orchestrator_pinned" if sel else "parallel_pinned",
                                   check_digest=False, decision_options=decision_options, wait_ms=wait_ms,
-                                  availability=availability, backend=backend)
+                                  availability=availability, backend=backend, repo_cwd=repo_cwd,
+                                  repo_prepared=layout_version == LAYOUT_VERSION)
             rnd = {k: res.get(k) for k in ROUND_KEYS}
             rnd["round"] = t["round"]
             if res["status"] != "completed":
@@ -255,7 +311,7 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
             rnd = {"status": "error", "round": rt["round"], "error": str(e)}
         m["rounds"].append(rnd)
         m["status"] = rnd["status"]
-        m.update({k: rnd[k] for k in ("worktree", "branch") if rnd.get(k)})  # the agent's work lives in the board's
+        m.update({k: rnd[k] for k in ("worktree", "branch") if rnd.get(k)})
 
     def run_all(ms):
         with ThreadPoolExecutor(g["max_parallel"]) as ex:
@@ -269,7 +325,10 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                     return {**out, "status": "conflict", "warnings": warnings + [r.warn(
                         "group_plan_changed", "a different plan was saved concurrently; rerun to recover it")]}
             else:
-                r.atomic_write(plan_path, json.dumps({"group_hash": group_hash, "members": members, "warnings": warnings},
+                frozen = {"group_hash": group_hash, "members": members, "warnings": warnings}
+                if layout_version == LAYOUT_VERSION:
+                    frozen.update(layout_version=LAYOUT_VERSION, backend=backend)
+                r.atomic_write(plan_path, json.dumps(frozen,
                                                     ensure_ascii=False).encode("utf-8"))
             run_all([m for m in members if m["status"] == "planned"])
     except herdr.Busy as e:

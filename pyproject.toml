@@ -19,4 +19,4 @@ bench-router = "bench_router.cli:main"
 packages = ["bench_router"]
 
 [tool.setuptools.package-data]
-bench_router = ["*.toml", "index.json", "defaults/*.toml"]
+bench_router = ["*.toml", "index.json", "defaults/*"]

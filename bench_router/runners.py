@@ -17,7 +17,7 @@ def _prepare(rc, prompt):
     """Router worktree from HEAD + input.txt. Nothing has been started yet, so a failure settles as not attempted."""
     wt, branch = h.run_worktree(rc), f"br/{rc['run_id']}"
     from . import parallel
-    parallel._git(rc["cwd"], "worktree", "add", "-b", branch, str(wt), "HEAD")
+    parallel._git(h.repo_cwd(rc), "worktree", "add", "-b", branch, str(wt), "HEAD")
     rc.update(worktree=str(wt), branch=branch)
     r.atomic_write(Path(rc["run_dir"]) / "input.txt", prompt.encode("utf-8"))
     (wt / h.RESULT_REL / rc["run_id"]).mkdir(parents=True, exist_ok=True)

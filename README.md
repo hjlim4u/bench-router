@@ -93,7 +93,7 @@ flowchart TD
 Steps 2, 3 and 5 need short answers from a model. bench-router does not call one on its own: it returns the question (exit code 17) and the caller answers it, automatically when you use the Agent Skill. You can also skip routing and name a profile yourself with `--profile`.
 
 > [!TIP]
-> **Routing stays cheap.** The questions go to a small model — `haiku` on Claude Code, `gpt-6-luna` on Codex, `flash` on Antigravity (the bundled `bench-decider` agent), or the optional Jev API — and contain only a task summary and short guide quotes, never your code or full benchmark tables. Vendor advice is asked once per vendor, not once per profile, and finished answers are reused when benchmark data is refreshed.
+> **Routing stays cheap.** The questions go to a small model — `haiku` on Claude Code, `gpt-6-luna` on Codex, `flash` on Antigravity (the bundled `bench-decider` agent), or the optional Jev API — and contain only a task summary and short guide quotes, never your code or full benchmark tables. Vendor advice is asked once per vendor, not once per profile, in one independent guidance round; finished answers are reused when benchmark data is refreshed.
 
 <details>
 <summary><b>Implementation terms for each step</b></summary>
@@ -102,7 +102,7 @@ Steps 2, 3 and 5 need short answers from a model. bench-router does not call one
 |---|---|
 | 1 | hard constraints: `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, `local_only`, `max_estimated_cost_usd` |
 | 2 | `analysis` stage: facets such as `task:repo_coding`, `lang:ko`; workload `clarity`, `reasoning`, `autonomy`, `deliverable`; keyword guesses are `rule_hints` |
-| 3 | `guidance:<vendor>` stage; candidates are `documented`, `alternative` (needs `select --accept-provisional`) or `provisional` (`guidance_missing`) |
+| 3 | one `guidance` stage containing independent `guidance:<vendor>` questions; candidates are `documented`, `alternative` (needs `select --accept-provisional`) or `provisional` (`guidance_missing`) |
 | 4 | snapshot `snapshot.json` + facet index `index.json`; exact protocol match or `model_proxy_comparison` |
 | 5 | `benchmark` stage; a unit is `accepted` at relevance ≥ 0.8 tied to a core requirement |
 | 6 | pending answer: `decision_required`; several candidates: `upstream_selection_required` (both exit 17); decision models configurable with `BENCH_ROUTER_DECISION_MODEL` |
@@ -203,7 +203,7 @@ Without a clone, install the CLI with `uv tool install 'bench-router[arena] @ gi
 > export PATH="$HOME/.local/bin:$PATH"
 > herdr --version                                      # Confirm 0.9.3+ (https://herdr.dev)
 > herdr plugin install eliasstravik/herdr-projects     # Install herdr-projects plugin
-> herdr-projects version                               # Confirm 1.2.1
+> herdr-projects version                               # Confirm 1.x+ (1.2+ recommended)
 > ```
 
 > [!TIP]
