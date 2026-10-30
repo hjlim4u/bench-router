@@ -4,7 +4,7 @@
 # `start` rows: (model, effort) starting points as the guide states them. `escalation` rows: effort changes the
 # guide makes conditional on evaluation or a step from the start, never starting points themselves.
 # `prompt_guidance` rows quote the vendor's own prompting guides for the selected model (output only; they never
-# take part in selection or hashes). `when` is verbatim page text; `text` is the prompt snippet the page supplies.
+# take part in selection or hashes). `models` is required: only the models the quoted page itself covers. `when` is verbatim page text; `text` is the prompt snippet the page supplies.
 # Gemini gives model roles and a model-independent thinking rule (`effort_class`), resolved per model from
 # that page's `default`/`supported` levels.
 version = "2026-10-26.1"
@@ -44,10 +44,6 @@ capture = "_raw/_archived/2026-10-24-openai-gpt-6-prompting-best-practices.md"
 url = "https://developers.openai.com/api/docs/guides/prompt-engineering"
 wiki = "references/sources/openai-prompting-guides.md"
 capture = "_raw/_archived/2026-10-24-openai-prompt-engineering.md"
-[sources.openai_codex_prompting]
-url = "https://developers.openai.com/codex/prompting"
-wiki = "references/sources/openai-prompting-guides.md"
-capture = "_raw/_archived/2026-10-24-openai-codex-prompting.md"
 [sources.gemini_prompting_strategies]
 url = "https://ai.google.dev/gemini-api/docs/prompting-strategies"
 wiki = "references/sources/google-gemini-prompting-strategies.md"
@@ -223,6 +219,7 @@ when = "Use maximum thinking for advanced coding, math, or multi-step planning"
 # --- vendor: openai
 
 [[vendor.openai.prompt_guidance]]
+models = ["gpt-6-luna", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-astra"]
 source = "openai_prompting_gpt_6"
 topic = "Initiative and follow-through"
 when = "To encourage more autonomous work, start with this prompt:"
@@ -233,6 +230,7 @@ When the user expresses intent to perform new work or fix an existing issue, per
 '''
 
 [[vendor.openai.prompt_guidance]]
+models = ["gpt-6-luna", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-astra"]
 source = "openai_prompting_gpt_6"
 topic = "Follow through on requests that imply authorization"
 when = "Prompt the model to follow through if the user’s prompt implies authorization:"
@@ -241,6 +239,7 @@ When the user's prompt indicates a request for action, such as "can you...", "I 
 '''
 
 [[vendor.openai.prompt_guidance]]
+models = ["gpt-6-luna", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-astra"]
 source = "openai_prompting_gpt_6"
 topic = "Instruction priority"
 when = "Make the priority of user instructions and skills explicit."
@@ -249,6 +248,7 @@ The user's instructions take precedence over guidelines provided in a skill. If 
 '''
 
 [[vendor.openai.prompt_guidance]]
+models = ["gpt-6-luna", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-astra"]
 source = "openai_prompting_gpt_6"
 topic = "Testing and verification"
 when = "For coding tasks, calibrate how much testing and verification a change requires. This can help avoid unnecessary tests or repeated checks for small changes."
@@ -257,11 +257,6 @@ Do not write tests for reversible, low-impact changes that mirror the implementa
 
 Run tests appropriate to the change and complete required checks. Once those pass, broaden or repeat testing only when new changes, failures, or unresolved concerns justify it; otherwise, continue toward completing the task.
 '''
-
-[[vendor.openai.prompt_guidance]]
-source = "openai_codex_prompting"
-topic = "Codex prompt contents"
-when = "A useful Codex prompt names the behavior you want, points to the relevant code or reproduction steps, preserves important constraints, and says how to verify the change."
 
 [[vendor.openai.prompt_guidance]]
 models = ["gpt-6.1-terra"]
@@ -341,36 +336,43 @@ When you change code that can be run, built, or type-checked, run a real check t
 # --- vendor: gemini
 
 [[vendor.gemini.prompt_guidance]]
+models = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-pro-preview"]
 source = "gemini_prompting_strategies"
 topic = "Be precise and direct"
 when = "**Be precise and direct:** State your goal clearly and concisely. Avoid unnecessary or overly persuasive language."
 
 [[vendor.gemini.prompt_guidance]]
+models = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-pro-preview"]
 source = "gemini_prompting_strategies"
 topic = "Consistent structure"
 when = "**Use consistent structure:** Employ clear delimiters to separate different parts of your prompt. XML-style tags (e.g., `<context>`, `<task>`) or Markdown headings are effective. Choose one format and use it consistently within a single prompt."
 
 [[vendor.gemini.prompt_guidance]]
+models = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-pro-preview"]
 source = "gemini_prompting_strategies"
 topic = "Critical instructions first"
 when = "**Prioritize critical instructions:** Place essential behavioral constraints, role definitions (persona), and output format requirements in the System Instruction or at the very beginning of the user prompt."
 
 [[vendor.gemini.prompt_guidance]]
+models = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-pro-preview"]
 source = "gemini_prompting_strategies"
 topic = "Verbosity"
 when = "**Control output verbosity:** By default, Gemini 3 models provide direct and efficient answers. If you need a more conversational or detailed response, you must explicitly request it in your instructions."
 
 [[vendor.gemini.prompt_guidance]]
+models = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-pro-preview"]
 source = "gemini_prompting_strategies"
 topic = "Reasoning and planning"
 when = "Gemini 2.5 and 3 series models automatically generate internal \"thinking\" text to improve reasoning performance. As such, it's generally not necessary to have the model outline, plan, or detail reasoning steps in the returned response itself. For problems that require heavy reasoning, simple requests like \"Think very hard before answering\" can improve performance, though at the cost of extra thinking tokens."
 
 [[vendor.gemini.prompt_guidance]]
+models = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-pro-preview"]
 source = "gemini_prompting_strategies"
 topic = "Ambiguity and permission handling"
 when = "**Ambiguity and permission handling:** Defines when the model is permitted to make assumptions versus when it must pause execution to ask the user for clarification or permission."
 
 [[vendor.gemini.prompt_guidance]]
+models = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-pro-preview"]
 source = "gemini_prompting_strategies"
 topic = "Persistence and recovery"
 when = "**Persistence and Recovery:** The degree to which the model attempts to self-correct errors. High persistence increases success rates but risks higher token costs or loops."

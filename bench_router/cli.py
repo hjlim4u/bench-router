@@ -113,7 +113,7 @@ def _load(args):
 
 
 def _prompt_guidance(args):
-    """Quoted prompting guide of the selected model's vendor; the router never rewrites a prompt."""
+    """Quoted vendor prompting guide that covers the selected model; the router never rewrites a prompt."""
     from . import decision
     model = args.model
     if args.profile:
@@ -123,7 +123,7 @@ def _prompt_guidance(args):
         model = profiles[args.profile]["model_id"]
     guidance = decision.prompt_guidance(decision.load_guidelines(), model)
     return {"schema_version": r.SCHEMA_VERSION, "status": "ok", "profile": args.profile, "prompt_guidance": guidance,
-            "warnings": [] if guidance else [r.warn("prompt_guidance_missing", f"no vendor prompting guide for {model}")]}
+            "warnings": [] if guidance and guidance["items"] else [r.warn("prompt_guidance_missing", f"no vendor prompting guide for {model}")]}
 
 
 def _select(args):
@@ -364,7 +364,9 @@ TASK_EPILOG = """task file (replace cwd with your existing absolute repository p
   starting with a letter/digit); round: integer >= 1; summary/prompt: nonempty.
   Optional: context_files (paths within cwd), constraints, priority
   (quality|balanced|cost; default balanced), exclude_profiles, facets,
-  execution (interactive|headless; default interactive).
+  execution (interactive|headless; default interactive),
+  profile_filter ({"include"|"exclude": {"vendor"|"model"|"effort": [..]}};
+  one included model and effort skip vendor guidance and benchmarks).
   interactive uses a board agent conversation; headless runs a one-shot CLI
   without approval prompts and cannot receive tell messages.
   facets are task tags as {axis: [value]}; obtain allowed values with wiki facets.

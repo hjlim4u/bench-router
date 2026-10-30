@@ -230,11 +230,13 @@ bench-router feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --e
   "constraints": {"max_cost_tier": "high", "min_context_tokens": 0, "local_only": false,
                   "timeout_ms": 900000, "required_capabilities": ["filesystem_write"]},
   "priority": "balanced",
-  "exclude_profiles": []
+  "exclude_profiles": [],
+  "profile_filter": {"include": {"vendor": ["openai"]}, "exclude": {"effort": ["xhigh"]}}
 }
 ```
 
 - Required: `schema_version`, `task_id` (`[A-Za-z0-9][A-Za-z0-9_-]{0,63}`), `round` (≥1), `summary` (≤4000 chars), `prompt` (≤256 KiB), `cwd` (existing absolute path).
+- Optional: `profile_filter` (`{"include"|"exclude": {"vendor"|"model"|"effort": [..]}}`, exact IDs; vendors come from the guide's model list, so unguided models fail vendor rules). It is an eligibility constraint, so guidance requests shrink to the remaining vendors. One included model and effort that leave a single eligible profile skip all decision stages (`user_specified`); an included model alone restricts guidance to its rows and skips the benchmark review when one suitable profile remains.
 - Optional: `facets` (`{axis: [value]}`). Used when the Orchestrator explicitly tags task characteristics defined in `wiki facets`, reflected in `evidence` table queries.
 - Unrecognized keys, NaN/Infinity, duplicate JSON keys, invalid UTF-8, and `context_files` pointing outside `cwd` return exit code 2.
 - During live dispatch, the prompt combined with execution contract text must not exceed 120 KiB, because Herdr passes prompts strictly as single argv arguments.
@@ -251,7 +253,7 @@ The classification and quality/coverage formulas below apply to default fact eva
 1. **Classification**
    - Applies summary keyword and `context_files` extension rules. A category is adopted only when two or more distinct rules match within that single category.
    - Unmatched tasks fall back to `general`, recording `fallback_reason`.
-2. **Hard Constraints**: Applies `enabled`, `exclude_profiles`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, and `local_only`. If context is provided, `tokens.required_context` and `max_estimated_cost_usd` are applied (`routing.CONSTRAINTS`). Live mode checks executable/kind consistency, PATH availability, `agy models`, and optional CodeBurn quota. Unsupported arguments are rejected prior to submission.
+2. **Hard Constraints**: Applies `enabled`, `exclude_profiles`, `profile_filter`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, and `local_only`. If context is provided, `tokens.required_context` and `max_estimated_cost_usd` are applied (`routing.CONSTRAINTS`). Live mode checks executable/kind consistency, PATH availability, `agy models`, and optional CodeBurn quota. Unsupported arguments are rejected prior to submission.
 3. **Evidence and Scoring**
    - Category weights `w` and evidence mappings `v` compute evidence weights `a_b = Σ w_c·v_cb`.
    - Normalizes percentiles across the cohort population (`(mean rank − 1)/(N − 1)`, or 0.5 if N=1).
