@@ -35,7 +35,18 @@ PROTOCOL = ("suite", "version", "subset", "metric", "direction", "variant", "dat
 GUIDANCE_OPTIONS = {"__none__": "No documented starting point covers the requirements.",
                     "__unknown__": "Task information is insufficient to choose."}
 # Fit states that may be chosen: alternatives need the caller's explicit acceptance, like provisional ones.
-SELECTABLE = ("documented", "provisional", "alternative")
+SELECTABLE = ("documented", "provisional", "alternative", "user_specified")
+USER = ("user", None)  # (provider, model) of a decision the task's profile_filter fixed without stages
+
+
+def _include(t):
+    return t.get("profile_filter", {}).get("include", {})
+
+
+def _user_pinned(t):
+    """The task names one model and one effort: nothing is left for vendor guidance or benchmarks to decide."""
+    inc = _include(t)
+    return len(inc.get("model", ())) == 1 and len(inc.get("effort", ())) == 1
 
 
 def _effort(value, what):
@@ -220,21 +231,24 @@ def _guidance_groups(profiles, guide):
     return sorted(groups.items(), key=lambda kv: (kv[0] is None, kv[0] or ""))
 
 
-def guidance_request(analysis, vendor, guide):
-    """One request per vendor in its guide's shape. No profile IDs, so profile changes do not stale the answer."""
+def guidance_request(analysis, vendor, guide, models=None):
+    """One request per vendor in its guide's shape. No profile IDs, so profile changes do not stale the answer.
+    `models`: the task's included models; the guide then only decides among their starting points."""
     v = guide["vendors"][vendor]
+    keep = lambda m: models is None or m in models
     if v["kind"] == "combos":
         questions = {f"guidance:{vendor}": {"type": "choice", "instructions": "Choose the starting point this guide assigns to the requirements.",
                                             "criteria": {**{oid: (o["context"] + ": " if o.get("context") else "") + o["when"]
-                                                            for oid, o in v["options"].items()}, **GUIDANCE_OPTIONS}}}
+                                                            for oid, o in v["options"].items() if keep(o["model"])}, **GUIDANCE_OPTIONS}}}
     else:
         questions = {f"guidance:{vendor}:model": {"type": "choice", "instructions": "Choose the model whose published role covers the requirements.",
-                                                  "criteria": {**{f"model:{m}": role for m, role in v["models"].items()}, **GUIDANCE_OPTIONS}},
+                                                  "criteria": {**{f"model:{m}": role for m, role in v["models"].items() if keep(m)}, **GUIDANCE_OPTIONS}},
                      f"guidance:{vendor}:effort": {"type": "choice", "instructions": "Choose the workload class for the thinking level.",
                                                    "criteria": {**{f"effort:{c}": w for c, w in v["classes"].items()},
                                                                 "__unknown__": GUIDANCE_OPTIONS["__unknown__"]}}}
     return provider.validate_request({"state": {"stage": "guidance", "analysis": analysis, "vendor": vendor,
-        "revision": v["revision"], "strategy": v["strategy"], **({"models": v["roles"]} if v.get("roles") else {}),
+        "revision": v["revision"], "strategy": v["strategy"],
+        **({"models": {m: role for m, role in v["roles"].items() if keep(m)}} if v.get("roles") else {}),
         "sources": {sid: guide["sources"][sid]["url"] for sid in v["sources"]},
         "instructions": "Apply only this vendor's dated guidance, quoted from its own pages, to the analysis; "
                         "do not compare vendors, borrow another vendor's rules, or invent capability. "
@@ -443,7 +457,8 @@ def validate_selection(raw):
     r._str_list(d["inputs"].get("omitted_profiles", []), "selection omitted_profiles")
     r._str_list(d["uncertainty"], "selection uncertainty")
     kinds = [stage.get("stage") if isinstance(stage, dict) else None for stage in d["stages"]]
-    if (not kinds or kinds[0] != "analysis" or any(kind not in ("guidance", "benchmark") for kind in kinds[1:])
+    pinned = not kinds and (d["provider"], d["model"]) == USER and _user_pinned(d["task"])
+    if not pinned and (not kinds or kinds[0] != "analysis" or any(kind not in ("guidance", "benchmark") for kind in kinds[1:])
             or kinds.count("benchmark") > 1 or ("benchmark" in kinds and kinds[-1] != "benchmark")):
         raise r.InputError("selection: invalid stage order")
     for stage in d["stages"]:
@@ -454,7 +469,7 @@ def validate_selection(raw):
             raise r.InputError("selection: request stage mismatch")
         if stage != _stage_response(stage["request"], stage, None, {}, verify_model=False):
             raise r.InputError("selection: malformed stage record")
-    if (d["provider"], d["model"]) != (d["stages"][-1]["provider"], d["stages"][-1]["model"]):
+    if not pinned and (d["provider"], d["model"]) != (d["stages"][-1]["provider"], d["stages"][-1]["model"]):
         raise r.InputError("selection: provider/model differs from recorded execution")
     if old["assessment_digest"] != (assessment_digest(d) if external else r.canonical_hash(d)):
         raise r.InputError("selection: decision digest mismatch")
@@ -466,7 +481,7 @@ def validate_selection(raw):
         fit = fits.get(old["profile"]) if isinstance(fits, dict) else None
         if not isinstance(fit, dict) or fit.get("status") not in SELECTABLE:
             raise r.InputError("selection: profile must be an eligible, suitable assessment candidate")
-        if fit["status"] != "documented" and not raw["accept_provisional"]:
+        if fit["status"] not in ("documented", "user_specified") and not raw["accept_provisional"]:
             raise r.InputError(f"selection: {fit['status']} suitability requires accept_provisional=true")
     return {**old, "schema_version": raw["schema_version"], "decision": d,
             **({"accept_provisional": raw["accept_provisional"]} if external else {})}
@@ -584,6 +599,33 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
             return None
         return answers
 
+    def finish(d, pid, reason):
+        if pid is not None:
+            d["uncertainty"] += candidate_diagnostics(d, pid, base["candidate_facts"])
+        if pid is None and not assessment_only and selection is None:
+            return {**base, "status": "decision_unavailable", "assessment_digest": assessment_digest(d), "decision": d}
+        if assessment_only:
+            return {**base, "status": "ok", "validated_decision": d, "resolved_profile": pid}
+        base.update(validated_decision=d, resolved_profile=pid)
+        if selection is not None:
+            return apply_record(base, cfg, selection, check_digest)
+        record = {"schema_version": SELECTION_VERSION, "profile": pid, "assessment_digest": r.canonical_hash(d),
+                  "policy": POLICY, "reason": reason, "decision": d}
+        return apply_record(base, cfg, record, check_digest)
+
+    if _user_pinned(semantic_task) and len(base["candidates"]) == 1:
+        # The user already chose model and effort; asking guides or benchmarks would only repeat that choice.
+        pid = base["candidates"][0]["profile"]
+        model_id = next(p["model_id"] for p in cfg["profile"] if p["id"] == pid)
+        fits = {pid: {"status": "user_specified", "rule": "profile_filter", "guided": None,
+                      "guidance": guide["models"].get(model_id, {}), "diagnostics": []}}
+        evaluation = {"units": {}, "observations": {}, "missing": {}, "fits": fits, "comparisons": {},
+                      "comparison_scopes": {}, "prefiltered_units": {}, "auxiliary_units": [], "omitted_units": 0,
+                      "warnings": [], "benchmark_relevance": None, "relevance": {}, "analysis": None}
+        d = deepcopy({"inputs": base["decision_inputs"], "task": semantic_task, "stages": [], "evaluation": evaluation,
+                      "uncertainty": [], "provider": USER[0], "model": USER[1]})
+        return finish(d, pid, f"{pid}: model and effort specified by the task's profile_filter")
+
     try:
         req = analysis_request(semantic_task, index, base["task_facts"])
         answers = ask(req)
@@ -595,7 +637,8 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
         groups, fits = _guidance_groups(profiles, guide), {}
         guided = [(vendor, group) for vendor, group in groups if vendor is not None]
         if guided:
-            answers = ask_guidance([guidance_request(analysis, vendor, guide) for vendor, _ in guided])
+            models = _include(semantic_task).get("model")
+            answers = ask_guidance([guidance_request(analysis, vendor, guide, models) for vendor, _ in guided])
             if answers is None:
                 return pending
             for vendor, group in guided:
@@ -609,7 +652,9 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
         relevance = None
         comparisons = evaluation["comparisons"]
         records = {}
-        if comparisons:
+        suitable = [pid for pid, fit in fits.items() if fit["status"] in ("documented", "provisional")]
+        # The task fixed the model and one suitable effort remains: benchmarks have nothing left to compare.
+        if comparisons and not (_include(semantic_task).get("model") and len(suitable) == 1):
             req = comparison_request(analysis, evaluation, index)
             answers = ask(req)
             if answers is None:
@@ -619,7 +664,6 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
         if cursor != len(supplied):
             raise r.InputError("decision response: unused stage responses")
         evaluation.update(benchmark_relevance=relevance, relevance=records, analysis=analysis)
-        suitable = [pid for pid, fit in fits.items() if fit["status"] in ("documented", "provisional")]
         pid = suitable[0] if (len(suitable) == 1 and not fits[suitable[0]].get("pending_conditions")
                               and (relevance is None or any(relevance.values()))) else None
         uncertainty = [] if pid is not None else ["upstream_selection_required" if suitable else "decision_abstained"]
@@ -629,19 +673,7 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
             uncertainty.append("workload_unresolved")
         d = deepcopy({"inputs": base["decision_inputs"], "task": semantic_task, "stages": completed, "evaluation": evaluation,
                       "uncertainty": uncertainty, "provider": completed[-1]["provider"], "model": completed[-1]["model"]})
-        if pid is not None:
-            d["uncertainty"] += candidate_diagnostics(d, pid, base["candidate_facts"])
-        if pid is None and not assessment_only and selection is None:
-            return {**base, "status": "decision_unavailable", "assessment_digest": assessment_digest(d), "decision": d}
-        if assessment_only:
-            return {**base, "status": "ok", "validated_decision": d, "resolved_profile": pid}
-        base.update(validated_decision=d, resolved_profile=pid)
-        if selection is not None:
-            return apply_record(base, cfg, selection, check_digest)
-        record = {"schema_version": SELECTION_VERSION, "profile": pid, "assessment_digest": r.canonical_hash(d),
-                  "policy": POLICY, "reason": f"{pid}: sole suitable profile; suitability={fits[pid]['rule']}",
-                  "decision": d}
-        return apply_record(base, cfg, record, check_digest)
+        return finish(d, pid, pid and f"{pid}: sole suitable profile; suitability={fits[pid]['rule']}")
     except r.InputError as exc:
         if selection is not None:
             return {**base, "status": "stale_assessment", "selected": None,
@@ -704,7 +736,7 @@ def evaluate(t, cfg, mapping, snap, snap_warnings, now, availability=None, conte
     if d:
         if not ev["comparisons"]:
             diagnostics.append("comparable_evaluation_missing")
-        analysis = ev["analysis"]
+        analysis = ev["analysis"] or {"unresolved_facets": [], "workload": {}}  # None: user-pinned, no analysis
         if analysis["unresolved_facets"] or "unknown" in analysis["workload"].values():
             diagnostics.append("workload_unresolved")
     return {"schema_version": ASSESSMENT_VERSION, "status": result["status"],

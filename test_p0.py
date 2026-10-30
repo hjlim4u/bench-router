@@ -1512,6 +1512,59 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertEqual([stage["provider"] for stage in stages], ["jev", "jev", "subagent"])
         self.assertEqual([stage["request"]["state"].get("vendor") for stage in stages], [None, "claude", "openai"])
 
+    def filtered(self, **flt):
+        self.task = r.validate_task({**{k: v for k, v in self.task.items() if k != "profile_filter"},
+                                     "schema_version": "1.0", "profile_filter": flt})
+
+    def test_v115_user_pinned_model_and_effort_skip_every_decision_stage(self):
+        self.ps.append(profile("light-high", model_id="gpt-6-luna", reasoning_effort="high"))
+        self.cfg = config(self.ps)
+        self.filtered(include={"model": ["gpt-6-luna"], "effort": ["high"]})
+        with mock.patch.object(self.d.provider, "decide", side_effect=AssertionError("no decision stage")):
+            out = self.route()
+            self.assertEqual((out["status"], out["selected"]["profile"]), ("selected", "light-high"))
+            selection = {k: v for k, v in out["selection"].items() if k != "source"}
+            self.assertEqual((selection["decision"]["stages"], selection["decision"]["provider"]), ([], "user"))
+            self.assertEqual(self.route(selection=selection)["selected"], out["selected"])  # replays offline
+            assessment = self.d.evaluate(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", env={})
+        self.assertEqual((assessment["status"], assessment["recommendation"]["profile"]), ("ok", "light-high"))
+        self.assertEqual(self.d.bind(assessment, "light-high", {"id": "user", "version": "1"}, "named")["profile"], "light-high")
+        forged = {**selection, "decision": {**selection["decision"], "task": {**selection["decision"]["task"], "profile_filter": {
+            "include": {"model": ["gpt-6-luna"]}}}}}  # stage-free records need a task that pins model and effort
+        with self.assertRaisesRegex(r.InputError, "stage order"):
+            self.d.validate_selection(forged)
+
+    def test_v116_profile_filter_narrows_candidates_and_guidance_vendors(self):
+        self.filtered(exclude={"vendor": ["claude"]})
+        packet = self.fit_packet()
+        self.assertEqual({q["request"]["state"]["vendor"] for q in packet["decision"]["requests"]}, {"openai"})
+        self.assertIn("filtered_by_task:exclude.vendor",
+                      json.dumps(r.assess(self.task, self.cfg, MAPPING, None, [], NOW)["candidates"]))
+        self.ps.append(profile("unguided", model_id="vendorless-1", reasoning_effort="low"))
+        self.cfg = config(self.ps)
+        self.assertNotIn("unguided", self.route()["fit_profiles"])  # unknown vendor fails closed
+        self.filtered(include={"effort": ["max"]})
+        self.assertEqual(self.route()["status"], "no_eligible_profile")
+        for bad in ({"include": {"vendor": ["openia"]}}, {"include": {"effort": ["huge"]}}, {"include": {}},
+                    {"only": {"model": ["x"]}}, {"exclude": {"model": []}}):
+            with self.assertRaises(r.InputError):
+                self.filtered(**bad)
+
+    def test_v117_named_model_asks_only_its_vendor_for_effort(self):
+        self.ps.append(profile("light-xhigh", model_id="gpt-6-luna", reasoning_effort="xhigh"))
+        self.cfg = config(self.ps)
+        self.filtered(include={"model": ["gpt-6-luna"]})
+        packet = self.fit_packet()
+        [request] = [q["request"] for q in packet["decision"]["requests"]]
+        self.assertEqual(request["state"]["vendor"], "openai")
+        self.assertTrue(all(c.startswith(("gpt-6-luna:", "__")) for c in request["questions"]["guidance:openai"]["criteria"]))
+        idx, snap = self.indexed(), self.exact({"light": {"u/coding": 0.9}})
+        out = self.finish("light", snap=snap, index=idx)
+        d = out["selection"]["decision"]
+        self.assertEqual(out["selected"]["profile"], "light")
+        self.assertTrue(d["evaluation"]["comparisons"])  # evidence exists, but one suitable effort leaves nothing to rank
+        self.assertNotIn("benchmark", [s["stage"] for s in d["stages"]])
+
     def test_v107_gemini_thinking_class_follows_each_models_configuration(self):
         levels = self.d.load_guidelines()["vendors"]["gemini"]["levels"]
         self.assertEqual(levels["gemini-3.5-flash-lite"], {"lookup": "minimal", "ordinary": "minimal", "advanced": "high"})

@@ -356,7 +356,9 @@ TASK_EPILOG = """task file (replace cwd with your existing absolute repository p
   starting with a letter/digit); round: integer >= 1; summary/prompt: nonempty.
   Optional: context_files (paths within cwd), constraints, priority
   (quality|balanced|cost; default balanced), exclude_profiles, facets,
-  execution (interactive|headless; default interactive).
+  execution (interactive|headless; default interactive),
+  profile_filter ({"include"|"exclude": {"vendor"|"model"|"effort": [..]}};
+  one included model and effort skip vendor guidance and benchmarks).
   interactive uses a board agent conversation; headless runs a one-shot CLI
   without approval prompts and cannot receive tell messages.
   facets are task tags as {axis: [value]}; obtain allowed values with wiki facets.

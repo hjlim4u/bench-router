@@ -187,7 +187,8 @@ def _parse_time(v, name):
 # ---------- task.json (04 입력 계약) ----------
 
 TASK_REQUIRED = ("schema_version", "task_id", "round", "summary", "prompt", "cwd")
-TASK_OPTIONAL = ("context_files", "constraints", "priority", "exclude_profiles", "facets", "execution")
+TASK_OPTIONAL = ("context_files", "constraints", "priority", "exclude_profiles", "facets", "execution", "profile_filter")
+FILTER_AXES = ("vendor", "model", "effort")
 EXECUTIONS = ("interactive", "headless")
 CONSTRAINT_DEFAULTS = {"max_cost_tier": "high", "min_context_tokens": 0, "local_only": False,
                        "timeout_ms": 900000, "required_capabilities": []}
@@ -476,12 +477,54 @@ def validate_task(raw):
     if not isinstance(facets, dict):
         raise InputError("task.facets: object {axis: [values]} required")
     t["facets"] = {a: _str_list(v, f"task.facets.{a}") for a, v in facets.items()}
+    if "profile_filter" in raw:  # absent stays absent so earlier task hashes and selection records still match
+        t["profile_filter"] = _profile_filter(raw["profile_filter"])
     return t
+
+
+def _profile_filter(raw):
+    """{include?, exclude?: {vendor?, model?, effort?: [..]}}; exact IDs, no prefix matching."""
+    if not isinstance(raw, dict) or not raw or set(raw) - {"include", "exclude"}:
+        raise InputError("task.profile_filter: object with include and/or exclude required")
+    from . import decision  # vendors are defined by the guide
+    vendors = decision.load_guidelines()["vendors"]
+    out = {}
+    for side, rule in raw.items():
+        if not isinstance(rule, dict) or not rule or set(rule) - set(FILTER_AXES):
+            raise InputError(f"task.profile_filter.{side}: object with vendor, model and/or effort required")
+        out[side] = {axis: _str_list(v, f"task.profile_filter.{side}.{axis}") for axis, v in rule.items()}
+        if not all(out[side].values()):
+            raise InputError(f"task.profile_filter.{side}: lists must not be empty")
+        if set(out[side].get("effort", [])) - set(EFFORT_ORDER):
+            raise InputError(f"task.profile_filter.{side}.effort: one of {list(EFFORT_ORDER)}")
+        if set(out[side].get("vendor", [])) - set(vendors):
+            raise InputError(f"task.profile_filter.{side}.vendor: one of {sorted(vendors)}")
+    return out
+
+
+def _task_filter(p, t, x):
+    f = t.get("profile_filter")
+    if not f:
+        return []
+    from . import decision
+    model = decision.load_guidelines()["models"].get(p["model_id"])
+    have = {"vendor": model and model["vendor"], "model": p["model_id"], "effort": p["reasoning_effort"]}
+    out = []
+    for axis, allowed in f.get("include", {}).items():
+        out += _check(have[axis] in allowed, f"filtered_by_task:include.{axis}",
+                      f"profile_filter.include.{axis}", have[axis], allowed)
+    for axis, denied in f.get("exclude", {}).items():
+        # An unguided model has no known vendor; fail closed so it cannot slip past a vendor exclusion.
+        out += _check(have[axis] is not None and have[axis] not in denied, f"filtered_by_task:exclude.{axis}",
+                      f"profile_filter.exclude.{axis}", have[axis], denied)
+    return out
 
 
 def semantic_task_hash(t):
     keys = ("prompt", "summary", "constraints", "priority", "cwd", "context_files", "exclude_profiles")
     extra = {"execution": t["execution"]} if t.get("execution", "interactive") != "interactive" else {}  # keeps old hashes
+    if "profile_filter" in t:
+        extra["profile_filter"] = t["profile_filter"]
     return canonical_hash({**{k: t[k] for k in keys}, **extra})
 
 
@@ -757,6 +800,7 @@ CONSTRAINTS = {
     "task_exclusion": lambda p, t, x: _check(p["id"] not in t["exclude_profiles"], "excluded_by_task",
                                              "exclude_profiles", p["id"], t["exclude_profiles"])
     if t["exclude_profiles"] else [],
+    "task_filter": _task_filter,
     "cost_tier": lambda p, t, x: _check(TIERS[p["cost_tier"]] <= TIERS[t["constraints"]["max_cost_tier"]],
                                         "cost_tier_exceeds_max", "cost_tier", p["cost_tier"],
                                         t["constraints"]["max_cost_tier"]),
