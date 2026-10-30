@@ -101,7 +101,7 @@ def load_guidelines():
     for vid, entry in vendors.items():
         known = {m for m, mm in models.items() if mm["vendor"] == vid}
         for row in entry["prompt_guidance"]:
-            if set(row.get("models", ())) - known:
+            if set(row["models"]) - known:
                 raise r.InputError(f"guideline {vid}: prompt_guidance names a model outside the guide")
     return {"version": guide["version"], "as_of": guide["as_of"], "vendors": vendors, "models": models,
             "sources": guide["sources"],
@@ -111,14 +111,15 @@ def load_guidelines():
 
 def _prompt_row(vid, row, sources):
     """One quoted passage of the vendor's own prompting guide (`text`: a prompt snippet the guide supplies)."""
-    if set(row) - {"models", "source", "topic", "when", "text"} or not {"source", "topic", "when"} <= set(row):
-        raise r.InputError(f"guideline {vid}: prompt_guidance needs source, topic, when; optional models, text")
+    # `models` is required: a vendor-wide default would hand one model's guide to its siblings.
+    if set(row) - {"models", "source", "topic", "when", "text"} or not {"models", "source", "topic", "when"} <= set(row):
+        raise r.InputError(f"guideline {vid}: prompt_guidance needs models, source, topic, when; optional text")
     if not row["source"].startswith(vid) or row["source"] not in sources:
         raise r.InputError(f"guideline {vid}: prompt_guidance source must belong to {vid}")
     for key in ("topic", "when", "text"):
         if key in row:
             r._str(row[key], f"guideline {vid} prompt_guidance.{key}", 20000)
-    return {**row, "models": r._str_list(row["models"], "prompt_guidance.models")} if "models" in row else dict(row)
+    return {**row, "models": r._str_list(row["models"], "prompt_guidance.models")}
 
 
 def prompt_guidance(guide, model_id):
@@ -129,7 +130,7 @@ def prompt_guidance(guide, model_id):
     vendor = guide["vendors"][model["vendor"]]
     items = [{**{k: row[k] for k in ("topic", "when", "text") if k in row},
               "source": {"id": row["source"], **guide["sources"][row["source"]]}}
-             for row in vendor["prompt_guidance"] if model_id in row.get("models", (model_id,))]
+             for row in vendor["prompt_guidance"] if model_id in row["models"]]
     return {"model": model_id, "vendor": vendor["id"], "revision": vendor["revision"],
             "guidelines_version": guide["version"], "items": items}
 

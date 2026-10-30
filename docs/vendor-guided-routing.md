@@ -103,8 +103,8 @@ Because guidelines are bundled within the package, Skills installed via copy ope
 
 ## Prompt Guidance for the Selected Model
 
-`bench-router prompt-guidance --profile <ID>` (or `--model <MODEL_ID>`) outputs verbatim official prompt guidance from the vendor of the selected model. It runs offline without writing files.
-Items consist of `topic`, verbatim `when` (the context of the advice), recommended prompt `text` (if provided), and provenance (`url`, wiki reference note, verbatim capture). Models absent from the guide return `prompt_guidance: null` with a `prompt_guidance_missing` warning.
+`bench-router prompt-guidance --profile <ID>` (or `--model <MODEL_ID>`) outputs verbatim official prompt guidance that the vendor's page states for the selected model; rows name their models explicitly, so a guide never reaches sibling models it does not cover. It runs offline without writing files.
+Items consist of `topic`, verbatim `when` (the context of the advice), recommended prompt `text` (if provided), and provenance (`url`, wiki reference note, verbatim capture). Models absent from the guide return `prompt_guidance: null`, and guided models no prompting page covers return empty `items`; both carry a `prompt_guidance_missing` warning.
 The router never alters prompts or rewrites prompts passed to `route`. Formulating improvements and presenting them to users is decided by upstream layers. Because vendor advice can conflict (e.g. adding vs. stripping instructions), only items from the selected model's vendor are shown, and applying them requires task-specific judgment.
 These items reside in `[[vendor.*.prompt_guidance]]` in `guidelines.toml` and do not affect selections, digests, or hashes. `when` and `text` must match verbatim captures in `wiki/_raw/_archived/`, verified by unit tests. The effectiveness of guides is not verified by this project; reported numbers reflect vendor self-reported results.
 

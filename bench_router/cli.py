@@ -105,7 +105,7 @@ def _load(args):
 
 
 def _prompt_guidance(args):
-    """Quoted prompting guide of the selected model's vendor; the router never rewrites a prompt."""
+    """Quoted vendor prompting guide that covers the selected model; the router never rewrites a prompt."""
     from . import decision
     model = args.model
     if args.profile:
@@ -115,7 +115,7 @@ def _prompt_guidance(args):
         model = profiles[args.profile]["model_id"]
     guidance = decision.prompt_guidance(decision.load_guidelines(), model)
     return {"schema_version": r.SCHEMA_VERSION, "status": "ok", "profile": args.profile, "prompt_guidance": guidance,
-            "warnings": [] if guidance else [r.warn("prompt_guidance_missing", f"no vendor prompting guide for {model}")]}
+            "warnings": [] if guidance and guidance["items"] else [r.warn("prompt_guidance_missing", f"no vendor prompting guide for {model}")]}
 
 
 def _select(args):

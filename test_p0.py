@@ -1548,6 +1548,15 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertEqual(self.d.prompt_guidance(guide, "claude-haiku-5-5")["vendor"], "claude")
         self.assertEqual({i["source"]["id"].split("_")[0] for i in self.d.prompt_guidance(guide, "gpt-6-luna")["items"]}, {"openai"})
         self.assertIsNone(self.d.prompt_guidance(guide, "gpt-7-new"))
+        # only the selected model's references: the Gemini 3 page does not reach gemini-4-argon
+        self.assertEqual(self.d.prompt_guidance(guide, "gemini-4-argon")["items"], [])
+        self.assertTrue(self.d.prompt_guidance(guide, "gemini-3.8-flash")["items"])
+        with mock.patch.object(r, "_load_toml", return_value={**r._load_toml(self.d.GUIDELINES)}) as load:
+            raw = load.return_value
+            raw["vendor"] = {**raw["vendor"], "gemini": {**raw["vendor"]["gemini"], "prompt_guidance": [
+                {k: v for k, v in raw["vendor"]["gemini"]["prompt_guidance"][0].items() if k != "models"}]}}
+            with self.assertRaisesRegex(r.InputError, "prompt_guidance needs models"):
+                self.d.load_guidelines()
         # prompt guidance is output only: it never changes the hashes that selection records bind
         self.assertEqual(guide["vendors"]["claude"]["hash"],
                          r.canonical_hash({k: v for k, v in r._load_toml(self.d.GUIDELINES)["vendor"]["claude"].items()
