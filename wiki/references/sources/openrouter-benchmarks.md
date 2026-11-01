@@ -7,7 +7,7 @@ sources:
   - "url:https://openrouter.ai/benchmarks"
   - "url:https://openrouter.ai/docs/api/api-reference/benchmarks/list-benchmarks"
 created: 2026-10-31T00:00:00Z
-updated: 2026-10-31T00:00:00Z
+updated: 2026-11-01T00:00:00Z
 as_of: 2026-10-30
 summary: >-
   OpenRouter's continuously run benchmark suite (GPQA, τ²-Airline, VGI, search, artifact/media, routers): what each measures, how it is graded, and how to read it.
@@ -50,7 +50,7 @@ snapshots:
 
 OpenRouter publishes "independent, reproducible measurements of the knobs you can actually set on an OpenRouter request: models, providers, search engines, and tool budgets." On 2026-10-30 the index listed 13 benchmarks and 2,302,647 task evaluations. Runs execute on Kepler, OpenRouter's benchmark harness, against production provider endpoints, so a score reflects the model **and** the provider serving it.
 
-The suite is a mirror and complement to collectors already in this wiki, not a new unit source: no `[[unit]]` id format exists for OpenRouter (see Open Questions).
+The classic leaderboards (GPQA Diamond, τ²-Bench Airline) are collected from the keyless daily `benchmark-leaderboard` export as `or:<benchmark>/default` units: [[entities/benchmarks/or/tau2-bench-airline]] (candidate) and `or:gpqa_diamond/default` on [[entities/benchmarks/mg/gpqa-diamond]] (archive). Search, VGI, artifact, media and router boards are not collected.
 
 ## Leaderboards
 
@@ -105,7 +105,7 @@ GPT-6.1 Sol's τ² rank sits far below its GPQA rank. With no std dev reported f
 
 ## Open Questions
 
-- No `[[unit]]` id format covers OpenRouter. Adding one (e.g. `or:<benchmark>`) would need an adapter in `bench_router/data.py` and a schema change in `wiki/AGENTS.md`.
+- Resolved 2026-11-01: `or:<benchmark>/<variant>` units, collected by the `or` source in `bench_router/data.py` from the keyless export.
 - τ²-Bench Airline overlaps the `multi_tool` task facet, but OpenRouter states it measures provider variance more than model capability. Whether it should feed routing at all is undecided.
 - The routers page defines no scale or method for its "Model Routing Index"; the capture is a table extract only.
 - Sketch scores ("Toughest critic", "Biggest fan" vs median) imply model judges, but the capture does not state the judging method.

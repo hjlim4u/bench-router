@@ -14,10 +14,10 @@ summary: >-
 base_confidence: 0.62
 lifecycle: reviewed
 lifecycle_changed: 2026-10-18
-lifecycle_reason: "Reviewed 2026-10-18 at the user's request (assistant review, not independent): structure, rules, LMArena categories vs the HF dataset, key figures vs saved sources, adoption consistency."
+lifecycle_reason: "Reviewed 2026-10-18 at the user's request (assistant review, not independent): structure, rules, LMArena categories vs the HF dataset, key figures vs saved sources, adoption consistency. 2026-11-01: mg:arc-agi-2/max promoted to active (independent-score coverage check)."
 tier: supporting
 created: 2026-10-17T00:00:00Z
-updated: 2026-10-18T00:00:00Z
+updated: 2026-11-01T00:00:00Z
 ---
 # ARC-AGI-2
 
@@ -40,9 +40,9 @@ id = "mg:arc-agi-2/max"
 desc = "Fluid, compositional visual reasoning: inferring a hidden transformation rule from a handful of example input/output grids and applying it exactly to a new one."
 metric = "pass_pct"
 status = "current"
-adoption = "candidate"
+adoption = "active"
 facets = { task = ["abstract_reasoning"] }
-reason = "MG stores 1 row per model (its peak tier), placing gpt-6.1-sol=94.2 in max and claude-opus-5-5=93.3 in high; arcprize.org has both at max (gpt-6.1-sol 94.2%, claude-opus-5-5 91.7%) and high (claude-opus-5-5 93.3%, gpt-6.1-sol 91.7%), but MG snapshot splits them across variants"
+reason = "Promoted 2026-11-01: 5 enabled profile models scored by ARC Prize at max (gpt-5.6-sol, gpt-5.6-luna, gpt-6-sol, gpt-6-luna, gpt-6.1-sol), all OpenAI. MG keeps 1 row per model at its peak tier, so claude-opus-5-5 and gemini-3.8-flash sit in mg:arc-agi-2/high; this unit alone cannot compare vendors"
 meaningful_gap = 9.2
 trust_grade = "B"
 

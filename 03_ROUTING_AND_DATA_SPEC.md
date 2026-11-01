@@ -41,6 +41,7 @@ SQLite maintains `sources`, `snapshots`, and `observations`. Selection, executio
 | The Model Gap (`mg`) | Active `mg:*` wiki units from public JSON | 24h / 7d |
 | SWE / TB exact | Approved manual imports; SWE-bench Verified / Terminal-Bench 4.0 pinned | 168h / 30d |
 | TB public | Official Terminal-Bench 4.0 page hydration; model proxy retaining its published agent/effort | 168h / 30d |
+| OpenRouter (`or`) | Keyless daily `benchmark-leaderboard` export, manifest SHA-256 checked; `or:*` wiki units, one auto-routing (else median provider) row per model | 24h / 7d |
 
 1. OS file locking restricts refresh to a single writer. Linux/WSL2 uses `fcntl`; Windows uses `msvcrt`. The two environments must never share the same physical cache concurrently.
 2. Skips if within TTL. `--force` bypasses TTL. No automatic timers are installed by the application.

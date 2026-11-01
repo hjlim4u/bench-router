@@ -161,7 +161,7 @@ All commands emit a **single JSON object** to stdout (except `explain` and `evid
 
 | Command | Action |
 |---|---|
-| `refresh [--source aa\|arena\|mg\|tb_auto] [--force] [--vault DIR]` | Fetches automated sources and compiles reviewed wiki pages (`index.json`) → publishes snapshot. Skips if within TTL |
+| `refresh [--source aa\|arena\|mg\|tb_auto\|or] [--force] [--vault DIR]` | Fetches automated sources and compiles reviewed wiki pages (`index.json`) → publishes snapshot. Skips if within TTL |
 | `refresh --source swe\|tb --import FILE` | Imports approved manual benchmark results |
 | `wiki compile [--vault DIR] [--check]` | Compiles reviewed benchmark wiki pages into `index.json` (`--check` validates only) |
 | `wiki facets` | Emits vocabulary, descriptions, and rule mappings available for tagging in `task.facets` |
@@ -289,6 +289,7 @@ Default evaluations provide `quality`, `coverage`, `coverage_band`, `exact_evide
 | `swe` | Manual `--import` results, pinned to SWE-bench Verified | `swe_verified_exact` | 168h / 30d |
 | `tb` | Manual `--import` results, pinned to Terminal-Bench 4.0 | `terminal_exact` | 168h / 30d |
 | `tb_auto` | Official Terminal-Bench 4.0 page hydration, published model/effort/agent retained as model proxies | `terminal_proxy` | 168h / 30d |
+| `or` | OpenRouter keyless daily `benchmark-leaderboard` export (CC BY 4.0): `latest.manifest.json` → dated JSON, SHA-256 checked on raw bytes; an export older than 7 days fails. Per model: newest version, then the `auto-routing` row, else the median provider | Active wiki units (`or:*`) | 24h / 7d |
 
 - **Response Handling**: 20 MiB response cap; request limits: aa 50, arena 300, mg 4, tb_auto 3. Status 401, 403, and 429 are never retried; 5xx and network errors retry up to 2 times.
 - **Timeouts**: Global timeout of **180s** per source (**600s** for arena). Per-request timeouts and backoffs dynamically scale down within remaining budgets.

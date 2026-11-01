@@ -14,10 +14,10 @@ summary: >-
 base_confidence: 0.62
 lifecycle: reviewed
 lifecycle_changed: 2026-10-18
-lifecycle_reason: "Reviewed 2026-10-18 at the user's request (assistant review, not independent): structure, rules, LMArena categories vs the HF dataset, key figures vs saved sources, adoption consistency."
+lifecycle_reason: "Reviewed 2026-10-18 at the user's request (assistant review, not independent): structure, rules, LMArena categories vs the HF dataset, key figures vs saved sources, adoption consistency. 2026-11-01: mg:deepswe/default promoted to active (independent-score coverage check)."
 tier: supporting
 created: 2026-10-17T00:00:00Z
-updated: 2026-10-18T00:00:00Z
+updated: 2026-11-01T00:00:00Z
 ---
 # DeepSWE
 
@@ -40,9 +40,9 @@ id = "mg:deepswe/default"
 desc = "Original, never-before-public software engineering tasks, built so agents can't just recall memorized GitHub fixes."
 metric = "pass_pct"
 status = "current"
-adoption = "candidate"
+adoption = "active"
 facets = { task = ["repo_coding"], shape = ["long_horizon"] }
-reason = "Only 1 profile model evaluated so far (gpt-6.1-sol=69.6 via AA Codex harness at max effort; AA xhigh is 73.2); claude-opus-5-5 and gemini-4-argon not yet on deepswe.datacurve.ai or AA"
+reason = "Promoted 2026-11-01: 6 enabled profile models have independent scores (deepswe-official: claude-opus-4-8, gpt-5.6-sol, gpt-5.6-luna, gemini-3.8-flash; artificial-analysis: gpt-6-sol, gpt-6.1-sol). claude-opus-5-5, claude-sonnet-5-5 and gpt-6-luna rows are vendor self-reports in the same MG cohort"
 meaningful_gap = 9.5
 trust_grade = "B"
 ```

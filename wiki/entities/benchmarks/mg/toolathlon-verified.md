@@ -17,7 +17,7 @@ lifecycle_changed: 2026-10-18
 lifecycle_reason: "Reviewed 2026-10-18 at the user's request (assistant review, not independent): structure, rules, LMArena categories vs the HF dataset, key figures vs saved sources, adoption consistency."
 tier: supporting
 created: 2026-10-17T00:00:00Z
-updated: 2026-10-18T00:00:00Z
+updated: 2026-11-01T00:00:00Z
 ---
 # Toolathlon-Verified
 
@@ -42,7 +42,7 @@ metric = "pass_pct"
 status = "current"
 adoption = "candidate"
 facets = { task = ["multi_tool"] }
-reason = "0 current profile models on the 17-row leaderboard (newest entry is claude-sonnet-5-5=77.8 self-reported; claude-opus-5-5, gpt-6.1-sol, gemini-4-argon not yet evaluated)"
+reason = "Coverage check 2026-11-01: 3 enabled profile models, all Claude; only claude-opus-4-8 is independent (toolathlon-official). claude-sonnet-5-5 and claude-opus-5-5 are vendor self-reports. Fewer than 2 independently scored models, so it stays candidate"
 meaningful_gap = 9.7
 trust_grade = "B"
 ```
