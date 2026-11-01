@@ -12,7 +12,7 @@ lifecycle_changed: 2026-10-18
 lifecycle_reason: "Reviewed 2026-10-18 at the user's request (assistant review, not independent): structure, rules, LMArena categories vs the HF dataset, key figures vs saved sources, adoption consistency."
 tier: supporting
 created: 2026-10-17T00:00:00Z
-updated: 2026-10-18T00:00:00Z
+updated: 2026-10-31T00:00:00Z
 ---
 # Terminal-Bench-Science
 
@@ -54,3 +54,4 @@ evidence = "dataset"
 - <https://huggingface.co/datasets/harborframework/terminal-bench-science>
 - [[_raw/hf/official.json]] — card description from the list API, fetched 2026-10-17
 - [[references/sources/hf-official-benchmarks]] — <https://huggingface.co/api/datasets?filter=benchmark:official>
+- [[references/sources/artificial-analysis-methodology]] — AA Intelligence Index v5.0 weights release 0.1.0 at 15% (70 tasks across 5 sciences, mini-swe-agent, 1,000-step cap).

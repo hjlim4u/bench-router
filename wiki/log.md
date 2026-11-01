@@ -21,3 +21,4 @@
 - [2026-10-24T13:24:26Z] WIKI_RESEARCH topic="Anthropic per-model prompting guides: effort guidance" rounds=1 sources_fetched=5 pages_created=1 backends_used=none
 - [2026-10-24T13:52:27Z] WIKI_RESEARCH topic="Vendor prompting guides (Gemini, OpenAI/Codex, Anthropic) for the selected model" rounds=1 sources_fetched=8 pages_created=2 backends_used=none
 - [2026-10-27T15:42:27Z] INGEST source=_raw/_archived/2026-10-27-openai-model-selection.md pages=references/sources/openai-model-selection.md scope="openai model selection update (GPT-6.1 Terra)"
+- [2026-10-30T23:43:41Z] INGEST source=_raw/_archived/2026-10-3*-openrouter-*.md,_raw/_archived/2026-10-31-artificial-analysis-*.md,_raw/web/openrouter-*.json pages_created=3 pages_updated=6 mode=append qmd=skipped_collection_unset

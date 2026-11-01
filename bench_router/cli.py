@@ -491,7 +491,8 @@ Offline: no selection, dispatch, network access or file writes.""",
   bench-router refresh --source mg
   bench-router refresh --source swe --import observations.json
 Automatic sources: aa = Artificial Analysis (ARTIFICIAL_ANALYSIS_API_KEY needed),
-arena = LMArena (pyarrow needed), mg = The Model Gap. Omitting --source refreshes
+arena = LMArena (pyarrow needed), mg = The Model Gap, tb_auto = Terminal-Bench 4.0
+public page, or = OpenRouter keyless daily export. Omitting --source refreshes
 all automatic sources. Manual sources swe = SWE-bench and tb = Terminal-Bench
 require --import; --import requires --source swe or --source tb.
 Compiles the wiki index and updates the shared snapshot. Failed sources keep
@@ -621,7 +622,7 @@ def main(argv=None):
     xp.add_argument("--max-units", type=int, default=12, help="maximum benchmark measurement units to show; integer >= 1 (default: %(default)s)")
     xp.add_argument("--format", choices=["json", "table"], default="json", help="output as a JSON object or readable text table (default: %(default)s)")
     fp = sub.add_parser("refresh", help="fetch sources and publish the routing snapshot")
-    fp.add_argument("--source", help="aa, arena, mg or tb_auto for automatic collection; swe or tb requires --import FILE (default: all automatic sources)")
+    fp.add_argument("--source", help="aa, arena, mg, tb_auto or or for automatic collection; swe or tb requires --import FILE (default: all automatic sources)")
     fp.add_argument("--force", action="store_true", help="fetch again even if cached source data has not expired (ignore TTL)")
     fp.add_argument("--import", dest="import_file", help="JSON file of approved manual observations; requires --source swe or --source tb")
     fp.add_argument("--vault", type=Path, help="benchmark wiki to compile; defaults to the clone wiki or installed index")

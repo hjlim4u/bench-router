@@ -1,7 +1,7 @@
 ---
 title: Hot Cache
-updated: 2026-10-27T15:42:27Z
-pages: 100
+updated: 2026-10-30T23:43:41Z
+pages: 103
 generated_by: obsidian-wiki memory hot
 ---
 
@@ -11,9 +11,9 @@ generated_by: obsidian-wiki memory hot
 
 ## Recent Activity
 
-- [2026-10-24] WIKI_RESEARCH topic=Anthropic per-model prompting guides: effort guidance rounds=1 sources_fetched=5 ...
 - [2026-10-24] WIKI_RESEARCH topic=Vendor prompting guides (Gemini, OpenAI/Codex, Anthropic) f... rounds=1 sources_fetched=8 ...
 - [2026-10-27] INGEST source=_raw/_archived/2026-10-27-openai-model-selection.md pages=references/sources/openai-model-selection.md scope=openai model selection update (GPT-6.1 Terra)
+- [2026-10-30] INGEST source=_raw/_archived/2026-10-3*-openrouter-*.md,_raw/_archived/20... pages_created=3 pages_updated=6 ...
 
 ## Active Threads
 
@@ -24,7 +24,7 @@ generated_by: obsidian-wiki memory hot
 
 ## Key Takeaways
 
-Captured Gemini, OpenAI GPT-6/prompt-engineering/Codex and extended Anthropic prompting excerpts; router exposes them via prompt-guidance without rewriting prompts
+OpenRouter and Artificial Analysis now have methodology source pages. AA Intelligence Index v5.0 dropped HLE (text-only) for HLE-Diamond, which puts the mg:hle/no_tools adoption reason on a source AA no longer refreshes in its index. OpenRouter's router leaderboard shows the best router only tying the best single model at medium effort, so cost per task matters for bench-router's own premise.
 
 ## Flagged Contradictions
 

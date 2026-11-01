@@ -14,10 +14,10 @@ summary: >-
 base_confidence: 0.62
 lifecycle: reviewed
 lifecycle_changed: 2026-10-18
-lifecycle_reason: "Reviewed 2026-10-18 at the user's request (assistant review, not independent): structure, rules, LMArena categories vs the HF dataset, key figures vs saved sources, adoption consistency."
+lifecycle_reason: "Reviewed 2026-10-18 at the user's request (assistant review, not independent): structure, rules, LMArena categories vs the HF dataset, key figures vs saved sources, adoption consistency. 2026-11-01: mg:agents-last-exam/default promoted to active (independent-score coverage check)."
 tier: supporting
 created: 2026-10-17T00:00:00Z
-updated: 2026-10-18T00:00:00Z
+updated: 2026-11-01T00:00:00Z
 ---
 # Agents' Last Exam
 
@@ -40,9 +40,9 @@ id = "mg:agents-last-exam/default"
 desc = "Real, economically valuable professional work — video editing, CAD, manufacturing simulation — done end-to-end."
 metric = "pass_pct"
 status = "current"
-adoption = "candidate"
+adoption = "active"
 facets = { task = ["professional_work"] }
-reason = "Only 1 profile model on Snorkel's 2026-10-01 leaderboard (43 rows): claude-opus-5-5=38.2 pass rate (Claude Code Max, rank 1); gpt-6.1-sol and gemini-4-argon not yet evaluated"
+reason = "Promoted 2026-11-01: 6 enabled profile models scored on the official ALE leaderboard (claude-opus-4-8, claude-opus-5-5, gpt-5.6-sol, gpt-5.6-luna, gpt-6-sol, gpt-6-luna), all independent"
 meaningful_gap = 3.2
 trust_grade = "A"
 ```

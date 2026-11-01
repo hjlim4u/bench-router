@@ -312,7 +312,7 @@ bench-router refresh --source arena  # Fetch Arena data (no key needed)
 
 # - With an Artificial Analysis API key, refresh all sources at once:
 set -a; [ -f ~/.config/bench-router/env ] && . ~/.config/bench-router/env; set +a
-bench-router refresh  # Refreshes aa, arena, and mg
+bench-router refresh  # Refreshes aa, arena, mg, tb_auto and or
 bench-router status   # Inspect data status and unmatched models
 
 # 3. Inspect decision requests without execution (substitute cwd with current absolute path)

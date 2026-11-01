@@ -17,7 +17,7 @@ lifecycle_changed: 2026-10-18
 lifecycle_reason: "Reviewed 2026-10-18 at the user's request (assistant review, not independent): structure, rules, LMArena categories vs the HF dataset, key figures vs saved sources, adoption consistency."
 tier: supporting
 created: 2026-10-17T00:00:00Z
-updated: 2026-10-18T00:00:00Z
+updated: 2026-10-31T00:00:00Z
 ---
 # Humanity's Last Exam
 
@@ -58,6 +58,11 @@ meaningful_gap = 2
 trust_grade = "B"
 ```
 
+## Open Questions
+
+- The `no_tools` reason cites Artificial Analysis runs on the 2,158-question text-only subset. AA removed that evaluation from its Index in v5.0 and replaced it with HLE-Diamond (1,000 questions, including 272 image questions), which AA calls not directly comparable ([[references/sources/artificial-analysis-methodology]]). Whether those runs will keep being refreshed is unknown. ^[ambiguous]
+- OpenRouter runs the same 2,158 text-only questions as a search benchmark ([[references/sources/openrouter-benchmarks]]). It varies the search engine with the model fixed, so it is not a `with_tools` model score.
+
 ## Facets
 
 - [[concepts/facets/task|task]]: science_reasoning
@@ -74,3 +79,5 @@ trust_grade = "B"
 - [[references/sources/themodelgap-data]] — <https://themodelgap.com/data/benchmarks.json>
 - <https://arxiv.org/abs/2501.14249>
 - <https://huggingface.co/datasets/cais/hle> — HF official mirror (score rows `verified=false`)
+- [[references/sources/artificial-analysis-methodology]] — AA Index v5.0 replaces HLE with HLE-Diamond.
+- [[references/sources/openrouter-benchmarks]] — HLE as a search benchmark on OpenRouter.

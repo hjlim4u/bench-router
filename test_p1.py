@@ -1,5 +1,6 @@
 """P1 검증 V11–V18 (06 문서). source 응답은 합성 fixture, 네트워크 없음.
 실행: python3 -m unittest -v test_p1"""
+import hashlib
 import io
 import json
 import os
@@ -492,8 +493,23 @@ class FakeHTTP2(FakeHTTP):
         return body
 
 
+def or_row(slug, provider, acc, perma=None, bench="tau_bench_verified_airline", when="2026-10-10T00:00:00Z"):
+    return {"benchmark": bench, "benchmark_page_url": f"https://openrouter.ai/benchmarks/{bench}",
+            "model_permaslug": perma or slug, "model_slug": slug, "model_name": slug, "provider_name": provider,
+            "accuracy": acc, "accuracy_std_dev": None, "run_count": 1, "total_questions": 50,
+            "avg_cost_per_task_usd": 0.1, "last_run_timestamp": when}
+
+
+def or_http(rows, day="2026-10-12", sha=None, url=None):
+    """OpenRouter export fake: manifest bytes, then the dated file's raw bytes."""
+    body = json.dumps({"dataset": "benchmark-leaderboard", "rows": rows}).encode()
+    url = url or f"{d.OR_URL}/{day}.json"
+    man = json.dumps({"snapshot_date": day, "files": {"json": {"url": url, "sha256": sha or hashlib.sha256(body).hexdigest()}}})
+    return lambda u, h, budget=None: man.encode() if u.endswith("latest.manifest.json") else body
+
+
 class P1Sources(unittest.TestCase):
-    """wiki unit 수집: arena:* 추가 cohort, Model Gap 어댑터."""
+    """wiki unit 수집: arena:* 추가 cohort, Model Gap 어댑터, OpenRouter export."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -502,6 +518,42 @@ class P1Sources(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def test_v65_openrouter_representative_row_and_namespace(self):
+        rows = [or_row("vendor/model-a", "auto-routing", .7), or_row("vendor/model-a", "Prov1", .9),
+                or_row("vendor/model-b", "Prov1", .5), or_row("vendor/model-b", "Prov2", .6), or_row("vendor/model-b", "Prov3", .8),
+                # 날짜 버전 둘이 같은 slug: 최신 run 버전만, 점수가 높아도 옛 버전은 탈락
+                or_row("vendor/model-a", "auto-routing", .99, perma="vendor/model-a-0901", bench="gpqa_diamond", when="2026-09-01T00:00:00Z"),
+                or_row("vendor/model-a", "auto-routing", .8, bench="gpqa_diamond"),
+                {**or_row(None, "auto-routing", .4, perma="vendor/model-a-0101"), "model_slug": None},
+                or_row("vendor/model-a-5", "auto-routing", .1)]  # 다른 모델(5 vs 5.5 같은 꼬리)과 섞이지 않는다
+        with mock.patch.object(d, "_http_get", side_effect=or_http(rows)):
+            res = d.refresh(self.cache, self.cfg, MAPPING, {}, NOW, only="or")
+        self.assertEqual(res["sources"]["or"]["result"], "updated")
+        snap = json.loads((self.cache / "snapshot.json").read_text("utf-8"))
+        a, b = (snap["profiles"][p]["evidence"] for p in ("a", "b"))
+        tau, gpqa = "or:tau_bench_verified_airline/default", "or:gpqa_diamond/default"
+        self.assertEqual((a[tau]["raw"], a[tau]["conditions"]["representative"]), (70.0, "auto"))
+        self.assertEqual((b[tau]["raw"], b[tau]["conditions"]["representative"], b[tau]["conditions"]["providers"]),
+                         (60.0, "median_provider", 3))
+        self.assertEqual((a[gpqa]["raw"], a[gpqa]["conditions"]["dropped_permaslugs"]), (80.0, ["vendor/model-a-0901"]))
+        self.assertEqual(snap["sources"]["or"]["published_at"], "2026-10-12")
+        self.assertEqual(set(snap["unmatched"]["or"]), {"model-a-0101", "model-a-5"})
+
+    def test_v65_openrouter_export_failures_keep_last_good(self):
+        rows = [or_row("vendor/model-a", "auto-routing", .7)]
+        with mock.patch.object(d, "_http_get", side_effect=or_http(rows)):
+            d.refresh(self.cache, self.cfg, MAPPING, {}, NOW, only="or")
+        bad = {"checksum": or_http(rows, sha="0" * 64), "foreign host": or_http(rows, url="https://evil.example/x.json"),
+               "old export": or_http(rows, day="2026-09-30"), "bad row": or_http([{**rows[0], "accuracy": 70}]),
+               "manifest fields": lambda u, h, budget=None: b"{}", "404": mock.Mock(side_effect=d.SourceError("HTTP 404"))}
+        for name, http in bad.items():
+            with self.subTest(name), mock.patch.object(d, "_http_get", side_effect=http):
+                res = d.refresh(self.cache, self.cfg, MAPPING, {}, NOW + timedelta(days=2), only="or", force=True)
+                self.assertEqual(res["status"], "failed")
+                snap = json.loads((self.cache / "snapshot.json").read_text("utf-8"))
+                self.assertEqual(snap["profiles"]["a"]["evidence"]["or:tau_bench_verified_airline/default"]["raw"], 70.0)
+                self.assertEqual(snap["sources"]["or"]["last_success_at"], NOW.isoformat(timespec="seconds"))
 
     def test_v62_model_gap_units_and_conditions(self):
         res = d.refresh(self.cache, self.cfg, MAPPING, {"mg": {"mg-a": "model-a", "mg-b": "model-b"}}, NOW,
@@ -617,12 +669,13 @@ class P1Wiki(unittest.TestCase):
     def test_v61_wiki_draft_pages_excluded_and_postings_active_only(self):
         self.write("entities/benchmarks/a.md", wiki_page("reviewed", "unit", [
             unit("arena:text_style_control/coding"), unit("arena:text_style_control/math", task=["math", "coding"]),
-            unit("mg:deepswe/default", "candidate"), unit("hf:x/y", "excluded") | {"facets": {}}]))
+            unit("mg:deepswe/default", "candidate"), unit("hf:x/y", "excluded") | {"facets": {}},
+            unit("or:tau_bench_verified_airline/default", "candidate")]))
         self.write("entities/benchmarks/b.md", wiki_page("draft", "unit", [unit("swe_verified_exact")]))
         idx = self.compile()
         self.assertEqual(set(idx["facets"]), {"task"})  # draft facet 페이지(lang) 제외
         self.assertEqual(set(idx["units"]), {"arena:text_style_control/coding", "arena:text_style_control/math",
-                                             "mg:deepswe/default", "hf:x/y"})  # draft 벤치마크 페이지 제외
+                                             "mg:deepswe/default", "hf:x/y", "or:tau_bench_verified_airline/default"})  # draft 벤치마크 페이지 제외
         self.assertEqual(idx["postings"], {"task:coding": ["arena:text_style_control/coding", "arena:text_style_control/math"],
                                            "task:math": ["arena:text_style_control/math"]})
         self.assertEqual(idx["units"]["mg:deepswe/default"]["page"], "entities/benchmarks/a.md")
@@ -631,6 +684,7 @@ class P1Wiki(unittest.TestCase):
         bad = {"unknown facet value": unit("arena:x/y", task=["painting"]),
                "draft facet page value": unit("arena:x/y", lang=["ko"]),
                "unknown id format": unit("nope"),
+               "id without variant": unit("or:tau_bench_verified_airline"),
                "bad adoption": unit("arena:x/y", "maybe"),
                "empty facets": unit("arena:x/y") | {"facets": {}},
                "unknown key": unit("arena:x/y") | {"weight": 0.5}}
@@ -699,6 +753,12 @@ class P1Wiki(unittest.TestCase):
         active = {u for ids in idx["postings"].values() for u in ids}
         self.assertEqual(active, {k for k, u in idx["units"].items() if u["adoption"] == "active"})
         self.assertTrue(set(d.EVIDENCE_IDS) & set(idx["units"]))
+
+    def test_v65_bundled_index_matches_repo_wiki(self):
+        """wiki 없는 설치는 내장 index.json을 쓴다: 위키를 고치면 `wiki compile` 결과로 다시 만들어야 한다."""
+        from bench_router import cli, evidence, wiki
+        idx = wiki.compile_wiki(cli.WIKI_VAULT)
+        self.assertEqual(json.loads(evidence.BUNDLED_INDEX.read_text("utf-8")), json.loads(json.dumps(idx)))
 
 
 class P1Installation(unittest.TestCase):

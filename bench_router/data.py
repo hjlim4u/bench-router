@@ -3,6 +3,7 @@
 refresh/import/status 전용. route는 이 모듈을 import하지 않는다(요청 경로 네트워크 0).
 """
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -19,7 +20,7 @@ from pathlib import Path
 from . import locking
 from . import routing as r
 
-ADAPTER_VERSION = "6"  # 3: arena effort; 4: AA effort; 5: Model Gap effort; 6: Terminal-Bench proxy rows
+ADAPTER_VERSION = "7"  # 3: arena effort; 4: AA effort; 5: Model Gap effort; 6: Terminal-Bench proxy rows; 7: OpenRouter
 DB_SCHEMA_VERSION = 2
 HTTP_TIMEOUT_S = 30
 HTTP_MAX_BYTES = 20 * 1024 * 1024
@@ -46,6 +47,8 @@ TB_URL = "https://www.tbench.ai/"
 EXACT_PINS = {"swe_verified_exact": {"source_id": "swe", "suite": "swe-bench", "version": "verified"},
               "terminal_exact": {"source_id": "tb", "suite": "terminal-bench", "version": "4.0"}}
 TB_PROXY = "terminal_proxy"
+OR_URL = "https://openrouter.ai/api/v1/datasets/exports/benchmark-leaderboard"
+OR_MAX_AGE_DAYS = 7  # 하루 1회 게시되는 export. 이보다 오래된 날짜를 다시 받으면 실패로 보고 last-good만 늙게 둔다
 EVIDENCE_IDS = sorted([*AA_FIELDS, *ARENA_COHORTS, *EXACT_PINS, TB_PROXY])
 
 SOURCES = {
@@ -62,6 +65,8 @@ SOURCES = {
            "attribution": "Terminal-Bench (manual import)"},
     "tb_auto": {"url": TB_URL, "ttl_hours": 168, "max_stale_hours": 720, "max_requests": 3,
                 "attribution": "Terminal-Bench 4.0 public leaderboard (model proxy)"},
+    "or": {"url": OR_URL, "ttl_hours": 24, "max_stale_hours": 168, "max_requests": 4,
+           "attribution": "Source: OpenRouter (openrouter.ai), licensed under CC BY 4.0: reuse and republish with attribution to OpenRouter."},
 }
 AUTO_SOURCES = [s for s, m in SOURCES.items() if not m.get("manual")]
 
@@ -126,8 +131,10 @@ def _http_get(url, headers=None, budget=None):
 
 def http_get_json(url, headers=None, budget=None):
     data = _http_get(url, headers, budget)
-    if url.endswith(".parquet"):
-        return _parquet_rows(data)
+    return _parquet_rows(data) if url.endswith(".parquet") else _json(data)
+
+
+def _json(data):
     try:
         return json.loads(data.decode("utf-8"), object_pairs_hook=r._no_dupes, parse_constant=r._reject_const)
     except (UnicodeDecodeError, json.JSONDecodeError, r.InputError) as e:
@@ -462,9 +469,65 @@ def parse_tb_auto(payload):
     return obs
 
 
+def fetch_or(get_bytes, now):
+    """OpenRouter 키 없는 일일 export: manifest → 날짜 파일. SHA-256은 받은 원문 bytes로 검증한다."""
+    man = _json(get_bytes(f"{OR_URL}/latest.manifest.json", None))
+    try:
+        day, url, sha = man["snapshot_date"], man["files"]["json"]["url"], man["files"]["json"]["sha256"]
+        age = (now.date() - datetime.fromisoformat(day).date()).days
+    except (KeyError, TypeError, ValueError, AttributeError):
+        raise SourceError("OpenRouter: manifest needs snapshot_date and files.json.url/sha256")
+    if not (isinstance(url, str) and url.startswith(OR_URL + "/")):  # manifest가 다른 호스트를 가리키면 따라가지 않는다
+        raise SourceError(f"OpenRouter: unexpected export URL {url!r}")
+    if age > OR_MAX_AGE_DAYS:
+        raise SourceError(f"OpenRouter: export {day} is older than {OR_MAX_AGE_DAYS} days")
+    data = get_bytes(url, None)
+    if hashlib.sha256(data).hexdigest() != sha:
+        raise SourceError("OpenRouter: export checksum mismatch")
+    doc = _json(data)
+    if not isinstance(doc, dict) or not isinstance(doc.get("rows"), list) or not doc["rows"]:
+        raise SourceError("OpenRouter: export rows must be a non-empty array")
+    return {"snapshot_date": day, "rows": doc["rows"]}, day, day
+
+
+def parse_or(payload):
+    """모델(현재 slug)별 대표 행 하나: 최신 run의 버전 → auto-routing 행, 없으면 공급자 median(페이지 headline 규칙)."""
+    groups = {}
+    for x in payload["rows"]:
+        bench, perma, prov, acc = (x.get(k) if isinstance(x, dict) else None
+                                   for k in ("benchmark", "model_permaslug", "provider_name", "accuracy"))
+        if not all(isinstance(v, str) and v for v in (bench, perma, prov)) or not isinstance(x.get("last_run_timestamp"), str) \
+                or type(acc) not in (int, float) or not 0 <= acc <= 1:
+            raise SourceError(f"OpenRouter: invalid row {perma!r} {bench!r}")
+        # model_slug가 null(목록에서 내려간 버전)이면 permaslug로 둔다: 날짜가 붙어 프로필과 이어지지 않고 unmatched로 남는다
+        groups.setdefault((bench, x.get("model_slug") or perma), {}).setdefault(perma, []).append(x)
+    obs = []
+    for (bench, slug), versions in sorted(groups.items()):
+        perma = max(versions, key=lambda p: (max(x["last_run_timestamp"] for x in versions[p]), p))
+        rows = versions[perma]
+        auto = [x for x in rows if x["provider_name"] == "auto-routing"]
+        pick = auto[0] if auto else sorted(rows, key=lambda x: (x["accuracy"], x["provider_name"]))[(len(rows) - 1) // 2]
+        eid = f"or:{bench}/default"
+        obs.append({"evidence_id": eid, "cohort_id": eid, "source_model": slug.split("/", 1)[-1], "raw": pick["accuracy"] * 100,
+                    "metric_version": "default", "scope": "model_proxy",
+                    "conditions": {"suite": bench, "version": None, "subset": None, "metric": "accuracy", "direction": "higher",
+                                   "variant": "default", "dataset_revision": payload["snapshot_date"],
+                                   "evaluation_harness": "openrouter-benchmark-harness", "aggregation": "90-day task-weighted mean",
+                                   "agent_scaffold": None, "reasoning_effort": None, "source_type": "independent",
+                                   "source_url": pick.get("benchmark_page_url"),
+                                   "representative": "auto" if auto else "median_provider",
+                                   "provider": pick["provider_name"], "providers": len(rows), "model_permaslug": perma,
+                                   "dropped_permaslugs": sorted(set(versions) - {perma}),
+                                   **{k: pick.get(k) for k in ("accuracy_std_dev", "run_count", "total_questions",
+                                                               "avg_cost_per_task_usd")}},
+                    "harness_id": None, "reasoning_effort": None, "published_at": None,
+                    "evaluated_at": pick["last_run_timestamp"]})
+    return obs
+
+
 FETCH = {"aa": fetch_aa, "arena": fetch_arena, "mg": fetch_mg}
 PARSE = {"aa": parse_aa, "arena": parse_arena, "mg": parse_mg, "swe": parse_import, "tb": parse_import,
-         "tb_auto": parse_tb_auto}
+         "tb_auto": parse_tb_auto, "or": parse_or}
 
 
 def normalize(obs):
@@ -536,6 +599,7 @@ def refresh_source(db, sid, now, force=False, import_doc=None, get_json=None, en
             get = lambda url, h: get_json(url, h, budget)
             payload, revision, published = (fetch_arena(get, env, arena_spec) if sid == "arena" else
                                             fetch_tb_auto(lambda url, h: http_get_text(url, h, budget), env) if sid == "tb_auto"
+                                            else fetch_or(lambda url, h: _http_get(url, h, budget), now) if sid == "or"
                                             else FETCH[sid](get, env))
         obs = normalize(PARSE[sid](payload))
     except (SourceError, KeyError, TypeError, ValueError, AttributeError) as e:  # a malformed payload fails this source only

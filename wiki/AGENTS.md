@@ -9,7 +9,7 @@ Pages are written in English, the language of the original sources, so definitio
 | Path | Content | `## Index` block |
 |---|---|---|
 | `concepts/facets/<axis>.md` | Allowed values (vocabulary) of one axis and how each is detected | `[[facet]]` array |
-| `entities/benchmarks/*.md`, `entities/benchmarks/{mg,hf}/*.md` | One benchmark and its leaderboard slices (units) | `[[unit]]` array |
+| `entities/benchmarks/*.md`, `entities/benchmarks/{mg,hf,or}/*.md` | One benchmark and its leaderboard slices (units) | `[[unit]]` array |
 | `references/sources/*.md` | Public sources whose definitions are quoted | none |
 | `concepts/*.md` | General model-selection concepts, separate from the facet vocabulary | none |
 | `synthesis/*.md` | Comparisons and findings across sources | none |
@@ -31,7 +31,7 @@ Each page body has one ```toml block in a `## Index` section. It lives in the bo
 
 - `adoption`: `active` (enters the inverted index) | `candidate` (promote to active after collection and coverage checks) | `archive` (saturated or replaced; lookup only) | `excluded` (not a task this router delegates; reason only). Only `active` units enter the inverted index. Independent of the page `lifecycle` (review state).
 - An `excluded` unit may have `facets = {}`. Every other unit needs at least one facet.
-- Unit id formats: `arena:<config>/<category>` (HF `lmarena-ai/leaderboard-dataset`), `arena-web:<board>/<signal>` (only on the arena.ai web leaderboard), `mg:<benchmark_id>/<variant>` (The Model Gap), `hf:<owner>/<dataset>` (HF official benchmarks), or one of `EVIDENCE_IDS` in `bench_router/data.py`.
+- Unit id formats: `arena:<config>/<category>` (HF `lmarena-ai/leaderboard-dataset`), `arena-web:<board>/<signal>` (only on the arena.ai web leaderboard), `mg:<benchmark_id>/<variant>` (The Model Gap), `hf:<owner>/<dataset>` (HF official benchmarks), `or:<benchmark>/<variant>` (OpenRouter keyless `benchmark-leaderboard` export), or one of `EVIDENCE_IDS` in `bench_router/data.py`.
 - A logical benchmark appears as units on one page only. Mirrors from other collectors (e.g. HF `cais/hle`) are attached to that page as sources.
   Exception: a manual exact import (`EXACT_PINS`, matched to the profile's harness and effort) keeps its own page next to the model-proxy page of the same benchmark, because it measures a different scope. The two pages link each other with `related_to`, and their `adoption` must agree unless the page states why not.
 - Facet-to-unit links are written **on the unit side only**. Facet pages never list units; the compiler builds the inverted index.

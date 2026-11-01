@@ -1,0 +1,844 @@
+{
+  "browsecomp": {
+    "headers": [
+      "Search provider",
+      "Model",
+      "Search budget",
+      "Answer quality",
+      "Cost per question",
+      "On the efficiency and quality frontier"
+    ],
+    "total_rows": 37,
+    "rows": [
+      [
+        "Perplexity",
+        "Claude Opus 5 · high",
+        "25-turn",
+        "89.0%",
+        "$0.99",
+        "yes"
+      ],
+      [
+        "Parallel",
+        "Claude Opus 5 · high",
+        "25-turn",
+        "86.3%",
+        "$1.68",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Sol · high",
+        "25-turn",
+        "82.4%",
+        "$0.50",
+        "yes"
+      ],
+      [
+        "Exa",
+        "Claude Opus 5 · high",
+        "25-turn",
+        "82.2%",
+        "$1.29",
+        "no"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Sol · high",
+        "25-turn",
+        "77.9%",
+        "$1.07",
+        "no"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Sol · high",
+        "25-turn",
+        "77.8%",
+        "$0.54",
+        "no"
+      ],
+      [
+        "OpenAI Native search",
+        "GPT-5.6 Sol · high",
+        "25-turn",
+        "77.8%",
+        "$0.68",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "DeepSeek V4 Flash 0731 · high",
+        "25-turn",
+        "77.0%",
+        "$0.076",
+        "yes"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Luna · xhigh",
+        "25-turn",
+        "74.0%",
+        "$0.099",
+        "no"
+      ],
+      [
+        "Parallel",
+        "DeepSeek V4 Flash 0731 · high",
+        "25-turn",
+        "69.1%",
+        "$0.060",
+        "yes"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Luna · xhigh",
+        "25-turn",
+        "68.4%",
+        "$0.14",
+        "no"
+      ],
+      [
+        "Exa",
+        "DeepSeek V4 Flash 0731 · high",
+        "25-turn",
+        "67.4%",
+        "$0.12",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "Claude Opus 5 · high",
+        "5-turn",
+        "66.5%",
+        "$0.51",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Sol · high",
+        "5-turn",
+        "65.2%",
+        "$0.29",
+        "no"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Sol · high",
+        "5-turn",
+        "60.2%",
+        "$0.47",
+        "no"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Sol · high",
+        "5-turn",
+        "60.1%",
+        "$0.30",
+        "no"
+      ],
+      [
+        "OpenAI Native search",
+        "GPT-5.6 Sol · high",
+        "5-turn",
+        "59.0%",
+        "$0.35",
+        "no"
+      ],
+      [
+        "Parallel",
+        "Claude Opus 5 · high",
+        "5-turn",
+        "57.8%",
+        "$0.84",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Luna · xhigh",
+        "5-turn",
+        "57.0%",
+        "$0.037",
+        "yes"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Luna · xhigh",
+        "25-turn",
+        "56.0%",
+        "$0.073",
+        "no"
+      ],
+      [
+        "Exa",
+        "Claude Opus 5 · high",
+        "5-turn",
+        "52.5%",
+        "$0.54",
+        "no"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Luna · xhigh",
+        "5-turn",
+        "48.0%",
+        "$0.049",
+        "no"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Sol · high",
+        "1-turn",
+        "46.7%",
+        "$0.20",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Sol · high",
+        "1-turn",
+        "46.3%",
+        "$0.20",
+        "no"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Sol · high",
+        "1-turn",
+        "43.7%",
+        "$0.21",
+        "no"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Luna · xhigh",
+        "5-turn",
+        "42.5%",
+        "$0.029",
+        "yes"
+      ],
+      [
+        "OpenAI Native search",
+        "GPT-5.6 Sol · high",
+        "1-turn",
+        "41.8%",
+        "$0.26",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "Claude Opus 5 · high",
+        "1-turn",
+        "35.8%",
+        "$0.14",
+        "no"
+      ],
+      [
+        "Parallel",
+        "DeepSeek V4 Flash 0731 · high",
+        "5-turn",
+        "35.2%",
+        "$0.007",
+        "yes"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Luna · xhigh",
+        "1-turn",
+        "33.7%",
+        "$0.017",
+        "no"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Luna · xhigh",
+        "1-turn",
+        "33.0%",
+        "$0.019",
+        "no"
+      ],
+      [
+        "Parallel",
+        "Claude Opus 5 · high",
+        "1-turn",
+        "30.8%",
+        "$0.18",
+        "no"
+      ],
+      [
+        "Exa",
+        "Claude Opus 5 · high",
+        "1-turn",
+        "29.4%",
+        "$0.14",
+        "no"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Luna · xhigh",
+        "1-turn",
+        "23.7%",
+        "$0.018",
+        "no"
+      ],
+      [
+        "Parallel",
+        "DeepSeek V4 Flash 0731 · high",
+        "1-turn",
+        "20.0%",
+        "$0.005",
+        "yes"
+      ],
+      [
+        "Exa",
+        "Claude Opus 5 · medium",
+        "plugin",
+        "12.0%",
+        "$0.44",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "Claude Opus 5 · medium",
+        "plugin",
+        "11.0%",
+        "$0.42",
+        "no"
+      ]
+    ]
+  },
+  "deepsearchqa": {
+    "headers": [
+      "Search provider",
+      "Model",
+      "Search budget",
+      "Answer quality",
+      "Cost per question",
+      "On the efficiency and quality frontier"
+    ],
+    "total_rows": 37,
+    "rows": [
+      [
+        "Parallel",
+        "Claude Opus 5 · high",
+        "25-turn",
+        "77.0%",
+        "$3.32",
+        "yes"
+      ],
+      [
+        "Perplexity",
+        "Claude Opus 5 · high",
+        "25-turn",
+        "76.5%",
+        "$1.69",
+        "yes"
+      ],
+      [
+        "OpenAI Native search",
+        "GPT-5.6 Sol · high",
+        "25-turn",
+        "75.0%",
+        "$0.57",
+        "yes"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Sol · high",
+        "25-turn",
+        "73.6%",
+        "$1.17",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Sol · high",
+        "25-turn",
+        "73.6%",
+        "$0.57",
+        "yes"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Luna · xhigh",
+        "25-turn",
+        "73.0%",
+        "$0.10",
+        "yes"
+      ],
+      [
+        "Exa",
+        "Claude Opus 5 · high",
+        "25-turn",
+        "70.5%",
+        "$1.80",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "DeepSeek V4 Flash 0731 · high",
+        "25-turn",
+        "69.0%",
+        "$0.063",
+        "yes"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Sol · high",
+        "25-turn",
+        "69.0%",
+        "$0.64",
+        "no"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Luna · xhigh",
+        "25-turn",
+        "67.0%",
+        "$0.14",
+        "no"
+      ],
+      [
+        "OpenAI Native search",
+        "GPT-5.6 Sol · high",
+        "5-turn",
+        "67.0%",
+        "$0.25",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "Claude Opus 5 · high",
+        "5-turn",
+        "64.7%",
+        "$0.44",
+        "no"
+      ],
+      [
+        "Parallel",
+        "DeepSeek V4 Flash 0731 · high",
+        "25-turn",
+        "64.0%",
+        "$0.059",
+        "yes"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Luna · xhigh",
+        "25-turn",
+        "63.0%",
+        "$0.076",
+        "no"
+      ],
+      [
+        "Exa",
+        "DeepSeek V4 Flash 0731 · high",
+        "25-turn",
+        "60.0%",
+        "$0.096",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Luna · xhigh",
+        "5-turn",
+        "60.0%",
+        "$0.032",
+        "yes"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Sol · high",
+        "5-turn",
+        "59.8%",
+        "$0.25",
+        "no"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Sol · high",
+        "5-turn",
+        "59.4%",
+        "$0.39",
+        "no"
+      ],
+      [
+        "Parallel",
+        "Claude Opus 5 · high",
+        "5-turn",
+        "58.0%",
+        "$0.74",
+        "no"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Sol · high",
+        "5-turn",
+        "57.9%",
+        "$0.24",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "DeepSeek V4 Flash 0731 · high",
+        "5-turn",
+        "56.0%",
+        "$0.029",
+        "yes"
+      ],
+      [
+        "Exa",
+        "Claude Opus 5 · high",
+        "5-turn",
+        "55.8%",
+        "$0.41",
+        "no"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Luna · xhigh",
+        "5-turn",
+        "55.0%",
+        "$0.043",
+        "no"
+      ],
+      [
+        "Exa",
+        "DeepSeek V4 Flash 0731 · high",
+        "5-turn",
+        "53.0%",
+        "$0.039",
+        "no"
+      ],
+      [
+        "Parallel",
+        "DeepSeek V4 Flash 0731 · high",
+        "5-turn",
+        "51.5%",
+        "$0.023",
+        "yes"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Luna · xhigh",
+        "5-turn",
+        "49.5%",
+        "$0.028",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Sol · high",
+        "1-turn",
+        "45.1%",
+        "$0.12",
+        "no"
+      ],
+      [
+        "OpenAI Native search",
+        "GPT-5.6 Sol · high",
+        "1-turn",
+        "45.0%",
+        "$0.15",
+        "no"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Sol · high",
+        "1-turn",
+        "42.7%",
+        "$0.14",
+        "no"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Luna · xhigh",
+        "1-turn",
+        "42.0%",
+        "$0.012",
+        "yes"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Sol · high",
+        "1-turn",
+        "41.7%",
+        "$0.13",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "Claude Opus 5 · high",
+        "1-turn",
+        "38.9%",
+        "$0.093",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Luna · xhigh",
+        "1-turn",
+        "38.0%",
+        "$0.010",
+        "yes"
+      ],
+      [
+        "Parallel",
+        "Claude Opus 5 · high",
+        "1-turn",
+        "34.8%",
+        "$0.12",
+        "no"
+      ],
+      [
+        "Exa",
+        "Claude Opus 5 · high",
+        "1-turn",
+        "33.3%",
+        "$0.086",
+        "no"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Luna · xhigh",
+        "1-turn",
+        "27.5%",
+        "$0.011",
+        "no"
+      ],
+      [
+        "Parallel",
+        "DeepSeek V4 Flash 0731 · high",
+        "1-turn",
+        "22.0%",
+        "$0.003",
+        "yes"
+      ]
+    ]
+  },
+  "hle": {
+    "headers": [
+      "Search provider",
+      "Model",
+      "Search budget",
+      "Answer quality",
+      "Cost per question",
+      "On the efficiency and quality frontier"
+    ],
+    "total_rows": 22,
+    "rows": [
+      [
+        "Perplexity",
+        "Claude Opus 5 · high",
+        "25-turn",
+        "77.4%",
+        "$0.46",
+        "yes"
+      ],
+      [
+        "Perplexity",
+        "Claude Opus 5 · high",
+        "1-turn",
+        "75.3%",
+        "$0.16",
+        "yes"
+      ],
+      [
+        "Exa",
+        "Claude Opus 5 · high",
+        "25-turn",
+        "74.2%",
+        "$0.67",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "Claude Opus 5 · high",
+        "5-turn",
+        "71.7%",
+        "$0.37",
+        "no"
+      ],
+      [
+        "Exa",
+        "Claude Opus 5 · high",
+        "5-turn",
+        "71.4%",
+        "$0.40",
+        "no"
+      ],
+      [
+        "OpenAI Native search",
+        "GPT-5.6 Sol · high",
+        "25-turn",
+        "71.1%",
+        "$0.40",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Sol · high",
+        "25-turn",
+        "71.0%",
+        "$0.33",
+        "no"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Sol · high",
+        "1-turn",
+        "70.0%",
+        "$0.11",
+        "yes"
+      ],
+      [
+        "Perplexity",
+        "GPT-5.6 Sol · high",
+        "5-turn",
+        "69.0%",
+        "$0.25",
+        "no"
+      ],
+      [
+        "Parallel",
+        "Claude Opus 5 · high",
+        "25-turn",
+        "68.6%",
+        "$0.54",
+        "no"
+      ],
+      [
+        "Exa",
+        "Claude Opus 5 · high",
+        "1-turn",
+        "68.5%",
+        "$0.17",
+        "no"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Sol · high",
+        "25-turn",
+        "68.4%",
+        "$0.38",
+        "no"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Sol · high",
+        "25-turn",
+        "66.4%",
+        "$0.47",
+        "no"
+      ],
+      [
+        "OpenAI Native search",
+        "GPT-5.6 Sol · high",
+        "5-turn",
+        "66.0%",
+        "$0.28",
+        "no"
+      ],
+      [
+        "OpenAI Native search",
+        "GPT-5.6 Sol · high",
+        "1-turn",
+        "66.0%",
+        "$0.16",
+        "no"
+      ],
+      [
+        "Parallel",
+        "Claude Opus 5 · high",
+        "5-turn",
+        "65.0%",
+        "$0.40",
+        "no"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Sol · high",
+        "5-turn",
+        "65.0%",
+        "$0.28",
+        "no"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Sol · high",
+        "5-turn",
+        "64.3%",
+        "$0.33",
+        "no"
+      ],
+      [
+        "Exa",
+        "GPT-5.6 Sol · high",
+        "1-turn",
+        "64.0%",
+        "$0.12",
+        "no"
+      ],
+      [
+        "Parallel",
+        "Claude Opus 5 · high",
+        "1-turn",
+        "60.1%",
+        "$0.20",
+        "no"
+      ],
+      [
+        "Parallel",
+        "GPT-5.6 Sol · high",
+        "1-turn",
+        "57.9%",
+        "$0.15",
+        "no"
+      ],
+      [
+        "OpenRouter automatic search-engine policy",
+        "Auto · high",
+        "default budget",
+        "52.5%",
+        "$0.082",
+        "yes"
+      ]
+    ]
+  },
+  "widesearch": {
+    "headers": [
+      "Search provider",
+      "1-turn",
+      "5-turn",
+      "25-turn"
+    ],
+    "total_rows": 4,
+    "rows": [
+      [
+        "Perplexity",
+        "79.8%\n13.0% complete tables\nGPT-5.6 Sol · high",
+        "81.4%\n18.0% complete tables\nGPT-5.6 Sol · high",
+        "84.0%\n21.0% complete tables\nGPT-5.6 Sol · high"
+      ],
+      [
+        "OpenAI Native",
+        "76.9%\n13.0% complete tables\nGPT-5.6 Sol · high",
+        "78.4%\n17.0% complete tables\nGPT-5.6 Sol · high",
+        "81.8%\n16.0% complete tables\nGPT-5.6 Sol · high"
+      ],
+      [
+        "Parallel",
+        "77.4%\n13.0% complete tables\nGPT-5.6 Sol · high",
+        "77.8%\n13.5% complete tables\nGPT-5.6 Sol · high",
+        "80.6%\n16.5% complete tables\nGPT-5.6 Sol · high"
+      ],
+      [
+        "Exa",
+        "69.1%\n8.0% complete tables\nGPT-5.6 Luna · xhigh",
+        "75.7%\n12.0% complete tables\nGPT-5.6 Luna · xhigh",
+        "78.0%\n16.0% complete tables\nGPT-5.6 Luna · xhigh"
+      ]
+    ]
+  }
+}
