@@ -276,10 +276,10 @@ Default category evidence mappings (`categories.toml`):
 
 | Category | Evidence (Weights) |
 |---|---|
-| coding_repo | swe_verified_exact 0.6, aa_coding 0.4 |
-| terminal_ops | terminal_exact 0.7, aa_coding 0.3 |
-| code_gen | aa_coding 1.0 |
-| webdev | arena_webdev 0.6, aa_coding 0.4 |
+| coding_repo | swe_verified_exact 0.6, aa_intelligence 0.4 |
+| terminal_ops | terminal_exact 0.7, aa_intelligence 0.3 |
+| code_gen | aa_intelligence 1.0 |
+| webdev | arena_webdev 0.6, aa_intelligence 0.4 |
 | math_reasoning | arena_text_math 1.0 |
 | analysis | aa_intelligence 0.6, arena_text 0.4 |
 | writing | arena_text 1.0 |

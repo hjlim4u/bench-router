@@ -16,7 +16,7 @@ from decimal import Decimal
 from pathlib import Path
 
 SCHEMA_VERSION = "1.0"
-POLICY_VERSION = "1.0"
+POLICY_VERSION = "1.1"
 CLASSIFIER_VERSION = "l1-rules-2"
 EPS = 1e-9
 
