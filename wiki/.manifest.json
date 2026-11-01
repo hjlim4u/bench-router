@@ -73,6 +73,189 @@
       "pages_produced": [
         "references/sources/openai-model-selection.md"
       ]
+    },
+    "_raw/_archived/2026-10-30-openrouter-benchmarks-api.md": {
+      "content_hash": "b44424722da1361c97724825e14837cc6aec503ad9db85ba49b73f3c6359c587",
+      "last_ingested": "2026-10-30T23:43:34.892032+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md",
+        "entities/benchmarks/artificial-analysis.md"
+      ]
+    },
+    "_raw/_archived/2026-10-30-openrouter-benchmarks.md": {
+      "content_hash": "c20f881bcbb3da97dad62eb5006c03a2bc3c47aad0cbb35178dd6a6befaa3bd9",
+      "last_ingested": "2026-10-30T23:43:34.029188+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/_archived/2026-10-30-openrouter-browsecomp.md": {
+      "content_hash": "1a78478460c6ab4456238320187cc8bca400d8de0f7b1ecd252a4fc27a8f5cd6",
+      "last_ingested": "2026-10-30T23:43:34.081796+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/_archived/2026-10-30-openrouter-gpqa-diamond.md": {
+      "content_hash": "05a554a77b67877d8ab35ca1e75095d848fd6f61aab4cf944eefae9d1088ff20",
+      "last_ingested": "2026-10-30T23:43:34.773595+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md",
+        "entities/benchmarks/mg/gpqa-diamond.md"
+      ]
+    },
+    "_raw/_archived/2026-10-30-openrouter-tau2-bench-airline.md": {
+      "content_hash": "34be8ca1acabe31e182a8f9217ea1029252d6a8456015cc4197011289231d2d8",
+      "last_ingested": "2026-10-30T23:43:34.184672+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/_archived/2026-10-31-openrouter-deepsearchqa.md": {
+      "content_hash": "92941d6a837d8ca8d51acb8a66a6f0dc375c6d0bc42e557d95b2cf995efaa356",
+      "last_ingested": "2026-10-30T23:43:34.241241+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/_archived/2026-10-31-openrouter-games.md": {
+      "content_hash": "33d657f73fa8805222cb9b50f40100ef0bdc3df9b2fe7cbe9bed9826cc4ed313",
+      "last_ingested": "2026-10-30T23:43:34.293868+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/_archived/2026-10-31-openrouter-hle.md": {
+      "content_hash": "2189ddee804b10175d5aa04103e77c63ed943893158839688d7be39f9e8c6dd8",
+      "last_ingested": "2026-10-30T23:43:34.826774+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md",
+        "entities/benchmarks/mg/hle.md"
+      ]
+    },
+    "_raw/_archived/2026-10-31-openrouter-media-images.md": {
+      "content_hash": "0e41adcf3dd6e074f9e59347620a4dc147af48d0a1ccb827a7b3e1a4784afd6f",
+      "last_ingested": "2026-10-30T23:43:34.403238+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/_archived/2026-10-31-openrouter-media-memes.md": {
+      "content_hash": "21e6e0ec27f432d1d8e5f9bb61516b32ba2da6e80c11ef67f2803655a847ccf4",
+      "last_ingested": "2026-10-30T23:43:34.454186+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/_archived/2026-10-31-openrouter-media-speech.md": {
+      "content_hash": "33fb1812ca0c884d39995308e6c237679da68b919c0b5870db4ea66a5ce302eb",
+      "last_ingested": "2026-10-30T23:43:34.504164+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/_archived/2026-10-31-openrouter-media-videos.md": {
+      "content_hash": "0bd765c9335a7f3c8f0e0a8ea03a6905414b582f6fdef7a51a9331bf87882bfb",
+      "last_ingested": "2026-10-30T23:43:34.555188+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/_archived/2026-10-31-openrouter-sketch.md": {
+      "content_hash": "03d2495e409a2e474f113ea1dbaa7014a43165390e1c5fe1b09273e58ef37ffb",
+      "last_ingested": "2026-10-30T23:43:34.620381+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/_archived/2026-10-31-openrouter-vgi-bench.md": {
+      "content_hash": "8e78cb35ca853d0406893fb74717b22fb6f5dc534817ec7dee0822cdd9aabe6a",
+      "last_ingested": "2026-10-30T23:43:34.673403+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/_archived/2026-10-31-openrouter-widesearch.md": {
+      "content_hash": "aeca220e30fee775da33ddecf93fa477f2c4e69192e05aee28d8575985ccf2db",
+      "last_ingested": "2026-10-30T23:43:34.723573+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/_archived/2026-10-31-artificial-analysis-intelligence-index.md": {
+      "content_hash": "ec40dd18e0d7fed86e50a8a937dbc60d0839cb75e202e0297b3c156bdeb7dab3",
+      "last_ingested": "2026-10-30T23:43:34.940252+00:00",
+      "pages_produced": [
+        "references/sources/artificial-analysis-methodology.md",
+        "entities/benchmarks/artificial-analysis.md",
+        "entities/benchmarks/mg/hle.md",
+        "entities/benchmarks/mg/gpqa-diamond.md",
+        "entities/benchmarks/mg/terminal-bench-4-0.md",
+        "entities/benchmarks/hf/terminal-bench-science.md"
+      ]
+    },
+    "_raw/_archived/2026-10-31-artificial-analysis-methodology.md": {
+      "content_hash": "d9bf2f33d4578008d631c16ba7a37c573df0ced9039d087ed3823a95d62d5d0b",
+      "last_ingested": "2026-10-30T23:43:34.986760+00:00",
+      "pages_produced": [
+        "references/sources/artificial-analysis-methodology.md"
+      ]
+    },
+    "_raw/_archived/2026-10-31-artificial-analysis-performance-benchmarking.md": {
+      "content_hash": "abfadcb5fd0fdc9569ef8f31680d4b65bb624dd200da3ca93d283d1492d14528",
+      "last_ingested": "2026-10-30T23:43:35.034549+00:00",
+      "pages_produced": [
+        "references/sources/artificial-analysis-methodology.md"
+      ]
+    },
+    "_raw/web/openrouter-artifact-benchmarks.json": {
+      "content_hash": "c89e9b77f7a5af6c1cc141e9c3c1bcf9f0e89ebf829fac0ce59e960dfddea9f7",
+      "last_ingested": "2026-10-30T23:43:35.086227+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/web/openrouter-benchmarks-index.json": {
+      "content_hash": "afda9a5ca7305079242170f9765c34b00300522c6570b3208a3bf6da9372f9e7",
+      "last_ingested": "2026-10-30T23:43:35.140121+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/web/openrouter-gpqa-diamond.json": {
+      "content_hash": "36ff994468c57117bc2ea26b46adddb705b77b3f90c81f701865ddf520dcbf2f",
+      "last_ingested": "2026-10-30T23:43:35.191240+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/web/openrouter-routers.json": {
+      "content_hash": "fa32cb1c6e1aba89541d9d07aef44f2e5610222d1a0edcadb5dba01c8a6649a0",
+      "last_ingested": "2026-10-30T23:43:35.244768+00:00",
+      "pages_produced": [
+        "projects/bench-router/synthesis/openrouter-router-benchmarks.md"
+      ]
+    },
+    "_raw/web/openrouter-search-benchmarks.json": {
+      "content_hash": "bc8be5083c09c51081907b23b9d1ac595d22b2fa77fc4cd44ada43dfeb9cf2f5",
+      "last_ingested": "2026-10-30T23:43:35.296512+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/web/openrouter-tau2-bench-airline.json": {
+      "content_hash": "e405f4476024aadabadbe48fcd951a7f0da249cb55330e2bfc80ffa6e0510ff0",
+      "last_ingested": "2026-10-30T23:43:35.346838+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
+    },
+    "_raw/web/openrouter-vgi-bench.json": {
+      "content_hash": "3a57fbbcdd5815666ff1a286b6258a63ad42312470a26bc7ed927b0cfda29aff",
+      "last_ingested": "2026-10-30T23:43:35.397594+00:00",
+      "pages_produced": [
+        "references/sources/openrouter-benchmarks.md"
+      ]
     }
   }
 }

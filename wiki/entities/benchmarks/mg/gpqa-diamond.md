@@ -17,7 +17,7 @@ lifecycle_changed: 2026-10-18
 lifecycle_reason: "Reviewed 2026-10-18 at the user's request (assistant review, not independent): structure, rules, LMArena categories vs the HF dataset, key figures vs saved sources, adoption consistency."
 tier: supporting
 created: 2026-10-17T00:00:00Z
-updated: 2026-10-18T00:00:00Z
+updated: 2026-10-31T00:00:00Z
 ---
 # GPQA Diamond
 
@@ -63,3 +63,5 @@ trust_grade = "D"
 - [[references/sources/themodelgap-data]] — <https://themodelgap.com/data/benchmarks.json>
 - <https://arxiv.org/abs/2311.12022>
 - <https://huggingface.co/datasets/Idavidrein/gpqa> — HF official mirror (score rows `verified=false`)
+- [[references/sources/openrouter-benchmarks]] — OpenRouter live mirror (167 models, 2026-10-30). OpenRouter runs it as a provider-health check, not a capability ranking. The top score is 96.5%, consistent with `saturated`.
+- [[references/sources/artificial-analysis-methodology]] — removed from the AA Intelligence Index in v4.2; still reported standalone.

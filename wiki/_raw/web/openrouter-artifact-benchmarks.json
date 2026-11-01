@@ -1,0 +1,1939 @@
+{
+  "games": {
+    "url": "https://openrouter.ai/benchmarks/media/games",
+    "count": 173,
+    "items": [
+      {
+        "model": "DeepSeek V4 Flash 0423",
+        "slug": "/deepseek/deepseek-v4-flash-20260423",
+        "text": "DeepSeek V4 Flash 0423\nBaidu\nPlay\nCost\n$0.002\nGeneration time\n218.5s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.002"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n218.5s"
+      },
+      {
+        "model": "gpt-oss-120b",
+        "slug": "/openai/gpt-oss-120b",
+        "text": "gpt-oss-120b\nNear AI\nPlay\nCost\n$0.003\nGeneration time\n388.3s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.003"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n388.3s"
+      },
+      {
+        "model": "Gemini 3.1 Flash Lite",
+        "slug": "/google/gemini-3.1-flash-lite-20260507",
+        "text": "Gemini 3.1 Flash Lite\nGoogle AI Studio\nPlay\nCost\n$0.008\nGeneration time\n14.9s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.008"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n14.9s"
+      },
+      {
+        "model": "DeepSeek V4 Flash 0731",
+        "slug": "/deepseek/deepseek-v4-flash-20260731",
+        "text": "DeepSeek V4 Flash 0731\nSail Research\nPlay\nCost\n$0.009\nGeneration time\n733.8s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.009"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n733.8s"
+      },
+      {
+        "model": "Hy3",
+        "slug": "/tencent/hy3-20260706",
+        "text": "Hy3\nTencent\nPlay\nCost\n$0.011\nGeneration time\n288.1s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.011"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n288.1s"
+      },
+      {
+        "model": "GPT-5 Nano",
+        "slug": "/openai/gpt-5-nano-2025-08-07",
+        "text": "GPT-5 Nano\nOpenAI\nPlay\nCost\n$0.011\nGeneration time\n168.2s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.011"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n168.2s"
+      },
+      {
+        "model": "Gemini 3.1 Flash Lite Preview",
+        "slug": "/google/gemini-3.1-flash-lite-preview-20260303",
+        "text": "Gemini 3.1 Flash Lite Preview\nGoogle AI Studio\nPlay\nCost\n$0.011\nGeneration time\n21.3s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.011"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n21.3s"
+      },
+      {
+        "model": "Mercury 3",
+        "slug": "/inception/mercury-3-20261019",
+        "text": "Mercury 3\nInception\nPlay\nCost\n$0.015\nGeneration time\n91.7s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.015"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n91.7s"
+      },
+      {
+        "model": "Beam 1.0 501B A23B",
+        "slug": "/reflection/beam-1.0-501b-a23b-20261016",
+        "text": "Beam 1.0 501B A23B\nNebius\nPlay\nCost\n$0.016\nGeneration time\n46.4s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.016"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n46.4s"
+      },
+      {
+        "model": "GLM 5.3 Flash",
+        "slug": "/z-ai/glm-5.3-flash-20260826",
+        "text": "GLM 5.3 Flash\nRelace\nPlay\nCost\n$0.018\nGeneration time\n675.1s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.018"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n675.1s"
+      },
+      {
+        "model": "Nemotron 3 Ultra",
+        "slug": "/nvidia/nemotron-3-ultra-550b-a55b-20260604",
+        "text": "Nemotron 3 Ultra\nBaseTen\nPlay\nCost\n$0.021\nGeneration time\n25.9s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.021"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n25.9s"
+      },
+      {
+        "model": "GPT-6 Luna",
+        "slug": "/openai/gpt-6-luna-20260922",
+        "text": "GPT-6 Luna\nOpenAI\nPlay\nCost\n$0.031\nGeneration time\n588.5s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.031"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n588.5s"
+      },
+      {
+        "model": "DeepSeek V4 Flash Vision Exp",
+        "slug": "/deepseek/deepseek-v4-flash-vision-exp-20260821",
+        "text": "DeepSeek V4 Flash Vision Exp\nDeepInfra\nPlay\nCost\n$0.033\nGeneration time\n278.3s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.033"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n278.3s"
+      },
+      {
+        "model": "Gemini 3.5 Flash Lite",
+        "slug": "/google/gemini-3.5-flash-lite-20260721",
+        "text": "Gemini 3.5 Flash Lite\nGoogle\nPlay\nCost\n$0.038\nGeneration time\n39.8s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.038"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n39.8s"
+      },
+      {
+        "model": "Inkling Small",
+        "slug": "/thinkingmachines/inkling-small-20260730",
+        "text": "Inkling Small\nDeepInfra\nPlay\nCost\n$0.040\nGeneration time\n322.7s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.040"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n322.7s"
+      },
+      {
+        "model": "GPT-5 Mini",
+        "slug": "/openai/gpt-5-mini-2025-08-07",
+        "text": "GPT-5 Mini\nOpenAI\nPlay\nCost\n$0.043\nGeneration time\n237.0s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.043"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n237.0s"
+      },
+      {
+        "model": "DeepSeek V4.1 Flash",
+        "slug": "/deepseek/deepseek-v4.1-flash-20260910",
+        "text": "DeepSeek V4.1 Flash\nNovita\nPlay\nCost\n$0.055\nGeneration time\n187.3s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.055"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n187.3s"
+      },
+      {
+        "model": "DeepSeek V4.1 Flash 1017",
+        "slug": "/deepseek/deepseek-v4.1-flash-20261017",
+        "text": "DeepSeek V4.1 Flash 1017\nRelace\nPlay\nCost\n$0.063\nGeneration time\n359.4s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.063"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n359.4s"
+      },
+      {
+        "model": "DeepSeek V4 Pro 0423",
+        "slug": "/deepseek/deepseek-v4-pro-20260423",
+        "text": "DeepSeek V4 Pro 0423\nStreamLake\nPlay\nCost\n$0.068\nGeneration time\n595.3s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.068"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n595.3s"
+      },
+      {
+        "model": "GPT-6 Luna Pro",
+        "slug": "/openai/gpt-6-luna-pro-20260922",
+        "text": "GPT-6 Luna Pro\nOpenAI\nPlay\nCost\n$0.071\nGeneration time\n1086.2s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.071"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n1086.2s"
+      },
+      {
+        "model": "GPT-5.6 Luna",
+        "slug": "/openai/gpt-5.6-luna-20260709",
+        "text": "GPT-5.6 Luna\nOpenAI\nPlay\nCost\n$0.073\nGeneration time\n434.1s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.073"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n434.1s"
+      },
+      {
+        "model": "Gemini 3.6 Flash",
+        "slug": "/google/gemini-3.6-flash-20260721",
+        "text": "Gemini 3.6 Flash\nGoogle AI Studio\nPlay\nCost\n$0.080\nGeneration time\n105.7s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.080"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n105.7s"
+      },
+      {
+        "model": "Inkling",
+        "slug": "/thinkingmachines/inkling-20260715",
+        "text": "Inkling\nBaseTen\nPlay\nCost\n$0.084\nGeneration time\n87.3s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.084"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n87.3s"
+      },
+      {
+        "model": "Hy4 preview",
+        "slug": "/tencent/hy4-preview-20260827",
+        "text": "Hy4 preview\nTencent\nPlay\nCost\n$0.084\nGeneration time\n497.7s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.084"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n497.7s"
+      },
+      {
+        "model": "Step 5 Preview",
+        "slug": "/stepfun/step-5-preview-20261008",
+        "text": "Step 5 Preview\nInferenceNet\nPlay\nCost\n$0.092\nGeneration time\n333.1s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.092"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n333.1s"
+      },
+      {
+        "model": "Gemini 3.8 Flash",
+        "slug": "/google/gemini-3.8-flash-20260902",
+        "text": "Gemini 3.8 Flash\nGoogle AI Studio\nPlay\nCost\n$0.11\nGeneration time\n91.0s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.11"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n91.0s"
+      },
+      {
+        "model": "Gemini 3.7 Flash",
+        "slug": "/google/gemini-3.7-flash-20260813",
+        "text": "Gemini 3.7 Flash\nGoogle AI Studio\nPlay\nCost\n$0.14\nGeneration time\n123.7s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.14"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n123.7s"
+      },
+      {
+        "model": "Muse Spark Open",
+        "slug": "/meta/muse-spark-open-20261015",
+        "text": "Muse Spark Open\nMakora\nPlay\nCost\n$0.15\nGeneration time\n408.5s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.15"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n408.5s"
+      },
+      {
+        "model": "Qwen3.8 27B",
+        "slug": "/qwen/qwen3.8-27b-20260814",
+        "text": "Qwen3.8 27B\nNovita\nPlay\nCost\n$0.18\nGeneration time\n1470.3s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.18"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n1470.3s"
+      },
+      {
+        "model": "Muse Spark 1.3",
+        "slug": "/meta/muse-spark-1.3-20260902",
+        "text": "Muse Spark 1.3\nMeta\nPlay\nCost\n$0.20\nGeneration time\n228.2s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.20"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n228.2s"
+      },
+      {
+        "model": "Grok 4.6",
+        "slug": "/x-ai/grok-4.6-20260810",
+        "text": "Grok 4.6\nxAI\nPlay\nCost\n$0.20\nGeneration time\n504.0s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.20"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n504.0s"
+      },
+      {
+        "model": "GLM 5.2",
+        "slug": "/z-ai/glm-5.2-20260616",
+        "text": "GLM 5.2\nDigitalOcean\nPlay\nCost\n$0.21\nGeneration time\n618.5s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.21"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n618.5s"
+      },
+      {
+        "model": "Kimi K3",
+        "slug": "/moonshotai/kimi-k3-20260715",
+        "text": "Kimi K3\nSail Research\nPlay\nCost\n$0.24\nGeneration time\n193.5s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.24"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n193.5s"
+      },
+      {
+        "model": "Qwen3.8 Max",
+        "slug": "/qwen/qwen3.8-max-20260902",
+        "text": "Qwen3.8 Max\nAlibaba\nPlay\nCost\n$0.30\nGeneration time\n1082.6s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.30"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n1082.6s"
+      },
+      {
+        "model": "GPT-6.1 Terra",
+        "slug": "/openai/gpt-6.1-terra-20261026",
+        "text": "GPT-6.1 Terra\nOpenAI\nPlay\nCost\n$0.33\nGeneration time\n779.5s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.33"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n779.5s"
+      },
+      {
+        "model": "GLM 5.3",
+        "slug": "/z-ai/glm-5.3-20260816",
+        "text": "GLM 5.3\nRelace\nPlay\nCost\n$0.42\nGeneration time\n1025.8s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.42"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n1025.8s"
+      },
+      {
+        "model": "GPT-6.1 Sol",
+        "slug": "/openai/gpt-6.1-sol-20260929",
+        "text": "GPT-6.1 Sol\nOpenAI\nPlay\nCost\n$0.49\nGeneration time\n1058.5s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.49"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n1058.5s"
+      },
+      {
+        "model": "GPT-5.6 Sol",
+        "slug": "/openai/gpt-5.6-sol-20260709",
+        "text": "GPT-5.6 Sol\nOpenAI\nPlay\nCost\n$0.49\nGeneration time\n785.8s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.49"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n785.8s"
+      },
+      {
+        "model": "Kimi K3.1 Pro",
+        "slug": "/moonshotai/kimi-k3.1-pro-20261023",
+        "text": "Kimi K3.1 Pro\nMoonshot AI\nPlay\nCost\n$0.50\nGeneration time\n1094.3s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.50"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n1094.3s"
+      },
+      {
+        "model": "Muse Wonder",
+        "slug": "/meta/muse-wonder-20261012",
+        "text": "Muse Wonder\nMeta\nPlay\nCost\n$0.55\nGeneration time\n254.1s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.55"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n254.1s"
+      },
+      {
+        "model": "GPT-5.6 Terra",
+        "slug": "/openai/gpt-5.6-terra-20260709",
+        "text": "GPT-5.6 Terra\nOpenAI\nPlay\nCost\n$0.79\nGeneration time\n648.2s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.79"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n648.2s"
+      },
+      {
+        "model": "Grok 4.7",
+        "slug": "/x-ai/grok-4.7-20260916",
+        "text": "Grok 4.7\nxAI\nPlay\nCost\n$0.80\nGeneration time\n1200.9s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$0.80"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n1200.9s"
+      },
+      {
+        "model": "Claude Opus 5",
+        "slug": "/anthropic/claude-opus-5-20260723",
+        "text": "Claude Opus 5\nAzure\nPlay\nCost\n$1.31\nGeneration time\n591.7s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$1.31"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n591.7s"
+      },
+      {
+        "model": "Claude Opus 4.8",
+        "slug": "/anthropic/claude-4.8-opus-20260528",
+        "text": "Claude Opus 4.8\nClaude Platform on AWS\nPlay\nCost\n$1.64\nGeneration time\n906.3s"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Cost\n$1.64"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Generation time\n906.3s"
+      },
+      {
+        "model": "",
+        "slug": "/",
+        "text": "© 2026 OpenRouter, Inc"
+      },
+      {
+        "model": "Chat",
+        "slug": "/chat",
+        "text": "Product\nChat\nRankings\nBenchmarks\nApps\nDiscover\nModels\nOri\nCollections\nProviders\nTools\nPricing\nBusiness\nEnterprise\nLabs"
+      },
+      {
+        "model": "Chat",
+        "slug": "/chat",
+        "text": "Chat"
+      },
+      {
+        "model": "Rankings",
+        "slug": "/rankings",
+        "text": "Rankings"
+      },
+      {
+        "model": "Benchmarks",
+        "slug": "/benchmarks",
+        "text": "Benchmarks"
+      },
+      {
+        "model": "Apps",
+        "slug": "/apps",
+        "text": "Apps"
+      },
+      {
+        "model": "Discover",
+        "slug": "/discover",
+        "text": "Discover"
+      },
+      {
+        "model": "Models",
+        "slug": "/models",
+        "text": "Models"
+      },
+      {
+        "model": "Ori",
+        "slug": "/ori",
+        "text": "Ori"
+      },
+      {
+        "model": "Collections",
+        "slug": "/collections",
+        "text": "Collections"
+      },
+      {
+        "model": "Providers",
+        "slug": "/providers",
+        "text": "Providers"
+      },
+      {
+        "model": "Tools",
+        "slug": "/tools",
+        "text": "Tools"
+      },
+      {
+        "model": "Pricing",
+        "slug": "/pricing",
+        "text": "Pricing"
+      },
+      {
+        "model": "Business",
+        "slug": "/business",
+        "text": "Business"
+      },
+      {
+        "model": "Enterprise",
+        "slug": "/enterprise",
+        "text": "Enterprise"
+      },
+      {
+        "model": "Labs",
+        "slug": "/labs",
+        "text": "Labs"
+      },
+      {
+        "model": "About",
+        "slug": "/about",
+        "text": "Company\nAbout\nBlog\nCustomers\nCareers\nHiring\nPrivacy\nTerms of Service\nTrust Center\nSupport\nWorks With OR\nData\nBrand"
+      },
+      {
+        "model": "About",
+        "slug": "/about",
+        "text": "About"
+      },
+      {
+        "model": "Blog",
+        "slug": "/blog",
+        "text": "Blog"
+      },
+      {
+        "model": "Customers",
+        "slug": "/customers",
+        "text": "Customers"
+      },
+      {
+        "model": "Careers\nHiring",
+        "slug": "/careers",
+        "text": "Careers\nHiring"
+      },
+      {
+        "model": "Privacy",
+        "slug": "/privacy",
+        "text": "Privacy"
+      },
+      {
+        "model": "Terms of Service",
+        "slug": "/terms",
+        "text": "Terms of Service"
+      },
+      {
+        "model": "Trust Center",
+        "slug": "https://trust.openrouter.ai/",
+        "text": "Trust Center"
+      },
+      {
+        "model": "Support",
+        "slug": "/support",
+        "text": "Support"
+      },
+      {
+        "model": "Works With OR",
+        "slug": "/works-with-openrouter",
+        "text": "Works With OR"
+      },
+      {
+        "model": "Data",
+        "slug": "/data",
+        "text": "Data"
+      },
+      {
+        "model": "Brand",
+        "slug": "/brand",
+        "text": "Brand"
+      },
+      {
+        "model": "Documentation",
+        "slug": "/docs",
+        "text": "Developer\nDocumentation\nAPI Reference\nDeveloper Platform\nStatus\nAI Site Map"
+      },
+      {
+        "model": "Documentation",
+        "slug": "/docs",
+        "text": "Documentation"
+      },
+      {
+        "model": "API Reference",
+        "slug": "/docs/api_reference/overview",
+        "text": "API Reference"
+      },
+      {
+        "model": "Developer Platform",
+        "slug": "/developers",
+        "text": "Developer Platform"
+      },
+      {
+        "model": "Status",
+        "slug": "https://status.openrouter.ai",
+        "text": "Status"
+      },
+      {
+        "model": "AI Site Map",
+        "slug": "/for-ai",
+        "text": "AI Site Map"
+      },
+      {
+        "model": "Discord",
+        "slug": "https://discord.gg/fVyRaUDgxW",
+        "text": "Connect\nDiscord\nGitHub\nLinkedIn\nX\nYouTube"
+      },
+      {
+        "model": "Discord",
+        "slug": "https://discord.gg/fVyRaUDgxW",
+        "text": "Discord"
+      },
+      {
+        "model": "GitHub",
+        "slug": "https://github.com/OpenRouterTeam",
+        "text": "GitHub"
+      },
+      {
+        "model": "LinkedIn",
+        "slug": "https://www.linkedin.com/company/104068329",
+        "text": "LinkedIn"
+      },
+      {
+        "model": "X",
+        "slug": "https://twitter.com/openrouter",
+        "text": "X"
+      },
+      {
+        "model": "YouTube",
+        "slug": "https://www.youtube.com/@OpenRouterAI",
+        "text": "YouTube"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Subscribe"
+      }
+    ]
+  },
+  "sketch": {
+    "url": "https://openrouter.ai/benchmarks/media/sketch",
+    "count": 212,
+    "items": [
+      {
+        "model": "Claude Fable 5.1",
+        "slug": "/anthropic/claude-fable-5.1-20260831",
+        "text": "Claude Fable 5.1\n$2.13\n518.7s\n8.8"
+      },
+      {
+        "model": "GPT-6 Astra",
+        "slug": "/openai/gpt-6-astra-20260903",
+        "text": "GPT-6 Astra\n$0.87\n390.6s\n9.1"
+      },
+      {
+        "model": "Grok 4.20 Multi-Agent",
+        "slug": "/x-ai/grok-4.20-multi-agent-20260309",
+        "text": "Grok 4.20 Multi-Agent\n$0.79\n121.3s\n8.2"
+      },
+      {
+        "model": "GPT-6 Sol Pro",
+        "slug": "/openai/gpt-6-sol-pro-20260922",
+        "text": "GPT-6 Sol Pro\n$0.77\n653.3s\n8.7"
+      },
+      {
+        "model": "GPT-5.6 Sol",
+        "slug": "/openai/gpt-5.6-sol-20260709",
+        "text": "GPT-5.6 Sol\n$0.57\n363.8s\n8.9"
+      },
+      {
+        "model": "Claude Opus 5",
+        "slug": "/anthropic/claude-opus-5-20260723",
+        "text": "Claude Opus 5\n$0.50\n275.0s\n8.6"
+      },
+      {
+        "model": "Claude Opus 4.6",
+        "slug": "/anthropic/claude-4.6-opus-20260205",
+        "text": "Claude Opus 4.6\n$0.49\n233.5s\n8.4"
+      },
+      {
+        "model": "Claude Opus 4.8",
+        "slug": "/anthropic/claude-4.8-opus-20260528",
+        "text": "Claude Opus 4.8\n$0.46\n222.1s\n8.3"
+      },
+      {
+        "model": "Sonar Deep Research",
+        "slug": "/perplexity/sonar-deep-research",
+        "text": "Sonar Deep Research\n$0.41\n165.2s\n6.8"
+      },
+      {
+        "model": "GPT-5.2",
+        "slug": "/openai/gpt-5.2-20251211",
+        "text": "GPT-5.2\n$0.40\n414.5s\n8.4"
+      },
+      {
+        "model": "GPT-6.1 Sol Pro",
+        "slug": "/openai/gpt-6.1-sol-pro-20260929",
+        "text": "GPT-6.1 Sol Pro\n$0.40\n997.2s\n9.5"
+      },
+      {
+        "model": "GPT-5.4",
+        "slug": "/openai/gpt-5.4-20260305",
+        "text": "GPT-5.4\n$0.38\n429.0s\n7.9"
+      },
+      {
+        "model": "GPT-6 Sol",
+        "slug": "/openai/gpt-6-sol-20260922",
+        "text": "GPT-6 Sol\n$0.35\n371.9s\n8.6"
+      },
+      {
+        "model": "GPT-5.2-Codex",
+        "slug": "/openai/gpt-5.2-codex-20260114",
+        "text": "GPT-5.2-Codex\n$0.33\n345.8s\n8.1"
+      },
+      {
+        "model": "Gemini 3.1 Pro Preview",
+        "slug": "/google/gemini-3.1-pro-preview-20260219",
+        "text": "Gemini 3.1 Pro Preview\n$0.29\n143.1s\n8.6"
+      },
+      {
+        "model": "GPT-5.6 Terra",
+        "slug": "/openai/gpt-5.6-terra-20260709",
+        "text": "GPT-5.6 Terra\n$0.29\n307.6s\n8.8"
+      },
+      {
+        "model": "Gemini 3.5 Flash",
+        "slug": "/google/gemini-3.5-flash-20260519",
+        "text": "Gemini 3.5 Flash\n$0.24\n130.5s\n9.0"
+      },
+      {
+        "model": "GPT-5.3-Codex",
+        "slug": "/openai/gpt-5.3-codex-20260224",
+        "text": "GPT-5.3-Codex\n$0.21\n155.8s\n8.4"
+      },
+      {
+        "model": "Gemini 4 Argon",
+        "slug": "/google/gemini-4-argon-20261013",
+        "text": "Gemini 4 Argon\n$0.21\n249.8s\n9.4"
+      },
+      {
+        "model": "Kimi K3",
+        "slug": "/moonshotai/kimi-k3-20260715",
+        "text": "Kimi K3\n$0.21\n251.3s\n8.6"
+      },
+      {
+        "model": "Qwen3.8 2.4T A95B",
+        "slug": "/qwen/qwen3.8-2.4t-a95b-20260812",
+        "text": "Qwen3.8 2.4T A95B\n$0.20\n132.0s\n8.6"
+      },
+      {
+        "model": "Gemini 3 Flash Preview",
+        "slug": "/google/gemini-3-flash-preview-20251217",
+        "text": "Gemini 3 Flash Preview\n$0.19\n325.4s\n7.9"
+      },
+      {
+        "model": "GPT-6.1 Sol",
+        "slug": "/openai/gpt-6.1-sol-20260929",
+        "text": "GPT-6.1 Sol\n$0.17\n619.8s\n9.3"
+      },
+      {
+        "model": "Mistral Medium 3.5",
+        "slug": "/mistralai/mistral-medium-3.5-20260430",
+        "text": "Mistral Medium 3.5\n$0.16\n92.7s\n5.9"
+      },
+      {
+        "model": "GPT-5.5",
+        "slug": "/openai/gpt-5.5-20260423",
+        "text": "GPT-5.5\n$0.15\n69.2s\n8.6"
+      },
+      {
+        "model": "Kimi K3.1 Pro",
+        "slug": "/moonshotai/kimi-k3.1-pro-20261023",
+        "text": "Kimi K3.1 Pro\n$0.15\n193.5s"
+      },
+      {
+        "model": "GLM 5.3",
+        "slug": "/z-ai/glm-5.3-20260816",
+        "text": "GLM 5.3\n$0.15\n435.6s\n8.5"
+      },
+      {
+        "model": "Gemini 2.5 Pro",
+        "slug": "/google/gemini-2.5-pro",
+        "text": "Gemini 2.5 Pro\n$0.13\n166.7s\n7.5"
+      },
+      {
+        "model": "GPT-5.1",
+        "slug": "/openai/gpt-5.1-20251113",
+        "text": "GPT-5.1\n$0.11\n100.7s\n7.1"
+      },
+      {
+        "model": "Ember-1",
+        "slug": "/fireworks/ember-1-20260923",
+        "text": "Ember-1\n$0.11\n116.4s\n9.1"
+      },
+      {
+        "model": "Claude Opus 4.1",
+        "slug": "/anthropic/claude-4.1-opus-20250805",
+        "text": "Claude Opus 4.1\n$0.11\n70.9s\n5.9"
+      },
+      {
+        "model": "GPT-5",
+        "slug": "/openai/gpt-5-2025-08-07",
+        "text": "GPT-5\n$0.099\n106.0s\n8.1"
+      },
+      {
+        "model": "Claude Opus 4",
+        "slug": "/anthropic/claude-4-opus-20250522",
+        "text": "Claude Opus 4\n$0.088\n21.0s\n6.1"
+      },
+      {
+        "model": "Gemini 3.7 Flash",
+        "slug": "/google/gemini-3.7-flash-20260813",
+        "text": "Gemini 3.7 Flash\n$0.086\n122.1s\n9.1"
+      },
+      {
+        "model": "Muse Spark 1.3",
+        "slug": "/meta/muse-spark-1.3-20260902",
+        "text": "Muse Spark 1.3\n$0.074\n88.6s\n8.8"
+      },
+      {
+        "model": "GLM 5.1",
+        "slug": "/z-ai/glm-5.1-20260406",
+        "text": "GLM 5.1\n$0.066\n243.4s\n8.6"
+      },
+      {
+        "model": "Sonar Pro",
+        "slug": "/perplexity/sonar-pro",
+        "text": "Sonar Pro\n$0.065\n33.1s\n7.8"
+      },
+      {
+        "model": "Qwen3.8 27B",
+        "slug": "/qwen/qwen3.8-27b-20260814",
+        "text": "Qwen3.8 27B\n$0.065\n487.7s\n8.8"
+      },
+      {
+        "model": "Sonar Pro Search",
+        "slug": "/perplexity/sonar-pro-search",
+        "text": "Sonar Pro Search\n$0.062\n28.0s\n7.5"
+      },
+      {
+        "model": "Seed 2.1 Turbo",
+        "slug": "/bytedance-seed/seed-2-1-turbo-20260810",
+        "text": "Seed 2.1 Turbo\n$0.055\n265.7s\n8.4"
+      },
+      {
+        "model": "Claude Opus 4.5",
+        "slug": "/anthropic/claude-4.5-opus-20251124",
+        "text": "Claude Opus 4.5\n$0.055\n23.7s\n7.9"
+      },
+      {
+        "model": "DeepSeek V4 Pro 0813",
+        "slug": "/deepseek/deepseek-v4-pro-20260813",
+        "text": "DeepSeek V4 Pro 0813\n$0.055\n213.6s\n8.3"
+      },
+      {
+        "model": "Grok 4.6",
+        "slug": "/x-ai/grok-4.6-20260810",
+        "text": "Grok 4.6\n$0.054\n141.2s\n8.5"
+      },
+      {
+        "model": "Gemini 3.6 Flash",
+        "slug": "/google/gemini-3.6-flash-20260721",
+        "text": "Gemini 3.6 Flash\n$0.053\n95.5s\n8.9"
+      },
+      {
+        "model": "Muse Spark Open",
+        "slug": "/meta/muse-spark-open-20261015",
+        "text": "Muse Spark Open\n$0.051\n106.6s\n7.3"
+      },
+      {
+        "model": "Grok 4.7",
+        "slug": "/x-ai/grok-4.7-20260916",
+        "text": "Grok 4.7\n$0.051\n78.5s\n7.4"
+      },
+      {
+        "model": "Gemini 3.8 Flash",
+        "slug": "/google/gemini-3.8-flash-20260902",
+        "text": "Gemini 3.8 Flash\n$0.051\n67.4s\n8.6"
+      },
+      {
+        "model": "GLM 5.2",
+        "slug": "/z-ai/glm-5.2-20260616",
+        "text": "GLM 5.2\n$0.045\n244.6s\n7.6"
+      },
+      {
+        "model": "GPT-4",
+        "slug": "/openai/gpt-4",
+        "text": "GPT-4\n$0.043\n5.4s\n5.5"
+      },
+      {
+        "model": "Kimi K2.7 Code",
+        "slug": "/moonshotai/kimi-k2.7-code-20260612",
+        "text": "Kimi K2.7 Code\n$0.043\n246.1s\n8.0"
+      },
+      {
+        "model": "Hy4 preview",
+        "slug": "/tencent/hy4-preview-20260827",
+        "text": "Hy4 preview\n$0.041\n268.4s\n8.5"
+      },
+      {
+        "model": "Gemini 3.5 Flash Lite",
+        "slug": "/google/gemini-3.5-flash-lite-20260721",
+        "text": "Gemini 3.5 Flash Lite\n$0.041\n41.0s\n8.5"
+      },
+      {
+        "model": "Step 5 Preview",
+        "slug": "/stepfun/step-5-preview-20261008",
+        "text": "Step 5 Preview\n$0.039\n335.4s\n8.8"
+      },
+      {
+        "model": "GPT-6 Luna Pro",
+        "slug": "/openai/gpt-6-luna-pro-20260922",
+        "text": "GPT-6 Luna Pro\n$0.037\n561.1s\n9.3"
+      },
+      {
+        "model": "Seed-2.0-Code",
+        "slug": "/bytedance-seed/seed-2.0-code-20260730",
+        "text": "Seed-2.0-Code\n$0.036\n164.1s\n6.3"
+      },
+      {
+        "model": "Claude Sonnet 4.5",
+        "slug": "/anthropic/claude-4.5-sonnet-20250929",
+        "text": "Claude Sonnet 4.5\n$0.034\n24.7s\n7.8"
+      },
+      {
+        "model": "Qwen3 VL 30B A3B Thinking",
+        "slug": "/qwen/qwen3-vl-30b-a3b-thinking",
+        "text": "Qwen3 VL 30B A3B Thinking\n$0.034\n451.0s\n3.9"
+      },
+      {
+        "model": "GLM 5 Turbo",
+        "slug": "/z-ai/glm-5-turbo-20260315",
+        "text": "GLM 5 Turbo\n$0.033\n196.9s\n8.5"
+      },
+      {
+        "model": "Glimpse",
+        "slug": "/elorian/glimpse-20261016",
+        "text": "Glimpse\n$0.033\n41.5s\n7.9"
+      },
+      {
+        "model": "Qwen3 VL 235B A22B Thinking",
+        "slug": "/qwen/qwen3-vl-235b-a22b-thinking",
+        "text": "Qwen3 VL 235B A22B Thinking\n$0.032\n149.4s\n4.8"
+      },
+      {
+        "model": "GPT-5.6 Luna",
+        "slug": "/openai/gpt-5.6-luna-20260709",
+        "text": "GPT-5.6 Luna\n$0.032\n263.2s\n8.6"
+      },
+      {
+        "model": "Claude Sonnet 4",
+        "slug": "/anthropic/claude-4-sonnet-20250522",
+        "text": "Claude Sonnet 4\n$0.029\n15.6s\n7.6"
+      },
+      {
+        "model": "Inkling",
+        "slug": "/thinkingmachines/inkling-20260715",
+        "text": "Inkling\n$0.027\n50.9s\n7.5"
+      },
+      {
+        "model": "GLM 5",
+        "slug": "/z-ai/glm-5-20260211",
+        "text": "GLM 5\n$0.026\n131.4s\n8.3"
+      },
+      {
+        "model": "GPT-5 Mini",
+        "slug": "/openai/gpt-5-mini-2025-08-07",
+        "text": "GPT-5 Mini\n$0.025\n99.7s\n8.3"
+      },
+      {
+        "model": "Sonar Reasoning Pro",
+        "slug": "/perplexity/sonar-reasoning-pro",
+        "text": "Sonar Reasoning Pro\n$0.025\n30.6s\n7.6"
+      },
+      {
+        "model": "Kimi K2.6",
+        "slug": "/moonshotai/kimi-k2.6-20260420",
+        "text": "Kimi K2.6\n$0.023\n107.8s\n7.4"
+      },
+      {
+        "model": "Grok Build 0.1",
+        "slug": "/x-ai/grok-build-0.1-20260520",
+        "text": "Grok Build 0.1\n$0.021\n74.6s\n7.3"
+      },
+      {
+        "model": "DeepSeek V4 Flash Vision Exp",
+        "slug": "/deepseek/deepseek-v4-flash-vision-exp-20260821",
+        "text": "DeepSeek V4 Flash Vision Exp\n$0.021\n51.2s\n8.6"
+      },
+      {
+        "model": "GPT-5.1-Codex-Mini",
+        "slug": "/openai/gpt-5.1-codex-mini-20251113",
+        "text": "GPT-5.1-Codex-Mini\n$0.019\n171.2s\n5.6"
+      },
+      {
+        "model": "DeepSeek V4.1 Flash",
+        "slug": "/deepseek/deepseek-v4.1-flash-20260910",
+        "text": "DeepSeek V4.1 Flash\n$0.019\n61.9s\n8.5"
+      },
+      {
+        "model": "Grok 4.3",
+        "slug": "/x-ai/grok-4.3-20260430",
+        "text": "Grok 4.3\n$0.019\n102.1s\n7.4"
+      },
+      {
+        "model": "Qwen3 235B A22B Thinking 2507",
+        "slug": "/qwen/qwen3-235b-a22b-thinking-2507",
+        "text": "Qwen3 235B A22B Thinking 2507\n$0.018\n186.2s\n8.1"
+      },
+      {
+        "model": "GPT-5.1-Codex",
+        "slug": "/openai/gpt-5.1-codex-20251113",
+        "text": "GPT-5.1-Codex\n$0.018\n14.2s\n7.0"
+      },
+      {
+        "model": "Qwen3.6 27B",
+        "slug": "/qwen/qwen3.6-27b-20260422",
+        "text": "Qwen3.6 27B\n$0.017\n70.5s\n8.0"
+      },
+      {
+        "model": "GPT-4.1",
+        "slug": "/openai/gpt-4.1-2025-04-14",
+        "text": "GPT-4.1\n$0.017\n24.1s\n6.4"
+      },
+      {
+        "model": "Seed-2.0-Lite",
+        "slug": "/bytedance-seed/seed-2.0-lite-20260309",
+        "text": "Seed-2.0-Lite\n$0.016\n110.7s\n8.1"
+      },
+      {
+        "model": "Grok 4.5",
+        "slug": "/x-ai/grok-4.5-20260708",
+        "text": "Grok 4.5\n$0.014\n29.2s\n8.0"
+      },
+      {
+        "model": "Mistral Large 2407",
+        "slug": "/mistralai/mistral-large-2407",
+        "text": "Mistral Large 2407\n$0.012\n18.3s\n6.0"
+      },
+      {
+        "model": "Claude Haiku 4.5",
+        "slug": "/anthropic/claude-4.5-haiku-20251001",
+        "text": "Claude Haiku 4.5\n$0.012\n12.1s\n6.5"
+      },
+      {
+        "model": "MiniMax M2.1",
+        "slug": "/minimax/minimax-m2.1",
+        "text": "MiniMax M2.1\n$0.012\n108.5s\n7.4"
+      },
+      {
+        "model": "Qwen3 Next 80B A3B Thinking",
+        "slug": "/qwen/qwen3-next-80b-a3b-thinking-2509",
+        "text": "Qwen3 Next 80B A3B Thinking\n$0.011\n52.7s\n4.3"
+      },
+      {
+        "model": "MiniMax M2.7",
+        "slug": "/minimax/minimax-m2.7-20260318",
+        "text": "MiniMax M2.7\n$0.011\n134.8s\n6.9"
+      },
+      {
+        "model": "MiMo-V2.5-Pro",
+        "slug": "/xiaomi/mimo-v2.5-pro-20260422",
+        "text": "MiMo-V2.5-Pro\n$0.011\n313.9s\n8.3"
+      },
+      {
+        "model": "Step 3.7 Flash",
+        "slug": "/stepfun/step-3.7-flash-20260528",
+        "text": "Step 3.7 Flash\n$0.010\n66.9s\n6.7"
+      },
+      {
+        "model": "Mixtral 8x22B Instruct",
+        "slug": "/mistralai/mixtral-8x22b-instruct",
+        "text": "Mixtral 8x22B Instruct\n$0.010\n8.2s\n4.4"
+      },
+      {
+        "model": "GPT-5 Nano",
+        "slug": "/openai/gpt-5-nano-2025-08-07",
+        "text": "GPT-5 Nano\n$0.010\n143.6s\n4.9"
+      },
+      {
+        "model": "Palmyra X5",
+        "slug": "/writer/palmyra-x5-20250428",
+        "text": "Palmyra X5\n$0.010\n21.2s\n4.6"
+      },
+      {
+        "model": "Nova Premier 1.0",
+        "slug": "/amazon/nova-premier-v1",
+        "text": "Nova Premier 1.0\n$0.009\n19.8s\n3.9"
+      },
+      {
+        "model": "Pareto 26.10",
+        "slug": "/unbiased/pareto-26.10-20261015",
+        "text": "Pareto 26.10\n$0.009\n76.0s\n9.0"
+      },
+      {
+        "model": "MiniMax M3.1 Flash",
+        "slug": "/minimax/minimax-m3.1-flash-20261019",
+        "text": "MiniMax M3.1 Flash\n$0.009\n145.0s"
+      },
+      {
+        "model": "GPT-6 Luna",
+        "slug": "/openai/gpt-6-luna-20260922",
+        "text": "GPT-6 Luna\n$0.009\n410.1s\n8.2"
+      },
+      {
+        "model": "Hy3",
+        "slug": "/tencent/hy3-20260706",
+        "text": "Hy3\n$0.009\n207.4s\n8.3"
+      },
+      {
+        "model": "Inkling Small",
+        "slug": "/thinkingmachines/inkling-small-20260730",
+        "text": "Inkling Small\n$0.009\n17.6s\n7.9"
+      },
+      {
+        "model": "MiMo-V2.6-Pro",
+        "slug": "/xiaomi/mimo-v2.6-pro-20260921",
+        "text": "MiMo-V2.6-Pro\n$0.009\n108.2s\n8.0"
+      },
+      {
+        "model": "Particle-1",
+        "slug": "/particle-ai/particle-1-20261027",
+        "text": "Particle-1\n$0.008\n11.7s\n7.8"
+      },
+      {
+        "model": "Mistral Large 4",
+        "slug": "/mistralai/mistral-large-4-0-20261006",
+        "text": "Mistral Large 4\n$0.008\n37.3s\n6.6"
+      },
+      {
+        "model": "Beam 1.0 501B A23B",
+        "slug": "/reflection/beam-1.0-501b-a23b-20261016",
+        "text": "Beam 1.0 501B A23B\n$0.008\n13.3s\n7.3"
+      },
+      {
+        "model": "Sonar",
+        "slug": "/perplexity/sonar",
+        "text": "Sonar\n$0.008\n21.2s\n7.8"
+      },
+      {
+        "model": "Seed-2.0-Mini",
+        "slug": "/bytedance-seed/seed-2.0-mini-20260224",
+        "text": "Seed-2.0-Mini\n$0.007\n155.9s\n6.8"
+      },
+      {
+        "model": "GLM 5.3 Flash",
+        "slug": "/z-ai/glm-5.3-flash-20260826",
+        "text": "GLM 5.3 Flash\n$0.007\n263.3s\n8.7"
+      },
+      {
+        "model": "Mistral Small 4",
+        "slug": "/mistralai/mistral-small-2603",
+        "text": "Mistral Small 4\n$0.007\n57.1s\n4.6"
+      },
+      {
+        "model": "Mercury 3",
+        "slug": "/inception/mercury-3-20261019",
+        "text": "Mercury 3\n$0.007\n36.3s\n7.8"
+      },
+      {
+        "model": "DeepSeek V4 Flash 0423",
+        "slug": "/deepseek/deepseek-v4-flash-20260423",
+        "text": "DeepSeek V4 Flash 0423\n$0.007\n449.8s\n8.6"
+      },
+      {
+        "model": "Nemotron 3 Ultra",
+        "slug": "/nvidia/nemotron-3-ultra-550b-a55b-20260604",
+        "text": "Nemotron 3 Ultra\n$0.006\n46.8s\n5.6"
+      },
+      {
+        "model": "Ling 3.1 Flash",
+        "slug": "/inclusionai/ling-3.1-flash-20261002",
+        "text": "Ling 3.1 Flash\n$0.006\n215.6s\n7.9"
+      },
+      {
+        "model": "Qwen3.6 35B A3B",
+        "slug": "/qwen/qwen3.6-35b-a3b-20260415",
+        "text": "Qwen3.6 35B A3B\n$0.005\n217.3s\n8.4"
+      },
+      {
+        "model": "Muse Glimmer 30B",
+        "slug": "/meta/muse-glimmer-30b-20260810",
+        "text": "Muse Glimmer 30B\n$0.005\n57.0s\n6.9"
+      },
+      {
+        "model": "Relace Search",
+        "slug": "/relace/relace-search-20251208",
+        "text": "Relace Search\n$0.004\n4.9s\n4.9"
+      },
+      {
+        "model": "Gemini 2.5 Flash",
+        "slug": "/google/gemini-2.5-flash",
+        "text": "Gemini 2.5 Flash\n$0.004\n8.1s\n6.1"
+      },
+      {
+        "model": "Nemotron 3.5 Super VL",
+        "slug": "/nvidia/nemotron-3.5-super-vl-20261015",
+        "text": "Nemotron 3.5 Super VL\n$0.004\n25.7s\n6.0"
+      },
+      {
+        "model": "R1 0528",
+        "slug": "/deepseek/deepseek-r1-0528",
+        "text": "R1 0528\n$0.004\n93.8s\n6.1"
+      },
+      {
+        "model": "Grok 4.20",
+        "slug": "/x-ai/grok-4.20-20260309",
+        "text": "Grok 4.20\n$0.004\n10.7s\n6.8"
+      },
+      {
+        "model": "LFM2.5-24B-A2B",
+        "slug": "/liquid/lfm-2.5-24b-a2b-20261012",
+        "text": "LFM2.5-24B-A2B\n$0.004\n23.0s\n3.0"
+      },
+      {
+        "model": "GLM 4.6",
+        "slug": "/z-ai/glm-4.6",
+        "text": "GLM 4.6\n$0.003\n21.1s\n6.1"
+      },
+      {
+        "model": "Mistral Large 3 2512",
+        "slug": "/mistralai/mistral-large-2512",
+        "text": "Mistral Large 3 2512\n$0.003\n21.6s\n5.6"
+      },
+      {
+        "model": "Qwen3 32B",
+        "slug": "/qwen/qwen3-32b-04-28",
+        "text": "Qwen3 32B\n$0.003\n352.5s\n5.6"
+      },
+      {
+        "model": "Perceptron Mk1.5",
+        "slug": "/perceptron/perceptron-mk1.5-20260925",
+        "text": "Perceptron Mk1.5\n$0.003\n6.4s\n5.5"
+      },
+      {
+        "model": "GLM 4.5 Air",
+        "slug": "/z-ai/glm-4.5-air",
+        "text": "GLM 4.5 Air\n$0.003\n33.6s\n5.1"
+      },
+      {
+        "model": "Devstral 2 2512",
+        "slug": "/mistralai/devstral-2512",
+        "text": "Devstral 2 2512\n$0.002\n6.2s\n3.5"
+      },
+      {
+        "model": "Mistral Medium 3",
+        "slug": "/mistralai/mistral-medium-3",
+        "text": "Mistral Medium 3\n$0.002\n5.9s\n3.4"
+      },
+      {
+        "model": "Mistral Medium 3.1",
+        "slug": "/mistralai/mistral-medium-3.1",
+        "text": "Mistral Medium 3.1\n$0.002\n5.7s\n3.8"
+      },
+      {
+        "model": "MiMo-V2.5",
+        "slug": "/xiaomi/mimo-v2.5-20260422",
+        "text": "MiMo-V2.5\n$0.002\n100.1s\n4.0"
+      },
+      {
+        "model": "R1 Distill Llama 70B",
+        "slug": "/deepseek/deepseek-r1-distill-llama-70b",
+        "text": "R1 Distill Llama 70B\n$0.002\n106.8s\n7.3"
+      },
+      {
+        "model": "Claude 3 Haiku",
+        "slug": "/anthropic/claude-3-haiku",
+        "text": "Claude 3 Haiku\n$0.002\n13.3s\n2.4"
+      },
+      {
+        "model": "Seed 1.6 Flash",
+        "slug": "/bytedance-seed/seed-1.6-flash-20250625",
+        "text": "Seed 1.6 Flash\n$0.002\n38.8s\n5.3"
+      },
+      {
+        "model": "DeepSeek V3.1 Terminus",
+        "slug": "/deepseek/deepseek-v3.1-terminus",
+        "text": "DeepSeek V3.1 Terminus\n$0.002\n76.5s\n6.3"
+      },
+      {
+        "model": "Qwen3 Coder Next",
+        "slug": "/qwen/qwen3-coder-next-2025-02-03",
+        "text": "Qwen3 Coder Next\n$0.002\n23.2s\n5.6"
+      },
+      {
+        "model": "GLM 4.7 Flash",
+        "slug": "/z-ai/glm-4.7-flash-20260119",
+        "text": "GLM 4.7 Flash\n$0.002\n171.5s\n8.5"
+      },
+      {
+        "model": "Solar Mini 4",
+        "slug": "/upstage/solar-mini4-20260922",
+        "text": "Solar Mini 4\n$0.002\n72.3s\n4.6"
+      },
+      {
+        "model": "Ling 3.0 Flash",
+        "slug": "/inclusionai/ling-3.0-flash-20260723",
+        "text": "Ling 3.0 Flash\n$0.002\n82.3s\n7.5"
+      },
+      {
+        "model": "Qwen3 Coder 480B A35B",
+        "slug": "/qwen/qwen3-coder-480b-a35b-07-25",
+        "text": "Qwen3 Coder 480B A35B\n$0.002\n10.7s\n6.4"
+      },
+      {
+        "model": "Qwen3 Next 80B A3B Instruct",
+        "slug": "/qwen/qwen3-next-80b-a3b-instruct-2509",
+        "text": "Qwen3 Next 80B A3B Instruct\n$0.001\n3.5s\n5.6"
+      },
+      {
+        "model": "Hermes 3 405B Instruct",
+        "slug": "/nousresearch/hermes-3-llama-3.1-405b",
+        "text": "Hermes 3 405B Instruct\n$0.001\n45.7s\n2.6"
+      },
+      {
+        "model": "Solar Pro 4",
+        "slug": "/upstage/solar-pro4-20260810",
+        "text": "Solar Pro 4\n$0.001\n118.1s\n6.9"
+      },
+      {
+        "model": "Cydonia 24B V4.1",
+        "slug": "/thedrummer/cydonia-24b-v4.1",
+        "text": "Cydonia 24B V4.1\n$0.001\n50.8s\n4.4"
+      },
+      {
+        "model": "Perceptron Mk1",
+        "slug": "/perceptron/perceptron-mk1-20260512",
+        "text": "Perceptron Mk1\n$0.001\n20.0s\n5.6"
+      },
+      {
+        "model": "Granite 4.2 8B",
+        "slug": "/ibm-granite/granite-4.2-8b-20260831",
+        "text": "Granite 4.2 8B\n$0.001\n75.4s\n3.7"
+      },
+      {
+        "model": "DeepSeek V3.2",
+        "slug": "/deepseek/deepseek-v3.2-20251201",
+        "text": "DeepSeek V3.2\n$0.001\n24.7s\n6.6"
+      },
+      {
+        "model": "Saba",
+        "slug": "/mistralai/mistral-saba-2502",
+        "text": "Saba\n$0.001\n9.3s\n4.3"
+      },
+      {
+        "model": "ERNIE 4.5 VL 424B A47B",
+        "slug": "/baidu/ernie-4.5-vl-424b-a47b",
+        "text": "ERNIE 4.5 VL 424B A47B\n$0.001\n20.9s\n5.5"
+      },
+      {
+        "model": "DeepSeek V3 0324",
+        "slug": "/deepseek/deepseek-chat-v3-0324",
+        "text": "DeepSeek V3 0324\n$0.001\n25.8s\n5.1"
+      },
+      {
+        "model": "Nova Lite 1.0",
+        "slug": "/amazon/nova-lite-v1",
+        "text": "Nova Lite 1.0\n$0.001\n17.3s\n2.8"
+      },
+      {
+        "model": "Qwen3 235B A22B Instruct 2507",
+        "slug": "/qwen/qwen3-235b-a22b-07-25",
+        "text": "Qwen3 235B A22B Instruct 2507\n$0.001\n21.4s\n5.1"
+      },
+      {
+        "model": "Qwen3 VL 30B A3B Instruct",
+        "slug": "/qwen/qwen3-vl-30b-a3b-instruct",
+        "text": "Qwen3 VL 30B A3B Instruct\n$0.00087\n51.4s\n5.4"
+      },
+      {
+        "model": "Mistral Small 3.1 24B",
+        "slug": "/mistralai/mistral-small-3.1-24b-instruct-2503",
+        "text": "Mistral Small 3.1 24B\n$0.00068\n20.4s\n3.6"
+      },
+      {
+        "model": "Llama 4 Maverick",
+        "slug": "/meta-llama/llama-4-maverick-17b-128e-instruct",
+        "text": "Llama 4 Maverick\n$0.00068\n13.5s\n5.8"
+      },
+      {
+        "model": "gpt-oss-120b",
+        "slug": "/openai/gpt-oss-120b",
+        "text": "gpt-oss-120b\n$0.00065\n40.4s\n4.6"
+      },
+      {
+        "model": "Qwen3 VL 235B A22B Instruct",
+        "slug": "/qwen/qwen3-vl-235b-a22b-instruct",
+        "text": "Qwen3 VL 235B A22B Instruct\n$0.00063\n43.1s\n4.1"
+      },
+      {
+        "model": "Skyfall 36B V2",
+        "slug": "/thedrummer/skyfall-36b-v2",
+        "text": "Skyfall 36B V2\n$0.0006\n8.6s\n3.6"
+      },
+      {
+        "model": "Mercury 2.5",
+        "slug": "/inception/mercury-2.5-20260908",
+        "text": "Mercury 2.5\n$0.00059\n6.4s\n7.1"
+      },
+      {
+        "model": "Qwen3 14B",
+        "slug": "/qwen/qwen3-14b-04-28",
+        "text": "Qwen3 14B\n$0.00053\n30.3s\n4.5"
+      },
+      {
+        "model": "Gemma 3 27B",
+        "slug": "/google/gemma-3-27b-it",
+        "text": "Gemma 3 27B\n$0.0005\n32.4s\n4.3"
+      },
+      {
+        "model": "Qwen3 Coder 30B A3B Instruct",
+        "slug": "/qwen/qwen3-coder-30b-a3b-instruct",
+        "text": "Qwen3 Coder 30B A3B Instruct\n$0.00043\n13.8s\n5.0"
+      },
+      {
+        "model": "Gemma 4 26B A4B",
+        "slug": "/google/gemma-4-26b-a4b-it-20260403",
+        "text": "Gemma 4 26B A4B\n$0.00043\n17.3s\n7.8"
+      },
+      {
+        "model": "Gemma 4 31B",
+        "slug": "/google/gemma-4-31b-it-20260402",
+        "text": "Gemma 4 31B\n$0.00038\n63.3s\n7.6"
+      },
+      {
+        "model": "Qwen3 30B A3B Instruct 2507",
+        "slug": "/qwen/qwen3-30b-a3b-instruct-2507",
+        "text": "Qwen3 30B A3B Instruct 2507\n$0.00036\n28.4s\n5.0"
+      },
+      {
+        "model": "Mistral Small 3.2 24B",
+        "slug": "/mistralai/mistral-small-3.2-24b-instruct-2506",
+        "text": "Mistral Small 3.2 24B\n$0.00035\n18.9s\n5.0"
+      },
+      {
+        "model": "Ministral 3 14B 2512",
+        "slug": "/mistralai/ministral-14b-2512",
+        "text": "Ministral 3 14B 2512\n$0.00035\n19.5s\n4.0"
+      },
+      {
+        "model": "Nova Micro 1.0",
+        "slug": "/amazon/nova-micro-v1",
+        "text": "Nova Micro 1.0\n$0.00035\n6.3s\n3.0"
+      },
+      {
+        "model": "GPT-4o-mini",
+        "slug": "/openai/gpt-4o-mini",
+        "text": "GPT-4o-mini\n$0.00035\n7.9s\n2.6"
+      },
+      {
+        "model": "Hy-MT2-7B",
+        "slug": "/tencent/hy-mt2-7b-20260521",
+        "text": "Hy-MT2-7B\n$0.0003\n8.4s\n4.2"
+      },
+      {
+        "model": "Hy-MT2-30B-A3B",
+        "slug": "/tencent/hy-mt2-30b-a3b-20260521",
+        "text": "Hy-MT2-30B-A3B\n$0.00028\n6.3s\n4.8"
+      },
+      {
+        "model": "Qwen2.5 72B Instruct",
+        "slug": "/qwen/qwen-2.5-72b-instruct",
+        "text": "Qwen2.5 72B Instruct\n$0.00027\n21.0s\n3.3"
+      },
+      {
+        "model": "GPT-4.1 Nano",
+        "slug": "/openai/gpt-4.1-nano-2025-04-14",
+        "text": "GPT-4.1 Nano\n$0.00027\n6.7s\n5.9"
+      },
+      {
+        "model": "Ministral 3 8B 2512",
+        "slug": "/mistralai/ministral-8b-2512",
+        "text": "Ministral 3 8B 2512\n$0.00025\n20.1s\n4.8"
+      },
+      {
+        "model": "Hy-MT2-1.8B",
+        "slug": "/tencent/hy-mt2-1.8b-20260521",
+        "text": "Hy-MT2-1.8B\n$0.00023\n5.6s\n0.0"
+      },
+      {
+        "model": "Ministral 3 3B 2512",
+        "slug": "/mistralai/ministral-3b-2512",
+        "text": "Ministral 3 3B 2512\n$0.00018\n7.5s\n3.3"
+      },
+      {
+        "model": "Gemma 3 12B",
+        "slug": "/google/gemma-3-12b-it",
+        "text": "Gemma 3 12B\n$0.00015\n21.7s\n3.5"
+      },
+      {
+        "model": "Llama 4 Scout",
+        "slug": "/meta-llama/llama-4-scout-17b-16e-instruct",
+        "text": "Llama 4 Scout\n$0.00015\n16.8s\n3.8"
+      },
+      {
+        "model": "Granite 4.0 Micro",
+        "slug": "/ibm-granite/granite-4.0-h-micro",
+        "text": "Granite 4.0 Micro\n$0.000069\n16.4s\n1.0"
+      },
+      {
+        "model": "",
+        "slug": "/",
+        "text": "© 2026 OpenRouter, Inc"
+      },
+      {
+        "model": "Chat",
+        "slug": "/chat",
+        "text": "Product\nChat\nRankings\nBenchmarks\nApps\nDiscover\nModels\nOri\nCollections\nProviders\nTools\nPricing\nBusiness\nEnterprise\nLabs"
+      },
+      {
+        "model": "Chat",
+        "slug": "/chat",
+        "text": "Chat"
+      },
+      {
+        "model": "Rankings",
+        "slug": "/rankings",
+        "text": "Rankings"
+      },
+      {
+        "model": "Benchmarks",
+        "slug": "/benchmarks",
+        "text": "Benchmarks"
+      },
+      {
+        "model": "Apps",
+        "slug": "/apps",
+        "text": "Apps"
+      },
+      {
+        "model": "Discover",
+        "slug": "/discover",
+        "text": "Discover"
+      },
+      {
+        "model": "Models",
+        "slug": "/models",
+        "text": "Models"
+      },
+      {
+        "model": "Ori",
+        "slug": "/ori",
+        "text": "Ori"
+      },
+      {
+        "model": "Collections",
+        "slug": "/collections",
+        "text": "Collections"
+      },
+      {
+        "model": "Providers",
+        "slug": "/providers",
+        "text": "Providers"
+      },
+      {
+        "model": "Tools",
+        "slug": "/tools",
+        "text": "Tools"
+      },
+      {
+        "model": "Pricing",
+        "slug": "/pricing",
+        "text": "Pricing"
+      },
+      {
+        "model": "Business",
+        "slug": "/business",
+        "text": "Business"
+      },
+      {
+        "model": "Enterprise",
+        "slug": "/enterprise",
+        "text": "Enterprise"
+      },
+      {
+        "model": "Labs",
+        "slug": "/labs",
+        "text": "Labs"
+      },
+      {
+        "model": "About",
+        "slug": "/about",
+        "text": "Company\nAbout\nBlog\nCustomers\nCareers\nHiring\nPrivacy\nTerms of Service\nTrust Center\nSupport\nWorks With OR\nData\nBrand"
+      },
+      {
+        "model": "About",
+        "slug": "/about",
+        "text": "About"
+      },
+      {
+        "model": "Blog",
+        "slug": "/blog",
+        "text": "Blog"
+      },
+      {
+        "model": "Customers",
+        "slug": "/customers",
+        "text": "Customers"
+      },
+      {
+        "model": "Careers\nHiring",
+        "slug": "/careers",
+        "text": "Careers\nHiring"
+      },
+      {
+        "model": "Privacy",
+        "slug": "/privacy",
+        "text": "Privacy"
+      },
+      {
+        "model": "Terms of Service",
+        "slug": "/terms",
+        "text": "Terms of Service"
+      },
+      {
+        "model": "Trust Center",
+        "slug": "https://trust.openrouter.ai/",
+        "text": "Trust Center"
+      },
+      {
+        "model": "Support",
+        "slug": "/support",
+        "text": "Support"
+      },
+      {
+        "model": "Works With OR",
+        "slug": "/works-with-openrouter",
+        "text": "Works With OR"
+      },
+      {
+        "model": "Data",
+        "slug": "/data",
+        "text": "Data"
+      },
+      {
+        "model": "Brand",
+        "slug": "/brand",
+        "text": "Brand"
+      },
+      {
+        "model": "Documentation",
+        "slug": "/docs",
+        "text": "Developer\nDocumentation\nAPI Reference\nDeveloper Platform\nStatus\nAI Site Map"
+      },
+      {
+        "model": "Documentation",
+        "slug": "/docs",
+        "text": "Documentation"
+      },
+      {
+        "model": "API Reference",
+        "slug": "/docs/api_reference/overview",
+        "text": "API Reference"
+      },
+      {
+        "model": "Developer Platform",
+        "slug": "/developers",
+        "text": "Developer Platform"
+      },
+      {
+        "model": "Status",
+        "slug": "https://status.openrouter.ai",
+        "text": "Status"
+      },
+      {
+        "model": "AI Site Map",
+        "slug": "/for-ai",
+        "text": "AI Site Map"
+      },
+      {
+        "model": "Discord",
+        "slug": "https://discord.gg/fVyRaUDgxW",
+        "text": "Connect\nDiscord\nGitHub\nLinkedIn\nX\nYouTube"
+      },
+      {
+        "model": "Discord",
+        "slug": "https://discord.gg/fVyRaUDgxW",
+        "text": "Discord"
+      },
+      {
+        "model": "GitHub",
+        "slug": "https://github.com/OpenRouterTeam",
+        "text": "GitHub"
+      },
+      {
+        "model": "LinkedIn",
+        "slug": "https://www.linkedin.com/company/104068329",
+        "text": "LinkedIn"
+      },
+      {
+        "model": "X",
+        "slug": "https://twitter.com/openrouter",
+        "text": "X"
+      },
+      {
+        "model": "YouTube",
+        "slug": "https://www.youtube.com/@OpenRouterAI",
+        "text": "YouTube"
+      },
+      {
+        "model": "",
+        "slug": "",
+        "text": "Subscribe"
+      }
+    ]
+  }
+}

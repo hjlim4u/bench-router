@@ -8,7 +8,7 @@ sources:
   - "conversation:2026-10-19"
   - "conversation:2026-10-22"
 created: 2026-10-19T01:52:29Z
-updated: 2026-10-22T07:20:11Z
+updated: 2026-10-31T00:00:00Z
 as_of: 2026-10-22
 summary: >-
   Project map separating dated routing audits, current policy documentation, model/effort guidance, and multi-agent planning proposals.
@@ -37,6 +37,7 @@ Bench-router assesses configured agent profiles, checks mandatory constraints, a
 - [[concepts/model-effort-selection]] explains the model/effort distinction.
 - [[projects/bench-router/synthesis/multi-agent-pattern-selection]] owns the proposed timing, information requirements, and workflow evidence for choosing collaboration patterns.
 - [[projects/bench-router/synthesis/router-orchestrator-boundary]] owns the proposed split between pattern decisions in the calling layer and pattern-agnostic single-task assignment in the router.
+- [[projects/bench-router/synthesis/openrouter-router-benchmarks]] owns findings from OpenRouter's router-vs-single-model leaderboard and a labelled proposal for using cost per task.
 
 ## Knowledge and runtime boundary
 

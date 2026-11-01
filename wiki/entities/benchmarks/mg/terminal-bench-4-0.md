@@ -19,7 +19,7 @@ lifecycle_changed: 2026-10-18
 lifecycle_reason: "Reviewed 2026-10-18 at the user's request (assistant review, not independent): structure, rules, LMArena categories vs the HF dataset, key figures vs saved sources, adoption consistency."
 tier: supporting
 created: 2026-10-17T00:00:00Z
-updated: 2026-10-18T00:00:00Z
+updated: 2026-10-31T00:00:00Z
 ---
 # Terminal-Bench 4.0
 
@@ -100,3 +100,5 @@ trust_grade = "B"
 - [[references/sources/themodelgap-data]] — <https://themodelgap.com/data/benchmarks.json>
 - <https://hub.harborframework.com/datasets/terminal-bench/terminal-bench/4>
 - <https://huggingface.co/datasets/harborframework/terminal-bench> — HF official mirror of the continuous Terminal-Bench (one repo, one tag per version; `main` tracks the latest). Pin the 4.0 tag before using its scores; score rows are `verified=false`.
+- [[references/sources/artificial-analysis-methodology]] — AA Intelligence Index v5.0 weights it 10%: full 66 tasks, mini-swe-agent, pass@1 over 3 repeats, 500-step cap.
+- [[projects/bench-router/synthesis/openrouter-router-benchmarks]] — one of six benchmarks in OpenRouter's router comparison (6 results as of 2026-10-30).

@@ -1,0 +1,1906 @@
+{
+  "source": "https://openrouter.ai/benchmarks/routers",
+  "title": "Model routing benchmarks | OpenRouter",
+  "extracted_at": "2026-10-30T23:14:43.628Z",
+  "tables": [
+    {
+      "headers": [
+        "Model router",
+        "Deep SWE",
+        "SWE Atlas QA",
+        "Terminal Bench 4.0",
+        "Tau3 Banking",
+        "MMMU Pro Vision",
+        "GPQA Diamond",
+        "Routers",
+        "Auto",
+        "COST TIER",
+        "Low",
+        "Medium",
+        "High",
+        "Fugu Max",
+        "Fugu Ultra v2",
+        "Jev Router",
+        "COST TIER",
+        "Low",
+        "Medium",
+        "High",
+        "Pareto",
+        "Multi Model Switching",
+        "Switchyard",
+        "ALGORITHM: STAGE",
+        "Claude Opus 5.5 + Claude Sonnet 5.5 (high)",
+        "Single Model Baselines (Reference)",
+        "Claude Haiku 5.5 (high)",
+        "Claude Haiku 5.5 (low)",
+        "Claude Haiku 5.5 (medium)",
+        "Claude Opus 5.5 (high)",
+        "Claude Opus 5.5 (low)",
+        "Claude Opus 5.5 (medium)",
+        "Claude Sonnet 5.5 (high)",
+        "Claude Sonnet 5.5 (low)",
+        "Claude Sonnet 5.5 (medium)",
+        "Deepseek v4.1 Flash (high)",
+        "Deepseek v4.1 Flash (max)",
+        "Deepseek v4.1 Flash 1017 (high)",
+        "Gemini 3.8 Flash (high)",
+        "Gemini 4 Argon (high)",
+        "GLM 5.3 (high)",
+        "GLM 5.3 Flash (high)",
+        "GPT-6-Astra (high)",
+        "GPT-6-Astra (low)",
+        "GPT-6-Astra (medium)",
+        "GPT-6-Luna (high)",
+        "GPT-6-Luna (max)",
+        "GPT-6-Sol (high)",
+        "GPT-6.1-Sol (high)",
+        "GPT-6.1-Sol (low)",
+        "GPT-6.1-Sol (medium)",
+        "GPT-6.1-Terra (high)",
+        "Grok 4.7 (medium)",
+        "Kimi K3 (high)",
+        "Kimi K3 (low)",
+        "Kimi K3.1 Pro (high)",
+        "Mimo v2.6 Pro (xhigh)"
+      ],
+      "rows": [
+        [
+          "Routers"
+        ],
+        [
+          "Auto"
+        ],
+        [
+          "COST TIER"
+        ],
+        [
+          "Low",
+          "—",
+          "7.7",
+          "6.7",
+          "4.5",
+          "7.5",
+          "8.8"
+        ],
+        [
+          "Medium",
+          "7.6",
+          "7.3",
+          "7.4",
+          "8.9",
+          "9.2",
+          "8.7"
+        ],
+        [
+          "High",
+          "7.4",
+          "—",
+          "—",
+          "7.0",
+          "9.0",
+          "7.3"
+        ],
+        [
+          "Fugu Max",
+          "4.6",
+          "6.9",
+          "—",
+          "7.8",
+          "9.2",
+          "7.9"
+        ],
+        [
+          "Fugu Ultra v2",
+          "—",
+          "7.5",
+          "—",
+          "7.9",
+          "8.3",
+          "7.5"
+        ],
+        [
+          "Jev Router"
+        ],
+        [
+          "COST TIER"
+        ],
+        [
+          "Low",
+          "8.9",
+          "8.3",
+          "—",
+          "8.6",
+          "8.9",
+          "8.6"
+        ],
+        [
+          "Medium",
+          "9.1",
+          "8.1",
+          "9.2",
+          "9.0",
+          "Best in benchmark\n9.8",
+          "9.0"
+        ],
+        [
+          "High",
+          "7.4",
+          "8.0",
+          "—",
+          "8.9",
+          "9.5",
+          "8.6"
+        ],
+        [
+          "Pareto",
+          "Best in benchmark\n9.7",
+          "Best in benchmark\n9.0",
+          "Best in benchmark\n9.3",
+          "Best in benchmark\n9.6",
+          "9.2",
+          "Best in benchmark\n9.4"
+        ],
+        [
+          "Multi Model Switching"
+        ],
+        [
+          "Switchyard"
+        ],
+        [
+          "ALGORITHM: STAGE"
+        ],
+        [
+          "Claude Opus 5.5 + Claude Sonnet 5.5 (high)",
+          "7.0",
+          "8.2",
+          "9.1",
+          "8.9",
+          "—",
+          "9.0"
+        ],
+        [
+          "Single Model Baselines (Reference)"
+        ],
+        [
+          "Claude Haiku 5.5 (high)",
+          "—",
+          "7.5",
+          "—",
+          "7.0",
+          "—",
+          "—"
+        ],
+        [
+          "Claude Haiku 5.5 (low)",
+          "6.6",
+          "6.1",
+          "—",
+          "5.5",
+          "—",
+          "—"
+        ],
+        [
+          "Claude Haiku 5.5 (medium)",
+          "7.3",
+          "6.7",
+          "—",
+          "6.3",
+          "—",
+          "—"
+        ],
+        [
+          "Claude Opus 5.5 (high)",
+          "Unknown",
+          "7.9",
+          "—",
+          "9.1",
+          "9.6",
+          "8.9"
+        ],
+        [
+          "Claude Opus 5.5 (low)",
+          "8.5",
+          "7.2",
+          "—",
+          "8.6",
+          "—",
+          "—"
+        ],
+        [
+          "Claude Opus 5.5 (medium)",
+          "8.3",
+          "8.1",
+          "—",
+          "9.1",
+          "—",
+          "—"
+        ],
+        [
+          "Claude Sonnet 5.5 (high)",
+          "7.6",
+          "7.8",
+          "—",
+          "9.3",
+          "—",
+          "—"
+        ],
+        [
+          "Claude Sonnet 5.5 (low)",
+          "8.0",
+          "5.7",
+          "—",
+          "7.2",
+          "—",
+          "—"
+        ],
+        [
+          "Claude Sonnet 5.5 (medium)",
+          "7.3",
+          "6.8",
+          "—",
+          "7.7",
+          "—",
+          "—"
+        ],
+        [
+          "Deepseek v4.1 Flash (high)",
+          "8.1",
+          "8.8",
+          "—",
+          "8.6",
+          "—",
+          "—"
+        ],
+        [
+          "Deepseek v4.1 Flash (max)",
+          "7.8",
+          "9.0",
+          "—",
+          "8.6",
+          "7.7",
+          "8.0"
+        ],
+        [
+          "Deepseek v4.1 Flash 1017 (high)",
+          "—",
+          "8.5",
+          "—",
+          "7.9",
+          "8.7",
+          "9.2"
+        ],
+        [
+          "Gemini 3.8 Flash (high)",
+          "—",
+          "Unknown",
+          "—",
+          "9.0",
+          "9.0",
+          "8.5"
+        ],
+        [
+          "Gemini 4 Argon (high)",
+          "—",
+          "—",
+          "—",
+          "8.4",
+          "9.1",
+          "8.5"
+        ],
+        [
+          "GLM 5.3 (high)",
+          "7.7",
+          "7.8",
+          "—",
+          "9.7",
+          "—",
+          "7.2"
+        ],
+        [
+          "GLM 5.3 Flash (high)",
+          "5.2",
+          "6.8",
+          "—",
+          "9.5",
+          "9.1",
+          "8.2"
+        ],
+        [
+          "GPT-6-Astra (high)",
+          "8.3",
+          "8.3",
+          "—",
+          "8.5",
+          "9.2",
+          "8.8"
+        ],
+        [
+          "GPT-6-Astra (low)",
+          "8.7",
+          "7.8",
+          "—",
+          "8.3",
+          "—",
+          "—"
+        ],
+        [
+          "GPT-6-Astra (medium)",
+          "8.5",
+          "7.9",
+          "—",
+          "8.2",
+          "—",
+          "—"
+        ],
+        [
+          "GPT-6-Luna (high)",
+          "7.7",
+          "7.1",
+          "—",
+          "7.9",
+          "9.7",
+          "9.4"
+        ],
+        [
+          "GPT-6-Luna (max)",
+          "8.8",
+          "7.3",
+          "—",
+          "8.7",
+          "9.2",
+          "8.9"
+        ],
+        [
+          "GPT-6-Sol (high)",
+          "8.5",
+          "8.3",
+          "—",
+          "9.4",
+          "9.9",
+          "9.4"
+        ],
+        [
+          "GPT-6.1-Sol (high)",
+          "9.1",
+          "8.4",
+          "—",
+          "9.3",
+          "—",
+          "9.6"
+        ],
+        [
+          "GPT-6.1-Sol (low)",
+          "8.9",
+          "8.4",
+          "—",
+          "8.3",
+          "—",
+          "—"
+        ],
+        [
+          "GPT-6.1-Sol (medium)",
+          "9.7",
+          "8.9",
+          "—",
+          "9.7",
+          "—",
+          "—"
+        ],
+        [
+          "GPT-6.1-Terra (high)",
+          "9.4",
+          "8.5",
+          "8.9",
+          "9.2",
+          "9.9",
+          "9.7"
+        ],
+        [
+          "Grok 4.7 (medium)",
+          "4.7",
+          "7.8",
+          "—",
+          "8.3",
+          "—",
+          "—"
+        ],
+        [
+          "Kimi K3 (high)",
+          "7.8",
+          "7.8",
+          "—",
+          "8.8",
+          "8.8",
+          "8.4"
+        ],
+        [
+          "Kimi K3 (low)",
+          "8.0",
+          "—",
+          "—",
+          "9.1",
+          "—",
+          "—"
+        ],
+        [
+          "Kimi K3.1 Pro (high)",
+          "8.8",
+          "8.2",
+          "—",
+          "8.9",
+          "9.4",
+          "8.2"
+        ],
+        [
+          "Mimo v2.6 Pro (xhigh)",
+          "7.4",
+          "7.8",
+          "—",
+          "9.2",
+          "7.5",
+          "7.6"
+        ]
+      ]
+    },
+    {
+      "headers": [
+        "Model router",
+        "Model Routing Index",
+        "Cost / task"
+      ],
+      "rows": [
+        [
+          "Claude Haiku 5.5 (low)",
+          "6.1",
+          "$0.053"
+        ],
+        [
+          "Claude Haiku 5.5 (medium)",
+          "6.8",
+          "$0.098"
+        ],
+        [
+          "Switchyard · Claude Opus 5.5 + Claude Sonnet 5.5 (high)",
+          "8.3",
+          "$2.46"
+        ],
+        [
+          "Claude Opus 5.5 (low)",
+          "8.1",
+          "$0.46"
+        ],
+        [
+          "Claude Opus 5.5 (medium)",
+          "8.5",
+          "$0.98"
+        ],
+        [
+          "Claude Sonnet 5.5 (high)",
+          "8.2",
+          "$0.83"
+        ],
+        [
+          "Claude Sonnet 5.5 (low)",
+          "6.9",
+          "$0.22"
+        ],
+        [
+          "Claude Sonnet 5.5 (medium)",
+          "7.2",
+          "$0.29"
+        ],
+        [
+          "Deepseek v4.1 Flash (high)",
+          "8.5",
+          "$0.22"
+        ],
+        [
+          "Deepseek v4.1 Flash (max)",
+          "8.2",
+          "$0.16"
+        ],
+        [
+          "Kimi K3 (high)",
+          "8.3",
+          "$0.75"
+        ],
+        [
+          "Kimi K3 (low)",
+          "8.6",
+          "$0.67"
+        ],
+        [
+          "Kimi K3.1 Pro (high)",
+          "8.8",
+          "$0.38"
+        ],
+        [
+          "GPT-6-Astra (high)",
+          "8.6",
+          "$1.39"
+        ],
+        [
+          "GPT-6-Astra (low)",
+          "8.2",
+          "$1.02"
+        ],
+        [
+          "GPT-6-Astra (medium)",
+          "8.2",
+          "$1.70"
+        ],
+        [
+          "GPT-6-Luna (high)",
+          "8.3",
+          "$0.032"
+        ],
+        [
+          "GPT-6-Luna (max)",
+          "8.6",
+          "$0.060"
+        ],
+        [
+          "GPT-6-Sol (high)",
+          "9.1",
+          "$0.28"
+        ],
+        [
+          "GPT-6.1-Sol (high)",
+          "9.1",
+          "$0.29"
+        ],
+        [
+          "GPT-6.1-Sol (low)",
+          "8.5",
+          "$0.14"
+        ],
+        [
+          "GPT-6.1-Sol (medium)",
+          "9.4",
+          "$0.25"
+        ],
+        [
+          "GPT-6.1-Terra (high)",
+          "9.3",
+          "$0.17"
+        ],
+        [
+          "Grok 4.7 (medium)",
+          "7.0",
+          "$3.21"
+        ],
+        [
+          "Mimo v2.6 Pro (xhigh)",
+          "7.9",
+          "$0.12"
+        ],
+        [
+          "GLM 5.3 (high)",
+          "8.1",
+          "$0.57"
+        ],
+        [
+          "GLM 5.3 Flash (high)",
+          "7.8",
+          "$0.12"
+        ],
+        [
+          "Auto (High tier)",
+          "7.7",
+          "$0.63"
+        ],
+        [
+          "Auto (Medium tier)",
+          "8.2",
+          "$1.02"
+        ],
+        [
+          "Fugu Max",
+          "7.3",
+          "$1.04"
+        ],
+        [
+          "Jev Router (High tier)",
+          "8.5",
+          "$1.67"
+        ],
+        [
+          "Jev Router (Low tier)",
+          "8.6",
+          "$0.20"
+        ],
+        [
+          "Jev Router (Medium tier)",
+          "9.0",
+          "$0.61"
+        ],
+        [
+          "Pareto",
+          "9.4",
+          "$0.13"
+        ],
+        [
+          "Claude Opus 5.5 (high)",
+          "8.9",
+          "$0.45"
+        ],
+        [
+          "Deepseek v4.1 Flash 1017 (high)",
+          "8.6",
+          "$0.014"
+        ],
+        [
+          "Gemini 3.8 Flash (high)",
+          "8.8",
+          "$0.18"
+        ],
+        [
+          "Gemini 4 Argon (high)",
+          "8.6",
+          "$0.33"
+        ],
+        [
+          "Auto (Low tier)",
+          "7.0",
+          "$0.19"
+        ],
+        [
+          "Fugu Ultra v2",
+          "7.8",
+          "$3.01"
+        ],
+        [
+          "Claude Haiku 5.5 (high)",
+          "7.3",
+          "$0.048"
+        ]
+      ]
+    },
+    {
+      "headers": [
+        "Benchmark",
+        "Model router",
+        "Quality",
+        "Cost / task",
+        "Cost / success",
+        "Time / task",
+        "Deep SWE\n35 results",
+        "GPQA Diamond\n27 results",
+        "MMMU Pro Vision\n23 results",
+        "SWE Atlas QA\n38 results",
+        "Tau3 Banking\n41 results",
+        "Terminal Bench 4.0\n6 results"
+      ],
+      "rows": [
+        [
+          "Deep SWE\n35 results"
+        ],
+        [
+          "Deep SWE\nKimi K3.1 Pro",
+          "77.9%",
+          "$0.84",
+          "$1.08",
+          "16.1m"
+        ],
+        [
+          "Deep SWE\nPareto",
+          "74.3%",
+          "$0.19",
+          "$0.26",
+          "7.5m"
+        ],
+        [
+          "Deep SWE\nGPT-6-Astra",
+          "73.5%",
+          "$2.99",
+          "$4.07",
+          "11.7m"
+        ],
+        [
+          "Deep SWE\nGPT-6.1-Terra",
+          "72.8%",
+          "$0.31",
+          "$0.43",
+          "8.3m"
+        ],
+        [
+          "Deep SWE\nGPT-6.1-Sol · openai",
+          "72.6%",
+          "$0.30",
+          "$0.41",
+          "3.7m"
+        ],
+        [
+          "Deep SWE\nGPT-6.1-Sol (high)",
+          "70.8%",
+          "$0.46",
+          "$0.65",
+          "6.5m"
+        ],
+        [
+          "Deep SWE\nClaude Opus 5.5\n\nFailed",
+          "70.5%",
+          "$7.76",
+          "$11.00",
+          "51.9m"
+        ],
+        [
+          "Deep SWE\nJev Router (Medium tier)",
+          "70.4%",
+          "$0.79",
+          "$1.12",
+          "4.2m"
+        ],
+        [
+          "Deep SWE\nGPT-6-Astra",
+          "69.9%",
+          "$1.99",
+          "$2.85",
+          "5.8m"
+        ],
+        [
+          "Deep SWE\nJev Router (High tier)",
+          "69.9%",
+          "$5.94",
+          "$8.49",
+          "23.9m"
+        ],
+        [
+          "Deep SWE\nKimi K3 (high)",
+          "69.0%",
+          "$1.85",
+          "$2.68",
+          "23.1m"
+        ],
+        [
+          "Deep SWE\nSwitchyard · Claude Opus 5.5 + Claude Sonnet 5.5 (high)",
+          "68.8%",
+          "$6.59",
+          "$9.59",
+          "44.9m"
+        ],
+        [
+          "Deep SWE\nClaude Opus 5.5",
+          "67.7%",
+          "$1.54",
+          "$2.27",
+          "7.0m"
+        ],
+        [
+          "Deep SWE\nGPT-6-Luna",
+          "67.3%",
+          "$0.18",
+          "$0.27",
+          "17.7m"
+        ],
+        [
+          "Deep SWE\nGPT-6-Astra",
+          "67.2%",
+          "$1.02",
+          "$1.52",
+          "3.1m"
+        ],
+        [
+          "Deep SWE\nClaude Sonnet 5.5",
+          "66.4%",
+          "$1.86",
+          "$2.80",
+          "21.4m"
+        ],
+        [
+          "Deep SWE\nJev Router (Low tier)",
+          "65.9%",
+          "$0.37",
+          "$0.57",
+          "5.8m"
+        ],
+        [
+          "Deep SWE\nGLM 5.3 (high)",
+          "64.6%",
+          "$1.46",
+          "$2.26",
+          "16.3m"
+        ],
+        [
+          "Deep SWE\nDeepseek v4.1 Flash",
+          "62.8%",
+          "$0.37",
+          "$0.60",
+          "19.9m"
+        ],
+        [
+          "Deep SWE\nDeepseek v4.1 Flash",
+          "61.9%",
+          "$0.42",
+          "$0.68",
+          "27.5m"
+        ],
+        [
+          "Deep SWE\nClaude Opus 5.5",
+          "61.1%",
+          "$0.52",
+          "$0.85",
+          "2.6m"
+        ],
+        [
+          "Deep SWE\nGPT-6-Sol",
+          "61.1%",
+          "$0.46",
+          "$0.75",
+          "3.6m"
+        ],
+        [
+          "Deep SWE\nGPT-6.1-Sol",
+          "60.2%",
+          "$0.14",
+          "$0.23",
+          "3.7m"
+        ],
+        [
+          "Deep SWE\nMimo v2.6 Pro",
+          "58.4%",
+          "$0.31",
+          "$0.53",
+          "43.2m"
+        ],
+        [
+          "Deep SWE\nKimi K3",
+          "57.5%",
+          "$0.63",
+          "$1.10",
+          "4.4m"
+        ],
+        [
+          "Deep SWE\nAuto (High tier)",
+          "56.8%",
+          "$1.48",
+          "$2.57",
+          "7.2m"
+        ],
+        [
+          "Deep SWE\nAuto (Medium tier)",
+          "54.5%",
+          "$0.80",
+          "$1.46",
+          "5.9m"
+        ],
+        [
+          "Deep SWE\nClaude Sonnet 5.5",
+          "54.0%",
+          "$0.36",
+          "$0.66",
+          "4.9m"
+        ],
+        [
+          "Deep SWE\nGPT-6-Luna",
+          "53.1%",
+          "$0.11",
+          "$0.21",
+          "15.8m"
+        ],
+        [
+          "Deep SWE\nClaude Haiku 5.5",
+          "52.2%",
+          "$0.25",
+          "$0.48",
+          "23.7m"
+        ],
+        [
+          "Deep SWE\nClaude Sonnet 5.5",
+          "49.6%",
+          "$0.51",
+          "$1.03",
+          "7.0m"
+        ],
+        [
+          "Deep SWE\nClaude Haiku 5.5",
+          "40.7%",
+          "$0.14",
+          "$0.34",
+          "16.2m"
+        ],
+        [
+          "Deep SWE\nGrok 4.7",
+          "35.4%",
+          "$5.89",
+          "$16.64",
+          "12.2m"
+        ],
+        [
+          "Deep SWE\nFugu Max",
+          "33.9%",
+          "$3.00",
+          "$8.85",
+          "25.4m"
+        ],
+        [
+          "Deep SWE\nGLM 5.3 Flash (high)",
+          "31.0%",
+          "$0.34",
+          "$1.10",
+          "27.0m"
+        ],
+        [
+          "GPQA Diamond\n27 results"
+        ],
+        [
+          "GPQA Diamond\nGemini 4 Argon",
+          "96.0%",
+          "$0.029",
+          "$0.030",
+          "40s"
+        ],
+        [
+          "GPQA Diamond\nKimi K3 (high)",
+          "94.9%",
+          "$0.036",
+          "$0.038",
+          "41s"
+        ],
+        [
+          "GPQA Diamond\nGPT-6-Astra (high)",
+          "94.9%",
+          "$0.034",
+          "$0.036",
+          "16s"
+        ],
+        [
+          "GPQA Diamond\nFugu Ultra",
+          "94.6%",
+          "$0.38",
+          "$0.40",
+          "1.8m"
+        ],
+        [
+          "GPQA Diamond\nJev Router (Medium tier)",
+          "93.9%",
+          "$0.016",
+          "$0.017",
+          "25s"
+        ],
+        [
+          "GPQA Diamond\nGemini 3.8 Flash",
+          "93.4%",
+          "$0.023",
+          "$0.025",
+          "44s"
+        ],
+        [
+          "GPQA Diamond\nGPT-6.1-Sol (high)",
+          "93.4%",
+          "$0.007",
+          "$0.007",
+          "14s"
+        ],
+        [
+          "GPQA Diamond\nFugu Ultra v2",
+          "93.3%",
+          "$0.17",
+          "$0.18",
+          "65s"
+        ],
+        [
+          "GPQA Diamond\nJev Router (High tier)",
+          "92.9%",
+          "$0.024",
+          "$0.026",
+          "34s"
+        ],
+        [
+          "GPQA Diamond\nJev Router (Low tier)",
+          "92.9%",
+          "$0.020",
+          "$0.022",
+          "40s"
+        ],
+        [
+          "GPQA Diamond\nPareto",
+          "92.4%",
+          "$0.003",
+          "$0.003",
+          "38s"
+        ],
+        [
+          "GPQA Diamond\nGPT-6-Sol (high)",
+          "91.4%",
+          "$0.008",
+          "$0.009",
+          "12s"
+        ],
+        [
+          "GPQA Diamond\nGPT-6.1-Terra",
+          "91.4%",
+          "$0.004",
+          "$0.004",
+          "11s"
+        ],
+        [
+          "GPQA Diamond\nGLM 5.3 Flash · digitalocean",
+          "90.9%",
+          "$0.005",
+          "$0.006",
+          "3.9m"
+        ],
+        [
+          "GPQA Diamond\nSwitchyard · Claude Opus 5.5 + Claude Sonnet 5.5 (high)",
+          "90.4%",
+          "$0.018",
+          "$0.020",
+          "12s"
+        ],
+        [
+          "GPQA Diamond\nKimi K3.1 Pro",
+          "90.4%",
+          "$0.021",
+          "$0.023",
+          "58s"
+        ],
+        [
+          "GPQA Diamond\nDeepseek v4.1 Flash 1017",
+          "90.2%",
+          "$0.003",
+          "$0.004",
+          "36s"
+        ],
+        [
+          "GPQA Diamond\nGPT-6-Luna",
+          "89.8%",
+          "$0.003",
+          "$0.004",
+          "73s"
+        ],
+        [
+          "GPQA Diamond\nClaude Opus 5.5 (high)",
+          "89.4%",
+          "$0.018",
+          "$0.020",
+          "10s"
+        ],
+        [
+          "GPQA Diamond\nFugu Max",
+          "88.6%",
+          "$0.025",
+          "$0.028",
+          "75s"
+        ],
+        [
+          "GPQA Diamond\nAuto (Low tier)",
+          "88.2%",
+          "$0.009",
+          "$0.010",
+          "28s"
+        ],
+        [
+          "GPQA Diamond\nDeepseek v4.1 Flash",
+          "87.9%",
+          "$0.011",
+          "$0.012",
+          "2.1m"
+        ],
+        [
+          "GPQA Diamond\nMimo v2.6 Pro",
+          "87.9%",
+          "$0.012",
+          "$0.014",
+          "5.3m"
+        ],
+        [
+          "GPQA Diamond\nAuto (Medium tier)",
+          "87.6%",
+          "$0.011",
+          "$0.012",
+          "29s"
+        ],
+        [
+          "GPQA Diamond\nGPT-6-Luna (high)",
+          "86.9%",
+          "$0.00098",
+          "$0.001",
+          "18s"
+        ],
+        [
+          "GPQA Diamond\nAuto (High tier)",
+          "83.2%",
+          "$0.061",
+          "$0.073",
+          "60s"
+        ],
+        [
+          "GPQA Diamond\nGLM 5.3 · digitalocean",
+          "82.3%",
+          "$0.026",
+          "$0.031",
+          "2.7m"
+        ],
+        [
+          "MMMU Pro Vision\n23 results"
+        ],
+        [
+          "MMMU Pro Vision\nGemini 4 Argon",
+          "87.0%",
+          "$0.027",
+          "$0.031",
+          "36s"
+        ],
+        [
+          "MMMU Pro Vision\nGPT-6-Astra",
+          "84.2%",
+          "$0.058",
+          "$0.069",
+          "8s"
+        ],
+        [
+          "MMMU Pro Vision\nClaude Opus 5.5",
+          "81.8%",
+          "$0.026",
+          "$0.032",
+          "9s"
+        ],
+        [
+          "MMMU Pro Vision\nKimi K3.1 Pro",
+          "81.7%",
+          "$0.016",
+          "$0.019",
+          "26s"
+        ],
+        [
+          "MMMU Pro Vision\nGemini 3.8 Flash",
+          "81.5%",
+          "$0.023",
+          "$0.029",
+          "45s"
+        ],
+        [
+          "MMMU Pro Vision\nGPT-6-Sol",
+          "81.5%",
+          "$0.013",
+          "$0.016",
+          "7s"
+        ],
+        [
+          "MMMU Pro Vision\nJev Router (High tier)",
+          "81.3%",
+          "$0.023",
+          "$0.029",
+          "14s"
+        ],
+        [
+          "MMMU Pro Vision\nAuto (Medium tier)",
+          "81.2%",
+          "$0.032",
+          "$0.039",
+          "20s"
+        ],
+        [
+          "MMMU Pro Vision\nKimi K3",
+          "81.0%",
+          "$0.021",
+          "$0.025",
+          "88s"
+        ],
+        [
+          "MMMU Pro Vision\nFugu Ultra v2",
+          "80.5%",
+          "$0.11",
+          "$0.14",
+          "42s"
+        ],
+        [
+          "MMMU Pro Vision\nGPT-6.1-Terra",
+          "80.3%",
+          "$0.006",
+          "$0.007",
+          "6s"
+        ],
+        [
+          "MMMU Pro Vision\nAuto (High tier)",
+          "79.9%",
+          "$0.036",
+          "$0.046",
+          "23s"
+        ],
+        [
+          "MMMU Pro Vision\nFugu Max",
+          "79.5%",
+          "$0.019",
+          "$0.024",
+          "24s"
+        ],
+        [
+          "MMMU Pro Vision\nJev Router (Medium tier)",
+          "78.4%",
+          "$0.010",
+          "$0.012",
+          "11s"
+        ],
+        [
+          "MMMU Pro Vision\nJev Router (Low tier)",
+          "77.8%",
+          "$0.021",
+          "$0.026",
+          "39s"
+        ],
+        [
+          "MMMU Pro Vision\nGPT-6-Luna",
+          "77.3%",
+          "$0.002",
+          "$0.003",
+          "38s"
+        ],
+        [
+          "MMMU Pro Vision\nGPT-6-Luna",
+          "76.6%",
+          "$0.00089",
+          "$0.001",
+          "8s"
+        ],
+        [
+          "MMMU Pro Vision\nPareto",
+          "75.5%",
+          "$0.015",
+          "$0.019",
+          "17s"
+        ],
+        [
+          "MMMU Pro Vision\nGLM 5.3 Flash",
+          "75.4%",
+          "$0.0008",
+          "$0.001",
+          "33s"
+        ],
+        [
+          "MMMU Pro Vision\nDeepseek v4.1 Flash 1017",
+          "72.7%",
+          "$0.006",
+          "$0.009",
+          "49s"
+        ],
+        [
+          "MMMU Pro Vision\nDeepseek v4.1 Flash",
+          "68.2%",
+          "$0.016",
+          "$0.023",
+          "2.1m"
+        ],
+        [
+          "MMMU Pro Vision\nAuto (Low tier)",
+          "65.4%",
+          "$0.031",
+          "$0.048",
+          "63s"
+        ],
+        [
+          "MMMU Pro Vision\nMimo v2.6 Pro",
+          "63.6%",
+          "$0.011",
+          "$0.017",
+          "2.5m"
+        ],
+        [
+          "SWE Atlas QA\n38 results"
+        ],
+        [
+          "SWE Atlas QA\nFugu Ultra v2",
+          "69.5%",
+          "$8.91",
+          "$12.82",
+          "15.5m"
+        ],
+        [
+          "SWE Atlas QA\nGPT-6-Astra (high)",
+          "65.5%",
+          "$2.06",
+          "$3.14",
+          "4.8m"
+        ],
+        [
+          "SWE Atlas QA\nDeepseek v4.1 Flash",
+          "65.3%",
+          "$0.16",
+          "$0.25",
+          "12.7m"
+        ],
+        [
+          "SWE Atlas QA\nDeepseek v4.1 Flash",
+          "63.7%",
+          "$0.19",
+          "$0.29",
+          "11.0m"
+        ],
+        [
+          "SWE Atlas QA\nJev Router (High tier)",
+          "62.9%",
+          "$1.53",
+          "$2.44",
+          "7.3m"
+        ],
+        [
+          "SWE Atlas QA\nGPT-6.1-Sol",
+          "60.5%",
+          "$0.22",
+          "$0.36",
+          "3.7m"
+        ],
+        [
+          "SWE Atlas QA\nPareto",
+          "60.5%",
+          "$0.14",
+          "$0.23",
+          "4.8m"
+        ],
+        [
+          "SWE Atlas QA\nGPT-6.1-Sol",
+          "59.7%",
+          "$0.39",
+          "$0.65",
+          "5.8m"
+        ],
+        [
+          "SWE Atlas QA\nGrok 4.7",
+          "58.9%",
+          "$1.44",
+          "$2.44",
+          "5.3m"
+        ],
+        [
+          "SWE Atlas QA\nGPT-6-Astra",
+          "58.8%",
+          "$1.63",
+          "$2.77",
+          "4.1m"
+        ],
+        [
+          "SWE Atlas QA\nJev Router (Low tier)",
+          "58.5%",
+          "$0.48",
+          "$0.82",
+          "4.5m"
+        ],
+        [
+          "SWE Atlas QA\nJev Router (Medium tier)",
+          "58.2%",
+          "$0.88",
+          "$1.51",
+          "4.1m"
+        ],
+        [
+          "SWE Atlas QA\nDeepseek v4.1 Flash 1017",
+          "58.1%",
+          "$0.000",
+          "$0.000",
+          "5.7m"
+        ],
+        [
+          "SWE Atlas QA\nKimi K3 (high)",
+          "58.1%",
+          "$0.86",
+          "$1.49",
+          "8.1m"
+        ],
+        [
+          "SWE Atlas QA\nKimi K3.1 Pro",
+          "58.1%",
+          "$0.000",
+          "$0.000",
+          "8.6m"
+        ],
+        [
+          "SWE Atlas QA\nGLM 5.3 (high)",
+          "57.3%",
+          "$0.64",
+          "$1.13",
+          "9.1m"
+        ],
+        [
+          "SWE Atlas QA\nSwitchyard · Claude Opus 5.5 + Claude Sonnet 5.5 (high)",
+          "56.5%",
+          "$0.000",
+          "$0.000",
+          "7.0m"
+        ],
+        [
+          "SWE Atlas QA\nClaude Opus 5.5 (high)",
+          "55.6%",
+          "$0.79",
+          "$1.43",
+          "3.8m"
+        ],
+        [
+          "SWE Atlas QA\nGPT-6-Sol (high)",
+          "55.4%",
+          "$0.35",
+          "$0.64",
+          "2.6m"
+        ],
+        [
+          "SWE Atlas QA\nGPT-6-Astra",
+          "54.1%",
+          "$0.89",
+          "$1.64",
+          "2.6m"
+        ],
+        [
+          "SWE Atlas QA\nClaude Opus 5.5",
+          "54.0%",
+          "$0.48",
+          "$0.89",
+          "2.8m"
+        ],
+        [
+          "SWE Atlas QA\nMimo v2.6 Pro",
+          "54.0%",
+          "$0.15",
+          "$0.28",
+          "20.4m"
+        ],
+        [
+          "SWE Atlas QA\nGPT-6.1-Terra",
+          "53.6%",
+          "$0.16",
+          "$0.29",
+          "3.6m"
+        ],
+        [
+          "SWE Atlas QA\nFugu Max",
+          "52.4%",
+          "$1.56",
+          "$2.98",
+          "11.1m"
+        ],
+        [
+          "SWE Atlas QA\nGPT-6.1-Sol",
+          "51.6%",
+          "$0.13",
+          "$0.25",
+          "2.6m"
+        ],
+        [
+          "SWE Atlas QA\nClaude Sonnet 5.5",
+          "48.4%",
+          "$0.26",
+          "$0.54",
+          "3.2m"
+        ],
+        [
+          "SWE Atlas QA\nAuto (Low tier)",
+          "44.0%",
+          "$0.12",
+          "$0.27",
+          "4.0m"
+        ],
+        [
+          "SWE Atlas QA\nAuto (Medium tier)",
+          "43.9%",
+          "$0.35",
+          "$0.78",
+          "3.2m"
+        ],
+        [
+          "SWE Atlas QA\nClaude Haiku 5.5",
+          "43.5%",
+          "$0.048",
+          "$0.11",
+          "5.7m"
+        ],
+        [
+          "SWE Atlas QA\nGemini 3.8 Flash\n\nFailed",
+          "43.5%",
+          "$1.04",
+          "$2.40",
+          "9.8m"
+        ],
+        [
+          "SWE Atlas QA\nGPT-6-Luna",
+          "42.7%",
+          "$0.064",
+          "$0.15",
+          "7.8m"
+        ],
+        [
+          "SWE Atlas QA\nGLM 5.3 Flash (high)",
+          "42.7%",
+          "$0.20",
+          "$0.46",
+          "15.1m"
+        ],
+        [
+          "SWE Atlas QA\nClaude Opus 5.5",
+          "39.5%",
+          "$0.16",
+          "$0.41",
+          "67s"
+        ],
+        [
+          "SWE Atlas QA\nGPT-6-Luna (high)",
+          "35.5%",
+          "$0.027",
+          "$0.077",
+          "2.8m"
+        ],
+        [
+          "SWE Atlas QA\nClaude Sonnet 5.5",
+          "33.1%",
+          "$0.098",
+          "$0.30",
+          "89s"
+        ],
+        [
+          "SWE Atlas QA\nClaude Haiku 5.5",
+          "31.5%",
+          "$0.015",
+          "$0.048",
+          "2.5m"
+        ],
+        [
+          "SWE Atlas QA\nClaude Haiku 5.5",
+          "24.2%",
+          "$0.007",
+          "$0.030",
+          "87s"
+        ],
+        [
+          "SWE Atlas QA\nClaude Sonnet 5.5",
+          "20.2%",
+          "$0.069",
+          "$0.34",
+          "68s"
+        ],
+        [
+          "Tau3 Banking\n41 results"
+        ],
+        [
+          "Tau3 Banking\nKimi K3.1 Pro",
+          "54.6%",
+          "$0.64",
+          "$1.17",
+          "5.3m"
+        ],
+        [
+          "Tau3 Banking\nGemini 4 Argon",
+          "46.4%",
+          "$0.94",
+          "$2.03",
+          "10.5m"
+        ],
+        [
+          "Tau3 Banking\nGLM 5.3",
+          "45.4%",
+          "$0.14",
+          "$0.30",
+          "2.9m"
+        ],
+        [
+          "Tau3 Banking\nKimi K3",
+          "42.8%",
+          "$0.97",
+          "$2.27",
+          "3.4m"
+        ],
+        [
+          "Tau3 Banking\nClaude Opus 5.5",
+          "42.3%",
+          "$0.98",
+          "$2.32",
+          "1.9m"
+        ],
+        [
+          "Tau3 Banking\nGPT-6-Sol (high)",
+          "42.3%",
+          "$0.55",
+          "$1.29",
+          "1.6m"
+        ],
+        [
+          "Tau3 Banking\nMimo v2.6 Pro",
+          "42.3%",
+          "$0.12",
+          "$0.29",
+          "11.3m"
+        ],
+        [
+          "Tau3 Banking\nGrok 4.7",
+          "41.8%",
+          "$2.32",
+          "$5.55",
+          "4.5m"
+        ],
+        [
+          "Tau3 Banking\nClaude Opus 5.5",
+          "39.7%",
+          "$0.92",
+          "$2.32",
+          "1.8m"
+        ],
+        [
+          "Tau3 Banking\nGemini 3.8 Flash",
+          "39.2%",
+          "$0.50",
+          "$1.27",
+          "4.2m"
+        ],
+        [
+          "Tau3 Banking\nKimi K3",
+          "38.1%",
+          "$0.71",
+          "$1.86",
+          "2.6m"
+        ],
+        [
+          "Tau3 Banking\nGPT-6.1-Sol",
+          "37.1%",
+          "$0.23",
+          "$0.62",
+          "67s"
+        ],
+        [
+          "Tau3 Banking\nAuto (Medium tier)",
+          "37.1%",
+          "$0.59",
+          "$1.54",
+          "4.2m"
+        ],
+        [
+          "Tau3 Banking\nDeepseek v4.1 Flash",
+          "36.1%",
+          "$0.20",
+          "$0.56",
+          "17.9m"
+        ],
+        [
+          "Tau3 Banking\nJev Router (Medium tier)",
+          "36.1%",
+          "$0.28",
+          "$0.77",
+          "5.1m"
+        ],
+        [
+          "Tau3 Banking\nClaude Sonnet 5.5",
+          "35.6%",
+          "$0.36",
+          "$1.01",
+          "65s"
+        ],
+        [
+          "Tau3 Banking\nGPT-6-Astra",
+          "35.6%",
+          "$1.83",
+          "$5.14",
+          "2.1m"
+        ],
+        [
+          "Tau3 Banking\nJev Router (High tier)",
+          "35.6%",
+          "$0.85",
+          "$2.38",
+          "1.7m"
+        ],
+        [
+          "Tau3 Banking\nSwitchyard · Claude Opus 5.5 + Claude Sonnet 5.5 (high)",
+          "35.1%",
+          "$0.78",
+          "$2.22",
+          "1.7m"
+        ],
+        [
+          "Tau3 Banking\nGPT-6.1-Sol",
+          "35.1%",
+          "$0.30",
+          "$0.86",
+          "1.5m"
+        ],
+        [
+          "Tau3 Banking\nFugu Ultra v2",
+          "35.1%",
+          "$2.84",
+          "$8.11",
+          "4.1m"
+        ],
+        [
+          "Tau3 Banking\nPareto",
+          "35.1%",
+          "$0.15",
+          "$0.44",
+          "1.7m"
+        ],
+        [
+          "Tau3 Banking\nGLM 5.3 Flash",
+          "34.0%",
+          "$0.043",
+          "$0.13",
+          "78s"
+        ],
+        [
+          "Tau3 Banking\nClaude Opus 5.5",
+          "33.5%",
+          "$0.69",
+          "$2.07",
+          "85s"
+        ],
+        [
+          "Tau3 Banking\nGPT-6-Astra",
+          "33.0%",
+          "$1.49",
+          "$4.51",
+          "88s"
+        ],
+        [
+          "Tau3 Banking\nGPT-6.1-Terra",
+          "33.0%",
+          "$0.17",
+          "$0.53",
+          "76s"
+        ],
+        [
+          "Tau3 Banking\nDeepseek v4.1 Flash",
+          "32.5%",
+          "$0.11",
+          "$0.33",
+          "7.5m"
+        ],
+        [
+          "Tau3 Banking\nGPT-6-Astra",
+          "32.5%",
+          "$1.16",
+          "$3.58",
+          "81s"
+        ],
+        [
+          "Tau3 Banking\nGPT-6-Luna",
+          "30.9%",
+          "$0.046",
+          "$0.15",
+          "3.8m"
+        ],
+        [
+          "Tau3 Banking\nJev Router (Low tier)",
+          "30.9%",
+          "$0.11",
+          "$0.37",
+          "4.3m"
+        ],
+        [
+          "Tau3 Banking\nFugu Max",
+          "29.9%",
+          "$0.59",
+          "$1.98",
+          "3.3m"
+        ],
+        [
+          "Tau3 Banking\nGPT-6.1-Sol",
+          "27.8%",
+          "$0.16",
+          "$0.58",
+          "57s"
+        ],
+        [
+          "Tau3 Banking\nAuto (High tier)",
+          "27.2%",
+          "$0.94",
+          "$3.66",
+          "4.4m"
+        ],
+        [
+          "Tau3 Banking\nClaude Sonnet 5.5",
+          "25.3%",
+          "$0.27",
+          "$1.08",
+          "52s"
+        ],
+        [
+          "Tau3 Banking\nDeepseek v4.1 Flash 1017",
+          "24.7%",
+          "$0.032",
+          "$0.13",
+          "2.2m"
+        ],
+        [
+          "Tau3 Banking\nGPT-6-Luna",
+          "24.2%",
+          "$0.020",
+          "$0.083",
+          "1.5m"
+        ],
+        [
+          "Tau3 Banking\nClaude Sonnet 5.5",
+          "22.2%",
+          "$0.24",
+          "$1.08",
+          "47s"
+        ],
+        [
+          "Tau3 Banking\nClaude Haiku 5.5",
+          "18.6%",
+          "$0.048",
+          "$0.26",
+          "78s"
+        ],
+        [
+          "Tau3 Banking\nClaude Haiku 5.5",
+          "14.4%",
+          "$0.025",
+          "$0.18",
+          "59s"
+        ],
+        [
+          "Tau3 Banking\nClaude Haiku 5.5",
+          "9.3%",
+          "$0.016",
+          "$0.17",
+          "47s"
+        ],
+        [
+          "Tau3 Banking\nAuto (Low tier)",
+          "8.2%",
+          "$0.17",
+          "$1.85",
+          "4.4m"
+        ],
+        [
+          "Terminal Bench 4.0\n6 results"
+        ],
+        [
+          "Terminal Bench 4.0\nJev Router (Medium tier)",
+          "48.3%",
+          "$1.69",
+          "$3.49",
+          "26.8m"
+        ],
+        [
+          "Terminal Bench 4.0\nSwitchyard · Claude Opus 5.5 + Claude Sonnet 5.5 (high)",
+          "45.0%",
+          "$0.000",
+          "$0.000",
+          "50.2m"
+        ],
+        [
+          "Terminal Bench 4.0\nPareto",
+          "42.5%",
+          "$0.29",
+          "$0.69",
+          "22.8m"
+        ],
+        [
+          "Terminal Bench 4.0\nGPT-6.1-Terra",
+          "40.8%",
+          "$0.40",
+          "$0.98",
+          "23.8m"
+        ],
+        [
+          "Terminal Bench 4.0\nAuto (Medium tier)",
+          "40.0%",
+          "$4.35",
+          "$10.88",
+          "49.8m"
+        ],
+        [
+          "Terminal Bench 4.0\nAuto (Low tier)",
+          "28.3%",
+          "$0.61",
+          "$2.16",
+          "58.7m"
+        ]
+      ]
+    }
+  ]
+}

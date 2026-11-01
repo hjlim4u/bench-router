@@ -1,0 +1,77 @@
+{
+  "url": "https://openrouter.ai/benchmarks",
+  "title": "AI Model Benchmarks | OpenRouter",
+  "extracted_at": "2026-10-30T14:54:38.140Z",
+  "cards": [
+    {
+      "href": "https://openrouter.ai/benchmarks/tau2-bench-airline",
+      "path": "/benchmarks/tau2-bench-airline",
+      "text": "τ²-Bench Airline\n\nMulti-turn service agents making tool calls under strict policy constraints.\n\n146\nmodels\nlast run\nOct 30, 2026\n\n80.0%\nGPT-5.1\n$0.009\nGLM 5.3 Flash\n42s\nGLM 5.3"
+    },
+    {
+      "href": "https://openrouter.ai/benchmarks/media/images",
+      "path": "/benchmarks/media/images",
+      "text": "Image\n\nImage prompts built to fail: depth, direction, counting, and text in the frame.\n\n60\nmodels\n\n$0.007\nRecraft: Recraft V4.1 Flash\n2s\nRecraft: Recraft V4.1 Flash"
+    },
+    {
+      "href": "https://openrouter.ai/benchmarks/media/videos",
+      "path": "/benchmarks/media/videos",
+      "text": "Video\n\nSix seconds of video, held to one duration and resolution across every model.\n\n27\nmodels\n\n$0.17\nHeyGen: HeyGen Video\n30s\nHeyGen: HeyGen Video"
+    },
+    {
+      "href": "https://openrouter.ai/benchmarks/media/speech",
+      "path": "/benchmarks/media/speech",
+      "text": "Speech\n\nOne sentence, every voice: did the words come back, and was direction performed?\n\n36\nmodels\n\n$0.000\nMistral: Voxtral Mini TTS\n1s\nElevenLabs: Eleven Flash v2.5"
+    },
+    {
+      "href": "https://openrouter.ai/benchmarks/media/memes",
+      "path": "/benchmarks/media/memes",
+      "text": "Memes\n\nEdit a meme as an image or animate it as a clip, graded on whether the brief landed.\n\n70\nmodels\n\n$0.009\nBlack Forest Labs: FLUX 3 Image Klein\n7s\nBlack Forest Labs: FLUX.2 Klein 4B"
+    },
+    {
+      "href": "https://openrouter.ai/benchmarks/media/sketch",
+      "path": "/benchmarks/media/sketch",
+      "text": "Sketch\n\nText models create drawings from prompts. The results are graded as images.\n\n242\nmodels\n\n$0.000034\nMistral: Mistral Nemo\n2s\nMeta: Llama 3.2 3B Instruct"
+    },
+    {
+      "href": "https://openrouter.ai/benchmarks/media/games",
+      "path": "/benchmarks/media/games",
+      "text": "Games\n\nText models create playable games from a single brief in one attempt.\n\n50\nmodels\n\n$0.004\nOpenAI: gpt-oss-120b\n16s\nGoogle: Gemini 3.1 Flash Lite Preview"
+    },
+    {
+      "href": "https://openrouter.ai/benchmarks/gpqa-diamond",
+      "path": "/benchmarks/gpqa-diamond",
+      "text": "GPQA Diamond\n\nGraduate-level science questions that resist retrieval and reward careful reasoning.\n\n167\nmodels\nlast run\nOct 30, 2026\n\n96.5%\nGemini 4 Argon\n$0.003\nPareto 26.10 Preview\n20s\nClaude Sonnet 5.5"
+    },
+    {
+      "href": "https://openrouter.ai/benchmarks/vgi-bench",
+      "path": "/benchmarks/vgi-bench",
+      "text": "VGI-Bench\n\nMultiple-choice questions about long videos: what was shown, said, or never happened.\n\n60\nmodels\nlast run\nOct 30, 2026\n\n66.2%\nSeed 1.6\n$0.039\nSeed 1.6\n64s\nSeed 1.6"
+    },
+    {
+      "href": "https://openrouter.ai/benchmarks/browsecomp",
+      "path": "/benchmarks/browsecomp",
+      "text": "BrowseComp\n\nHard-to-locate facts on the live web, scored on persistent multi-step research.\n\n4\nmodels\nlast run\nAug 18, 2026\n\n89.0%\nPerplexity\nClaude Opus 5 · high\n$0.99\nPerplexity\nClaude Opus 5 · high\n1.9m\nPerplexity\nClaude Opus 5 · high"
+    },
+    {
+      "href": "https://openrouter.ai/benchmarks/deepsearchqa",
+      "path": "/benchmarks/deepsearchqa",
+      "text": "DeepSearchQA\n\nQuestions whose answers are lists, scored for exhaustive retrieval with no padding.\n\n4\nmodels\nlast run\nAug 18, 2026\n\n77.0%\nParallel\nClaude Opus 5 · high\n$0.10\nPerplexity\nGPT-5.6 Luna · xhigh\n1.6m\nPerplexity\nGPT-5.6 Luna · xhigh"
+    },
+    {
+      "href": "https://openrouter.ai/benchmarks/hle",
+      "path": "/benchmarks/hle",
+      "text": "HLE\n\nHumanity's Last Exam as a search benchmark: expert questions answered with live search.\n\n3\nmodels\nlast run\nSep 15, 2026\n\n77.4%\nPerplexity\nClaude Opus 5 · high\n$0.16\nPerplexity\nClaude Opus 5 · high\n48s\nPerplexity\nClaude Opus 5 · high"
+    },
+    {
+      "href": "https://openrouter.ai/benchmarks/widesearch",
+      "path": "/benchmarks/widesearch",
+      "text": "WideSearch\n\nFill an entire table; answer-item accuracy scores partial matches.\n\n4\nmodels\nlast run\nAug 18, 2026\n\n84.0%\nPerplexity\nGPT-5.6 Sol · high\n$0.063\nPerplexity\nGPT-5.6 Luna · xhigh\n1.9m\nPerplexity\nGPT-5.6 Sol · high"
+    },
+    {
+      "href": "https://openrouter.ai/benchmarks/routers",
+      "path": "/benchmarks/routers",
+      "text": "Model Routers\n\nHow model routers balance quality, cost and speed across every benchmark with at least four model routers.\n\n7\nrouters\nlast run\nOct 28, 2026\n\n63.4%\nPareto\n$0.13\nPareto\n6.3m\nPareto"
+    }
+  ]
+}
