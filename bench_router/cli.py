@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import routing as r
 
-EXIT = {"selected": 0, "completed": 0, "ok": 0, "recorded": 0, "sent": 0, "stop_sent": 0, "blocked": 10, "timed_out": 11, "waiting": 11, "handed_off": 11,
+EXIT = {"selected": 0, "completed": 0, "ok": 0, "recorded": 0, "sent": 0, "stop_sent": 0, "blocked": 10, "timed_out": 11, "waiting": 11, "skipped": 11, "handed_off": 11,
         "delivery_uncertain": 11, "execution_failed": 12, "result_invalid": 12, "no_eligible_profile": 13,
         "conflict": 14, "stale_assessment": 14, "partial_failure": 16, "failed": 16,
         "decision_required": 17, "decision_unavailable": 17}
@@ -166,6 +166,11 @@ def _collect(args):
 def _stop(args):
     from . import herdr
     return herdr.stop_run(args.cwd, args.run_id)
+
+
+def _prune(args):
+    from . import parallel
+    return {"schema_version": r.SCHEMA_VERSION, **parallel.prune(str(Path(args.cwd).resolve()), args.dry_run)}
 
 
 def _wait_ms(v):
@@ -546,6 +551,11 @@ For a parallel member, cwd is its router worktree from the group output.""",
     "stop": """Example: bench-router stop --cwd /absolute/path/to/repo --run-id RUN
 Requests an explicit stop; subsequent collect reports execution_failed.
 For a parallel member use its router worktree, not the agent's inner worktree.""",
+    "prune": """Example: bench-router prune --cwd /absolute/path/to/repo --dry-run
+Removes router-made worktrees (branches br/... and board work/N-br-...) once their
+work is in HEAD: clean, no commits of their own, older than an hour, and no run in
+the repo unsettled. Everything else is listed under kept with a reason; nothing is
+forced. route and parallel run the same sweep before each live dispatch.""",
     "resume": """Example: bench-router resume --cwd /absolute/path/to/repo --run-id RUN
 Reopens the completed agent's conversation without sending a message. Use tell
 afterwards to provide new instructions. For parallel use the router worktree.""",
@@ -656,6 +666,9 @@ def main(argv=None):
     stp = sub.add_parser("stop", help="stop a live run: board stop, or close a headless run's pane; logged, never automatic")
     stp.add_argument("--cwd", required=True, help="run cwd; a parallel member's router worktree when --run-id is omitted")
     stp.add_argument("--run-id", help="defaults to the only unsettled run under --cwd")
+    pp = sub.add_parser("prune", help="remove router worktrees whose work is already in HEAD; lists the rest")
+    pp.add_argument("--cwd", required=True, help="git repository top level")
+    pp.add_argument("--dry-run", action="store_true", help="list what would be removed without removing it")
     sp = sub.add_parser("resume", help="reopen a completed run's agent in the same conversation; sends nothing")
     sp.add_argument("--run-id", required=True, help="completed run ID whose agent conversation to reopen")
     sp.add_argument("--cwd", required=True, help="the run's input repository path; for parallel use the member's router worktree")
@@ -693,7 +706,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     try:
-        res = {"init": _init, "refresh": _refresh, "status": _status, "profiles": _profiles, "collect": _collect, "resume": _resume, "tell": _tell, "stop": _stop, "feedback": _feedback,
+        res = {"init": _init, "refresh": _refresh, "status": _status, "profiles": _profiles, "collect": _collect, "resume": _resume, "tell": _tell, "stop": _stop, "prune": _prune, "feedback": _feedback,
                 "parallel": _parallel, "select": _select, "coordination": _coordination, "wiki": _wiki,
                 "evidence": _evidence, "prompt-guidance": _prompt_guidance}.get(
             args.cmd, _load)(args)

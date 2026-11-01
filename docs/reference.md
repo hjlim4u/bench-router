@@ -47,6 +47,16 @@ The Skill invokes the shared `bench-router` and `bench-router-decide` commands. 
 
 ## Inspecting retained worktrees
 
+`route` and `parallel` sweep the repository before each live dispatch, and `bench-router prune --cwd REPO [--dry-run]` runs the same sweep on demand. It removes a worktree and its branch only when all of these hold:
+- No run in the repository is unsettled.
+- The branch was made by the router (`br/...`, or board `work/N-br-...`).
+- The checkout is older than an hour and clean (`git status --porcelain`).
+- It holds no run receipts (old-layout parallel members keep theirs inside).
+- It contains no kept worktree.
+- The branch has no commits outside `HEAD`.
+
+Everything else is reported under `kept` with a reason. Ignored files go with a removed checkout. A `completed` run's result is copied next to its receipt first, but the rejected result files of a `result_invalid` or `execution_failed` run are not. Work merged by squash or rebase keeps its own commits, so it stays `commits not in HEAD` until it is reviewed by hand, as described below.
+
 The router preserves worktrees, branches, receipts, and results for review and recovery; completion does not mean the changes were accepted. Start with `git -C REPO worktree list --porcelain` and the run or group records under `REPO/.bench-router/`. Match each worktree to its runner and receipt, and use `collect` or the Herdr board to establish that the worker has stopped. A missing or uncertain receipt is not proof it is safe to remove.
 
 For each candidate, inspect `git -C WORKTREE status --short --untracked-files=all`, `git -C WORKTREE status --short --ignored` (ignored files may include results), and its branch commits and unmerged changes. Save or adopt needed changes and results, and check whether `resume` or old-group recovery still needs the checkout. Inspect nested worktrees independently. Only after these checks, explicitly run `git -C REPO worktree remove WORKTREE`; do not use `--force` to discard changes. Branches and receipts are separate and are not removed by this command. Herdr-owned worktrees also require checking the board's lifecycle before removal. Never recursively delete `.bench-router` to clean worktrees.
@@ -163,6 +173,7 @@ All commands emit a **single JSON object** to stdout (except `explain` and `evid
 |---|---|
 | `refresh [--source aa\|arena\|mg\|tb_auto\|or] [--force] [--vault DIR]` | Fetches automated sources and compiles reviewed wiki pages (`index.json`) → publishes snapshot. Skips if within TTL |
 | `refresh --source swe\|tb --import FILE` | Imports approved manual benchmark results |
+| `prune --cwd REPO [--dry-run]` | Removes router worktrees whose work is already in `HEAD` and lists the rest with reasons; also runs before each live `route`/`parallel` |
 | `wiki compile [--vault DIR] [--check]` | Compiles reviewed benchmark wiki pages into `index.json` (`--check` validates only) |
 | `wiki facets` | Emits vocabulary, descriptions, and rule mappings available for tagging in `task.facets` |
 | `evidence --task FILE [--format json\|table] [--max-units N]` | Emits per-profile benchmark evidence matching task facets (no sums or rankings; read-only) |
