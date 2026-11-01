@@ -801,6 +801,8 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
             if not repo_prepared and parallel.prepare_repo(repo_cwd or t["cwd"]):
                 res["warnings"] = res["warnings"] + [r.warn(
                     "dirty_base", "uncommitted changes in cwd are not in the board worktree (based on HEAD)")]
+            if not repo_prepared:  # group members skip this: run_group already swept before its fanout
+                parallel._auto_prune(repo_cwd or t["cwd"])
             Path(rc["run_dir"]).mkdir(parents=True)
             # 판단 기록 = 출력 + 같은 입력의 evaluate 2.0(통과·탈락 제약의 관측값·기준값, facts).
             # ponytail: assess를 한 번 더 돈다(결정적, 입력 동일). 느려지면 route가 assessment를 넘기게

@@ -298,6 +298,49 @@ class P3(unittest.TestCase):
         with self.assertRaisesRegex(r.InputError, "total agents"):
             self.group(schema_version="2.0", tasks=entries)
 
+    def test_v35_prune_removes_only_merged_clean_router_worktrees(self):
+        git = ["git", "-C", self.cwd, "-c", "user.name=t", "-c", "user.email=t@t"]
+        pl.prepare_repo(self.cwd)
+        base = Path(self.cwd, ".bench-router", "worktrees")
+        def add(branch, rel):
+            subprocess.run(git + ["worktree", "add", "-q", "-b", branch, str(base / rel), "HEAD"], check=True)
+            return base / rel
+        merged, outer = add("br/g/merged", "g/merged"), add("br/g/outer", "g/outer")
+        inner = add("br/g/inner", "g/outer/.bench-router/worktrees/x/y")  # 예전 layout의 중첩 worktree
+        dirty = add("br/g/dirty", "g/dirty")
+        (dirty / "a.txt").write_text("changed\n", "utf-8")
+        ahead = add("br/g/ahead", "g/ahead")
+        (ahead / "b.txt").write_text("b\n", "utf-8")
+        subprocess.run(["git", "-C", str(ahead), "-c", "user.name=t", "-c", "user.email=t@t", "add", "b.txt"], check=True)
+        subprocess.run(["git", "-C", str(ahead), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "b"], check=True)
+        receipt = add("br/g/receipt", "g/receipt")
+        (receipt / ".bench-router/runs/r1").mkdir(parents=True)
+        (receipt / ".bench-router/runs/r1/receipt.json").write_text('{"status": "completed"}', "utf-8")
+        human = add("feature/mine", "human")  # router가 만들지 않은 브랜치는 건드리지 않는다
+        later = pl.time.time() + 2 * pl.PRUNE_MIN_AGE_S
+
+        self.assertEqual(pl.prune(self.cwd)["removed"], [])  # 갓 만든 worktree는 recent
+        dry = pl.prune(self.cwd, dry_run=True, now=later)
+        self.assertTrue(merged.exists())
+        res = pl.prune(self.cwd, now=later)
+        self.assertEqual(dry["removed"], res["removed"])
+        self.assertEqual({x["branch"] for x in res["removed"]}, {"br/g/merged", "br/g/inner", "br/g/outer"})
+        self.assertEqual({x["branch"]: x["reason"] for x in res["kept"]},
+                         {"br/g/dirty": "uncommitted changes", "br/g/ahead": "commits not in HEAD",
+                          "br/g/receipt": "holds run receipts"})
+        self.assertFalse(merged.exists() or outer.exists() or inner.exists())
+        self.assertTrue(dirty.exists() and ahead.exists() and human.exists())
+        branches = subprocess.run(git + ["branch", "--format=%(refname:short)"], capture_output=True, text=True).stdout.split()
+        self.assertNotIn("br/g/merged", branches)
+        self.assertIn("br/g/ahead", branches)
+
+        run = Path(self.cwd, ".bench-router/runs/live")  # 저장소에 끝나지 않은 run이 있으면 아무것도 지우지 않는다
+        run.mkdir(parents=True)
+        (run / "receipt.json").write_text('{"status": "submission_attempted"}', "utf-8")
+        (dirty / "a.txt").write_text("a\n", "utf-8")
+        self.assertEqual(pl.prune(self.cwd, now=later)["status"], "skipped")
+        self.assertTrue(dirty.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

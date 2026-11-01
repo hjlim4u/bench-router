@@ -10,6 +10,8 @@ import os
 import re
 import shutil
 import subprocess
+import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -160,6 +162,70 @@ def prepare_repo(cwd):
     return bool(_git(cwd, "status", "--porcelain"))
 
 
+# router가 만든 브랜치만: local/headless `br/<run_id>`, parallel `br/<group>/<label>`, 보드 태스크 `work/<n>-br-<run_id>`
+ROUTER_BRANCH = re.compile(r"br/.+|work/\d+-br-[0-9a-f-]+")
+PRUNE_MIN_AGE_S = 3600  # 갓 끝난 run은 결과를 읽고 resume할 시간을 둔다
+
+
+def _receipt_files(cwd):
+    b = herdr.bench_dir(cwd)  # 현재 run·group member 기록, 그리고 예전 layout의 member worktree 안 기록
+    return [*b.glob("runs/*/receipt.json"), *b.glob("groups/*/members/*/.bench-router/runs/*/receipt.json"),
+            *b.glob("worktrees/*/*/.bench-router/runs/*/receipt.json")]
+
+
+def prune(cwd, dry_run=False, now=None):
+    """Remove router worktrees whose work is already in HEAD: clean, no commits of their own, nothing live.
+    Everything else is kept with a reason. Nothing is forced, so git refuses anything it would lose."""
+    now = time.time() if now is None else now
+    out = {"status": "ok", "removed": [], "kept": []}
+    live = [f.parent.name for f in _receipt_files(cwd)
+            if json.loads(f.read_text("utf-8")).get("status") not in herdr.SETTLED_STATUSES]
+    if live:
+        return {**out, "status": "skipped", "reason": f"run {live[0]} is not settled"}
+    head, wts, cur = _git(cwd, "rev-parse", "HEAD"), [], {}
+    for line in _git(cwd, "worktree", "list", "--porcelain").splitlines() + [""]:
+        if line.startswith(("worktree ", "branch ")):
+            k, v = line.split(" ", 1)
+            cur[k] = v.removeprefix("refs/heads/")
+        elif not line and cur:
+            wts.append(cur)
+            cur = {}
+    for w in sorted(wts[1:], key=lambda w: -len(w["worktree"])):  # 중첩 worktree를 바깥보다 먼저
+        path, branch = w["worktree"], w.get("branch")
+        if not branch or not ROUTER_BRANCH.fullmatch(branch):
+            continue
+        p = Path(path)
+        merged = subprocess.run(["git", "-C", str(cwd), "merge-base", "--is-ancestor", branch, head],
+                                capture_output=True).returncode == 0
+        why = (None if not p.exists() else
+               "recent" if now - p.stat().st_mtime < PRUNE_MIN_AGE_S else
+               "holds run receipts" if any(p.glob(".bench-router/runs/*/receipt.json")) else
+               "contains a kept worktree" if any(k["worktree"].startswith(path + os.sep) for k in out["kept"]) else
+               "uncommitted changes" if _git(p, "status", "--porcelain") else None)
+        why = why or (None if merged else "commits not in HEAD")
+        item = {"worktree": path, "branch": branch}
+        if why:
+            out["kept"].append({**item, "reason": why})
+            continue
+        if not dry_run:
+            if p.exists():
+                _git(cwd, "worktree", "remove", path)
+            _git(cwd, "worktree", "prune")
+            _git(cwd, "branch", "-d", branch)
+        out["removed"].append(item)
+    return out
+
+
+def _auto_prune(cwd):
+    """Dispatch-time sweep: a failure here never blocks the dispatch."""
+    try:
+        res = prune(cwd)
+        if res["removed"]:
+            print(f"bench-router: pruned {len(res['removed'])} merged worktree(s) in {cwd}", file=sys.stderr)
+    except (r.InputError, OSError, ValueError) as e:
+        print(f"bench-router: worktree prune skipped: {e}", file=sys.stderr)
+
+
 def worktree(cwd, gid, label):
     """Projects starts immediately: prepare the cwd before durable task submission."""
     wt = Path(cwd) / ".bench-router" / "worktrees" / gid / label
@@ -264,6 +330,7 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
 
     if prepare_repo(g["cwd"]):
         warnings.append(r.warn("dirty_base", "uncommitted changes in cwd are not in the worktrees (based on HEAD)"))
+    _auto_prune(g["cwd"])
     shared.mkdir(parents=True, exist_ok=True)
 
     def run(m):
