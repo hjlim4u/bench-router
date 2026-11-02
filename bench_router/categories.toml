@@ -1,19 +1,20 @@
 # P: 초기 정책 (03 문서 "카테고리와 evidence 매핑"). 각 카테고리 합 = 1.
 # 바꾸면 routing.POLICY_VERSION도 올린다.
+# 1.1: AA가 Coding Index를 없애고 Intelligence Index v5.0에 합쳐서(2026-11-01 확인) aa_coding 자리를 aa_intelligence로 바꿨다.
 [mapping.coding_repo]
 swe_verified_exact = 0.6
-aa_coding = 0.4
+aa_intelligence = 0.4
 
 [mapping.terminal_ops]
 terminal_exact = 0.7
-aa_coding = 0.3
+aa_intelligence = 0.3
 
 [mapping.code_gen]
-aa_coding = 1.0
+aa_intelligence = 1.0
 
 [mapping.webdev]
 arena_webdev = 0.6
-aa_coding = 0.4
+aa_intelligence = 0.4
 
 [mapping.math_reasoning]
 arena_text_math = 1.0
