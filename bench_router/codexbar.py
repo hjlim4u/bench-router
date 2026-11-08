@@ -1,13 +1,14 @@
 """CodexBar 0.84 CLI contract: fresh, account-bound quota before paid decisions."""
 import base64
 import json
-import math
+import hashlib
 import os
 import re
-import signal
+from . import usage as policy
+from .usage import Availability, fresh, number
+from .usage_process import run_cli
 import shutil
 import subprocess
-import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,48 +17,6 @@ BIN = os.environ.get("BENCH_ROUTER_CODEXBAR", "codexbar")
 PROVIDERS = {"claude": "claude", "codex": "codex", "agy": "antigravity"}
 MAX_AGE_S = 300
 CALL_TIMEOUT_S = 120  # agy's native /usage report can take 90 seconds on a cold start
-
-
-class Availability(dict):
-    """Keep the existing reason-map contract; carry volatile observations outside decision hashes."""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.details = {}
-
-
-def run_cli(cmd, *, timeout=CALL_TIMEOUT_S, **kwargs):
-    """Own only this probe's process group. Give CodexBar time to cancel its native children first."""
-    with tempfile.TemporaryFile() as output:
-        with subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.DEVNULL,
-                              start_new_session=True) as proc:
-            try:
-                proc.wait(timeout=timeout)
-            finally:
-                if proc.poll() is None:
-                    try:
-                        proc.terminate()
-                        proc.wait(timeout=5)
-                    except (ProcessLookupError, subprocess.TimeoutExpired):
-                        pass
-                try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                proc.wait()
-            output.seek(0)
-            return subprocess.CompletedProcess(cmd, proc.returncode, output.read(8 * 1024 * 1024 + 1).decode("utf-8", "replace"))
-
-
-def number(value):
-    return value if type(value) is int or (type(value) is float and math.isfinite(value)) else None
-
-
-def fresh(value, now):
-    try:
-        age = (now - datetime.fromisoformat(value.replace("Z", "+00:00"))).total_seconds()
-        return -60 <= age <= MAX_AGE_S
-    except (AttributeError, TypeError, ValueError, OverflowError):
-        return False
 
 
 def query(provider, source, runner=None):
@@ -136,9 +95,7 @@ def windows(data, provider, model, labels):
 
 
 def needs_credits(model, data):
-    # Claude Pro Fable uses prepaid Claude.ai Usage credits, separate from API Console billing.
-    plan = str(data.get("loginMethod") or "").lower()
-    return "fable" in model and not any(x in plan for x in ("max", "team", "enterprise"))
+    return policy.needs_credits("claude", model, data.get("loginMethod"))
 
 
 def claude_identity():
@@ -186,161 +143,88 @@ def account_binding(provider, payload, data, expected):
     return "ambient_cli"
 
 
-def credit_reason(payload, base, now):
+def credit_binding(payload, base, now):
     web = usage(payload, now)
     if not web or payload.get("source") != "web":
-        return "codexbar_credits_unverified"
+        return "unverified"
     identity = claude_identity()
     email = base.get("accountEmail") or identity.get("emailAddress")
     if not email or str(email).casefold() != str(web.get("accountEmail", "")).casefold():
-        return "codexbar_credit_account_mismatch"
+        return "mismatch"
     base_org = base.get("accountOrganization") or identity.get("organizationName")
     web_org = web.get("accountOrganization")
     if base_org and web_org and str(base_org).casefold() != str(web_org).casefold():
-        return "codexbar_credit_account_mismatch"
+        return "mismatch"
     base_id, web_id = base.get("identity"), web.get("identity")
     base_id = base_id if isinstance(base_id, dict) else {}
     web_id = web_id if isinstance(web_id, dict) else {}
     if base_id.get("accountID") and web_id.get("accountID") and base_id["accountID"] != web_id["accountID"]:
-        return "codexbar_credit_account_mismatch"
-    # Preserve every known spend cap; a balance-only Web response synthesizes limit=0,
-    # which must never erase the OAuth source's real spend limit.
-    for data in (base, web):
-        cap = data.get("providerCost")
-        if isinstance(cap, dict) and fresh(cap.get("updatedAt"), now):
-            used, limit = number(cap.get("used")), number(cap.get("limit"))
-            if used is not None and limit is not None and limit > 0 and used >= limit:
-                return "codexbar_spend_limit_exhausted"
-    cost = web.get("providerCost")
-    if not isinstance(cost, dict) or not fresh(cost.get("balanceUpdatedAt") or cost.get("updatedAt"), now):
-        return "codexbar_credits_unverified"
-    balance = number(cost.get("balance"))
-    if balance is None or cost.get("currencyCode") != "USD":
-        return "codexbar_credits_unverified"
-    if balance <= 0:
-        return "codexbar_credits_exhausted"
-    used, limit = number(cost.get("used")), number(cost.get("limit"))
-    if used is None or limit is None or min(used, limit) < 0:
-        return "codexbar_credits_unverified"
-    if limit > 0 and used >= limit:
-        return "codexbar_spend_limit_exhausted"
-    return None
+        return "mismatch"
+    return "matched"
 
 
-def reserve_percent():
-    from .routing import InputError
-    try:
-        value = float(os.environ.get("BENCH_ROUTER_MIN_REMAINING", "10"))
-        if math.isfinite(value) and 0 <= value <= 100:
-            return value
-    except ValueError:
-        pass
-    raise InputError("BENCH_ROUTER_MIN_REMAINING must be a finite percentage from 0 to 100")
-
-
-def describe(payload, selected, binding, reason, threshold, now):
-    """Allowlisted numeric observations, no raw provider messages, emails, or reset-credit IDs."""
-    data = usage(payload, now)
-    rows = []
-    for w in selected:
-        row = {"used_percent": w["usedPercent"], "remaining_percent": max(0, 100 - w["usedPercent"])}
-        scope = w.get("scope", "unknown")
-        row["scope"] = scope if isinstance(scope, str) and re.fullmatch(r"[a-zA-Z0-9_.-]{1,120}", scope) else "unknown"
-        for key, target in (("resetsAt", "resets_at"), ("windowMinutes", "window_minutes")):
-            value = w.get(key)
-            if key == "resetsAt":
-                try:
-                    value = datetime.fromisoformat(value.replace("Z", "+00:00")).isoformat()
-                except (TypeError, AttributeError, ValueError):
-                    continue
-            elif number(value) is None or value <= 0:
-                continue
-            row[target] = value
-        if row not in rows:
-            rows.append(row)
-    remaining = min((w["remaining_percent"] for w in rows), default=None)
-    source = payload.get("source")
-    detail = {"provider": payload.get("provider"), "source": source if source in {
-        "oauth", "web", "cli", "app", "ide", "offline"} else "unknown",
-        "updated_at": data.get("updatedAt"), "checked_at": now.isoformat(), "account_binding": binding,
-        "windows": rows, "remaining_percent": remaining, "reason": reason,
-        "guard": {"min_remaining_percent": threshold, "decision": "unknown" if remaining is None else
-                  "low" if remaining < threshold or remaining == 0 else "safe"}, "pace": {}}
-    pace = payload.get("pace")
-    if isinstance(pace, dict):
-        for key in ("primary", "secondary", "tertiary"):
-            p = pace.get(key)
-            if not isinstance(p, dict) or key not in {w.get("scope") for w in selected}:
-                continue
-            row = {}
-            if isinstance(p.get("stage"), str) and p["stage"] in {"ahead", "farAhead", "behind", "farBehind", "onTrack"}:
-                row["stage"] = p["stage"]
-            if type(p.get("willLastToReset")) is bool:
-                row["will_last_to_reset"] = p["willLastToReset"]
-            if number(p.get("etaSeconds")) is not None and p["etaSeconds"] >= 0:
-                row["eta_seconds"] = p["etaSeconds"]
-            if row:
-                detail["pace"][key] = row
-    detail["warnings"] = (["ambient_account_unverified"] if binding == "ambient_cli" else []) + (
-        ["pace_runs_out_before_reset"] if any(p.get("will_last_to_reset") is False for p in detail["pace"].values()) else [])
-    return detail
-
-
-def availability(profiles, runner=None, which=shutil.which, now=None):
-    """Unknown quota excludes a candidate before evaluation; external/offline callers bypass this."""
-    clock = lambda: now or datetime.now(timezone.utc)
-    threshold = reserve_percent()
+def collect(profiles, *, now, runner=None, which=shutil.which):
+    """Translate CodexBar sources to observations; the common policy owns eligibility."""
     providers = sorted({PROVIDERS[p["kind"]] for p in profiles if p.get("kind") in PROVIDERS})
     identities = {provider: worker_email(provider) for provider in providers}
     def fetch(provider):
         return query(provider, "auto" if provider == "antigravity" else "oauth", runner) if which(BIN) else {}
     with ThreadPoolExecutor(max_workers=3) as pool:
         payloads = dict(zip(providers, pool.map(fetch, providers)))
-    out, web = Availability(), None
+    out, web = {}, None
+    def clock():
+        # Fixture time is injected. Live snapshots can be newer than batch start.
+        return max(now, datetime.now(timezone.utc)) if runner is None else now
     for p in profiles:
-        provider = PROVIDERS.get(p.get("kind"))
+        provider, model = PROVIDERS.get(p.get("kind")), policy.model_id(p)
         payload = payloads.get(provider, {})
         data = usage(payload, clock())
-        credit_check = "not_checked"
         if provider == "claude" and not data and which(BIN):
             if web is None:
                 web = query("claude", "web", runner)
             if usage(web, clock()) and account_binding(provider, web, web["usage"], identities.get(provider)) == "matched":
                 payload, data = web, web["usage"]
-        args = p.get("args", [])
-        model = str(p.get("model_id", "")).lower()
-        for flag in ("--model", "-m"):
-            if flag in args and args.index(flag) + 1 < len(args):
-                model = args[args.index(flag) + 1].lower()
-        selected = windows(data, provider, model, payload.get("rateWindowLabels") or {})
-        reason = "codexbar_quota_unverified" if not selected else None
         binding = account_binding(provider, payload, data, identities.get(provider)) if data else "unverified"
-        if not reason and binding in {"mismatch", "unverified"}:
-            reason = "codexbar_account_mismatch" if binding == "mismatch" else "codexbar_account_unverified"
-        if binding in {"mismatch", "unverified"}:
-            selected = []  # Another account's quota must not appear as this worker's allowance.
-        if not reason and any(w["usedPercent"] >= 100 for w in selected):
-            reason = "codexbar_quota_exhausted"
-        if not reason and provider == "claude" and needs_credits(model, data):
-            if web is None:
+        selected, balances, caps = [], [], []
+        email = identities.get(provider)
+        account_key = hashlib.sha256((provider + ":" + email.casefold()).encode()).hexdigest() if isinstance(email, str) else None
+        def add_windows(raw, raw_payload, bound):
+            for w in windows(raw, provider, model, raw_payload.get("rateWindowLabels")):
+                selected.append(policy.Window(w["scope"], w["usedPercent"], raw.get("updatedAt"),
+                    raw_payload.get("source", "unknown"), w.get("resetsAt"), w.get("windowMinutes"), bound, account_key))
+        def add_cap(raw, source, bound):
+            c = raw.get("providerCost")
+            if isinstance(c, dict):
+                caps.append(policy.SpendCap(c.get("used"), c.get("limit"), c.get("currencyCode"),
+                    c.get("updatedAt"), source, bound, account_key))
+        add_windows(data, payload, binding)
+        if data and needs_credits(model, data):
+            if web is None and which(BIN):
                 web = query("claude", "web", runner)
-            credit_check = reason = credit_reason(web, data, clock())
-            if reason != "codexbar_credit_account_mismatch" and usage(web, clock()) and web.get("source") == "web":
-                selected += windows(usage(web, clock()), provider, model, web.get("rateWindowLabels") or {})
-                if any(w["usedPercent"] >= 100 for w in selected):
-                    reason = "codexbar_quota_exhausted"
-        if not reason and any(100 - w["usedPercent"] < threshold for w in selected):
-            reason = "codexbar_quota_low"
-        out[p["id"]] = reason
-        out.details[p["id"]] = describe(payload, selected, binding, reason, threshold, clock())
-        out.details[p["id"]]["provider"] = provider
-        if credit_check != "not_checked":
-            cost = usage(web, clock()).get("providerCost")
-            cost = cost if isinstance(cost, dict) else {}
-            stamp = cost.get("balanceUpdatedAt") or cost.get("updatedAt")
-            verified = credit_check not in {"codexbar_credit_account_mismatch", "codexbar_credits_unverified"} and fresh(stamp, clock())
-            out.details[p["id"]]["credits"] = {"status": credit_check or "available",
-                "balance": number(cost.get("balance")) if verified else None,
-                "currency": "USD" if verified and cost.get("currencyCode") == "USD" else None,
-                "updated_at": stamp if verified else None}
+            wb = credit_binding(web or {}, data, clock())
+            wd = usage(web or {}, clock())
+            c = wd.get("providerCost") or {}
+            c = c if isinstance(c, dict) else {}
+            balances.append(policy.Balance(c.get("balance"), c.get("currencyCode"),
+                observed_at=c.get("balanceUpdatedAt") or c.get("updatedAt"), source="web", binding=wb,
+                status="measured" if number(c.get("balance")) is not None else "unknown", account_key=account_key))
+            if wb == "matched":
+                add_windows(wd, web, wb)
+                add_cap(wd, "web", wb)
+            add_cap(data, payload.get("source", "unknown"), "matched" if wb == "matched" else binding)
+        pace = {}
+        raw_pace = payload.get("pace")
+        if isinstance(raw_pace, dict):
+            for scope, raw in raw_pace.items():
+                if isinstance(raw, dict):
+                    pace[scope] = {"stage": raw.get("stage"), "will_last_to_reset": raw.get("willLastToReset"),
+                                   "eta_seconds": raw.get("etaSeconds")}
+        out[p["id"]] = policy.Observation(p["id"], provider, model, "codexbar", payload.get("source", "unknown"),
+            data.get("loginMethod"), "ok" if data else "unavailable", binding,
+            tuple(selected), tuple(balances), tuple(caps), pace, account_key)
     return out
+
+
+def availability(profiles, runner=None, which=shutil.which, now=None):
+    """Compatibility entry point; production callers use usage.probe."""
+    return policy.probe(profiles, collector=lambda ps, *, now: collect(ps, now=now, runner=runner, which=which), now=now)

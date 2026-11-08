@@ -1300,7 +1300,7 @@ class P0VendorGuidance(unittest.TestCase):
             self.assertFalse((root / "cache").exists())
 
     def test_v98_cli_preflight_filters_before_decisions_and_preserves_selection_cohort(self):
-        from bench_router import evidence, herdr
+        from bench_router import evidence, herdr, codexbar
         from types import SimpleNamespace
         root = Path(self.tmp.name)
         task = root / "task.json"
@@ -1312,7 +1312,7 @@ class P0VendorGuidance(unittest.TestCase):
         calls = []
 
         def quota(cmd, **kw):
-            self.assertEqual(cmd[:3], [herdr.codexbar.BIN, "usage", "--provider"])
+            self.assertEqual(cmd[:3], [codexbar.BIN, "usage", "--provider"])
             if cmd[3] == "codex":
                 calls.append("quota")
             return SimpleNamespace(returncode=0, stdout=json.dumps([{

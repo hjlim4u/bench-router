@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import codexbar
+from . import usage
 from . import locking
 from . import routing as r
 
@@ -201,9 +201,9 @@ def claude_efforts(runner=subprocess.run):
         return ()
 
 
-def probe_profiles(profiles, which=shutil.which, runner=subprocess.run):
+def probe_profiles(profiles, which=shutil.which, runner=subprocess.run, collector=None):
     """Native CLI/model checks, then CodexBar's model-scoped quota and credit checks."""
-    out = codexbar.Availability({p["id"]: probe(p, which) if p.get("enabled", True) else "disabled" for p in profiles})
+    out = usage.Availability({p["id"]: probe(p, which) if p.get("enabled", True) else "disabled" for p in profiles})
     agy = [p for p in profiles if out[p["id"]] is None and p["kind"] == "agy"]
     if agy:
         models = agy_models(runner)
@@ -211,7 +211,7 @@ def probe_profiles(profiles, which=shutil.which, runner=subprocess.run):
             model = model_effort(p)
             out[p["id"]] = "agy_models_unavailable" if models is None else (None if model and model[0] in models else "agy_model_unavailable")
     eligible = [p for p in profiles if out[p["id"]] is None]
-    quota = codexbar.availability(eligible, runner=None if runner is subprocess.run else runner, which=which)
+    quota = usage.probe(eligible, collector=collector, runner=None if runner is subprocess.run else runner, which=which)
     out.update(quota)
     out.details.update(quota.details)
     return out

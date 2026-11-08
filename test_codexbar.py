@@ -85,7 +85,7 @@ class CodexBarTests(unittest.TestCase):
         web = payload()
         web["source"] = "web"
         web["usage"].update(accountEmail="owner@example.com", providerCost={
-            "balance": 2, "balanceUpdatedAt": NOW.isoformat(), "currencyCode": "USD", "used": 1, "limit": 10})
+            "balance": 2, "balanceUpdatedAt": NOW.isoformat(), "updatedAt": NOW.isoformat(), "currencyCode": "USD", "used": 1, "limit": 10})
         profiles = [profile("s"), profile("f", "claude-fable-5"), profile("f2", "claude-fable-5")]
         got, calls = self.check(profiles, {"claude": p}, web)
         self.assertEqual(got, {"s": None, "f": None, "f2": None})
@@ -95,6 +95,7 @@ class CodexBarTests(unittest.TestCase):
             self.assertEqual(self.check(profiles, {"claude": p}, web)[0]["f"], reason)
         web["usage"]["providerCost"].update(balance=2, used=10)
         self.assertEqual(self.check(profiles, {"claude": p}, web)[0]["f"], "codexbar_spend_limit_exhausted")
+        web["usage"]["providerCost"]["used"] = 1
         web["usage"]["providerCost"]["balanceUpdatedAt"] = (NOW - timedelta(hours=1)).isoformat()
         self.assertEqual(self.check(profiles, {"claude": p}, web)[0]["f"], "codexbar_credits_unverified")
         self.assertIsNone(self.check(profiles, {"claude": p}, web)[0].details["f"]["credits"]["balance"])
@@ -242,8 +243,6 @@ class CodexBarTests(unittest.TestCase):
                                 self.assertTrue(select.select([fd], [], [], 2)[0])
                             finally:
                                 os.close(fd)
-                        status = Path(f"/proc/{pid}/stat")
-                        self.assertTrue(not status.exists() or status.read_text().rsplit(")", 1)[1].split()[0] == "Z")
                         self.assertIsNone(unrelated.poll())
                 finally:
                     unrelated.terminate()

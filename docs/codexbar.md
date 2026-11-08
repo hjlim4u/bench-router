@@ -1,5 +1,9 @@
 # CodexBar usage, credits, and cost
 
+외부 측정 도구를 교체하는 공통 계약과 정책은
+[사용량 수집 경계 설계안](usage-provider-boundary.md)에 정리되어 있다.
+`usage.py`에 구현되어 있다. 기본 어댑터는 CodexBar다.
+
 Live local/Shepherdr routing and `evaluate --preflight` use the official
 [CodexBar 0.84.0 CLI](https://github.com/steipete/CodexBar/releases/tag/v0.84.0).
 CodeBurn has been removed from the project dependency, execution, reporting, and
@@ -162,3 +166,15 @@ Quota polling does not scan cost history. Local cost scans do not submit prompts
 Official contracts: [CLI](https://github.com/steipete/CodexBar/blob/v0.84.0/docs/cli.md),
 [Claude sources and credits](https://github.com/steipete/CodexBar/blob/v0.84.0/docs/claude.md),
 [Antigravity buckets](https://github.com/steipete/CodexBar/blob/v0.84.0/docs/antigravity.md).
+
+
+## Optional CodeBurn compatibility collector
+
+Set `BENCH_ROUTER_USAGE_COLLECTOR=codeburn` to use an already installed CodeBurn
+CLI; `BENCH_ROUTER_CODEBURN=/absolute/path/to/codeburn` selects its executable.
+The default remains `codexbar`; no automatic cross-tool fallback or runtime install occurs.
+`preflight[].collector` identifies the actual tool. Historical `codexbar_*` reason
+codes remain compatible identifiers for both collectors. CodeBurn 0.9.27 supplies
+provider/model quota windows but no verified Claude.ai prepaid credits; required
+Fable credit checks remain unsupported and exclude Fable safely. See the
+[collector contract and compatibility checks](usage-provider-boundary.md).
