@@ -89,7 +89,7 @@ workflow 근거는 패턴·정책 버전·역할별 프로필·반복 수·문�
 
 현재 workflow_gain은 평가가 필요한 effort의 pending 진단이며 null·workflow_gain_unverified로 남는다. 벤치마크 우세로 자동 해소하거나 multi-agent 이득을 계산하지 않는다. 상위가 실제 작업에서 비교·수용한다. judge 능력도 generator pool·정답 비율·집계에 의존하면 조건을 workflow 자료에 남긴다.
 
-context.max_estimated_cost_usd는 호출 allowance다. 같은 잔여 예산을 모든 worker에 주어도 총합이 제한되지 않는다. 판단 호출·재시도·재개·후속 작업도 상위 예산에 포함한다. CodeBurn probe는 provider 상태·보고된 window 소진을 확인할 뿐 팀 quota를 예약하지 않는다. 같은 provider의 profile별 quota를 합산하지 않는다.
+context.max_estimated_cost_usd는 호출 allowance다. 같은 잔여 예산을 모든 worker에 주어도 총합이 제한되지 않는다. 판단 호출·재시도·재개·후속 작업도 상위 예산에 포함한다. CodexBar probe는 provider 상태·보고된 window 소진을 확인할 뿐 팀 quota를 예약하지 않는다. 같은 provider의 profile별 quota를 합산하지 않는다.
 
 decision digest는 workspace 파일 본문 전체를 고정하지 않는다. 상위가 artifact·commit을 기록하고 실제 후속 prompt가 바뀌면 재평가한다. 내부 worker의 check_digest 조정을 공개 우회 옵션으로 쓰지 않는다.
 

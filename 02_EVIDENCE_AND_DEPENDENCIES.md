@@ -10,7 +10,7 @@ Original research date: 2026-10-12 · Implementation alignment update: 2026-10-2
 | SWE / TB | Approved manual imports with recorded evaluation conditions; pins Verified / TB 4.0 |
 | Semantic Decision | Implements analysis, vendor-specific guidance, and benchmark phases via Jev or native bench-decider |
 | Execution | Interactive via Projects 1.2.1 / headless via Herdr; current regression tests use fake CLI and actual temporary Git worktrees |
-| Ancillary Tools | Optional install via uv/mise; integrated CodeBurn availability, quota, and profile discovery |
+| Ancillary Tools | CodexBar installed by mise setup for live quota/credit preflight; model discovery uses native CLI caches and guidance |
 
 Official guidance texts and versions per model are pinned in `bench_router/guidelines.toml` and are not queried over the web at runtime. Policy 6 and record schemas are located in [Vendor-guided Routing](docs/vendor-guided-routing.md). Price, speed, and score deltas from secondary sources are never hardcoded as constants in the implementation.
 

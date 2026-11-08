@@ -106,7 +106,7 @@ Context capacity is checked against the maximum of task minimum requirements and
 2. If absent, cost is calculated as `(input tokens × input rate + output tokens × output rate) / 1,000,000` (`source: router:io2-v1`).
 3. If inputs are missing or expired, missing status and cause are returned. Cache discounts and surcharges must be reflected in upstream estimates.
 
-Estimated tokens represent cost inputs for this invocation, while profile.context_tokens represents static capacity. An invocation allowance must not be interpreted as a team budget or actual billing guarantee. In live mode, CodeBurn provider status and quota exhaustion across all windows are optionally checked. Antigravity checks the active model list via `agy models`. CodeBurn failures fall back to PATH checks while retaining agy model validation. No quota reservation is made for N workers.
+Estimated tokens represent cost inputs for this invocation, while profile.context_tokens represents static capacity. An invocation allowance must not be interpreted as a team budget or actual billing guarantee. Live mode and `evaluate --preflight` require fresh CodexBar quota for the selected model. Any applicable exhausted window excludes it; unknown quota excludes it as unverified. Antigravity also checks `agy models`. Claude Pro Fable requires verified same-account prepaid Usage credits. See [CodexBar](codexbar.md). No quota reservation is made for N workers.
 
 ## 4. Contract D — Binding Decision Records to Execution
 
@@ -165,4 +165,4 @@ Policy versions, CLI format numbers, and JSON schema versions are independent. O
 
 Namespaced metrics passed through transparently require no registry modifications. Adding formal types, units, or lifetimes requires updating `METRICS`; adding filter constraints requires implementing functions, limits, and focused test fixtures in `CONSTRAINTS`. Illustrative latency caps must not be documented as active inputs. Ranking policies belong to upstream implementation.
 
-The complete verification command is `python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn`. Verification standards for selection, staleness, replay, partial failure, and deduplication reside in [Validation Documentation](../06_VALIDATION_AND_OPEN_ITEMS.md). Live Projects dispatch, workflow quality, and team budget validation remain separate from offline contract testing.
+The complete verification command is `python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codexbar`. Verification standards for selection, staleness, replay, partial failure, and deduplication reside in [Validation Documentation](../06_VALIDATION_AND_OPEN_ITEMS.md). Live Projects dispatch, workflow quality, and team budget validation remain separate from offline contract testing.

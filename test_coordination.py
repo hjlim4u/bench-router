@@ -46,17 +46,19 @@ class CoordinationTests(unittest.TestCase):
         self.assertEqual(co.inspect()["records"][0]["backend"], herdr.BACKEND)
 
     def test_v46_uncertain_initial_submission_never_retries(self):
-        fake = FakeProjects(prompt_error="lost response")
+        fake = FakeProjects()
+        fake.add_error = "lost response"
         first = self.run_(fake)
         self.assertEqual((first["status"], first["thread_id"]), ("delivery_uncertain", None))
         self.assertEqual(self.run_(fake)["status"], "delivery_uncertain")
-        self.assertEqual(len(fake.prompts), 1)
+        self.assertEqual(len(fake.prompts), 0)
+        self.assertEqual(len(fake.adds), 1)
         self.assertTrue(co.load(first["coordination_key"])["active"])
 
     def test_v47_configuration_change_keeps_submission_uncertain(self):
         fake = FakeProjects(after_status="working")
         out = self.run_(fake)
-        fake.version = "herdr-projects 1.2.2 (/fake)"
+        fake.core_version = "hc 0.1.19"
         fake.status = "idle"
         write_result()(fake, fake.prompts[0])
         self.assertEqual(herdr.collect_run(str(self.cwd), out["run_id"], 0, runner=fake)["status"], "delivery_uncertain")
@@ -96,7 +98,7 @@ class CoordinationTests(unittest.TestCase):
         co.reserve(self.task(), herdr.BACKEND, herdr.project_binding(runner=FakeProjects()))
         fake = FakeProjects()
         self.assertEqual(self.run_(fake)["status"], "conflict")
-        self.assertEqual(fake.calls, [["version"]])  # binding only; nothing added
+        self.assertEqual(fake.calls, [["--version"], ["hc", "--version"]])  # binding only; nothing added
 
     def test_v51a_error_before_receipt_releases_admission(self):
         with self.assertRaises(r.InputError):
@@ -158,8 +160,8 @@ class CoordinationTests(unittest.TestCase):
         out = self.run_(fake)
         write_result()(fake, fake.prompts[0])
         fake.status = "idle"
-        for rows, details in (({"title": "br-other"}, {}), ({"id": "repo/9"}, {}), ({}, {"agent": "other"}),
-                              ({}, {"worktree": None}), ({}, {"task": {"id": "repo/9"}})):
+        for rows, details in (({"title": "br-other"}, {}), ({"key": "repo#9"}, {}), ({}, {"agent": "other"}),
+                              ({}, {"worktree": None}), ({}, {"id": 9})):
             fake.updates, fake.detail_updates = rows, details
             self.assertEqual(herdr.collect_run(str(self.cwd), out["run_id"], 0, runner=fake)["status"], "delivery_uncertain")
             self.assertTrue(co.load(out["coordination_key"])["active"])
@@ -177,7 +179,7 @@ class CoordinationTests(unittest.TestCase):
 
     def test_v58_pending_brief_cannot_complete_from_a_report(self):
         fake = FakeProjects(on_prompt=write_result())
-        fake.updates = {"stage": "queued", "state": "working"}
+        fake.updates = {"state": "queued", "status": "queued"}
         out = self.run_(fake)
         self.assertEqual(out["status"], "timed_out")
         self.assertIsNone(out["result_path"])
@@ -196,7 +198,7 @@ class CoordinationTests(unittest.TestCase):
             with redirect_stdout(output):
                 self.assertEqual(cli.main(["route", "--task", str(task_file), "--profile", "review"]), 0, output.getvalue())
             run = json.loads(output.getvalue())
-            self.assertEqual(run["thread_id"], "repo/1")
+            self.assertEqual(run["thread_id"], "repo#1")
             with redirect_stdout(io.StringIO()):
                 self.assertEqual(cli.main(["collect", "--cwd", str(self.cwd), "--run-id", run["run_id"]]), 0)
 

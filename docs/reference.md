@@ -11,7 +11,7 @@ This document covers configuration formats, CLI commands, exit codes, evaluation
 - Offline evaluation and data refresh run on Linux, WSL2, and Windows. Live Projects execution runs on Linux or WSL2.
 - Python 3.11+.
 - Evaluation, selection and `route --dry-run` need no Herdr or Agent CLI.
-- Live delegation picks a runner with `--runner` (see [Runners](#runners)). `external` needs neither Herdr nor an agent CLI, `local` needs the authenticated Agent CLI, and `herdr` (the `auto` choice when `herdr-projects` is on PATH) requires Herdr, herdr-projects **1.2.1** (board), and authenticated Agent CLIs. The task `cwd` must be the root of a Git repository containing at least one commit. See [docs/projects.md](projects.md).
+- Live delegation picks a runner with `--runner` (see [Runners](#runners)). `external` needs neither Herdr nor an agent CLI, `local` needs the authenticated Agent CLI, and `herdr` (the `auto` choice when `herdr-task` and `hc` are on PATH) requires Shepherdr 3.x (certified 3.1.14), herdr-core **0.1.17+**, a local space, and authenticated Agent CLIs. The task `cwd` must be the root of a Git repository containing at least one commit. See [docs/projects.md](projects.md).
 - Refreshing Artificial Analysis data requires an API key (Free tier suffices).
 
 From a clone, `mise run install` installs the CLI as an editable uv tool (it follows the clone, so `wiki compile` finds `wiki/`) together with the global Agent Skill; rerun it after `git pull` to refresh the Skill copy. Alternatively, install the CLI with `uv tool install /absolute/path/to/bench-router`, then run `bench-router init` to create shared profiles and aliases without overwriting existing files. The installed `bench-router` command works from any directory; `init` is offline and data collection is separate (`bench-router refresh --source mg`). Arena refresh requires the optional extra: `uv tool install '/absolute/path/to/bench-router[arena]'`. Run `uv tool update-shell` and restart the shell if the command is not on PATH.
@@ -115,11 +115,13 @@ context_tokens = 0
 capabilities = ["filesystem_write"]
 ```
 
-The model names and effort levels above are illustrative. Confirm supported models using `herdr-projects models KIND`. `args` can only translate `--model`/`-m`, `--effort`, and Codex `-c model_reasoning_effort="E"` into Projects settings. Passing other flags (such as `--permission-mode`, `-s`, `-a`) terminates with `execution_failed` prior to submission.
+The model names and effort levels above are illustrative. Confirm supported models using the target CLI or `bench-router profiles discover`. `args` can only translate `--model`/`-m`, `--effort`, and Codex `-c model_reasoning_effort="E"` into herdr-task settings. Passing other flags (such as `--permission-mode`, `-s`, `-a`) terminates with `execution_failed` prior to submission.
 
-Permissions follow Projects `worker.access` (`full` | `ask`). Modify using `herdr-projects set worker.access ask [--repo NAME]`. Under `ask`, Claude requires approval on every file edit and Codex on writes outside the worktree, pausing in `blocked`. For details, see [Projects Profiles and Permissions](projects.md#profiles-and-permissions).
+Interactive permissions follow the user’s CLI settings and Shepherdr settings. The old `worker.access` option does not exist in Shepherdr. Questions and permissions pause in `blocked`. For details, see [Projects Profiles and Permissions](projects.md#profiles-and-permissions).
 
-Live `route` and `parallel` check PATH availability, and Antigravity checks the active model list via `agy models`. When `codeburn quota --format json` is available, provider status and quota window exhaustion are checked for Claude and Codex. CodeBurn installations under `.bench-router/codeburn` are detected automatically, overridable via PATH or `BENCH_ROUTER_CODEBURN`. When CodeBurn is unavailable, checks fall back to PATH while retaining agy model verification.
+Live `route`, `parallel`, and opt-in `evaluate --preflight` check executable availability, native `agy models`, then CodexBar usage. Static task constraints run before network probes. Every applicable shared or model-specific quota window must retain at least the default 10% reserve (`BENCH_ROUTER_MIN_REMAINING` overrides it); missing or stale quota excludes the profile. Live outputs expose sanitized `preflight` observations and advisory pace outside selection digests. Claude Pro Fable additionally requires fresh same-account Claude.ai Usage credits and available reported spend limits. CodexBar is found on PATH or through `BENCH_ROUTER_CODEXBAR`. Install, authentication, freshness rules, reason codes, and native reporting commands are documented in [CodexBar](codexbar.md). Offline and external runs skip these probes.
+
+The Skill uses `evaluate --preflight --format 3` before requesting paid decisions and retains `--preflight` on response replays. Known unavailable profiles are excluded from guidance and benchmark comparisons; when none remain, no decision request is made. Format 3 records the assessed `inputs.eligible_profiles` cohort so offline selection validation does not reintroduce excluded profiles. Live dispatch rechecks availability and may reject a stale assessment. Use the same global `--runner` for assessment and dispatch; `external` skips local probes. Plain `evaluate` and `route --dry-run` remain offline. If availability changes invalidate a response digest, restart assessment with fresh packets.
 
 #### Caller-owned profiles (schema 2.0)
 
@@ -141,7 +143,7 @@ context_tokens = 0
 capabilities = []
 ```
 
-`profiles discover [--force]` generates candidate configurations in `profiles.toml` from installed CLIs. Codex inspects `models_cache.json` and per-model effort; Claude inspects guidelines models and CLI help effort flags; agy inspects account model listings, merged with CodeBurn observed models. Generated profiles default to `enabled=true`, `cost_tier=high`, and `context_tokens=0`. Review permissions, capabilities, context limits, and live account invocation status before use. Overwriting existing files requires `--force`.
+`profiles discover [--force]` generates candidate configurations in `profiles.toml` from installed CLIs. Codex inspects `models_cache.json` and per-model effort; Claude inspects guidelines models and CLI help effort flags; agy inspects account model listings. Usage history is not used as a runnable model catalog. Generated profiles default to `enabled=true`, `cost_tier=high`, and `context_tokens=0`. Review permissions, capabilities, context limits, and live account invocation status before use. Overwriting existing files requires `--force`.
 
 <a id="aliasestoml"></a>
 ### aliases.toml
@@ -167,7 +169,7 @@ Unmatched names can be inspected via `unmatched_count` and `unmatched_sample` in
 
 ## Commands
 
-All commands emit a **single JSON object** to stdout (except `explain` and `evidence --format table`, which output text). Diagnostic logs go to stderr. Global options include: `--config-dir`, `--cache-dir`, `--herdr-session NAME` (or environment variable `BENCH_ROUTER_HERDR_SESSION`). The Projects executable path defaults to `herdr-projects`, overridable via `BENCH_ROUTER_PROJECTS`. `--herdr-session` must match the session containing the target project.
+All commands emit a **single JSON object** to stdout (except `explain` and `evidence --format table`, which output text). Diagnostic logs go to stderr. Global options include `--config-dir`, `--cache-dir`, and `--herdr-space SPACE` (`BENCH_ROUTER_SPACE`, or per-repo `.bench-router/shepherdr.json`). `--herdr-session` is a legacy alias for space selection. Executable paths default to `herdr-task` and `hc`, overridden by `BENCH_ROUTER_TASKS` and `BENCH_ROUTER_HC`. Recovery uses the recorded space.
 
 | Command | Action |
 |---|---|
@@ -181,7 +183,7 @@ All commands emit a **single JSON object** to stdout (except `explain` and `evid
 | `profiles discover [--force]` | Discovers installed CLIs and generates candidate profiles (requires `--force` to overwrite) |
 | `route --task FILE --dry-run` | Generates offline decision packets; validates saved responses or selection records (no network, herdr, or disk writes) |
 | `explain --task FILE [--context FILE]` | Outputs human-readable candidate rationale, evidence, disqualifications, constraint results, and metrics |
-| `evaluate --task FILE [--context FILE] [--format 1\|2\|3]` | Evaluates facts (schema 2.0 default) / format 3 evaluates phased suitability and evidence (schema 4.0; no selection) |
+| `evaluate --task FILE [--context FILE] [--format 1\|2\|3] [--preflight]` | Evaluates facts (schema 2.0 default) / format 3 evaluates phased suitability and evidence (schema 4.0; no selection); opt-in preflight filters unavailable profiles before decision requests |
 | `select --assessment FILE --profile ID --policy-id ID --policy-version V --reason TEXT [--accept-provisional]` | Produces selection 6.0 from a completed format 3 assessment; save only the inner `selection` object |
 | `route --task FILE --selection FILE` | Dispatches the profile chosen by the Orchestrator with selection evidence; returns `stale_assessment` if inputs changed |
 | `route --task FILE [--wait-ms N]` | Selects profile, delegates via Herdr, and waits/collects within timeout budget; `--wait-ms 0` returns immediately after dispatch |
@@ -205,7 +207,7 @@ bench-router status
 bench-router route --task task.json --dry-run
 bench-router explain --task task.json
 bench-router evidence --task task.json --format table
-bench-router --herdr-session work route --task task.json      # live delegation
+bench-router --herdr-space SPACE route --task task.json      # live delegation
 bench-router collect --run-id <RUN_ID> --cwd /abs/project --wait-ms 60000
 bench-router feedback --run-id <RUN_ID> --cwd /abs/project --outcome success --evaluator orchestrator
 ```
@@ -264,7 +266,7 @@ The classification and quality/coverage formulas below apply to default fact eva
 1. **Classification**
    - Applies summary keyword and `context_files` extension rules. A category is adopted only when two or more distinct rules match within that single category.
    - Unmatched tasks fall back to `general`, recording `fallback_reason`.
-2. **Hard Constraints**: Applies `enabled`, `exclude_profiles`, `profile_filter`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, and `local_only`. If context is provided, `tokens.required_context` and `max_estimated_cost_usd` are applied (`routing.CONSTRAINTS`). Live mode checks executable/kind consistency, PATH availability, `agy models`, and optional CodeBurn quota. Unsupported arguments are rejected prior to submission.
+2. **Hard Constraints**: Applies `enabled`, `exclude_profiles`, `profile_filter`, `max_cost_tier`, `min_context_tokens`, `required_capabilities`, and `local_only`. If context is provided, `tokens.required_context` and `max_estimated_cost_usd` are applied (`routing.CONSTRAINTS`). Live mode checks executable/kind consistency, PATH availability, `agy models`, and CodexBar model quotas and required credits. Unsupported arguments are rejected prior to submission.
 3. **Evidence and Scoring**
    - Category weights `w` and evidence mappings `v` compute evidence weights `a_b = Σ w_c·v_cb`.
    - Normalizes percentiles across the cohort population (`(mean rank − 1)/(N − 1)`, or 0.5 if N=1).
@@ -355,11 +357,11 @@ WantedBy=timers.target
 <a id="runners"></a>
 ### Runners
 
-The global `--runner auto|herdr|local|external` option (env `BENCH_ROUTER_RUNNER`, default `auto`) selects the executor of a new live `route`/`parallel` run. `auto` resolves to `herdr` when `herdr-projects` (`BENCH_ROUTER_PROJECTS`) is on PATH and to `local` otherwise. The choice is recorded as the receipt `backend` (`projects-1.2`, `local-1`, `external-1`). `collect`, `stop` and re-dispatch of the same task/round follow the recorded backend, not the current flag. Every runner shares the receipt, coordination (four-active limit, overlap guard), nonce and result contract below.
+The global `--runner auto|herdr|local|external` option (env `BENCH_ROUTER_RUNNER`, default `auto`) selects the executor of a new live `route`/`parallel` run. `auto` resolves to `herdr` when both `herdr-task` and `hc` are on PATH and to `local` otherwise. The choice is recorded as the receipt `backend` (`shepherdr-3`, `local-1`, `external-1`). `collect`, `stop` and re-dispatch of the same task/round follow the recorded backend, not the current flag. Every runner shares the receipt, coordination (four-active limit, overlap guard), nonce and result contract below.
 
 | Runner | Executes | Tasks | Worktree | `stop` | `tell`/`resume` |
 |---|---|---|---|---|---|
-| `herdr` | Projects board agent or Herdr pane | interactive, headless | Projects/Herdr | board stop / workspace close | yes (board runs) |
+| `herdr` | Shepherdr task agent or core terminal | interactive, headless | herdr-task/hc | hc kill | yes (interactive runs) |
 | `local` | profile one-shot CLI as a detached `sh -c` subprocess (own session, output in `runs/RUN/output.log`) | headless only | `git worktree add` under `.bench-router/worktrees/runs/RUN` | SIGTERM to the process group | no |
 | `external` | nothing; the caller runs the agent | any | same as local | records the caller's statement that its agent stopped | no |
 
@@ -367,15 +369,15 @@ The global `--runner auto|herdr|local|external` option (env `BENCH_ROUTER_RUNNER
 
 Live `route` (without `--dry-run`) proceeds as follows:
 
-1. Checks PATH availability and constraints to select a profile, pinning Projects version and session to the receipt. Live credentials and model access are verified by the target agent.
+1. Checks PATH availability and constraints to select a profile, pinning the task protocol, core version and Shepherdr space to the receipt. Live credentials and model access are verified by the target agent.
 2. Acquires `<cwd>/.bench-router/dispatch.lock`. Dispatches run serially per cwd.
 3. Existing receipts matching `(task_id, round)` branch based on content hash: identical hashes recover existing runs via **collect without retransmission**; divergent hashes trigger `conflict`. Unresolved prior runs block new delegations (`unresolved_run`).
 4. Generates a UUID `run_id` and 128-bit nonce, atomically writing the receipt. Selection rationale is recorded in `decision.json`.
-5. Translates profile `kind/args` into board configuration (`--worker.agent kind/model`, `--worker.effort`). Non-translatable arguments terminate with `execution_failed`. Atomically writes `input.txt`.
-6. Fsyncs `submission_attempted` to the receipt **prior** to submission. Invokes `add br-<run_id> --desc PROMPT --repo CWD --delegate` **exactly once** and records the returned board task ID (`thread_id`, e.g. `repo/12`). Disables automated review, attempts, plans, and merges (`--review.when never`, `--merge.by you`), adopting board `worker.access`.
-7. When board stage reaches `approval`/`done`, validates result contracts in the task worktree. Blocked states return single-line board diagnostics (`diagnostic_tail`). Timeouts and stalled runs record `timed_out`/`delivery_uncertain` without retransmitting.
+5. Translates profile `kind/args` into board configuration (`--agent KIND`, `--model MODEL`, `--effort E`). Non-translatable arguments terminate with `execution_failed`. Atomically writes `input.txt`.
+6. Saves submission intent before `herdr-task add br-RUN --prompt-file FILE --folder REPO`, saves the returned `key` as `thread_id` (e.g. `repo#12`), then invokes `start KEY --folder REPO --space SPACE` once. Review is off, merge asks the person, and the caller’s HEAD is pinned with a private `br-base/RUN` branch. A lost add/start response never causes a retry.
+7. Reads `herdr-task show KEY --folder REPO --json` and validates task identity and worktree. A finished turn with result.json, or native ready/done, triggers result validation. Questions return `blocked` with `diagnostic_tail`; working/queued tasks return `timed_out`. Missing or changed identities return `delivery_uncertain` without retransmission.
 
-Reaching `completed` closes the agent pane to release system resources (`release`). Active or prompt-waiting agents are left open. Resuming conversation context uses `python3 -m bench_router.cli resume --cwd CWD --run-id RUN` to reopen the board task and restart the agent in the same session.
+Reaching `completed` ends idle/done task programs through `hc kill` (`release`). Working or blocked agents remain. `resume --cwd CWD --run-id RUN` invokes `herdr-task resume` in the recorded space; `resumed.session_resumed` distinguishes session recovery from Shepherdr’s handoff. Router workers are told not to call native ready/done/accept or open a PR: native ready can remove ignored results or open a PR. Router completion therefore leaves board acceptance to the person; see [Execution and Collection](projects.md#execution-and-collection).
 
 The execution contract appends to the prompt. Agents must write two files to `.bench-router/runs/<run_id>/` inside their assigned worktree. Upon passing validation, the router copies them to `<cwd>/.bench-router/runs/<run_id>/`. The `.bench-router/` directory is registered in `info/exclude` to prevent pollution of board commits:
 
@@ -424,7 +426,7 @@ Schema 1.0 input structure (illustrative; multiple candidates request upstream s
 | `isolation` | Behavior |
 |---|---|
 | `isolated` (default) | Worktree isolation only. Agents remain unaware of each other |
-| `shared` | Shared scratchpad at `<cwd>/.bench-router/groups/<group_id>/shared/`. Agents write only to their own `<label>.md` and `<label>/` subdirectories and read peer notes to share dead ends, observations, and intermediate results. Because the scratchpad resides outside the worktree, board `worker.access ask` requires approval on each write (`blocked`) |
+| `shared` | Shared scratchpad at `<cwd>/.bench-router/groups/<group_id>/shared/`. Agents write only to their own `<label>.md` and `<label>/` subdirectories and read peer notes to share dead ends, observations, and intermediate results. Because the scratchpad resides outside the worktree, the user’s CLI settings may require approval on writes (`blocked`) |
 
 Execution outputs contain member profiles, `receipt_cwd`, worktrees, branches, and rounds with status, run_id, receipt_path, result_path, task_outcome, delivery_state, and reassignment. Use `receipt_cwd` with `collect`, `tell`, `stop`, `resume`, and `feedback`. Before the runner has made a real space, `worktree` and `branch` are `null`. Results persist in `groups/GROUP/group.json`. All completed returns 0; partial completions or failures return `partial_failure` (16); conflicts return 14. Pre-dispatch incomplete decisions return 17, stale inputs return 14, and empty candidate sets return 13. Uncertain members follow `collect_first`.
 
@@ -459,10 +461,10 @@ Member receipt directories reside at `<cwd>/.bench-router/groups/<group_id>/memb
 
 Setting `"execution": "headless"` in the task runs one-shot CLIs instead of interactive board agents. Default is `interactive`.
 
-1. `herdr worktree create` builds `<cwd>/.bench-router/worktrees/runs/<run_id>` (branch `br/<run_id>`) and pane.
-2. Adds an agentless task (`br-<run_id>`) to the board, using `report` to show working → done/error status. Board tasks are display-only; board failures do not interrupt CLI execution.
-3. Runs `claude -p`, `codex exec`, or `agy -p` inside the pane with profile model and effort settings. Prompts pass via `runs/<run_id>/input.txt` rather than argv. Exit codes persist in `runs/<run_id>/exit_code`.
-4. `collect` validates `exit_code` and result contracts rather than board stages. Running processes return `timed_out`; closed panes return `execution_failed`. Panes close upon completion.
+1. Reuses the local runner’s Git worktree preparation at `<cwd>/.bench-router/worktrees/runs/<run_id>` (branch `br/<run_id>`).
+2. Creates a Shepherdr board task and starts its one-shot CLI with `herdr-task start --argv`. A separate core observer updates progress and collects results automatically.
+3. Runs `claude -p`, `codex exec`, or `agy -p` with the profile’s model and effort. Prompts come from input.txt; exit codes persist in `runs/<run_id>/exit_code`.
+4. `collect` validates the exit code and result contract. Working terminals return `timed_out`; an exited terminal without its exit-code file returns `execution_failed`.
 
 - Supported kinds: claude, codex, agy. Profile args are restricted to model and effort (identical to interactive mode).
 - **Executes with permission prompts bypassed** because no interactive user is present (`--dangerously-skip-permissions`, or `--dangerously-bypass-approvals-and-sandbox` in Codex). Restrict to trusted repositories.
@@ -473,7 +475,7 @@ Setting `"execution": "headless"` in the task runs one-shot CLIs instead of inte
 ## Testing
 
 ```bash
-python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn
+python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codexbar
 ```
 
 | File | Scope |
@@ -483,9 +485,9 @@ python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeb
 | `test_p3.py` | Parallel dispatch (V30–V34): worktree isolation, fanout, shared scratchpads, re-run idempotency (requires git) |
 | `test_p2.py` | Delegation (V19–V29): argv handoff, task ID capture, launch failures, pre-submission states, result contracts, path traversal prevention, timeout idempotency, crash recovery, conflict locks |
 | `test_coordination.py` | Shared admission limits, path collision prevention, ownership, adoption records, stoppage verification |
-| `test_codeburn.py` | Availability, quota, usage metrics, profile discovery fixtures |
+| `test_codexbar.py` | Availability, quota, usage metrics, profile discovery fixtures |
 
-Live execution tests use test doubles conforming to Projects 1.2.1 CLI (`src/cli/tasks.rs`), constructing real temporary `git worktree` instances per task. Historical direct Herdr smoke tests reflect earlier execution pathways and do not certify Projects live operations. Empirical evidence resides in `docs/evidence/` (herdr help, API schema, skills, claude/codex `--help`).
+Live execution tests use Shepherdr 3.1.14 herdr-task/hc test doubles and real temporary Git worktrees. Historical direct Herdr TUI smoke tests do not certify the new platform. Empirical evidence resides in `docs/evidence/` (herdr help, API schema, skills, claude/codex `--help`).
 
 ---
 
@@ -549,3 +551,5 @@ python3 eval/cost.py --tag T       # Aggregates tokens and API-equivalent costs 
 - The Model Gap data: `themodelgap.com`, CC BY 4.0.
 - AA data: Artificial Analysis. Attribution required when sharing or displaying.
 - API credentials must be stored strictly in configuration files (`env`, permissions `chmod 600`), never committed to repositories or exposed in logs.
+
+New Herdr runs include `monitor` and `cleanup` in output. The observer marks the board done and removes clean integrated worktrees, task/base branches and terminals after merge; see [Headless Execution](projects.md#headless-execution). Results and receipts are retained.

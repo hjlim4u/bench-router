@@ -278,7 +278,7 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
         elif layout_version is not None:
             return {"schema_version": g["schema_version"], "group_id": g["group_id"], "status": "conflict",
                     "warnings": [r.warn("group_layout", "saved group has an unsupported execution layout")]}
-        availability = herdr._availability(None, cfg, which, backend)
+        availability = herdr._availability(None, cfg, which, backend, zip(g["tasks"], g["contexts"]))
         members, warnings = saved["members"], saved["warnings"]
         # Existing receipts are recovered even after guide/config changes. Unstarted members must
         # still pass one group-wide preflight, so stale choices cannot produce a partial new fanout.
@@ -302,11 +302,12 @@ def run_group(g, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                 m["status"] = chk["status"]
     else:
         layout_version = LAYOUT_VERSION
-        availability = None if dry_run else herdr._availability(None, cfg, which, backend)
+        availability = None if dry_run else herdr._availability(None, cfg, which, backend, zip(g["tasks"], g["contexts"]))
         members, warnings = plan(g, cfg, mapping, snap, snap_warnings, availability, decision_options, responses)
     out = {"schema_version": g["schema_version"], "group_id": g["group_id"], "isolation": g["isolation"],
            "fanout": g["fanout"], "shared_dir": None if g["isolation"] == "isolated" else str(shared),
-           "members": members, "warnings": warnings}
+           "members": members, "warnings": warnings,
+           **({"preflight": availability.details} if getattr(availability, "details", None) else {})}
     labels = [m["label"] for m in members if m["status"] == "planned"]
     for m in members:
         if layout_version == LAYOUT_VERSION:

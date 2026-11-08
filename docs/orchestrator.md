@@ -92,7 +92,7 @@ python3 -m bench_router.cli route --task task.json --context context.json --prof
 
 `evaluate --format 1` keeps the previous candidate/excluded shape. Neither format 1 nor 2 includes a combined score or performs semantic suitability assessment.
 
-`evaluate` does not probe live availability; live `route` probes again before dispatch. Antigravity profiles are checked against `agy models`. When CodeBurn is available, Claude/Codex profiles are also checked for provider availability and exhaustion of every reported quota window. Missing or failed CodeBurn queries fall back to PATH checks while retaining the agy model check. The normal `route` command uses vendor-guided staged judgments and can require an upstream choice; it does not rank candidates by category score. `explain` prints its current status and the basic assessment's constraints and facts.
+Plain `evaluate` is offline; `evaluate --preflight` probes before paid decisions and live `route` checks again before dispatch. Native `agy models` verifies Antigravity model access. CodexBar checks the selected model’s shared and scoped quota windows, plus Claude Pro Fable’s prepaid Usage credits. Unverified quota or required credits excludes the profile; see [setup and reporting](codexbar.md). The normal `route` command uses vendor-guided staged judgments and can require an upstream choice; it does not rank candidates by category score. `explain` prints its current status and the basic assessment's constraints and facts.
 
 To record why a profile was chosen, pass a selection instead of `--profile`:
 

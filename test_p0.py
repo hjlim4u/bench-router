@@ -1299,6 +1299,95 @@ class P0VendorGuidance(unittest.TestCase):
             popen.assert_not_called()
             self.assertFalse((root / "cache").exists())
 
+    def test_v98_cli_preflight_filters_before_decisions_and_preserves_selection_cohort(self):
+        from bench_router import evidence, herdr
+        from types import SimpleNamespace
+        root = Path(self.tmp.name)
+        task = root / "task.json"
+        task.write_text(json.dumps({"schema_version": "1.0", **self.task}))
+        response_path = root / "response.json"
+        self.ps[1].update(kind="claude", executable="claude")
+        command = ["--cache-dir", str(root / "cache"), "--runner", "local", "evaluate", "--preflight",
+                   "--format", "3", "--task", str(task), "--host", "codex"]
+        calls = []
+
+        def quota(cmd, **kw):
+            self.assertEqual(cmd[:3], [herdr.codexbar.BIN, "usage", "--provider"])
+            if cmd[3] == "codex":
+                calls.append("quota")
+            return SimpleNamespace(returncode=0, stdout=json.dumps([{
+                "provider": cmd[3], "source": "oauth", "usage": {
+                    "updatedAt": herdr._iso(herdr._now()),
+                    "primary": {"usedPercent": 10 if cmd[3] == "codex" else 100}}}]))
+
+        probe, decide = herdr.probe_profiles, self.d.provider.decide
+
+        def checked_decide(*args, **kw):
+            self.assertTrue(calls, "quota must precede any paid decision")
+            return decide(*args, **kw)
+
+        def run(extra=()):
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                code = cli.main([*command, *extra])
+            return code, json.loads(output.getvalue())
+
+        with mock.patch.object(cli, "_config", return_value=(self.cfg, MAPPING)), \
+                mock.patch.object(r, "env_with_dotenv", return_value={}), \
+                mock.patch.object(herdr.shutil, "which", return_value="/tool"), \
+                mock.patch.object(herdr, "probe_profiles", side_effect=lambda ps, which: probe(ps, which, quota)), \
+                mock.patch.object(self.d.provider, "decide", side_effect=checked_decide), \
+                mock.patch.object(herdr, "dispatch") as dispatch:
+            code, assessment = run()
+            self.assertEqual(code, 17)
+            response_path.write_text(json.dumps(guided_reply(assessment, "light")))
+            code, assessment = run(["--decision-response", str(response_path)])
+            self.assertEqual([p["request"]["state"]["vendor"] for p in assessment["decision"]["requests"]], ["openai"])
+            response_path.write_text(json.dumps(guided_reply(assessment, "light")))
+            code, assessment = run(["--decision-response", str(response_path)])
+            self.assertEqual((code, assessment["status"], assessment["availability_verified"]), (0, "ok", True))
+            self.assertEqual([c["profile"] for c in assessment["candidates"] if c["eligible"]], ["light"])
+            self.assertEqual(len(calls), 3)  # every stage replay rechecks quota
+            dispatch.assert_not_called()
+
+        selection = self.d.bind(assessment, "light", {"id": "team", "version": "1"}, "available candidate")
+        self.assertEqual(selection["decision"]["inputs"]["eligible_profiles"], ["light"])
+        index = evidence.load_index(root / "cache")
+        snap, warnings = r.load_snapshot(root / "cache")
+
+        def replay(availability=None):
+            return r.route(self.task, self.cfg, MAPPING, snap, warnings, NOW, host="codex", env={},
+                           index=index, selection=selection, availability=availability)
+
+        self.assertEqual(replay()["selected"]["profile"], "light")  # offline replay
+        self.assertEqual(replay({"light": None, "strong": None})["status"], "selected")
+        self.assertEqual(replay({"light": "codexbar_quota_exhausted", "strong": None})["status"], "stale_assessment")
+
+    def test_v99_cli_preflight_all_unavailable_skips_decisions_and_external_skips_probe(self):
+        from bench_router import herdr
+        root = Path(self.tmp.name)
+        task = root / "task.json"
+        task.write_text(json.dumps({"schema_version": "1.0", **self.task}))
+        for runner, preflight in (("local", True), ("local", False), ("external", True)):
+            with self.subTest(runner=runner, preflight=preflight), \
+                    mock.patch.object(cli, "_config", return_value=(self.cfg, MAPPING)), \
+                    mock.patch.object(r, "env_with_dotenv", return_value={}), \
+                    mock.patch.object(herdr, "probe_profiles", return_value={
+                        p["id"]: "codexbar_quota_exhausted" for p in self.ps}) as probe, \
+                    mock.patch.object(self.d.provider, "decide", wraps=self.d.provider.decide) as decide, \
+                    contextlib.redirect_stdout(io.StringIO()) as output:
+                code = cli.main(["--cache-dir", str(root / "cache"), "--runner", runner, "evaluate",
+                                 "--format", "3", "--task", str(task), *(["--preflight"] if preflight else [])])
+                assessment = json.loads(output.getvalue())
+                if runner == "local" and preflight:
+                    self.assertEqual(assessment["status"], "no_eligible_profile")
+                    self.assertTrue(assessment["availability_verified"])
+                    probe.assert_called_once()
+                    decide.assert_not_called()
+                else:
+                    self.assertEqual(code, 17)
+                    self.assertFalse(assessment["availability_verified"])
+                    probe.assert_not_called()
+
     def test_v92_majority_winner_is_evidence_for_upstream_selection(self):
         ids = ("u/one", "u/two", "u/three")
         idx = self.indexed(ids)

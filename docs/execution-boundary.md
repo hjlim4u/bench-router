@@ -10,8 +10,8 @@
 |---|---|
 | `evaluate`, `select`, `route --dry-run` | Herdr 설치 없이 평가·선택·선택 기록 검증 가능. 선택 전용으로 재사용할 경로가 이미 있음 |
 | 일반 `route` | [cli._load](../bench_router/cli.py)에서 바로 `herdr.dispatch` 호출 |
-| `herdr.dispatch` | CLI/CodeBurn probe, Projects 1.2.1 binding, admission, receipt, 실행·회수를 묶어 처리 |
-| `execution: headless` | 직접 subprocess 실행이 아님. [herdr._execute_headless](../bench_router/herdr.py)가 Herdr worktree/pane에서 CLI를 시작하며 Projects binding도 요구 |
+| `herdr.dispatch` | CLI/CodexBar probe, Shepherdr task protocol/core/space binding, admission, receipt, 실행·회수를 묶어 처리 |
+| `execution: headless` | 직접 subprocess 실행이 아님. [herdr._execute_headless](../bench_router/herdr.py)가 router worktree와 hc terminal에서 CLI를 시작하며 Shepherdr binding도 요구 |
 | `parallel` | [parallel.py](../bench_router/parallel.py)가 Herdr 모듈의 probe·receipt·dispatch에 직접 의존. dry-run은 실행하지 않음 |
 | profiles 1.0 | `kind`, `executable`, `args` 필수. fingerprint에도 실행 인자가 포함되어 순수 API 프로필 표현에 부적합 |
 | 배포 Skill | [SKILL.md](../skills/bench-router/SKILL.md)가 선택과 Herdr 실행을 하나의 위임 절차로 안내 |
@@ -193,7 +193,7 @@ Herdr live 동작을 바꾸는 구현에서는 전체 offline suite와 별도 �
 
 2026-10-25 사용자 결정으로 §2의 대안 B 일부와 §8의 "자동 전환 금지"를 뒤집었다. 범위는 다음으로 제한한다.
 
-- 전역 `--runner auto|herdr|local|external`(`BENCH_ROUTER_RUNNER`). `auto`는 `herdr-projects`가 PATH에 있으면 herdr, 없으면 local이다. 판정 결과는 receipt `backend`(`projects-1.2`, `local-1`, `external-1`)에 기록한다. 기록된 run의 회수·중단·재dispatch는 현재 플래그가 아니라 receipt를 따르므로, 실행 중에 환경이 바뀌어도 다른 수단으로 재전송하지 않는다.
+- 전역 `--runner auto|herdr|local|external`(`BENCH_ROUTER_RUNNER`). `auto`는 `herdr-task`와 `hc`가 PATH에 있으면 herdr, 없으면 local이다. 판정 결과는 receipt `backend`(`shepherdr-3`, `local-1`, `external-1`)에 기록한다. 기록된 run의 회수·중단·재dispatch는 현재 플래그가 아니라 receipt를 따르므로, 실행 중에 환경이 바뀌어도 다른 수단으로 재전송하지 않는다.
 - `local`([runners.py](../bench_router/runners.py)): headless task만 받는다. 기존 `headless_argv`·결과 계약·exit_code 정산을 재사용하고, 라우터가 만든 git worktree에서 분리된 `sh -c` 프로세스로 실행한다. 중단은 process group SIGTERM이다. PID 재사용은 확인하지 않는다(코드의 `shortcut:` 주석 참고).
 - `external`: 라우터가 worktree·prompt·receipt를 만들고 `handed_off`와 `invocation`을 반환한다. 호출자가 실행한 뒤 `collect`가 기존 결과 계약을 검사한다. 이 경로에서는 §7의 "receipt·collect·4개 한도 미적용"이 바뀌어, 라우터 receipt·coordination이 그대로 적용된다. 로컬 CLI 가용성은 검사하지 않는다(미확인으로 둠).
 - 추가하지 않은 것: API SDK 실행기, plugin registry/ABC, local의 interactive·`tell`. API 호출은 external로 상위가 수행한다.
