@@ -212,12 +212,15 @@ class FakeTui(FakeProjects):
 
     def __init__(self, run_error=None):
         super().__init__()
-        self.procs, self.ws_closed, self.run_error = {}, [], run_error
+        self.procs, self.ws_closed, self.typed, self.run_error = {}, [], [], run_error
+        self.socket = "/home/u/.config/herdr/herdr.sock"
 
     def __call__(self, cmd, **kw):
         if cmd[0] != hd.TUI_BIN:
             return super().__call__(cmd, **kw)
         op, arg = cmd[1:3], (cmd[3] if len(cmd) > 3 else None)
+        if op == ["status", "server"]:
+            return subprocess.CompletedProcess(cmd, 0, f"status: running\nversion: 0.9.5\nsocket: {self.socket}\n", "")
         if op == ["workspace", "create"]:
             w = f"w{len(self.ws_closed) + len(self.procs) + 1}x{len(self.runs)}"
             self.runs.append(cmd)
@@ -225,6 +228,7 @@ class FakeTui(FakeProjects):
         if op == ["pane", "run"]:
             if self.run_error:
                 return subprocess.CompletedProcess(cmd, 1, "", self.run_error)
+            self.typed.append(cmd[4])
             self.procs[arg] = subprocess.Popen(["sh", "-c", cmd[4]], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                                start_new_session=True)
             return subprocess.CompletedProcess(cmd, 0, "", "")  # herdr 0.9.5 prints nothing here
@@ -706,6 +710,13 @@ class P2(unittest.TestCase):
             out = self.run_(fake, self.task(task_id="slow", execution="headless"), backend=hd.TUI_BACKEND, wait_ms=0)
         self.assertEqual(out["status"], "timed_out")
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "timed_out")  # pane still there
+        self.assertIn("</dev/null 2>&1 | tee", fake.typed[0])  # stdin as in local, output kept
+        home, fake.socket = fake.socket, "/home/u/.config/herdr/sessions/other/herdr.sock"  # another herdr session
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "delivery_uncertain")
+        self.assertEqual(hd.stop_run(self.cwd, out["run_id"], runner=fake)["status"], "delivery_uncertain")
+        self.assertEqual(fake.ws_closed, [])  # ids there name someone else's workspaces: nothing closed
+        fake.socket = home
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "timed_out")
         self.assertEqual(hd.stop_run(self.cwd, out["run_id"], runner=fake)["status"], "stop_sent")
         res = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
         self.assertEqual((res["status"], self.receipt(res)["process_exited"]), ("execution_failed", True))

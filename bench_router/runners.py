@@ -37,7 +37,22 @@ def _herdr(argv, runner, raw=False):
     return h.project_call(argv, runner, raw=raw, exe=h.TUI_BIN)
 
 
+def _socket(runner):
+    """The herdr server this call reaches; workspace and pane ids are only unique within one server."""
+    out, _ = _herdr(["status", "server"], runner, raw=True)
+    return next((line[len("socket: "):] for line in (out or "").splitlines() if line.startswith("socket: ")), None)
+
+
+def _same_server(rc, runner):
+    if _socket(runner) != rc["herdr_socket"]:
+        raise r.InputError(f"herdr-tui: this shell reaches another herdr server than the run's ({rc['herdr_socket']}); "
+                           "collect or stop it from that herdr session")
+
+
 def _start_tui(rc, argv, runner, wait_ms):
+    rc["herdr_socket"] = _socket(runner)
+    if not rc["herdr_socket"]:
+        return _fail(rc, "herdr-tui: no running herdr server (herdr status server); nothing started")
     obj, err = _herdr(["workspace", "create", "--cwd", rc["worktree"], "--no-focus",
                        "--label", f"bench-router {rc['task_id']} r{rc['round']}"], runner)
     try:
@@ -49,7 +64,8 @@ def _start_tui(rc, argv, runner, wait_ms):
     h.save(rc)  # Persist before typing the command: a lost response must never start a second CLI.
     log = shlex.quote(str(Path(rc["run_dir"]) / "output.log"))
     _, err = _herdr(["pane", "run", rc["pane_id"],
-                     f"{shlex.join(['sh', '-c', h.headless_script(rc, argv)])} 2>&1 | tee {log}"], runner,
+                     # stdin from /dev/null as in local: the CLI never reads the pane's keyboard
+                     f"{shlex.join(['sh', '-c', h.headless_script(rc, argv)])} </dev/null 2>&1 | tee {log}"], runner,
                     raw=True)  # pane run prints nothing on success
     if err:
         rc.update(status="delivery_uncertain", delivery_state="uncertain")
@@ -113,6 +129,8 @@ def poll(rc, runner=subprocess.run):
             h._observe(rc, note=f"waiting for the caller's result ({why})")
         return
     tui = rc["backend"] == h.TUI_BACKEND
+    if tui:
+        _same_server(rc, runner)  # collect turns this into delivery_uncertain; nothing is closed or settled
     if h.settle_exit(rc):
         if tui:
             _release_tui(rc, runner)
@@ -147,6 +165,10 @@ def stop(rc, runner=subprocess.run):
     """local: end the process group. herdr-tui: close the run's own workspace, which ends its CLI.
     external: record the caller's word that its agent stopped. Returns an error."""
     if rc["backend"] == h.TUI_BACKEND:
+        try:
+            _same_server(rc, runner)
+        except r.InputError as e:
+            return {"code": "herdr_server_changed", "message": str(e)[:300]}
         return _herdr(["workspace", "close", rc["workspace_id"]], runner)[1]
     if rc["backend"] == h.EXTERNAL_BACKEND:
         rc.update(status="execution_failed", process_exited=True)
