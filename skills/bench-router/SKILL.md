@@ -30,10 +30,11 @@ Use the [vendor-guided decision workflow](references/decision.md) for semantic f
 
 ## Runners (Herdr optional)
 
-The global `--runner auto|herdr|local|external` option (default `auto`, or `BENCH_ROUTER_RUNNER`) picks the executor for live `route`/`parallel`. `auto` uses Herdr when `herdr-task` and `hc` are on PATH, otherwise `local`. Every runner keeps the same receipt, admission limit, `collect` and result contract, and a recorded run always recovers through its own runner (`backend` in the output).
+The global `--runner auto|herdr|herdr-tui|local|external` option (default `auto`, or `BENCH_ROUTER_RUNNER`) picks the executor for live `route`/`parallel`. `auto` uses Herdr when `herdr-task` and `hc` are on PATH, otherwise `local`. Every runner keeps the same receipt, admission limit, `collect` and result contract, and a recorded run always recovers through its own runner (`backend` in the output).
 
 - `herdr`: board agent (`interactive`) or core terminal (`headless`), as described below. Headless output is also kept in `runs/RUN/output.log` after the terminal closes.
 - `local`: runs the profile's one-shot CLI (`claude -p`, `codex exec`, `agy -p`) as a local subprocess in a router worktree. Only `"execution": "headless"` tasks are accepted. `stop` ends the process; `tell` and `resume` are not available.
+- `herdr-tui`: through the `herdr` CLI only (no plugin), in a workspace of its own that the human can watch. Interactive tasks start the profile's agent in the pane and submit the prompt once; `blocked` means it waits for an answer in its pane (answer it there, then `collect`); `tell` works. `"execution": "headless"` runs the one-shot CLI there instead. The workspace closes when the run completes; `stop` closes it; no `resume`. The repo folder must already be trusted by the agent: a new folder's trust question fails the start as `execution_failed` and nothing is sent.
 - `external`: the router prepares the worktree, prompt and receipt and returns `handed_off` (exit 11) with an `invocation` (`cwd`, `prompt_path`, `result_dir`, suggested `argv`, `model_id`, `deadline_at`). Run the agent yourself (API, subprocess, host Agent tool), have it write the result files into `result_dir`, then `collect`. Use `stop` to record that your agent stopped. Local CLI availability is not probed, and schema 2.0 caller-owned profiles are eligible.
 
 To only select, finish steps 1–2 and run `route --task TASK_FILE --selection SELECTION_FILE --dry-run`.

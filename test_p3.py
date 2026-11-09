@@ -235,6 +235,23 @@ class P3(unittest.TestCase):
         self.assertEqual(subprocess.run(["git", "-C", self.cwd, "status", "--porcelain"], capture_output=True,
                                         text=True).stdout, "")  # .bench-router는 exclude
 
+    def test_v30b_herdr_tui_members_run_in_their_own_workspaces(self):
+        import sys, time
+        from test_p2 import FakeTui
+        self.enterContext(patch.object(hd, "time", time))  # real processes need real waiting
+        writer = (f"import os, sys; sys.path.insert(0, {str(Path(__file__).parent)!r}); from test_p2 import write_result; "
+                  "from types import SimpleNamespace; write_result()(SimpleNamespace(worktree_of=lambda _: os.getcwd()), sys.argv[1])")
+        base = {"schema_version": "1.0", "round": 1, "summary": "s", "prompt": "do it", "execution": "headless"}
+        fake = FakeTui()
+        with patch.object(hd, "headless_argv", return_value=[sys.executable, "-c", writer]):
+            out = self.run_(self.group2(tasks=[{**base, "task_id": "t1"}, {**base, "task_id": "t2"}]), fake,
+                            backend=hd.TUI_BACKEND)
+        self.assertEqual(out["status"], "completed", out)
+        receipts = [json.loads(Path(m["rounds"][0]["receipt_path"]).read_text("utf-8")) for m in out["members"]]
+        self.assertEqual({x["backend"] for x in receipts}, {hd.TUI_BACKEND})
+        self.assertEqual(sorted(fake.ws_closed), sorted(x["workspace_id"] for x in receipts))  # one each, all closed
+        self.assertEqual(len({x["worktree"] for x in receipts}), 2)
+
     def test_v30_recovery_keeps_saved_runner(self):
         g, fake = self.group2(), FakeProjects(on_prompt=write_result())
         self.run_(g, fake)

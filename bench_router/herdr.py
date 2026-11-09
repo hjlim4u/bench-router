@@ -22,7 +22,9 @@ HERDR_BIN = os.environ.get("BENCH_ROUTER_HC", "hc")
 BACKEND = "shepherdr-3"
 LOCAL_BACKEND = "local-1"  # one-shot CLI as a local subprocess (runners.py)
 EXTERNAL_BACKEND = "external-1"  # the caller runs the agent; the router keeps receipt and result contract
-RUNNERS = {"herdr": BACKEND, "local": LOCAL_BACKEND, "external": EXTERNAL_BACKEND}
+TUI_BACKEND = "herdr-tui-1"  # one-shot CLI in its own herdr TUI workspace, through the herdr CLI only (runners.py)
+TUI_BIN = os.environ.get("BENCH_ROUTER_HERDR", "herdr")
+RUNNERS = {"herdr": BACKEND, "herdr-tui": TUI_BACKEND, "local": LOCAL_BACKEND, "external": EXTERNAL_BACKEND}
 TASK_PROTOCOL = "1"  # herdr-task --version is its protocol, not Shepherdr's release number
 SHORT_CALL_S = 15
 OBSERVE_FLOOR_S = 2  # one task observation; keeps calls inside a 5s task budget
@@ -445,11 +447,13 @@ def _wait(rc, wait_ms):
     return remaining if wait_ms is None else min(remaining, wait_ms)
 
 
-def headless_script(rc, argv):
-    """sh script: the one-shot CLI in the worktree with the prompt from input.txt, then its exit code, atomically."""
+def headless_script(rc, argv, publish=True):
+    """sh script: the one-shot CLI in the worktree with the prompt from input.txt, then its exit code, atomically.
+    publish=False leaves exit_code.tmp for the caller to publish (herdr-tui: after tee has written the last output)."""
     q, rd = shlex.quote, Path(rc["run_dir"])
-    return (f"cd {q(rc['worktree'])} && {shlex.join(argv)} \"$(cat {q(str(rd / 'input.txt'))})\"; "
-            f"echo $? > {q(str(rd / 'exit_code.tmp'))} && mv {q(str(rd / 'exit_code.tmp'))} {q(str(rd / 'exit_code'))}")
+    tmp = q(str(rd / "exit_code.tmp"))
+    return (f"cd {q(rc['worktree'])} && {shlex.join(argv)} \"$(cat {q(str(rd / 'input.txt'))})\"; echo $? > {tmp}"
+            + (f" && mv {tmp} {q(str(rd / 'exit_code'))}" if publish else ""))
 
 
 
@@ -470,7 +474,7 @@ def _binding_unchanged(rc, session, runner):
 def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=None):
     if rc["backend"] != BACKEND:
         from . import runners
-        return runners.start(rc, prompt, profile, wait_ms)
+        return runners.start(rc, prompt, profile, wait_ms, runner)
     if not _binding_unchanged(rc, session, runner):
         return rc
     settings = worker_settings(profile)
@@ -629,13 +633,17 @@ def _task(rc, runner, timeout_s=SHORT_CALL_S):
 
 def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     """Observe the recorded board task only; never delegate, retry or re-prompt it."""
-    if rc.get("backend") not in (BACKEND, LOCAL_BACKEND, EXTERNAL_BACKEND):
+    if rc.get("backend") not in (BACKEND, LOCAL_BACKEND, EXTERNAL_BACKEND, TUI_BACKEND):
         raise r.InputError("legacy receipt: inspect the original worker; automatic backend migration is refused")
     native = rc["backend"] == BACKEND
     if rc["status"] == "completed" and rc.get("settled_contract"):
         if native and rc.get("release") is None:  # completed before releasing existed, or the last close failed
             release(rc, runner)
             save(rc)
+        elif not native:
+            from . import runners
+            if runners.retry_release(rc, runner):
+                save(rc)
         return rc
     if rc["delivery_state"] == "not_attempted":
         return rc
@@ -652,7 +660,7 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
         try:
             if not native:
                 from . import runners
-                runners.poll(rc)
+                runners.poll(rc, runner)
             elif headless:
                 _poll_headless(rc, runner, timeout())
             elif project_binding(session, runner) != rc["project_binding"]:
@@ -717,7 +725,7 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
                 backend = existing[0].get("backend", BACKEND)
             elif backend == LOCAL_BACKEND and t["execution"] != "headless":
                 raise r.InputError('the local runner runs one-shot CLIs: set "execution": "headless", '
-                                   "or use --runner herdr|external")
+                                   "or use --runner herdr|herdr-tui|external")
             if not existing:
                 availability = _availability(availability, cfg, which, backend, [(t, context)])
             if not existing and profile_id is None and selection is None:
@@ -877,6 +885,8 @@ def resume_run(cwd, run_id, runner=subprocess.run):
         rc = load_receipt(cwd, run_id)
         if rc.get("backend") != BACKEND or not rc.get("thread_id"):
             raise r.InputError("only a Shepherdr task run can be resumed")
+        if rc.get("execution") == "headless":  # its card has no conversation; resume would rerun the saved argv
+            raise r.InputError("headless runs cannot be resumed; dispatch a new round")
         if project_binding(rc["herdr_session"], runner) != rc["project_binding"]:
             raise r.InputError("Shepherdr protocol or core version changed; inspect the recorded worker")
         _task(rc, runner)
@@ -897,24 +907,33 @@ def tell_run(cwd, run_id, text, runner=subprocess.run):
     rc = _target(cwd, run_id)
     if rc.get("execution") == "headless":
         raise r.InputError("headless runs take no messages; use the shared scratchpad or a new round")
-    if rc.get("backend") != BACKEND or not rc.get("thread_id"):
-        raise r.InputError("only a Shepherdr task run can receive a message")
-    if rc["status"] in SETTLED_STATUSES and not rc.get("resumed"):
+    tui = rc.get("backend") == TUI_BACKEND and rc.get("agent_name")
+    if not tui and (rc.get("backend") != BACKEND or not rc.get("thread_id")):
+        raise r.InputError("only a Shepherdr or interactive herdr-tui run can receive a message")
+    if rc["status"] in SETTLED_STATUSES and not (tui or rc.get("resumed")):
         raise r.InputError("run is settled; `resume` it first (tell on a finished board task starts a new agent)")
-    if project_binding(rc["herdr_session"], runner) != rc["project_binding"]:
-        raise r.InputError("Shepherdr protocol, space or core version changed; inspect the recorded worker")
-    row = _task(rc, runner)
-    live = row.get("live") or []
-    if row.get("state") != "running" or len(live) != 1 or (row.get("needs") == "reply" and not rc.get("resumed")):
-        raise r.InputError("task finished on the board or has no single live worker; collect/resume first")
-    terminal = live[0]["address"]
+    if tui:  # herdr itself refuses a prompt to a blocked agent
+        if rc["status"] in SETTLED_STATUSES:
+            raise r.InputError("run is settled and its workspace is closed; dispatch a new round")
+        from . import runners
+        runners._same_server(rc, runner)
+        send = lambda: project_call(["agent", "prompt", rc["agent_name"], text], runner, exe=TUI_BIN)
+    else:
+        if project_binding(rc["herdr_session"], runner) != rc["project_binding"]:
+            raise r.InputError("Shepherdr protocol, space or core version changed; inspect the recorded worker")
+        row = _task(rc, runner)
+        live = row.get("live") or []
+        if row.get("state") != "running" or len(live) != 1 or (row.get("needs") == "reply" and not rc.get("resumed")):
+            raise r.InputError("task finished on the board or has no single live worker; collect/resume first")
+        terminal = live[0]["address"]
+        send = lambda: project_call(["send", terminal, text, "--json"], runner, exe=HERDR_BIN)
     # No dispatch lock or receipt write: a blocking parallel/collect on this cwd must not stall the message.
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
     _log_event(rc, {"sha256": digest, "state": "attempted", "bytes": len(text.encode("utf-8")), "text": text})
-    obj, err = project_call(["send", terminal, text, "--json"], runner, exe=HERDR_BIN)
+    obj, err = send()
     log = _log_event(rc, {"sha256": digest, "state": "uncertain" if err else "sent", "error": err})
     return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain" if err else "sent",
-            "run_id": rc["run_id"], "thread_id": rc["thread_id"], "sha256": digest, "messages_path": str(log),
+            "run_id": rc["run_id"], "thread_id": rc.get("thread_id"), "sha256": digest, "messages_path": str(log),
             **({"error": err} if err else {})}
 
 
@@ -924,7 +943,7 @@ def stop_run(cwd, run_id, runner=subprocess.run):
     rc = _target(os.path.realpath(cwd), run_id)
     if rc["status"] in SETTLED_STATUSES:
         raise r.InputError(f"run is already settled ({rc['status']}); nothing to stop")
-    if rc.get("backend") in (LOCAL_BACKEND, EXTERNAL_BACKEND):
+    if rc.get("backend") in (LOCAL_BACKEND, EXTERNAL_BACKEND, TUI_BACKEND):
         from . import runners
         external = rc["backend"] == EXTERNAL_BACKEND
         try:
@@ -935,7 +954,7 @@ def stop_run(cwd, run_id, runner=subprocess.run):
                     if rc["status"] in SETTLED_STATUSES:
                         raise r.InputError(f"run is already settled ({rc['status']}); nothing to stop")
                 _log_event(rc, {"state": "stop_attempted"})
-                err = runners.stop(rc)
+                err = runners.stop(rc, runner)
         except Busy as e:
             return {"schema_version": r.SCHEMA_VERSION, "status": "conflict", "run_id": rc["run_id"],
                     "warnings": [r.warn("dispatch_lock", f"{e}; retry stop when collect returns")]}

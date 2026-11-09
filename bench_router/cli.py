@@ -606,9 +606,10 @@ def main(argv=None):
     ap.add_argument("--herdr-space", "--herdr-session", dest="herdr_session", metavar="SPACE",
                     default=os.environ.get("BENCH_ROUTER_SPACE") or os.environ.get("BENCH_ROUTER_HERDR_SESSION") or None,
                     help="local Shepherdr space id for dispatch (BENCH_ROUTER_SPACE); --herdr-session is a legacy alias")
-    ap.add_argument("--runner", choices=("auto", "herdr", "local", "external"),
+    ap.add_argument("--runner", choices=("auto", "herdr", "herdr-tui", "local", "external"),
                     default=os.environ.get("BENCH_ROUTER_RUNNER") or "auto",
-                    help="live route/parallel executor: Shepherdr task/core terminal, local one-shot CLI subprocess (headless tasks), "
+                    help="live route/parallel executor: Shepherdr task/core terminal, herdr-tui agent (or headless one-shot CLI) in its own "
+                         "herdr TUI workspace, local one-shot CLI subprocess (headless tasks), "
                          "or external (returns an invocation; you run the agent, then collect). auto = herdr when "
                          "herdr-task and hc are on PATH, else local. Recorded runs keep theirs (default: %(default)s)")
     rp = sub.add_parser("route", help="select a profile and delegate via Shepherdr (--dry-run: select only)")
