@@ -361,7 +361,7 @@ The global `--runner auto|herdr|local|external` option (env `BENCH_ROUTER_RUNNER
 
 | Runner | Executes | Tasks | Worktree | `stop` | `tell`/`resume` |
 |---|---|---|---|---|---|
-| `herdr` | Shepherdr task agent or core terminal | interactive, headless | herdr-task/hc | hc kill | yes (interactive runs) |
+| `herdr` | Shepherdr task agent or core terminal (headless output also teed to `runs/RUN/output.log`) | interactive, headless | herdr-task/hc | hc kill | yes (interactive runs) |
 | `local` | profile one-shot CLI as a detached `sh -c` subprocess (own session, output in `runs/RUN/output.log`) | headless only | `git worktree add` under `.bench-router/worktrees/runs/RUN` | SIGTERM to the process group | no |
 | `external` | nothing; the caller runs the agent | any | same as local | records the caller's statement that its agent stopped | no |
 

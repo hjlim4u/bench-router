@@ -543,7 +543,10 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
             rc.update(status="execution_failed", process_exited=True)
             save(rc)
             return rc
-        launch_args = ["--argv", json.dumps(["sh", "-c", headless_script({**rc, "worktree": "."}, argv)])]
+        # tee keeps the pane live while output.log outlives release() closing the terminal (as the local runner's log)
+        log = shlex.quote(str(Path(rc["run_dir"]) / "output.log"))
+        script = f"{{ {headless_script({**rc, 'worktree': '.'}, argv)}; }} 2>&1 | tee {log}"
+        launch_args = ["--argv", json.dumps(["sh", "-c", script])]
     obj, err = project_call(["start", rc["thread_id"], "--folder", repo_cwd(rc), "--space", rc["project_binding"]["space"],
                              *launch_args, "--json"], runner,
                             timeout_s=min(START_CALL_S, max(0.001, (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds())))

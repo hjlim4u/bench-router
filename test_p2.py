@@ -215,7 +215,7 @@ def headless_cli(exit_code=0, result=True):
     """Stand-in for `herdr pane run`: what the typed one-shot CLI would leave behind."""
     def act(fake, cmd):
         script = shlex.split(cmd)[2]
-        wt = shlex.split(script.split(" && ")[0])[1]
+        wt = shlex.split(script.split(" && ")[0].removeprefix("{ "))[1]
         rd = Path(re.search(r"cat (\S+)/input\.txt", script).group(1))
         if wt == ".":
             wt = fake.worktree_of((rd / "input.txt").read_text("utf-8"))
@@ -478,6 +478,8 @@ class P2(unittest.TestCase):
         cmd = shlex.split(fake.runs[0])[2]
         self.assertIn("claude -p --model m --effort high --dangerously-skip-permissions", cmd)
         self.assertNotIn("do the thing", cmd)  # the prompt reaches the CLI from input.txt only
+        log = Path(hd.load_receipt(self.cwd, out["run_id"])["run_dir"]) / "output.log"
+        self.assertTrue(cmd.endswith(f"2>&1 | tee {shlex.quote(str(log))}"), cmd)
         self.assertEqual((fake.reports, len(fake.closed)), ([], 1))
         with self.assertRaisesRegex(r.InputError, "headless"):
             hd.tell_run(self.cwd, out["run_id"], "hi", runner=fake)

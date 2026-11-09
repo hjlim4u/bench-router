@@ -32,7 +32,7 @@ Use the [vendor-guided decision workflow](references/decision.md) for semantic f
 
 The global `--runner auto|herdr|local|external` option (default `auto`, or `BENCH_ROUTER_RUNNER`) picks the executor for live `route`/`parallel`. `auto` uses Herdr when `herdr-task` and `hc` are on PATH, otherwise `local`. Every runner keeps the same receipt, admission limit, `collect` and result contract, and a recorded run always recovers through its own runner (`backend` in the output).
 
-- `herdr`: board agent (`interactive`) or core terminal (`headless`), as described below.
+- `herdr`: board agent (`interactive`) or core terminal (`headless`), as described below. Headless output is also kept in `runs/RUN/output.log` after the terminal closes.
 - `local`: runs the profile's one-shot CLI (`claude -p`, `codex exec`, `agy -p`) as a local subprocess in a router worktree. Only `"execution": "headless"` tasks are accepted. `stop` ends the process; `tell` and `resume` are not available.
 - `external`: the router prepares the worktree, prompt and receipt and returns `handed_off` (exit 11) with an `invocation` (`cwd`, `prompt_path`, `result_dir`, suggested `argv`, `model_id`, `deadline_at`). Run the agent yourself (API, subprocess, host Agent tool), have it write the result files into `result_dir`, then `collect`. Use `stop` to record that your agent stopped. Local CLI availability is not probed, and schema 2.0 caller-owned profiles are eligible.
 
