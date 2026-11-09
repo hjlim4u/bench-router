@@ -47,7 +47,7 @@ def _end_marker(rc):
     return f"bench-router-exited-{rc['run_id']}"
 
 
-HERDR_MIN = (0, 9, 5)  # tested; older servers may omit completion_seq, and interactive runs would never settle
+HERDR_MIN = (0, 9, 2)  # completion_seq is first documented in 0.9.2; without it interactive runs never settle
 
 
 def _status(runner):

@@ -828,11 +828,15 @@ class P2(unittest.TestCase):
         self.assertEqual((res["status"], fake.ws_closed), ("execution_failed", [rc["workspace_id"]]))  # not "running" forever
         self.assertIn("replaced", res["last_observation"]["note"])
         fake = FakeTui()
-        fake.version = "0.9.4"  # older servers may omit completion_seq: refused before anything starts
+        fake.version = "0.9.1"  # before 0.9.2 there is no completion_seq: refused before anything starts
         with patch.object(hd, "headless_argv", return_value=["true"]):
             out = self.run_(fake, self.task(task_id="old", execution="headless"), backend=hd.TUI_BACKEND)
         self.assertEqual((out["status"], fake.runs), ("execution_failed", []))
         self.assertIn("herdr update", out["last_observation"]["note"])
+        fake.version = "0.9.2"  # the oldest accepted server
+        with patch.object(hd, "headless_argv", return_value=["true"]):
+            self.run_(fake, self.task(task_id="oldest", execution="headless"), backend=hd.TUI_BACKEND)
+        self.assertEqual(len(fake.runs), 1)  # its workspace was created
         fake = FakeTui(run_error="herdr: server not running")
         with patch.object(hd, "headless_argv", return_value=["true"]):
             out = self.run_(fake, self.task(task_id="lost", execution="headless"), backend=hd.TUI_BACKEND)
