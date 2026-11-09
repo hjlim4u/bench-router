@@ -3,8 +3,8 @@ title: Todo Index
 category: _meta
 tags: [meta/todos]
 sources: [conversation]
-created: 2026-11-08
-updated: 2026-11-08
+created: 2026-11-09
+updated: 2026-11-09
 generated_by: obsidian-wiki memory todo
 ---
 
@@ -21,3 +21,4 @@ safe to edit by hand — the table round-trips. An open item untouched for
 | t3 | open | Record benchmark uncertainty (stderr/CI) so the near-tie threshold that triggers collaboration reflects measurement noise. | projects/bench-router/synthesis/multi-agent-pattern-selection.md | 2026-10-22 | 2026-10-22 |
 | t4 | open | Decide whether to accept the router/orchestration boundary; if so, allow repeated profiles in group 2.0 and document the candidate-pool and uncertainty-code contract | projects/bench-router/synthesis/router-orchestrator-boundary.md | 2026-10-22 | 2026-10-22 |
 | t5 | open | Wire vendor-CLI quota probes (agy /usage groups, Claude weekly_scoped + extra_usage for Fable, Codex rateLimitsByLimitId) into herdr.probe_profiles? | synthesis/research-per-model-quota-codeburn-replacement.md | 2026-11-08 | 2026-11-08 |
+| t6 | done | bench-router herdr-tui interactive: send tell with --wait --until working, and settle idle/done only when completion_seq is present (review findings 1-2, stage 2 still uncommitted) | bench-router | 2026-11-09 | 2026-11-09 |

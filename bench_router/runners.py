@@ -7,6 +7,7 @@ external: the router prepares worktree, prompt and receipt, returns an `invocati
 agent however its environment allows (API, host Agent tool, remote job); `collect` then checks the result files.
 """
 import os
+import re
 import shlex
 import signal
 import subprocess
@@ -33,14 +34,31 @@ def _fail(rc, note):
     return rc
 
 
-def _herdr(argv, runner, raw=False):
-    return h.project_call(argv, runner, raw=raw, exe=h.TUI_BIN)
+def _herdr(argv, runner, raw=False, timeout_s=h.SHORT_CALL_S):
+    return h.project_call(argv, runner, raw=raw, timeout_s=timeout_s, exe=h.TUI_BIN)
+
+
+def _wait_args(wait_s):
+    """A herdr-side wait within collect's budget, instead of collect polling each second; None when no budget."""
+    return (["--timeout", str(int(wait_s * 1000))], wait_s + h.SHORT_CALL_S) if wait_s >= 1 else None
+
+
+def _end_marker(rc):
+    return f"bench-router-exited-{rc['run_id']}"
+
+
+HERDR_MIN = (0, 9, 2)  # completion_seq is first documented in 0.9.2; without it interactive runs never settle
+
+
+def _status(runner):
+    """`herdr status server` as {field: value}; it has no JSON form."""
+    out, _ = _herdr(["status", "server"], runner, raw=True)
+    return dict(line.split(": ", 1) for line in (out or "").splitlines() if ": " in line)
 
 
 def _socket(runner):
     """The herdr server this call reaches; workspace and pane ids are only unique within one server."""
-    out, _ = _herdr(["status", "server"], runner, raw=True)
-    return next((line[len("socket: "):] for line in (out or "").splitlines() if line.startswith("socket: ")), None)
+    return _status(runner).get("socket")
 
 
 def _same_server(rc, runner):
@@ -50,14 +68,21 @@ def _same_server(rc, runner):
 
 
 def _start_tui(rc, argv, runner, wait_ms, chat=None):
-    rc["herdr_socket"] = _socket(runner)
+    status = _status(runner)
+    rc["herdr_socket"] = status.get("socket")
     if not rc["herdr_socket"]:
         return _fail(rc, "herdr-tui: no running herdr server (herdr status server); nothing started")
+    m = re.match(r"(\d+)\.(\d+)\.(\d+)", status.get("version", ""))
+    if not m or tuple(map(int, m.groups())) < HERDR_MIN:
+        return _fail(rc, f"herdr-tui: herdr {status.get('version', '?')} is older than "
+                         f"{'.'.join(map(str, HERDR_MIN))}; run herdr update; nothing started")
     obj, err = _herdr(["workspace", "create", "--cwd", rc["worktree"], "--no-focus",
                        "--label", f"bench-router {rc['task_id']} r{rc['round']}"], runner)
     try:
         res = obj["result"]
-        rc.update(workspace_id=res["workspace"]["workspace_id"], pane_id=res["root_pane"]["pane_id"])
+        # the terminal id changes when herdr restarts and restores the pane as a new shell
+        rc.update(workspace_id=res["workspace"]["workspace_id"], pane_id=res["root_pane"]["pane_id"],
+                  herdr_terminal=res["root_pane"]["terminal_id"])
     except (KeyError, TypeError):
         return _fail(rc, f"herdr-tui: workspace create failed ({(err or {}).get('message')}); nothing started")
     if chat:
@@ -69,7 +94,8 @@ def _start_tui(rc, argv, runner, wait_ms, chat=None):
     q = lambda name: shlex.quote(str(rd / name))
     # stdin from /dev/null as in local; exit_code appears only after tee ends, so closing on it loses no output
     command = (f"{shlex.join(['sh', '-c', h.headless_script(rc, argv, publish=False)])} </dev/null 2>&1 "
-               f"| tee {q('output.log')}; mv {q('exit_code.tmp')} {q('exit_code')}")
+               f"| tee {q('output.log')}; mv {q('exit_code.tmp')} {q('exit_code')}; "
+               f"printf 'bench-router-%s-%s\\n' exited {rc['run_id']}")  # the end marker pane wait-output waits for
     _, err = _herdr(["pane", "run", rc["pane_id"], command], runner, raw=True)  # pane run prints nothing on success
     if err:
         rc.update(status="delivery_uncertain", delivery_state="uncertain")
@@ -108,8 +134,25 @@ def _start_agent(rc, profile, prompt, runner, wait_ms):
     return h.collect(rc, h._wait(rc, wait_ms), runner=runner)
 
 
-def _poll_agent(rc, runner):
-    obj, err = _herdr(["agent", "get", rc["agent_name"]], runner)
+def _replaced(rc, current, runner):
+    """True, and the run failed and its workspace closed, when herdr replaced the run's terminal: a server restart
+    restores the pane under the same id as a new shell, and what ran in it (CLI or agent) is gone."""
+    if not rc.get("herdr_terminal") or not current or current == rc["herdr_terminal"]:
+        return False
+    rc.update(status="execution_failed", process_exited=True)
+    h._observe(rc, note=f"herdr-tui: the pane's terminal was replaced ({rc['herdr_terminal']} -> {current}), "
+                        "e.g. by a herdr server restart; what ran in it is gone")
+    _release_tui(rc, runner)
+    return True
+
+
+def _poll_agent(rc, runner, wait_s=0):
+    obj = err = None
+    if wait := _wait_args(wait_s):  # herdr returns when the turn settles or asks; a timeout falls back to agent get
+        obj, _ = _herdr(["agent", "wait", rc["agent_name"], "--until", "idle", "--until", "done", "--until", "blocked",
+                         *wait[0]], runner, timeout_s=wait[1])
+    if obj is None:
+        obj, err = _herdr(["agent", "get", rc["agent_name"]], runner)
     if err:
         if "not_found" in err["message"]:  # closed by stop or a human before the turn ended with results
             rc.update(status="execution_failed", process_exited=True)
@@ -118,17 +161,20 @@ def _poll_agent(rc, runner):
             rc["status"] = "timed_out"
             h._observe(rc, error=err, note="herdr unreachable; the agent may still be working, collect again")
         return
-    status = obj["result"]["agent"]["agent_status"]
+    agent = obj["result"]["agent"]
+    if _replaced(rc, agent.get("terminal_id"), runner):
+        return
+    status = agent["agent_status"]
     if status == "blocked":  # a question or permission: a human answers it in herdr, then collect again
         rc.update(status="blocked", diagnostic_tail=_screen_tail(rc, runner))
         h._observe(rc, "blocked", note="herdr-tui agent waits for an answer in its pane")
-    elif status in ("idle", "done"):  # the turn was seen working at submission, so this is its end
+    elif status in ("idle", "done") and agent.get("completion_seq") is not None:  # herdr: a turn really ended
         h.settle(rc, "done")
         if rc["status"] == "completed":
             _release_tui(rc, runner)
-    else:
+    else:  # working, unknown, or idle without a finished turn (the prompt may never have landed)
         rc["status"] = "timed_out"
-        h._observe(rc, status, note="herdr-tui agent still working")
+        h._observe(rc, status, note="herdr-tui agent has not finished a turn")
 
 
 def _release_tui(rc, runner):
@@ -190,7 +236,7 @@ def start(rc, prompt, profile, wait_ms, runner=subprocess.run):
     return h.collect(rc, h._wait(rc, wait_ms))
 
 
-def poll(rc, runner=subprocess.run):
+def poll(rc, runner=subprocess.run, wait_s=0):
     """One observation of a local, herdr-tui or external run; settled receipts stay settled."""
     if rc["status"] in h.SETTLED_STATUSES:
         retry_release(rc, runner)
@@ -207,13 +253,18 @@ def poll(rc, runner=subprocess.run):
     if tui:
         _same_server(rc, runner)  # collect turns this into delivery_uncertain; nothing is closed or settled
     if tui and rc.get("agent_name"):
-        return _poll_agent(rc, runner)
+        return _poll_agent(rc, runner, wait_s)
+    if tui and (wait := _wait_args(wait_s)) and not (Path(rc["run_dir"]) / "exit_code").exists():
+        _herdr(["pane", "wait-output", rc["pane_id"], "--regex", f"^{_end_marker(rc)}$", *wait[0]], runner,
+               raw=True, timeout_s=wait[1])  # returns at the end marker, or at the budget; the checks below decide
     if h.settle_exit(rc):
         if tui:
             _release_tui(rc, runner)
         return
     if tui:
-        _, err = _herdr(["pane", "get", rc["pane_id"]], runner)
+        obj, err = _herdr(["pane", "get", rc["pane_id"]], runner)
+        if not err and _replaced(rc, obj["result"]["pane"].get("terminal_id"), runner):
+            return
         if not err:
             rc["status"] = "timed_out"
             h._observe(rc, "working", note="herdr-tui CLI still running")
