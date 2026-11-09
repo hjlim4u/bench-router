@@ -97,9 +97,10 @@ Other profile arguments are rejected before submission. Interactive Claude and a
 permissions and Shepherdr settings. The old `worker.access` setting does not exist on this platform. A permission or question
 appears as `blocked`; answer through Shepherdr's cards or normal approval workflow.
 
-Each task gets `--worktree --set review=off --set "merge=ask me first" --set proof=off` and branches from the
-caller's exact HEAD commit, on `br/RUN_ID`. A private `br-base/RUN_ID` branch pins that commit because the upstream base option accepts branch names only; retain it with the worktree until the caller prunes the run. If Shepherdr's folder setting disables worktrees, the router adds the
-task but refuses to start it in the user's checkout.
+Each task gets `--worktree --set review=off --set "merge=ask me first" --set proof=off`, with branch
+`br/RUN_ID`. The base is the checked-out branch, not a pinned submission-time commit; detached HEAD is
+refused. If Shepherdr's folder setting disables worktrees, the router adds the task but refuses to start it
+in the user's checkout.
 
 ## Execution and Collection
 
