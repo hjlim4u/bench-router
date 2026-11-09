@@ -701,6 +701,19 @@ class P2(unittest.TestCase):
                 hd.resume_run(self.cwd, out["run_id"], runner=fake)
                 self.assertEqual(task["resumed_argv"], expected)
 
+    def test_codex_interactive_runs_without_sandbox_through_start_and_resume(self):
+        p = profile("a")
+        args = p["args"]
+        self.cfg = config([p])
+        fake = FakeProjects(on_prompt=write_result())
+        out = self.run_(fake, self.task(task_id="codex-sbx"))
+        self.assertEqual(out["status"], "completed")
+        task = fake.tasks[out["thread_id"]]
+        expected = ["codex", *args, "--dangerously-bypass-approvals-and-sandbox"]
+        self.assertEqual(task["argv"], expected)
+        hd.resume_run(self.cwd, out["run_id"], runner=fake)
+        self.assertEqual(task["resumed_argv"], expected)
+
     def test_shepherdr_split_start_recovers_without_starting_twice(self):
         fake = FakeProjects(on_prompt=write_result())
         fake.start_error = True
