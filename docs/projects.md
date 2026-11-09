@@ -44,6 +44,40 @@ bench-router --herdr-space SPACE --runner herdr route --task task.json --selecti
 `herdr-task` and `hc` are available. The task cwd must be the root of a committed Git repository. Uncommitted
 changes are excluded from the new worktree, with a `dirty_base` warning. `.bench-router/` is excluded from commits.
 
+## App and companion TUI
+
+From this repository, use `mise run herdr-app` for the primary desktop window and
+`mise run herdr-tui` in another terminal for a plugin-free companion. Without mise:
+
+```bash
+sh scripts/herdr.sh app
+sh scripts/herdr.sh tui
+```
+
+The companion uses session `app-companion`, configuration `examples/herdr-tui.toml`, and
+separate config/state directories under `.bench-router/tui/`. Existing user plugins and their
+startup hooks are not loaded into this environment; no plugin installation or removal is needed.
+Use this launcher rather than bare `herdr`, which still uses the user's existing configuration.
+The shell wrapper restores the original XDG directories so `hc`, Shepherdr and bench-router
+inside ordinary TUI panes use the same user environment as the app.
+
+In the TUI, press **Ctrl+B, H** to select and attach to a live core terminal, or
+**Ctrl+B, Shift+H** to observe without typing or resizing. **Ctrl+backslash** detaches from
+core while leaving its program running. Close/detach this viewer before closing its TUI pane.
+Tasks continue to be created through Shepherdr/bench-router, in the default core session.
+The TUI has its own server: attaching is a terminal view, not synchronization of the two
+agent sidebars. A task whose worker was released can be reopened through router `resume`.
+No extra agent or duplicate task is started by the attach shortcuts.
+
+The app requires a working desktop session (WSLg on this WSL2 installation). An existing
+web-only Shepherdr installation does not automatically add the desktop layout; follow the
+[Shepherdr install guide](https://github.com/eliasstravik/shepherdr/blob/main/docs/install.md)
+if the layout is missing. `python3 scripts/check-herdr-launch.py` checks launch isolation
+without starting servers. `sh scripts/herdr.sh tui config check` validates the native config.
+
+References: [TUI custom commands](https://herdr.dev/tui/docs/configuration/#custom-command-keybindings),
+[core attach](https://github.com/herdrdev/herdr-core/blob/master/docs/commands.md#hc-attach).
+
 ## Profiles and Permissions
 
 | Router profile | herdr-task setting |
@@ -93,11 +127,15 @@ by collect. The result is validated against the task's key, numeric id, title, f
 | stopped worker | `execution_failed`; unexpected exits retain admission until inspected |
 | missing or changed task identity | `delivery_uncertain` |
 
-Shepherdr's native `ready` can open a PR or remove a no-change worktree, including ignored result files. Router
-prompts therefore tell workers to keep the branch/worktree and end their turn without calling ready/done/accept
-or opening a PR. Router `completed` is result delivery. The observer changes the board to done after merge and safe cleanup;
-until then its progress text says it waits for merge. Review, committing and landing work remain caller decisions. This avoids
-changing the old no-automatic-PR and worktree-retention contract.
+After a successful result is validated and copied beside its receipt, the router calls `herdr-task ready`.
+Workers commit requested code changes and end their turn without calling ready/done/accept themselves.
+Ready can open a GitHub PR; the person accepts the task before merging (`merge=ask me first`). Shepherdr
+owns subsequent merge and worktree/branch cleanup. Router `completed` still means result delivery, not merge.
+Partial/failed results are collected without marking the task Ready. A `ready` receipt records the handoff;
+an attempted or uncertain handoff is never automatically repeated: inspect the board before acting manually.
+The target is the repository's checked-out branch; detached HEAD is refused. Shepherdr manages the starting
+revision, so execution no longer pins the caller's HEAD with a private base branch. Existing receipts with
+private base branches are not handed to Ready automatically; finish those runs manually.
 
 Results live at `.bench-router/runs/RUN_ID/` in the task worktree, and are copied beside the receipt after
 run id, nonce, fingerprint, file path, size, encoding and SHA-256 checks. `task_outcome` records reported success,
@@ -125,16 +163,10 @@ public task `start --argv` option. The CLI reads input.txt and records its exit 
 Its terminal and the card are linked by Shepherdr's own task labels. Headless tell/resume remain unsupported.
 
 Every new Herdr run starts a separate core observer (`monitor` in the output). It collects and validates results
-automatically, updates the card's progress text, and waits for merge. Callers can still collect whenever they
-need the returned result; they need not poll to keep the board updated. An observer launch error is reported
-in `monitor.error`. The observer retries transient Git/core errors every five seconds.
-
-After validation, the observer checks that the worktree is clean and its committed changes are integrated into
-repository HEAD (ancestry or an equivalent squash-merge tree). It then sends `herdr-task done`, removes the
-worktree, compare-and-deletes its task and private base branches, and ends/removes remaining task terminals.
-The observer removes itself on exit. Results and receipts remain outside the removed worktree. Cleanup details
-are recorded in `cleanup`. No-change clean tasks can finish immediately. Dirty or unmerged work is retained;
-merge itself stays the caller's decision. A live working/blocked terminal also defers cleanup.
+and exits after collection and the Ready handoff. It does not watch for merge or remove Git resources.
+Callers can still collect whenever they need the result. An observer launch error is reported in
+`monitor.error`. The observer retries transient Git/core errors every five seconds until collection completes.
+Results and receipts remain outside the worktree so Shepherdr can clean it up after acceptance.
 
 ## Parallel Dispatch
 
@@ -159,3 +191,19 @@ interactive start/collect/release, resume with a handoff, explicit send, and hea
 The smoke used a synthetic Python worker and real herdr-task/hc commands; it made no paid model request and
 does not certify a provider's login, model access or exact-session recovery. The offline suite ran 218 tests
 with 2 skipped. Existing TUI installations and the two pre-existing untracked wiki notes were preserved.
+
+## User plugin migration
+
+`python3 scripts/migrate-herdr-app.py` checks the installed sources and runs the official
+Shepherdr desktop installation dry run. `--apply` backs up affected user configuration,
+installs the desktop layout while preserving existing keys and agent hooks, unregisters
+Annotate/terminal-browser when present, removes their TUI keybindings, and switches Ovis
+to herdr-core using its existing configuration and state. Ovis is stopped and restarted
+through its own launcher, without stopping Herdr or core. Reviewr and Plugin Manager
+are not copied into the app. The script preserves plugin data and standalone binaries.
+
+Apply requires write access to the user's home and access to the running services.
+After installation select Shepherdr with Ctrl+Shift+L in the app. Existing TUI clients
+load removed keybindings on the next config reload or launch. Ovis remains installed
+as a TUI-managed package; its launcher now serves core terminals, not the TUI server.
+`python3 scripts/check-herdr-migration.py` checks binding removal offline.

@@ -412,6 +412,8 @@ Task `cwd` must be the **root of a Git repository containing at least one commit
 
 ```bash
 # 4. Live execution, collection, and verification (Linux/WSL2)
+# Desktop + plugin-free companion terminal: mise run herdr-app / mise run herdr-tui
+# Setup and attach shortcuts: docs/projects.md
 # Herdr runner (Shepherdr, herdr-core, and Agent CLIs installed):
 bench-router --herdr-space SPACE route --task task.json --selection selection.json  # Shepherdr space id
 # Without Herdr: a local one-shot CLI (task.json needs "execution": "headless") ...

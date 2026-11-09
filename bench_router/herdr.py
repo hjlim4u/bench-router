@@ -479,10 +479,9 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
         _observe(rc, note="profile args beyond model/effort cannot be expressed; nothing submitted")
         save(rc)
         return rc
-    # ponytail: native ready opens PRs or deletes ignored results; keep acceptance manual until upstream can retain both.
-    prompt += ("\nShepherdr: do not call herdr-task ready, done, accept or merge; do not open a PR. "
-               "Keep this worktree and branch. After writing the results, end your turn. "
-               "bench-router validates and collects the results; the person decides how the work lands.\n")
+    prompt += ("\nShepherdr: do not call herdr-task ready, done, accept or merge yourself. "
+               "Commit requested code changes, keep this worktree and branch, then write results and end your turn. "
+               "bench-router validates and copies results before marking the task Ready; the person accepts it.\n")
     r.atomic_write(Path(rc["run_dir"]) / "input.txt", prompt.encode("utf-8"))
     remaining = (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds()
     if remaining <= 0:
@@ -491,18 +490,16 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
         save(rc)
         return rc
     from . import parallel
-    # herdr-task --base accepts branch names only. A private base branch pins the caller's HEAD;
-    # passing the current branch could fetch and start from a newer remote commit instead.
-    base = f"br-base/{rc['run_id']}"
+    # Shepherdr owns merging into the repository's actual target branch.
     try:
-        parallel._git(repo_cwd(rc), "branch", base, "HEAD")
+        base = parallel._git(repo_cwd(rc), "branch", "--show-current")
+        if not base:
+            raise r.InputError("a checked-out target branch is required")
     except r.InputError as e:
         rc["status"] = "execution_failed"
-        _observe(rc, note=f"could not pin HEAD: {e}; nothing submitted")
+        _observe(rc, note=f"{e}; nothing submitted")
         save(rc)
         return rc
-    rc["base_branch"] = base
-    rc["base_commit"] = parallel._git(repo_cwd(rc), "rev-parse", base)
     rc["delivery_state"] = "submission_attempted"
     save(rc)  # An add with a lost response must never be repeated, even though it starts nothing.
     obj, err = project_call(["add", "br-" + rc["run_id"], "--prompt-file", str(Path(rc["run_dir"]) / "input.txt"),
@@ -845,6 +842,8 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
 
 def release(rc, runner=subprocess.run):
     """End only idle terminals belonging to this run; leave working and blocked agents alone."""
+    from .lifecycle import finalize
+    finalize(rc, runner)
     argv = ["ls", "--label", f"bench-router.run={rc['run_id']}", "--json"] if not rc.get("thread_id") else \
         ["ls", "--label", f"herdr.task={rc['thread_id']}", "--json"]
     obj, err = project_call(argv, runner, exe=HERDR_BIN)
@@ -1056,7 +1055,7 @@ def output(res, rc, reused=False):
                 "last_observation": rc["last_observation"],
                 "diagnostic_tail": rc.get("diagnostic_tail"), "release": rc.get("release"), "reused_receipt": reused,
                 "backend": rc.get("backend"), "invocation": rc.get("invocation"),
-                "monitor": rc.get("monitor"), "cleanup": rc.get("cleanup")})
+                "monitor": rc.get("monitor"), "ready": rc.get("ready"), "cleanup": rc.get("cleanup")})
     out["selected"] = {**(out.get("selected") or {}), "profile": rc["profile"],
                        "profile_fingerprint": rc["profile_fingerprint"]}
     out["reassignment"] = ("collect_first" if rc["delivery_state"] in ("submission_attempted", "uncertain")

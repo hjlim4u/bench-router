@@ -192,8 +192,8 @@ class FakeProjects:
             self._pane(t)
             self.stopped.discard(t["key"])
             return self._ok({**self._row(t), "terminal": f"t{t['id']}", "resumed": True})
-        if argv[0] == "done":
-            return self._ok({**self._row(self.tasks[argv[1]]), "state": "done"})
+        if argv[0] in ("ready", "done"):
+            return self._ok({**self._row(self.tasks[argv[1]]), "state": argv[0]})
         if argv[0] == "status":
             return self._ok({"ok": True})
         if argv[0] == "reopen":
@@ -655,30 +655,56 @@ class P2(unittest.TestCase):
         with self.assertRaises(r.InputError):
             hd.resolve_runner("cloud", which)
 
-    def test_board_and_resources_finalize_only_after_merge(self):
+    def test_validated_results_handoff_once_without_merging_or_cleanup(self):
         from bench_router.lifecycle import finalize
         fake = FakeProjects(on_prompt=write_result())
         out = self.run_(fake)
         rc = self.receipt(out)
-        wt = Path(out["worktree"])
-        git = lambda cwd, *args: subprocess.run(["git", "-C", str(cwd), "-c", "user.name=t",
-            "-c", "user.email=t@t", *args], check=True, capture_output=True)
-        (wt / "change.txt").write_text("implementation")
-        self.assertFalse(finalize(rc, fake))  # never discard dirty work
-        git(wt, "add", "change.txt")
-        git(wt, "commit", "-qm", "implementation")
-        self.assertFalse(finalize(rc, fake))  # committed but not merged
-        git(self.cwd, "merge", "--squash", out["branch"])
-        git(self.cwd, "commit", "-qm", "squash result")
-        self.assertTrue(finalize(rc, fake, dry_run=True))
-        self.assertTrue(wt.exists())
-        self.assertTrue(finalize(rc, fake))
-        self.assertFalse(wt.exists())
+        self.assertEqual(rc["ready"]["state"], "ready")
+        self.assertTrue(Path(out["worktree"]).exists())
         self.assertTrue(Path(out["result_path"]).exists())
-        self.assertEqual(self.receipt(out)["cleanup"]["board"], "done")
-        for branch in (out["branch"], rc["base_branch"]):
-            self.assertNotEqual(subprocess.run(["git", "-C", self.cwd, "rev-parse", "--verify", branch],
-                               capture_output=True).returncode, 0)
+        self.assertTrue(finalize(rc, fake))
+        self.assertEqual(sum(c[0] == "ready" for c in fake.calls), 1)
+        self.assertFalse(any(c[0] in ("accept", "merge", "done") for c in fake.calls))
+        self.assertFalse(any(c[0] == "hc" and c[1] == "rm" for c in fake.calls))
+        self.assertFalse(subprocess.run(["git", "-C", self.cwd, "branch", "--list", "br-base/*"],
+                                        check=True, capture_output=True, text=True).stdout.strip())
+
+    def test_ready_can_remove_worktree_after_result_copy(self):
+        fake = FakeProjects(on_prompt=write_result())
+        def cleanup_on_ready(cmd, **kw):
+            if cmd[1] == "ready":
+                task = fake.tasks[cmd[2]]
+                subprocess.run(["git", "-C", task["folder"], "worktree", "remove", "--force", task["worktree"]],
+                               check=True, capture_output=True)
+            return fake(cmd, **kw)
+        out = self.run_(cleanup_on_ready)
+        self.assertEqual(out["status"], "completed")
+        self.assertFalse(Path(out["worktree"]).exists())
+        self.assertIsNone(hd.check_result(self.receipt(out))[1])
+
+    def test_ready_skips_partial_and_legacy_runs(self):
+        from bench_router.lifecycle import finalize
+        fake = FakeProjects(on_prompt=write_result())
+        out = self.run_(fake)
+        rc = self.receipt(out)
+        fake.calls.clear()
+        for extra in ({"task_outcome": "partial"}, {"base_branch": "br-base/old"}):
+            self.assertFalse(finalize({**rc, "ready": None, **extra}, fake))
+        self.assertFalse(fake.calls)
+
+    def test_ready_response_loss_does_not_repeat_submission(self):
+        from bench_router.lifecycle import finalize
+        fake = FakeProjects(on_prompt=write_result())
+        def lost(cmd, **kw):
+            if cmd[1] == "ready":
+                raise subprocess.TimeoutExpired(cmd, 15)
+            return fake(cmd, **kw)
+        out = self.run_(lost)
+        rc = self.receipt(out)
+        self.assertEqual(rc["ready"]["state"], "uncertain")
+        self.assertFalse(finalize(rc, fake))
+        self.assertFalse(any(c[0] == "ready" for c in fake.calls))
 
     def test_worker_settings(self):
         p = lambda kind, args: {"kind": kind, "args": args}
@@ -734,7 +760,7 @@ class P2(unittest.TestCase):
         from bench_router import coordination
         self.assertEqual(coordination.inspect()["active"], 0)
 
-    def test_pin_failure_settles_before_submission(self):
+    def test_target_branch_failure_settles_before_submission(self):
         from bench_router import parallel, coordination
         original = parallel._git
         def git(cwd, *args, **kwargs):
@@ -748,13 +774,14 @@ class P2(unittest.TestCase):
                          ("execution_failed", "not_attempted", []))
         self.assertEqual(coordination.inspect()["active"], 0)
 
-    def test_shepherdr_finished_turn_collects_without_ready_or_pr(self):
+    def test_shepherdr_finished_turn_hands_off_after_collection(self):
         fake = FakeProjects(on_prompt=write_result())
         fake.updates = {"state": "running", "status": "working", "needs": None}
         out = self.run_(fake)
         self.assertEqual(out["status"], "completed")
         self.assertIn("do not call herdr-task ready", fake.prompts[0])
-        self.assertFalse(any(c[0] in ("ready", "accept", "done") for c in fake.calls))
+        self.assertTrue(any(c[0] == "ready" for c in fake.calls))
+        self.assertFalse(any(c[0] in ("accept", "done") for c in fake.calls))
 
     def test_legacy_receipt_never_controls_new_core(self):
         fake = FakeProjects(after_status="working")

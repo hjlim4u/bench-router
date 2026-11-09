@@ -41,3 +41,11 @@ run = "uv run python -m bench_router.cli refresh --force"
 
 [tasks.status]
 run = "uv run python -m bench_router.cli status"
+
+[tasks.herdr-app]
+description = "Open the primary Herdr app (default core session)"
+run = "sh scripts/herdr.sh app"
+
+[tasks.herdr-tui]
+description = "Open the plugin-free companion TUI; prefix+h attaches to core"
+run = "sh scripts/herdr.sh tui"

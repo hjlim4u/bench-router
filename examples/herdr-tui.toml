@@ -1,0 +1,20 @@
+# Loaded by scripts/herdr.sh tui, with a separate empty plugin registry.
+onboarding = false
+
+[[keys.command]]
+key = "prefix+h"
+type = "pane"
+command = 'env XDG_CONFIG_HOME="$BENCH_ROUTER_CORE_CONFIG_HOME" XDG_STATE_HOME="$BENCH_ROUTER_CORE_STATE_HOME" HC_SESSION=default hc attach'
+description = "Attach to an app/core terminal (Ctrl+backslash detaches)"
+
+[[keys.command]]
+key = "prefix+shift+h"
+type = "pane"
+command = 'env XDG_CONFIG_HOME="$BENCH_ROUTER_CORE_CONFIG_HOME" XDG_STATE_HOME="$BENCH_ROUTER_CORE_STATE_HOME" HC_SESSION=default hc attach --observe'
+description = "Observe an app/core terminal without input or resize"
+
+[session]
+resume_agents_on_restore = false
+
+[ui.sound]
+enabled = false
