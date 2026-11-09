@@ -405,7 +405,7 @@ Live `route` and `parallel` run through a *runner*, chosen with the global `--ru
 | Runner | Needs | Runs | Notes |
 |---|---|---|---|
 | `herdr` | Shepherdr 3.x, hc >= 0.1.17, Agent CLI | Board task with automatic observer (`interactive` or `headless`) | Permission waiting (`blocked`), `tell`, `resume`; see [Projects Setup Guide](docs/projects.md) |
-| `herdr-tui` | herdr TUI (`herdr` on PATH, server running), Agent CLI; no plugin | The same one-shot CLI as `local`, run in the root pane of its own herdr TUI workspace | `"execution": "headless"` tasks only; watch it in herdr; the workspace closes when the run settles; `stop` closes it; no `tell`/`resume` |
+| `herdr-tui` | herdr TUI (`herdr` on PATH, server running), Agent CLI; no plugin | Interactive: the profile's agent started in the root pane of its own herdr TUI workspace (`herdr agent start`), the prompt submitted once. Headless: the same one-shot CLI as `local` in that pane | Watch it in herdr; `blocked` shows when the agent waits for an answer in its pane; `tell` works on interactive runs; the workspace closes when the run settles; `stop` closes it; no `resume`. The repo folder must already be trusted by the agent (a new folder's trust question fails the start; nothing is sent) |
 | `local` | Agent CLI only | The profile's one-shot CLI (`claude -p`, `codex exec`, `agy -p`) as a local subprocess | `"execution": "headless"` tasks only; approvals are off; `stop` ends the process; no `tell`/`resume` |
 | `external` | Nothing | Nothing: the router returns `handed_off` (exit 11) with an `invocation` | Your API/host-tool executor runs the agent and writes the result files into `invocation.result_dir`, then you `collect`. Caller-owned schema 2.0 profiles are eligible |
 
@@ -417,7 +417,7 @@ Task `cwd` must be the **root of a Git repository containing at least one commit
 bench-router --herdr-space SPACE route --task task.json --selection selection.json  # Shepherdr space id
 # Without Herdr: a local one-shot CLI (task.json needs "execution": "headless") ...
 bench-router --runner local route --task task.json --selection selection.json
-# ... the same CLI, visible in its own herdr TUI workspace ...
+# ... an agent (or, with "execution": "headless", a one-shot CLI) visible in its own herdr TUI workspace ...
 bench-router --runner herdr-tui route --task task.json --selection selection.json
 # ... or hand the run to your own executor, which writes the results into invocation.result_dir
 bench-router --runner external route --task task.json --selection selection.json     # → status handed_off + invocation

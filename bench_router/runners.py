@@ -49,7 +49,7 @@ def _same_server(rc, runner):
                            "collect or stop it from that herdr session")
 
 
-def _start_tui(rc, argv, runner, wait_ms):
+def _start_tui(rc, argv, runner, wait_ms, chat=None):
     rc["herdr_socket"] = _socket(runner)
     if not rc["herdr_socket"]:
         return _fail(rc, "herdr-tui: no running herdr server (herdr status server); nothing started")
@@ -60,6 +60,9 @@ def _start_tui(rc, argv, runner, wait_ms):
         rc.update(workspace_id=res["workspace"]["workspace_id"], pane_id=res["root_pane"]["pane_id"])
     except (KeyError, TypeError):
         return _fail(rc, f"herdr-tui: workspace create failed ({(err or {}).get('message')}); nothing started")
+    if chat:
+        h.save(rc)
+        return _start_agent(rc, *chat, runner, wait_ms)
     rc["delivery_state"] = "submission_attempted"
     h.save(rc)  # Persist before typing the command: a lost response must never start a second CLI.
     rd = Path(rc["run_dir"])
@@ -74,6 +77,58 @@ def _start_tui(rc, argv, runner, wait_ms):
         h.save(rc)
         return rc
     return h.collect(rc, h._wait(rc, wait_ms), runner=runner)
+
+
+def _screen_tail(rc, runner):
+    out, _ = _herdr(["agent", "read", rc["agent_name"]], runner, raw=True)
+    return (out or "").strip()[-400:]
+
+
+def _start_agent(rc, profile, prompt, runner, wait_ms):
+    """Interactive: start the profile's agent in the workspace pane, then submit the prompt once."""
+    rc["agent_name"] = "br-" + rc["run_id"][:12]
+    h.save(rc)
+    _, err = _herdr(["agent", "start", rc["agent_name"], "--kind", profile["kind"], "--pane", rc["pane_id"],
+                     "--timeout", "60000", "--", *profile["args"]], runner)
+    if err:  # nothing was sent yet, so failing is safe; e.g. the folder-trust question blocks a new folder
+        note = f"herdr-tui: agent did not start ({err['message']}); screen: {_screen_tail(rc, runner)!r}; nothing sent"
+        _herdr(["workspace", "close", rc["workspace_id"]], runner)
+        return _fail(rc, note)
+    rc["delivery_state"] = "submission_attempted"
+    h.save(rc)  # Persist before the prompt: a lost response must never submit it twice.
+    _, err = _herdr(["agent", "prompt", rc["agent_name"], prompt, "--wait", "--until", "working", "--until", "blocked",
+                     "--timeout", "20000"], runner)
+    if err:
+        rc.update(status="delivery_uncertain", delivery_state="uncertain")
+        h._observe(rc, error=err, note="herdr-tui: prompt unconfirmed; inspect the agent, never resubmit")
+        h.save(rc)
+        return rc
+    rc["delivery_state"] = "activity_observed"
+    h.save(rc)
+    return h.collect(rc, h._wait(rc, wait_ms), runner=runner)
+
+
+def _poll_agent(rc, runner):
+    obj, err = _herdr(["agent", "get", rc["agent_name"]], runner)
+    if err:
+        if "not_found" in err["message"]:  # closed by stop or a human before the turn ended with results
+            rc.update(status="execution_failed", process_exited=True)
+            h._observe(rc, note="herdr-tui agent is gone (stopped or closed)")
+        else:
+            rc["status"] = "timed_out"
+            h._observe(rc, error=err, note="herdr unreachable; the agent may still be working, collect again")
+        return
+    status = obj["result"]["agent"]["agent_status"]
+    if status == "blocked":  # a question or permission: a human answers it in herdr, then collect again
+        rc.update(status="blocked", diagnostic_tail=_screen_tail(rc, runner))
+        h._observe(rc, "blocked", note="herdr-tui agent waits for an answer in its pane")
+    elif status in ("idle", "done"):  # the turn was seen working at submission, so this is its end
+        h.settle(rc, "done")
+        if rc["status"] == "completed":
+            _release_tui(rc, runner)
+    else:
+        rc["status"] = "timed_out"
+        h._observe(rc, status, note="herdr-tui agent still working")
 
 
 def _release_tui(rc, runner):
@@ -97,7 +152,14 @@ def retry_release(rc, runner=subprocess.run):
 
 def start(rc, prompt, profile, wait_ms, runner=subprocess.run):
     argv = h.headless_argv(profile) if profile.get("kind") else None
-    if rc["backend"] in (h.LOCAL_BACKEND, h.TUI_BACKEND) and argv is None:
+    chat = rc["backend"] == h.TUI_BACKEND and rc.get("execution") != "headless"  # a live agent in the pane
+    if chat:
+        prompt += ("\nherdr-tui: do not open a PR or merge; keep this worktree and branch. After writing the "
+                   "results, end your turn. bench-router validates and collects the results.\n")
+        if h.model_effort(profile) is None or len(prompt.encode("utf-8")) > h.MAX_PROMPT_ARG_BYTES:
+            return _fail(rc, "herdr-tui: profile args beyond model/effort or a prompt over "
+                             f"{h.MAX_PROMPT_ARG_BYTES} bytes; nothing started")
+    elif rc["backend"] in (h.LOCAL_BACKEND, h.TUI_BACKEND) and argv is None:
         return _fail(rc, f"{rc['backend']}: no one-shot CLI for kind {profile.get('kind')!r} or args beyond model/effort")
     try:
         _prepare(rc, prompt)
@@ -112,7 +174,7 @@ def start(rc, prompt, profile, wait_ms, runner=subprocess.run):
         h.save(rc)
         return rc
     if rc["backend"] == h.TUI_BACKEND:
-        return _start_tui(rc, argv, runner, wait_ms)
+        return _start_tui(rc, argv, runner, wait_ms, (profile, prompt) if chat else None)
     rc["delivery_state"] = "submission_attempted"
     h.save(rc)  # Persist before starting: a lost response must never start a second CLI.
     try:
@@ -144,6 +206,8 @@ def poll(rc, runner=subprocess.run):
     tui = rc["backend"] == h.TUI_BACKEND
     if tui:
         _same_server(rc, runner)  # collect turns this into delivery_uncertain; nothing is closed or settled
+    if tui and rc.get("agent_name"):
+        return _poll_agent(rc, runner)
     if h.settle_exit(rc):
         if tui:
             _release_tui(rc, runner)

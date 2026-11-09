@@ -719,9 +719,9 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
             if existing:
                 co.observe_receipt(existing[0])
                 backend = existing[0].get("backend", BACKEND)
-            elif backend in (LOCAL_BACKEND, TUI_BACKEND) and t["execution"] != "headless":
-                raise r.InputError('the local and herdr-tui runners run one-shot CLIs: set "execution": "headless", '
-                                   "or use --runner herdr|external")
+            elif backend == LOCAL_BACKEND and t["execution"] != "headless":
+                raise r.InputError('the local runner runs one-shot CLIs: set "execution": "headless", '
+                                   "or use --runner herdr|herdr-tui|external")
             if not existing:
                 availability = _availability(availability, cfg, which, backend, [(t, context)])
             if not existing and profile_id is None and selection is None:
@@ -901,24 +901,33 @@ def tell_run(cwd, run_id, text, runner=subprocess.run):
     rc = _target(cwd, run_id)
     if rc.get("execution") == "headless":
         raise r.InputError("headless runs take no messages; use the shared scratchpad or a new round")
-    if rc.get("backend") != BACKEND or not rc.get("thread_id"):
-        raise r.InputError("only a Shepherdr task run can receive a message")
-    if rc["status"] in SETTLED_STATUSES and not rc.get("resumed"):
+    tui = rc.get("backend") == TUI_BACKEND and rc.get("agent_name")
+    if not tui and (rc.get("backend") != BACKEND or not rc.get("thread_id")):
+        raise r.InputError("only a Shepherdr or interactive herdr-tui run can receive a message")
+    if rc["status"] in SETTLED_STATUSES and not (tui or rc.get("resumed")):
         raise r.InputError("run is settled; `resume` it first (tell on a finished board task starts a new agent)")
-    if project_binding(rc["herdr_session"], runner) != rc["project_binding"]:
-        raise r.InputError("Shepherdr protocol, space or core version changed; inspect the recorded worker")
-    row = _task(rc, runner)
-    live = row.get("live") or []
-    if row.get("state") != "running" or len(live) != 1 or (row.get("needs") == "reply" and not rc.get("resumed")):
-        raise r.InputError("task finished on the board or has no single live worker; collect/resume first")
-    terminal = live[0]["address"]
+    if tui:  # herdr itself refuses a prompt to a blocked agent
+        if rc["status"] in SETTLED_STATUSES:
+            raise r.InputError("run is settled and its workspace is closed; dispatch a new round")
+        from . import runners
+        runners._same_server(rc, runner)
+        send = lambda: project_call(["agent", "prompt", rc["agent_name"], text], runner, exe=TUI_BIN)
+    else:
+        if project_binding(rc["herdr_session"], runner) != rc["project_binding"]:
+            raise r.InputError("Shepherdr protocol, space or core version changed; inspect the recorded worker")
+        row = _task(rc, runner)
+        live = row.get("live") or []
+        if row.get("state") != "running" or len(live) != 1 or (row.get("needs") == "reply" and not rc.get("resumed")):
+            raise r.InputError("task finished on the board or has no single live worker; collect/resume first")
+        terminal = live[0]["address"]
+        send = lambda: project_call(["send", terminal, text, "--json"], runner, exe=HERDR_BIN)
     # No dispatch lock or receipt write: a blocking parallel/collect on this cwd must not stall the message.
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
     _log_event(rc, {"sha256": digest, "state": "attempted", "bytes": len(text.encode("utf-8")), "text": text})
-    obj, err = project_call(["send", terminal, text, "--json"], runner, exe=HERDR_BIN)
+    obj, err = send()
     log = _log_event(rc, {"sha256": digest, "state": "uncertain" if err else "sent", "error": err})
     return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain" if err else "sent",
-            "run_id": rc["run_id"], "thread_id": rc["thread_id"], "sha256": digest, "messages_path": str(log),
+            "run_id": rc["run_id"], "thread_id": rc.get("thread_id"), "sha256": digest, "messages_path": str(log),
             **({"error": err} if err else {})}
 
 
