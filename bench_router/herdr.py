@@ -531,8 +531,12 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
     rc["start_attempted"] = True
     save(rc)
     # Shepherdr only translates model/effort for Claude and Codex. Its public argv override keeps agy's flags.
+    # Codex's workspace-write sandbox cannot commit in a git worktree (the lock files live in the main .git).
     launch_args = (["--argv", json.dumps([profile["executable"], *profile["args"], "--prompt-interactive"])]
-                   if profile["kind"] == "agy" else [])
+                   if profile["kind"] == "agy" else
+                   ["--argv", json.dumps([profile["executable"], *profile["args"],
+                                          "--dangerously-bypass-approvals-and-sandbox"])]
+                   if profile["kind"] == "codex" else [])
     if rc.get("execution") == "headless":
         argv = headless_argv(profile)
         if argv is None:

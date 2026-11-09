@@ -55,8 +55,13 @@ changes are excluded from the new worktree, with a `dirty_base` warning. `.bench
 
 For interactive Antigravity (`agy`) tasks, start uses herdr-task’s public `--argv` override to pass the validated executable/model/effort flags and `--prompt-interactive` directly. Shepherdr saves that argv for queued execution and subsequent resume/handoff; its default model/effort builder only handles Claude/Codex.
 
-Other profile arguments are rejected before submission. Interactive workers inherit the user's CLI permissions
-and Shepherdr settings. The old `worker.access` setting does not exist on this platform. A permission or question
+Interactive Codex tasks also start through `--argv`, with the profile flags plus
+`--dangerously-bypass-approvals-and-sandbox`: Codex's workspace-write sandbox cannot write the lock files a git
+worktree keeps in the main repository's `.git`, so a sandboxed worker can never commit. Restrict it to trusted
+repositories.
+
+Other profile arguments are rejected before submission. Interactive Claude and agy workers inherit the user's CLI
+permissions and Shepherdr settings. The old `worker.access` setting does not exist on this platform. A permission or question
 appears as `blocked`; answer through Shepherdr's cards or normal approval workflow.
 
 Each task gets `--worktree --set review=off --set "merge=ask me first" --set proof=off` and branches from the
