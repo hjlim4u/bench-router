@@ -28,7 +28,11 @@ bench-router init
 
 [tasks.install-skill]
 description = "install global skill instructions only (no CLI or engine)"
-run = 'npx -y skills add "$PWD" -g -a claude-code codex antigravity -y'
+run = """
+npx -y skills add "$PWD" -g -a claude-code codex antigravity -y
+# skills skips symlinks that leave the skill folder: copy the bundled bench-decider definitions resolved
+cp -L skills/bench-router/references/agents/* ~/.agents/skills/bench-router/references/agents/
+"""
 
 [tasks.test]
 description = "offline test suite"
