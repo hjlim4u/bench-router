@@ -871,6 +871,8 @@ def resume_run(cwd, run_id, runner=subprocess.run):
         rc = load_receipt(cwd, run_id)
         if rc.get("backend") != BACKEND or not rc.get("thread_id"):
             raise r.InputError("only a Shepherdr task run can be resumed")
+        if rc.get("execution") == "headless":  # its card has no conversation; resume would rerun the saved argv
+            raise r.InputError("headless runs cannot be resumed; dispatch a new round")
         if project_binding(rc["herdr_session"], runner) != rc["project_binding"]:
             raise r.InputError("Shepherdr protocol or core version changed; inspect the recorded worker")
         _task(rc, runner)

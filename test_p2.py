@@ -481,6 +481,10 @@ class P2(unittest.TestCase):
         self.assertEqual((fake.reports, len(fake.closed)), ([], 1))
         with self.assertRaisesRegex(r.InputError, "headless"):
             hd.tell_run(self.cwd, out["run_id"], "hi", runner=fake)
+        fake.calls.clear()
+        with self.assertRaisesRegex(r.InputError, "headless"):
+            hd.resume_run(self.cwd, out["run_id"], runner=fake)
+        self.assertFalse(any(c[0] == "resume" for c in fake.calls))
 
     def test_headless_running_then_pane_closed_is_failure(self):
         fake = FakeProjects()  # no exit_code yet: the CLI is still running
