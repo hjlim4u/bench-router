@@ -887,6 +887,20 @@ class P2(unittest.TestCase):
         self.assertEqual(blocked["warnings"][-1]["code"], "coordination")
         self.assertEqual(first["status"], "completed")
 
+    def test_dispatch_lock_waits_out_a_brief_holder(self):
+        import threading
+        held = threading.Event()
+        def observer():
+            with hd.dispatch_lock(self.cwd):
+                held.set()
+                REAL_SLEEP(0.3)
+        th = threading.Thread(target=observer)
+        th.start()
+        held.wait()
+        with hd.dispatch_lock(self.cwd):  # a brief observer poll is not a conflict
+            pass
+        th.join()
+
     def test_v29_agent_gone_or_partial(self):
         fake = FakeProjects(after_status="working")
         out = self.run_(fake)
@@ -917,6 +931,13 @@ class P2(unittest.TestCase):
         fake = FakeProjects(on_prompt=write_result())
         fake.core_version = "hc 0.1.19"
         self.assertEqual(self.run_(fake)["status"], "completed")
+
+    def test_message_log_survives_unicode_line_separator(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rc = {"run_dir": tmp}
+            hd._log_event(rc, {"state": "sent", "text": "pasted\u2028text"})
+            hd._log_event(rc, {"state": "stop_sent"})
+            self.assertEqual([e["state"] for e in hd._events(rc)], ["sent", "stop_sent"])
 
     def test_prompt_size_limit(self):
         with self.assertRaises(r.InputError):

@@ -2,10 +2,11 @@
 import contextlib
 import errno
 import os
+import time
 
 
 @contextlib.contextmanager
-def exclusive(path, busy):
+def exclusive(path, busy, wait_s=0):
     with open(path, "a+b") as f:
         if os.name == "nt":
             import msvcrt
@@ -15,15 +16,20 @@ def exclusive(path, busy):
             f.seek(0)
         else:
             import fcntl
-        try:
-            if os.name == "nt":
-                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as e:
-            if e.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK) or getattr(e, "winerror", None) == 33:
-                raise busy from e
-            raise
+        deadline = time.monotonic() + wait_s
+        while True:
+            try:
+                if os.name == "nt":
+                    msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError as e:
+                if not (e.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK) or getattr(e, "winerror", None) == 33):
+                    raise
+                if time.monotonic() >= deadline:
+                    raise busy from e
+                time.sleep(0.01)
         try:
             yield
         finally:

@@ -139,8 +139,8 @@ def main():
                                           for p, v in prices.items() if v), "",
              "| 정책 | 성공 | API 환산 USD 합 | 성공 1건당 USD | 출력 토큰 | 캐시 적중 입력 | 비캐시 입력 | 측정 누락 run |",
              "|---|---|---|---|---|---|---|---|"]
-    for name in ("fixed-default", "low-cost-first", "bench-router"):
-        sel = [by[(t[0], pol[name][t[0]])] for t in TASKS if (t[0], pol[name][t[0]]) in by]
+    for name, choice in pol.items():
+        sel = [by[(t[0], choice[t[0]])] for t in TASKS if (t[0], choice[t[0]]) in by]
         wins = sum(x["status"] == "completed" and x["check"] for x in sel)
         cost = sum(x["usd_api_equiv"] or 0 for x in sel)
         lines.append(f"| {name} | {wins}/{len(sel)} | ${cost:.2f} | ${cost / max(1, wins):.3f} | {tot(sel, 'output'):,} | "

@@ -328,8 +328,9 @@ def receipts(cwd):
 @contextlib.contextmanager
 def dispatch_lock(cwd):
     bench_dir(cwd).mkdir(exist_ok=True)
+    # The run observer holds this lock briefly every 5s; wait it out instead of reporting a false conflict.
     with locking.exclusive(bench_dir(cwd) / "dispatch.lock",
-                           Busy("another bench-router dispatch/collect holds the lock for this cwd")):
+                           Busy("another bench-router dispatch/collect holds the lock for this cwd"), wait_s=2):
         yield
 
 
@@ -580,9 +581,7 @@ def _poll_headless(rc, runner, timeout_s):
     if rc.get("thread_id"):
         row = _task(rc, runner, timeout_s)
         if row.get("state") in ("todo", "queued", "scheduled"):
-            events = Path(rc["run_dir"]) / "messages.jsonl"
-            cancelled = row.get("state") == "todo" and events.exists() and any(
-                json.loads(line).get("cancelled_queue") for line in events.read_text("utf-8").splitlines())
+            cancelled = row.get("state") == "todo" and any(e.get("cancelled_queue") for e in _events(rc))
             if cancelled:
                 rc.update(status="execution_failed", process_exited=True)
             else:
@@ -658,18 +657,14 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
                 row = _task(rc, runner, timeout())
                 state, status, needs = row.get("state"), row.get("status"), row.get("needs")
                 if state in ("todo", "queued", "scheduled"):
-                    events = Path(rc["run_dir"]) / "messages.jsonl"
-                    cancelled = state == "todo" and events.exists() and any(
-                        json.loads(x).get("cancelled_queue") for x in events.read_text("utf-8").splitlines())
+                    cancelled = state == "todo" and any(e.get("cancelled_queue") for e in _events(rc))
                     if cancelled:
                         rc.update(status="execution_failed", process_exited=True)
                     else:
                         rc["status"] = "delivery_uncertain" if state == "todo" else "timed_out"
                     _observe(rc, status, note="task not started; recovery never calls start")
                 elif needs == "stopped":
-                    events = Path(rc["run_dir"]) / "messages.jsonl"
-                    stopped = events.exists() and any(json.loads(x).get("state") == "stop_sent"
-                                                       for x in events.read_text("utf-8").splitlines())
+                    stopped = any(e.get("state") == "stop_sent" for e in _events(rc))
                     rc.update(status="execution_failed", process_exited=stopped)
                     _observe(rc, status, note=row.get("why") or "task agent stopped")
                 elif status == "needs" and needs != "reply":
@@ -987,6 +982,12 @@ def _log_event(rc, entry):
     with open(log, "a", encoding="utf-8") as f:  # shortcut: one O_APPEND write per line; lock if senders get concurrent
         f.write(json.dumps({"at": _iso(_now()), **entry}, ensure_ascii=False) + "\n")
     return log
+
+
+def _events(rc):
+    """messages.jsonl entries. split("\\n"), not splitlines(): U+2028 in a logged message is not a record break."""
+    log = Path(rc["run_dir"]) / "messages.jsonl"
+    return [json.loads(x) for x in log.read_text("utf-8").split("\n") if x] if log.exists() else []
 
 
 def collect_run(cwd, run_id, wait_ms, session=None, runner=subprocess.run):

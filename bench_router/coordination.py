@@ -3,7 +3,6 @@ import contextlib
 import json
 import os
 import re
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -47,16 +46,7 @@ def _save(rec):
 
 @contextlib.contextmanager
 def gate():
-    deadline = time.monotonic() + 2
-    with contextlib.ExitStack() as stack:
-        while True:
-            try:
-                stack.enter_context(locking.exclusive(directory() / "admission.lock", Conflict("coordination admission is busy")))
-                break
-            except Conflict:
-                if time.monotonic() >= deadline:
-                    raise
-                time.sleep(0.01)
+    with locking.exclusive(directory() / "admission.lock", Conflict("coordination admission is busy"), wait_s=2):
         yield
 
 

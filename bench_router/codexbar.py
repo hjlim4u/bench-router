@@ -14,8 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 BIN = os.environ.get("BENCH_ROUTER_CODEXBAR", "codexbar")
-PROVIDERS = {"claude": "claude", "codex": "codex", "agy": "antigravity"}
-MAX_AGE_S = 300
+PROVIDERS = policy.PROVIDERS
 CALL_TIMEOUT_S = 120  # agy's native /usage report can take 90 seconds on a cold start
 
 
