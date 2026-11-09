@@ -447,11 +447,13 @@ def _wait(rc, wait_ms):
     return remaining if wait_ms is None else min(remaining, wait_ms)
 
 
-def headless_script(rc, argv):
-    """sh script: the one-shot CLI in the worktree with the prompt from input.txt, then its exit code, atomically."""
+def headless_script(rc, argv, publish=True):
+    """sh script: the one-shot CLI in the worktree with the prompt from input.txt, then its exit code, atomically.
+    publish=False leaves exit_code.tmp for the caller to publish (herdr-tui: after tee has written the last output)."""
     q, rd = shlex.quote, Path(rc["run_dir"])
-    return (f"cd {q(rc['worktree'])} && {shlex.join(argv)} \"$(cat {q(str(rd / 'input.txt'))})\"; "
-            f"echo $? > {q(str(rd / 'exit_code.tmp'))} && mv {q(str(rd / 'exit_code.tmp'))} {q(str(rd / 'exit_code'))}")
+    tmp = q(str(rd / "exit_code.tmp"))
+    return (f"cd {q(rc['worktree'])} && {shlex.join(argv)} \"$(cat {q(str(rd / 'input.txt'))})\"; echo $? > {tmp}"
+            + (f" && mv {tmp} {q(str(rd / 'exit_code'))}" if publish else ""))
 
 
 
@@ -634,6 +636,10 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
         if native and rc.get("release") is None:  # completed before releasing existed, or the last close failed
             release(rc, runner)
             save(rc)
+        elif not native:
+            from . import runners
+            if runners.retry_release(rc, runner):
+                save(rc)
         return rc
     if rc["delivery_state"] == "not_attempted":
         return rc

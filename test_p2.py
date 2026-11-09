@@ -212,7 +212,7 @@ class FakeTui(FakeProjects):
 
     def __init__(self, run_error=None):
         super().__init__()
-        self.procs, self.ws_closed, self.typed, self.run_error = {}, [], [], run_error
+        self.procs, self.ws_closed, self.typed, self.run_error, self.close_fail = {}, [], [], run_error, 0
         self.socket = "/home/u/.config/herdr/herdr.sock"
 
     def __call__(self, cmd, **kw):
@@ -237,6 +237,11 @@ class FakeTui(FakeProjects):
                 return subprocess.CompletedProcess(cmd, 1, "", '{"error":{"code":"pane_not_found"}}')
             return self._ok({"result": {"pane": {"pane_id": arg}}})
         if op == ["workspace", "close"]:
+            if self.close_fail:
+                self.close_fail -= 1
+                return subprocess.CompletedProcess(cmd, 1, "", '{"error":{"code":"server_busy"}}')
+            if arg in self.ws_closed:
+                return subprocess.CompletedProcess(cmd, 1, "", '{"error":{"code":"workspace_not_found"}}')
             self.ws_closed.append(arg)
             for pane in [p for p in self.procs if p.startswith(arg + ":")]:
                 proc = self.procs.pop(pane)
@@ -711,6 +716,8 @@ class P2(unittest.TestCase):
         self.assertEqual(out["status"], "timed_out")
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "timed_out")  # pane still there
         self.assertIn("</dev/null 2>&1 | tee", fake.typed[0])  # stdin as in local, output kept
+        self.assertNotIn("&& mv", fake.typed[0])  # exit_code is published only after tee has ended:
+        self.assertRegex(fake.typed[0], r"\| tee \S+output\.log; mv \S+exit_code\.tmp \S+exit_code$")
         home, fake.socket = fake.socket, "/home/u/.config/herdr/sessions/other/herdr.sock"  # another herdr session
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "delivery_uncertain")
         self.assertEqual(hd.stop_run(self.cwd, out["run_id"], runner=fake)["status"], "delivery_uncertain")
@@ -720,6 +727,29 @@ class P2(unittest.TestCase):
         self.assertEqual(hd.stop_run(self.cwd, out["run_id"], runner=fake)["status"], "stop_sent")
         res = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
         self.assertEqual((res["status"], self.receipt(res)["process_exited"]), ("execution_failed", True))
+        from bench_router import runners
+        self.assertEqual(runners.stop({"backend": hd.TUI_BACKEND})["code"], "stop_error")  # dispatch not done yet
+        fake = FakeTui()
+        fake.close_fail = 1  # the close after settling fails once
+        with patch.object(hd, "headless_argv", return_value=[sys.executable, "-c", writer]):
+            out = self.run_(fake, self.task(task_id="retry", execution="headless"), backend=hd.TUI_BACKEND)
+        self.assertEqual((out["status"], fake.ws_closed, "error" in self.receipt(out)["release"]), ("completed", [], True))
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "completed")
+        rc = self.receipt(out)
+        self.assertEqual((fake.ws_closed, "error" in rc["release"]), ([rc["workspace_id"]], False))  # retried, closed
+        hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual(fake.ws_closed, [rc["workspace_id"]])  # nothing left to retry
+        fake = FakeTui()
+        with patch.object(hd, "headless_argv", return_value=["sleep", "30"]):
+            out = self.run_(fake, self.task(task_id="gone", execution="headless"), backend=hd.TUI_BACKEND, wait_ms=0)
+        rc = self.receipt(out)
+        fake.ws_closed.append(rc["workspace_id"])  # closed (stop or a human) just as the CLI wrote its exit code
+        (Path(rc["run_dir"]) / "exit_code").write_text("0\n", "utf-8")
+        res = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertNotIn("error", self.receipt(res)["release"])  # already closed counts as released, no retries
+        for proc in fake.procs.values():
+            os.killpg(proc.pid, 9)
+            proc.wait()
         fake = FakeTui(run_error="herdr: server not running")
         with patch.object(hd, "headless_argv", return_value=["true"]):
             out = self.run_(fake, self.task(task_id="lost", execution="headless"), backend=hd.TUI_BACKEND)
