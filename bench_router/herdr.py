@@ -656,7 +656,7 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
         try:
             if not native:
                 from . import runners
-                runners.poll(rc, runner)
+                runners.poll(rc, runner, max(0.0, deadline - time.monotonic()))  # herdr-tui waits in herdr
             elif headless:
                 _poll_headless(rc, runner, timeout())
             elif project_binding(session, runner) != rc["project_binding"]:

@@ -214,10 +214,22 @@ class FakeTui(FakeProjects):
         super().__init__()
         self.procs, self.ws_closed, self.typed, self.run_error, self.close_fail = {}, [], [], run_error, 0
         self.socket = "/home/u/.config/herdr/herdr.sock"
+        self.version, self.terminal = "0.9.5", "term_1"
+        self.waits = []
         self.agents, self.agent_status, self.agent_prompts, self.prompt_calls = {}, "idle", [], 0
         self.completion_seq = None  # set by finish(): herdr marks an idle transition that ended real work
         self.start_error = self.prompt_error = self.on_agent_prompt = self.last_prompt_cmd = None
         self.screen = "Quick safety check: Is this a project you trust?"
+
+    def restart(self):
+        """herdr server restart: processes die, panes come back under the same ids as new shells (new terminal)."""
+        for proc in self.procs.values():
+            if proc:
+                os.killpg(proc.pid, 9)
+                proc.wait()
+        self.procs = dict.fromkeys(self.procs)
+        self.terminal += "-restored"
+        self.agent_status, self.completion_seq = "idle", None  # a resumed conversation, no finished turn
 
     def finish(self, status="done"):
         self.agent_status, self.completion_seq = status, (self.completion_seq or 0) + 1
@@ -227,17 +239,18 @@ class FakeTui(FakeProjects):
             return super().__call__(cmd, **kw)
         op, arg = cmd[1:3], (cmd[3] if len(cmd) > 3 else None)
         if op == ["status", "server"]:
-            return subprocess.CompletedProcess(cmd, 0, f"status: running\nversion: 0.9.5\nsocket: {self.socket}\n", "")
+            return subprocess.CompletedProcess(cmd, 0, f"status: running\nversion: {self.version}\nsocket: {self.socket}\n", "")
         if op == ["workspace", "create"]:
             w = f"w{len(self.ws_closed) + len(self.procs) + 1}x{len(self.runs)}"
             self.runs.append(cmd)
-            return self._ok({"result": {"workspace": {"workspace_id": w}, "root_pane": {"pane_id": f"{w}:p1"}}})
+            return self._ok({"result": {"workspace": {"workspace_id": w},
+                                        "root_pane": {"pane_id": f"{w}:p1", "terminal_id": self.terminal}}})
         if op == ["pane", "run"]:
             if self.run_error:
                 return subprocess.CompletedProcess(cmd, 1, "", self.run_error)
             self.typed.append(cmd[4])
             self.procs[arg] = subprocess.Popen(["sh", "-c", cmd[4]], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                               start_new_session=True)
+                                               stderr=subprocess.DEVNULL, start_new_session=True)
             return subprocess.CompletedProcess(cmd, 0, "", "")  # herdr 0.9.5 prints nothing here
         if op == ["agent", "start"]:
             if self.start_error:
@@ -258,16 +271,33 @@ class FakeTui(FakeProjects):
         if op == ["agent", "get"]:
             if arg not in self.agents:
                 return subprocess.CompletedProcess(cmd, 1, "", '{"error":{"code":"agent_not_found"}}')
-            agent = {"name": arg, "agent_status": self.agent_status}
+            agent = {"name": arg, "agent_status": self.agent_status, "terminal_id": self.terminal}
             if self.completion_seq is not None:
                 agent["completion_seq"] = self.completion_seq
             return self._ok({"result": {"agent": agent}})
+        if op == ["agent", "wait"]:
+            self.waits.append(cmd)
+            until = [cmd[i + 1] for i, a in enumerate(cmd) if a == "--until"]
+            if arg in self.agents and self.agent_status in until:
+                return self._ok({"result": {"agent": {"name": arg, "agent_status": self.agent_status,
+                                                      "terminal_id": self.terminal,
+                                                      **({"completion_seq": self.completion_seq}
+                                                         if self.completion_seq is not None else {})}}})
+            return subprocess.CompletedProcess(cmd, 1, "", '{"error":{"code":"timeout"}}')
+        if op == ["pane", "wait-output"]:
+            self.waits.append(cmd)
+            proc = self.procs.get(arg)
+            try:  # like herdr: returns once the CLI printed its end marker, or at the timeout
+                proc.wait(timeout=int(cmd[cmd.index("--timeout") + 1]) / 1000)
+                return self._ok({"result": {"matched_line": "bench-router-exited"}})
+            except (AttributeError, subprocess.TimeoutExpired):
+                return subprocess.CompletedProcess(cmd, 1, "", '{"error":{"code":"timeout"}}')
         if op == ["agent", "read"]:
             return subprocess.CompletedProcess(cmd, 0, self.screen, "")
         if op == ["pane", "get"]:
             if arg not in self.procs:
                 return subprocess.CompletedProcess(cmd, 1, "", '{"error":{"code":"pane_not_found"}}')
-            return self._ok({"result": {"pane": {"pane_id": arg}}})
+            return self._ok({"result": {"pane": {"pane_id": arg, "terminal_id": self.terminal}}})
         if op == ["workspace", "close"]:
             if self.close_fail:
                 self.close_fail -= 1
@@ -278,6 +308,8 @@ class FakeTui(FakeProjects):
             self.agents = {n: c for n, c in self.agents.items() if f"{arg}:" not in " ".join(c)}
             for pane in [p for p in self.procs if p.startswith(arg + ":")]:
                 proc = self.procs.pop(pane)
+                if proc is None:
+                    continue
                 try:
                     os.killpg(proc.pid, 1)  # SIGHUP, as a closed terminal does
                 except ProcessLookupError:
@@ -742,6 +774,9 @@ class P2(unittest.TestCase):
             self.assertEqual((out["status"], rc["exit_code"], out["backend"]), (status, code, hd.TUI_BACKEND), out["last_observation"])
             self.assertEqual((fake.ws_closed, rc["release"]["workspace_id"]), ([rc["workspace_id"]], rc["workspace_id"]))
             self.assertEqual(fake.runs[0][fake.runs[0].index("--cwd") + 1], rc["worktree"])  # the run's own worktree
+            wait, = [w for w in fake.waits if w[1:3] == ["pane", "wait-output"]][:1]  # herdr waited, no 1 s polling
+            self.assertEqual(wait[wait.index("--regex") + 1], f"^bench-router-exited-{rc['run_id']}$")
+            self.assertNotRegex(fake.typed[0], f"bench-router-exited-{rc['run_id']}")  # the typed line never matches
         self.assertIn("boom", (Path(rc["run_dir"]) / "output.log").read_text("utf-8"))  # output survives the close
         fake = FakeTui()
         with patch.object(hd, "headless_argv", return_value=["sleep", "30"]):
@@ -750,7 +785,7 @@ class P2(unittest.TestCase):
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "timed_out")  # pane still there
         self.assertIn("</dev/null 2>&1 | tee", fake.typed[0])  # stdin as in local, output kept
         self.assertNotIn("&& mv", fake.typed[0])  # exit_code is published only after tee has ended:
-        self.assertRegex(fake.typed[0], r"\| tee \S+output\.log; mv \S+exit_code\.tmp \S+exit_code$")
+        self.assertRegex(fake.typed[0], r"\| tee \S+output\.log; mv \S+exit_code\.tmp \S+exit_code; printf ")
         home, fake.socket = fake.socket, "/home/u/.config/herdr/sessions/other/herdr.sock"  # another herdr session
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "delivery_uncertain")
         self.assertEqual(hd.stop_run(self.cwd, out["run_id"], runner=fake)["status"], "delivery_uncertain")
@@ -783,6 +818,21 @@ class P2(unittest.TestCase):
         for proc in fake.procs.values():
             os.killpg(proc.pid, 9)
             proc.wait()
+        fake = FakeTui()  # herdr restarts while the CLI runs: same pane id, new shell, nothing running
+        with patch.object(hd, "headless_argv", return_value=["sleep", "30"]):
+            out = self.run_(fake, self.task(task_id="restart", execution="headless"), backend=hd.TUI_BACKEND, wait_ms=0)
+        rc = self.receipt(out)
+        self.assertEqual(rc["herdr_terminal"], "term_1")
+        fake.restart()
+        res = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((res["status"], fake.ws_closed), ("execution_failed", [rc["workspace_id"]]))  # not "running" forever
+        self.assertIn("replaced", res["last_observation"]["note"])
+        fake = FakeTui()
+        fake.version = "0.9.4"  # older servers may omit completion_seq: refused before anything starts
+        with patch.object(hd, "headless_argv", return_value=["true"]):
+            out = self.run_(fake, self.task(task_id="old", execution="headless"), backend=hd.TUI_BACKEND)
+        self.assertEqual((out["status"], fake.runs), ("execution_failed", []))
+        self.assertIn("herdr update", out["last_observation"]["note"])
         fake = FakeTui(run_error="herdr: server not running")
         with patch.object(hd, "headless_argv", return_value=["true"]):
             out = self.run_(fake, self.task(task_id="lost", execution="headless"), backend=hd.TUI_BACKEND)
@@ -838,8 +888,11 @@ class P2(unittest.TestCase):
         res = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
         self.assertEqual((res["status"], fake.ws_closed), ("timed_out", []))  # the told turn runs on, not cut off
         fake.finish()
-        res = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        res = hd.collect_run(self.cwd, out["run_id"], 60000, runner=fake)
         self.assertEqual((res["status"], fake.ws_closed), ("completed", [rc["workspace_id"]]))
+        wait = fake.waits[-1]  # the waiting collect asked herdr to block, instead of polling agent get each second
+        self.assertEqual((wait[1:3], wait[wait.index("--until") + 1]), (["agent", "wait"], "idle"))
+        self.assertIn("--timeout", wait)
         with self.assertRaisesRegex(r.InputError, "settled"):
             hd.tell_run(self.cwd, out["run_id"], "late", runner=fake)
         # the agent cannot start (folder trust question): nothing sent, workspace closed, round stays free
@@ -849,6 +902,12 @@ class P2(unittest.TestCase):
         self.assertEqual((out["status"], fake.prompt_calls, len(fake.ws_closed)), ("execution_failed", 0, 1))
         self.assertIn("nothing sent", out["last_observation"]["note"])
         self.assertIn("trust", out["last_observation"]["note"])
+        # herdr restarts mid-turn and resumes the conversation in a new terminal: failed, not "working" forever
+        fake = FakeTui()
+        out = self.run_(fake, self.task(task_id="restart2"), backend=hd.TUI_BACKEND, wait_ms=0)
+        fake.restart()
+        res = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((res["status"], len(fake.ws_closed)), ("execution_failed", 1))
         # the agent vanished (workspace closed by a human)
         fake = FakeTui()
         out = self.run_(fake, self.task(task_id="gone2"), backend=hd.TUI_BACKEND, wait_ms=0)
