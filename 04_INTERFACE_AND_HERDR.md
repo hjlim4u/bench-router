@@ -67,7 +67,7 @@ The TOML configuration requires `schema_version="1.0"` and `[[profile]]` entries
 
 `model`, `harness`, and `effort` are preserved separately from evaluation matching. `context_tokens=0` represents unknown capacity and cannot satisfy positive context demands. `reasoning_effort=unknown` prevents exact matching and marks guidelines as missing. Changing `config_revision` updates the configuration fingerprint, while CLI version currently defaults to `unknown`.
 
-[profiles.example.toml](examples/profiles.example.toml) contains disabled placeholders. `profiles discover` inspects executable CLIs to collect model and effort details into active profiles, but cannot guarantee successful live invocations. Live probes check PATH, agy models, and optional CodeBurn status; actual model runtime execution success is verified separately.
+[profiles.example.toml](examples/profiles.example.toml) contains disabled placeholders. `profiles discover` inspects executable CLIs to collect model and effort details into active profiles, but cannot guarantee successful live invocations. Live probes check PATH, agy models, and fresh CodexBar model quotas and required credits; actual model runtime execution success is verified separately.
 
 ## Output and Selection Records
 

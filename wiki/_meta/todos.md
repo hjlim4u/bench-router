@@ -3,10 +3,9 @@ title: Todo Index
 category: _meta
 tags: [meta/todos]
 sources: [conversation]
-created: 2026-10-22
-updated: 2026-10-22
+created: 2026-11-08
+updated: 2026-11-08
 generated_by: obsidian-wiki memory todo
-summary: Open threads carried between sessions on the router design (evaluations, pattern selection, benchmark uncertainty, orchestration boundary).
 ---
 
 # Todo Index
@@ -21,3 +20,4 @@ safe to edit by hand — the table round-trips. An open item untouched for
 | t2 | open | Define representative task families and matched single-agent versus multi-agent workflow evaluations before enabling automatic pattern selection. | projects/bench-router/synthesis/multi-agent-pattern-selection.md | 2026-10-22 | 2026-10-22 |
 | t3 | open | Record benchmark uncertainty (stderr/CI) so the near-tie threshold that triggers collaboration reflects measurement noise. | projects/bench-router/synthesis/multi-agent-pattern-selection.md | 2026-10-22 | 2026-10-22 |
 | t4 | open | Decide whether to accept the router/orchestration boundary; if so, allow repeated profiles in group 2.0 and document the candidate-pool and uncertainty-code contract | projects/bench-router/synthesis/router-orchestrator-boundary.md | 2026-10-22 | 2026-10-22 |
+| t5 | open | Wire vendor-CLI quota probes (agy /usage groups, Claude weekly_scoped + extra_usage for Fable, Codex rateLimitsByLimitId) into herdr.probe_profiles? | synthesis/research-per-model-quota-codeburn-replacement.md | 2026-11-08 | 2026-11-08 |

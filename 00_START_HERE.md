@@ -10,7 +10,7 @@ Run from the repository root. No extra installation is needed for the offline CL
 
 ```bash
 python3 -m bench_router.cli --help
-python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn
+python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codexbar
 python3 -m bench_router.cli wiki compile --check
 ```
 

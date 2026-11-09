@@ -890,6 +890,7 @@ def assess(t, cfg, mapping, snap, snap_warnings, now, availability=None, context
             "context": context, "availability_verified": availability is not None,
             "snapshot_id": snap["snapshot_id"] if snap else None, "config_hash": config_hash(cfg, mapping),
             "task_hash": semantic_task_hash(t),
+            **({"preflight": availability.details} if getattr(availability, "details", None) else {}),
             "task_metrics": metric_facts(context["task_metrics"], now) if context is not None else {}}
 
 
@@ -934,6 +935,7 @@ def _result_v1(asmt, cands, status, selected, mode, warnings):
             "snapshot_id": asmt["snapshot_id"], "policy_version": POLICY_VERSION,
             "config_hash": asmt["config_hash"], "task_hash": asmt["task_hash"],
             "warnings": warnings, "sources": asmt["sources"],
+            **({"preflight": asmt["preflight"]} if "preflight" in asmt else {}),
             "assessment_digest": canonical_hash(_inputs(asmt)),
             **({"decision_context": context, "context_hash": canonical_hash(context), "complexity": _complexity_v1(context),
                 "max_estimated_cost_usd": context.get("max_estimated_cost_usd")} if context is not None else {})}
@@ -978,7 +980,8 @@ def evaluate(t, cfg, mapping, snap, snap_warnings, now, availability=None, conte
             "assessment_digest": canonical_hash(_inputs(asmt)), "inputs": _inputs(asmt),
             "task_facts": asmt["task_metrics"], "max_estimated_cost_usd": (context or {}).get("max_estimated_cost_usd"),
             "candidates": cands, "availability_verified": asmt["availability_verified"],
-            "classification": asmt["classification"], "sources": asmt["sources"], "warnings": asmt["warnings"]}
+            "classification": asmt["classification"], "sources": asmt["sources"], "warnings": asmt["warnings"],
+            **({"preflight": asmt["preflight"]} if "preflight" in asmt else {})}
 
 
 def pin_selection(res, cfg, profile_id, mode="orchestrator_pinned"):

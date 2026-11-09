@@ -1,5 +1,5 @@
 """P3 병렬 위임 V30–V34: worktree 격리, fanout, shared scratchpad, 재실행 멱등.
-herdr-projects는 member마다 board task를 만드는 test_p2.FakeProjects. 실행: python3 -m unittest -v test_p3"""
+Shepherdr는 member마다 board task를 만드는 test_p2.FakeProjects. 실행: python3 -m unittest -v test_p3"""
 import json
 import os
 import re
@@ -60,7 +60,7 @@ class P3(unittest.TestCase):
 
     def run_(self, g, fake, **kw):
         fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
-        return pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which, **kw)
+        return pl.run_group(g, self.cfg, MAPPING, None, [], session="default", runner=fake, which=which, **kw)
 
     def test_v100_legacy_worktree_recovery_checks_identity(self):
         existing = pl.worktree(self.cwd, "old", "member")
@@ -107,11 +107,11 @@ class P3(unittest.TestCase):
         g = self.group(schema_version="2.0", tasks=[{"task": g["raw_tasks"][0], "selections": selections}])
         self.assertEqual(pl.run_group(g, self.cfg, MAPPING, None, [], dry_run=True,
                                      decision_options=opts)["status"], "selected")
-        out = pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which,
+        out = pl.run_group(g, self.cfg, MAPPING, None, [], session="default", runner=fake, which=which,
                            decision_options=opts)
         self.assertEqual((out["status"], [m["profile"] for m in out["members"]]), ("completed", ["a", "b"]), out)
         with patch.object(decision, "load_guidelines", side_effect=AssertionError("must reuse frozen choices")):
-            again = pl.run_group(g, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which,
+            again = pl.run_group(g, self.cfg, MAPPING, None, [], session="default", runner=fake, which=which,
                                  decision_options=opts)
         self.assertEqual((again["status"], len(fake.prompts)), ("completed", 2), again)
 
@@ -119,13 +119,13 @@ class P3(unittest.TestCase):
         repeated = self.group(schema_version="2.0", group_id="repeat",
                               tasks=[{"task": g["raw_tasks"][0],
                                       "selections": [out["members"][0]["selection"]] * 2}])
-        out = pl.run_group(repeated, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which,
+        out = pl.run_group(repeated, self.cfg, MAPPING, None, [], session="default", runner=fake, which=which,
                            decision_options=opts)
         self.assertEqual((out["status"], [m["profile"] for m in out["members"]]), ("completed", ["a", "a"]))
         for key in ("label", "worktree"):
             self.assertEqual(len({m[key] for m in out["members"]}), 2)
         self.assertEqual(len({m["rounds"][0]["run_id"] for m in out["members"]}), 2)
-        again = pl.run_group(repeated, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which,
+        again = pl.run_group(repeated, self.cfg, MAPPING, None, [], session="default", runner=fake, which=which,
                              decision_options=opts)
         self.assertEqual((again["status"], len(fake.prompts)), ("completed", 4))
 
@@ -141,7 +141,7 @@ class P3(unittest.TestCase):
                "tasks": [{"task": task, "selections": [selection, selection]}]}
         fake = FakeProjects(on_prompt=write_result(), profiles={p["id"]: p for p in self.cfg["profile"]})
         def run(raw, runner):
-            return pl.run_group(pl.validate_group(raw), self.cfg, MAPPING, None, [], session="brtest",
+            return pl.run_group(pl.validate_group(raw), self.cfg, MAPPING, None, [], session="default",
                                 runner=runner, which=which, decision_options={"host": "codex", "env": {}})
         out = run(raw, fake)
         self.assertEqual((out["status"], [m["profile"] for m in out["members"]]), ("completed", ["b", "b"]))

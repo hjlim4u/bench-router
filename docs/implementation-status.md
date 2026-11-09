@@ -17,15 +17,15 @@ Updated: 2026-10-24 · Corroborated implementation commit: `67d90a9` · This upd
 | Recovery & Control | `collect`, multi-run waiting, explicit `tell`/`stop`, session `resume` for completed runs, and `feedback`. |
 | Parallel Dispatch | Group 1.0/2.0, repeated selections, separate worktrees, frozen plans, receipt recovery, and member delivery state. 8 tasks, 16 items per group, max_parallel 1–4. |
 | Admission | Max 4 shared active slots, path overlap prevention, ownership tracking, and adoption records. Pre-submission confirmed failure settles receipts and returns slots. |
-| Availability & Discovery | PATH checks, `agy models`, optional CodeBurn quota, `profiles discover` (Claude guide/CLI effort flags, Codex cache, CodeBurn, agy models). |
-| Environment | Core CLI uses Python 3.11+ stdlib. Arena refresh (`pyarrow`) and optional CodeBurn use uv/mise. |
+| Availability & Discovery | PATH, `agy models`, fresh CodexBar model/shared quotas and Claude Pro Fable credits. Discovery uses native caches/model lists and Claude guidance. |
+| Environment | Core CLI uses Python 3.11+ stdlib. Arena refresh uses `pyarrow` via uv; live preflight uses the pinned CodexBar binary installed by mise setup. |
 
 Weighted sum scoring, cost discounts, near-tie logic, default/fallback auto-selection, and `--policy legacy` have been removed. Category quality/coverage metrics remain as evaluate 1/2 diagnostics. Historical vendor-guided selection 3.0/4.0 records are not accepted as current inputs and require re-evaluation. Replaying previously submitted receipts takes precedence over new policies.
 
 ## Validation Status (2026-10-24)
 
 ```bash
-python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn
+python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codexbar
 ```
 
 165 test executions: **163 passed, 2 skipped**. Skipped tests cover Windows-specific file sharing checks and real Parquet decoding in environments without pyarrow. Under Python 3.14, a single SQLite connection `ResourceWarning` is emitted with zero test failures. Tests use fake sources/CLIs and real temporary Git worktrees.

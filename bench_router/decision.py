@@ -455,6 +455,7 @@ def validate_selection(raw):
         raise r.InputError("selection.decision: assessment inputs required")
     r.validate_task({"schema_version": r.SCHEMA_VERSION, **d["task"]})
     r._str_list(d["inputs"].get("omitted_profiles", []), "selection omitted_profiles")
+    r._str_list(d["inputs"].get("eligible_profiles", []), "selection eligible_profiles")
     r._str_list(d["uncertainty"], "selection uncertainty")
     kinds = [stage.get("stage") if isinstance(stage, dict) else None for stage in d["stages"]]
     pinned = not kinds and (d["provider"], d["model"]) == USER and _user_pinned(d["task"])
@@ -517,6 +518,17 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
         selection = validate_selection(selection)
         omit_profiles = selection["decision"]["inputs"].get("omitted_profiles", [])
     base = prepare(t, cfg, mapping, snap, snap_warnings, now, availability, context, index, omit_profiles)
+    eligible_profiles = None
+    if selection is not None:
+        eligible_profiles = selection["decision"]["inputs"].get("eligible_profiles")
+    elif assessment_only and availability is not None:
+        eligible_profiles = base["fit_profiles"]
+    if eligible_profiles is not None:
+        # Replay the assessed cohort offline; fresh live checks can still exclude its members.
+        base["decision_inputs"]["eligible_profiles"] = eligible_profiles
+        base["candidates"] = [c for c in base["candidates"] if c["profile"] in eligible_profiles]
+        base["fit_profiles"] = [pid for pid in base["fit_profiles"] if pid in eligible_profiles]
+        base["candidate_facts"] = {pid: facts for pid, facts in base["candidate_facts"].items() if pid in eligible_profiles}
     if not base["candidates"]:
         return {**base, "status": "stale_assessment" if selection else "no_eligible_profile"}
     guide = load_guidelines()
@@ -752,7 +764,8 @@ def evaluate(t, cfg, mapping, snap, snap_warnings, now, availability=None, conte
                            "diagnostics": d["uncertainty"]} if d else None,
         "decision": d if d else result.get("decision"),
         **({"decision_request": result["decision_request"]} if "decision_request" in result else {}),
-        "warnings": result["warnings"], "availability_verified": result["availability_verified"]}
+        "warnings": result["warnings"], "availability_verified": result["availability_verified"],
+        **({"preflight": result["preflight"]} if "preflight" in result else {})}
 
 
 def bind(assessment, profile, policy, reason, accept_provisional=False):

@@ -1,87 +1,157 @@
-# Projects Execution and Collaboration
+# Shepherdr Execution and Collaboration
 
-The current execution pathway is `route` / `parallel` → herdr-projects 1.x+ public CLI (board) → Herdr → Agent CLI.
-The upstream agent decides task decomposition, profile selection, subsequent rounds, and result adoption.
-bench-router maintains benchmark evaluations, hard constraints, execution logs, and result contract validation.
+The live pathway is `route` / `parallel` → Shepherdr 3.x `herdr-task` → herdr-core (`hc`) → Agent CLI.
+The caller chooses decomposition, profiles, review rounds and result adoption. bench-router keeps durable receipts,
+admission limits and result validation. The certified upstream contracts are Shepherdr **3.1.14**, herdr-task
+protocol **1**, and herdr-core **0.1.17+**. Core version or space changes hold an active run as `delivery_uncertain`.
 
 ## Setup
 
-- Live dispatch runs within the same user and Herdr session on Linux or WSL2.
-- The certified contract version is Projects **1.2.1**; newer versions (>= 1.2.1) are accepted (`herdr-projects version`). Older versions are rejected prior to submission; active runs are held as `delivery_uncertain` if the recorded version changes.
-- Plugin installation and user configuration are managed by the operator. The router does not modify installations, credentials, or board configuration.
-- The task `cwd` must be the root of a Git repository containing at least one commit. The board branches an agent-specific worktree from that HEAD (uncommitted changes are omitted, emitting a `dirty_base` warning).
-- The router registers `.bench-router/` in the `cwd`'s `info/exclude` to prevent result files from polluting board commits.
-- Receipts from version 0.2.34 (`backend: "projects"`) are not automatically migrated. Those workers must be inspected and cleaned up manually.
+Use the official [upgrading guide](https://github.com/eliasstravik/shepherdr/blob/main/docs/upgrading.md) and
+[install guide](https://github.com/eliasstravik/shepherdr/blob/main/docs/install.md). The old terminal
+`herdr-projects` plugin and Shepherdr are separate installations. Keep the old installation and data when upgrading;
+the documented 2.x transition does not establish a migration path for 1.2.x data. Do not update the old plugin
+checkout from the new main branch.
+
+For a web-only Linux/WSL2 installation, install herdr-core and have Tailscale signed in, then:
 
 ```bash
-export PATH="$HOME/.local/bin:$PATH"
-herdr --version                                   # herdr 0.9.3+ (https://herdr.dev)
-herdr plugin install eliasstravik/herdr-projects  # Install Projects plugin
-herdr-projects version                            # herdr-projects 1.x+ (...)
-# Optional: export BENCH_ROUTER_PROJECTS=/absolute/path/to/herdr-projects
-python3 -m bench_router.cli route --task task.json
+git clone https://github.com/eliasstravik/shepherdr
+cd shepherdr
+./install.sh --web --dry-run
+./install.sh --web
+shepherdr doctor
+shepherdr web status
 ```
+
+The web service is private to the tailnet and listens locally on 127.0.0.1. On WSL an existing Windows Tailscale
+installation can be reused through a `tailscale` command forwarding to its executable; verify the HTTPS API,
+including authentication, after installation. No desktop app is required for this mode.
+
+Create a space for the repository in the web app. Select it using the global `--herdr-space SPACE` option,
+`BENCH_ROUTER_SPACE`, or a local `<repo>/.bench-router/shepherdr.json` containing `{"space":"SPACE"}`.
+A caller already inside herdr-core can inherit its terminal's space. `--herdr-session` and
+`BENCH_ROUTER_HERDR_SESSION` remain aliases for the space selection; these no longer select a terminal-Herdr
+session. Shepherdr uses the default core session. Recorded runs recover with their recorded space.
+
+```bash
+hc --version                         # hc >= 0.1.17
+herdr-task --version                  # task protocol: 1 (not the Shepherdr release)
+bench-router --herdr-space SPACE --runner herdr route --task task.json --selection selection.json
+```
+
+`BENCH_ROUTER_TASKS` and `BENCH_ROUTER_HC` can override executable paths. `auto` selects `herdr` only when both
+`herdr-task` and `hc` are available. The task cwd must be the root of a committed Git repository. Uncommitted
+changes are excluded from the new worktree, with a `dirty_base` warning. `.bench-router/` is excluded from commits.
 
 ## Profiles and Permissions
 
-Projects 1.2.1 has no named profiles. The router translates profile `kind/args` into task configuration arguments:
-
-| Router args | board config |
+| Router profile | herdr-task setting |
 |---|---|
-| (none) | `--worker.agent KIND` (program default model) |
-| `--model M` / `-m M` | `--worker.agent KIND/M` (name from `herdr-projects models KIND`) |
-| `--effort E`, codex `-c model_reasoning_effort="E"` | `--worker.effort E` |
+| kind | `--agent KIND` |
+| `--model M` / `-m M` | `--model M` |
+| no model | `--model default` (the CLI's default) |
+| `--effort E`, Codex `-c model_reasoning_effort="E"` | `--effort E` |
 
-Other arguments (such as `--add-dir`) cannot be expressed and are rejected prior to submission (`execution_failed`, `not_attempted`).
-Permissions directly follow board `worker.access` (`full` | `ask`). Modify via `herdr-projects set worker.access ask [--repo NAME]`.
-Under `ask`, Claude prompts for approval on every edit, and Codex prompts on writes outside the worktree, transitioning to `blocked`.
+For interactive Antigravity (`agy`) tasks, start uses herdr-task’s public `--argv` override to pass the validated executable/model/effort flags and `--prompt-interactive` directly. Shepherdr saves that argv for queued execution and subsequent resume/handoff; its default model/effort builder only handles Claude/Codex.
 
-Each receipt represents a single agent invocation. The router fixes the following parameters per task:
-`--workspace.from here --workspace.cleanup false --review.when never --review.rounds 0 --merge.by you --merge.pr false --attempts.by 1 --plan.approve none --no-research`.
+Other profile arguments are rejected before submission. Interactive workers inherit the user's CLI permissions
+and Shepherdr settings. The old `worker.access` setting does not exist on this platform. A permission or question
+appears as `blocked`; answer through Shepherdr's cards or normal approval workflow.
+
+Each task gets `--worktree --set review=off --set "merge=ask me first" --set proof=off` and branches from the
+caller's exact HEAD commit, on `br/RUN_ID`. A private `br-base/RUN_ID` branch pins that commit because the upstream base option accepts branch names only; retain it with the worktree until the caller prunes the run. If Shepherdr's folder setting disables worktrees, the router adds the
+task but refuses to start it in the user's checkout.
 
 ## Execution and Collection
 
-The router atomically saves input and result contracts to `input.txt`, records submission intent, and invokes:
-`add br-RUN_ID --desc PROMPT --repo CWD --delegate ... --json`. The returned task ID (`repo/N`) serves as `thread_id` in the output.
-Because the prompt is passed as a single argv argument, the total size including result contracts is capped at 120 KiB.
+The prompt is written to `runs/RUN_ID/input.txt` and passed using `--prompt-file`. For compatibility the router
+retains its 120 KiB prompt limit. Creation and start are separate calls:
 
-Status is determined via `stage` / `state` from `list --all --json`; mismatched titles (`br-RUN_ID`) trigger a hold.
+```text
+herdr-task add br-RUN_ID --folder REPO --prompt-file FILE ... --json
+herdr-task start KEY --folder REPO --space SPACE --json
+herdr-task show KEY --folder REPO --json
+```
 
-| board | Router status |
+The task's durable `key` (`repo#12`, distinct from its numeric id and display ref) becomes `thread_id`.
+Submission intent is saved before add; identity is saved before start. A lost response or process crash never
+causes automatic add/start retries. An added task without a confirmed start is held for inspection, not started
+by collect. The result is validated against the task's key, numeric id, title, folder, agent, worktree and branch.
+
+| Shepherdr observation | Router status |
 |---|---|
-| stage `approval`/`done` | Checks result contract in `details` worktree → `completed` / `result_invalid` |
-| state `blocked` (prompts, permissions, rate limits, etc.) | `blocked`, single-line summary from board in `diagnostic_tail` |
-| stage `failed`/`nosummary`/`stopped`/`todo`, state `error` | `execution_failed` |
-| stage `after`/`queued`/`starting` | `timed_out` (not yet started) |
-| other (`working`, `checking`, etc.) | `timed_out` (in progress) |
+| queued / scheduled | `timed_out` |
+| working | `timed_out` |
+| needs a permission, answer or provider action | `blocked` |
+| idle/done worker with result.json after its turn | validate result → `completed` / `result_invalid` |
+| ready / done | validate result → `completed` / `result_invalid` |
+| stopped worker | `execution_failed`; unexpected exits retain admission until inspected |
+| missing or changed task identity | `delivery_uncertain` |
 
-- Result files are written to `.bench-router/runs/RUN_ID/` inside the agent worktree and copied to `<cwd>/.bench-router/runs/RUN_ID/` upon passing validation. The output `worktree`/`branch` identifies the agent's working location. Upon completion, the board commits changes to that branch and waits in `approval`. Merging (`approve`) is decided by a human operator.
-- Resource cleanup: Upon reaching `completed`, the router closes the Herdr pane (agent) inside the task worktree (`herdr pane list` → `pane close`; closing the final pane removes the space). If the agent inside remains `working`/`blocked`, the pane is left open and retried during the next collection. Closed panes and agent sessions are recorded in `release` within receipt and output. Incomplete executions are not closed.
-- Resuming work: `resume --cwd CWD --run-id RUN` invokes board `reopen ID` to reopen the space and restart the agent with the same conversation context (sending nothing). Resumed sessions are not closed by the router. Subsequent instructions are delivered via `tell --cwd CWD --run-id RUN --message "..."`.
-- Lost responses: Identical task/round requests are never re-submitted. If a task ID is lost, verify effects in the board under the `br-RUN_ID` title and resolve explicitly.
-- In-progress / waiting on prompts: Observe active executions via `collect --cwd CWD --run-id RUN --wait-ms N`. Questions and permissions are handled via the standard board approval interface (`herdr-projects details ID`).
-- Follow-up review and modification: Upstream agents specify prior results and review notes in a new task round. Automated retries, tell loops, or recursive delegation are never performed.
-- Non-blocking launch: `--wait-ms N` in `route`/`parallel` reduces wait time only after submission (`add`). Submission itself continues to use the task `timeout_ms` budget. If set to `0`, `timed_out` returns immediately after submission; collection is handled via `collect` or re-running the same group.
-- Headless execution: Tasks with `execution: headless` do not use board agents. They execute one-shot CLIs in Herdr worktree panes and report status to the board as an agentless task. For details, see [Reference](reference.md#headless-execution).
-- Cancellation: `stop --cwd CWD [--run-id RUN]` invokes board `stop ID` (or `herdr workspace close` for headless tasks) and appends to `messages.jsonl`. Stoppage occurs only when explicitly invoked by an upstream agent. When the board reports `stopped` or the headless workspace closes, agent termination is confirmed; the next `collect` records `execution_failed` and releases concurrency admission (no `coordination release` required).
-- Waiting across multiple runs: `collect --run CWD RUN_ID --run … --until any|all --wait-ms N` polls each run, returning when one or all settle or become `blocked`. Result adoption is decided by upstream agents.
-- Runtime guidance: `tell --cwd CWD [--run-id RUN] --message TEXT | --message-file F` delivers a message to the agent for that run via board `tell ID TEXT`. The router never sends messages autonomously; messages are sent strictly on explicit invocation. Pre- and post-send states are recorded in `runs/RUN_ID/messages.jsonl` (`attempted` → `sent`/`uncertain`). If a response is lost, verify status in the board before retransmitting. Settled runs start a new agent, so messages are accepted only after `resume`. Receipts update during `collect`; tasks that have already ended (approval, done, failed, etc.) are rejected before sending. Headless runs (`execution: headless`) reject messages. Dispatch locks are not held during `tell`, allowing messages to be sent while `collect` or `parallel` waits on the same cwd. Omitting `--run-id` targets the sole incomplete run in the cwd.
-- `completed` denotes structural receipt compliance across run ID, nonce, profile fingerprint, result path, file size, and SHA-256 validation. Substantive task success is recorded in `task_outcome`, and result adoption is recorded via `coordination feedback`.
-- When pre-submission failure is confirmed, the receipt settles and admission is returned immediately. Runs that have been submitted or whose delivery remains uncertain retain one of the 4 concurrent execution slots until worker stoppage and partial effects are verified. If necessary, release slots manually via `coordination release --key KEY --confirmed-stopped --note "..."`.
-- Tasks created directly in the board do not count towards router execution limits.
+Shepherdr's native `ready` can open a PR or remove a no-change worktree, including ignored result files. Router
+prompts therefore tell workers to keep the branch/worktree and end their turn without calling ready/done/accept
+or opening a PR. Router `completed` is result delivery. The observer changes the board to done after merge and safe cleanup;
+until then its progress text says it waits for merge. Review, committing and landing work remain caller decisions. This avoids
+changing the old no-automatic-PR and worktree-retention contract.
+
+Results live at `.bench-router/runs/RUN_ID/` in the task worktree, and are copied beside the receipt after
+run id, nonce, fingerprint, file path, size, encoding and SHA-256 checks. `task_outcome` records reported success,
+partial or failure; `completed` alone does not establish substantive success.
+
+On completion, only idle/done core terminals with this task's label are ended (`release`). Working or blocked
+terminals remain. `resume` uses `herdr-task resume` in the recorded space: Shepherdr resumes a known Claude/Codex
+session, otherwise it starts with a handoff (`resumed.session_resumed` reports which). A resumed session is not
+automatically released again. `tell` uses `hc send` to the sole live worker and logs attempted/sent/uncertain
+message delivery. It never starts a new worker. These commands act only on explicit caller invocation.
+
+`stop` ends the observed live core terminal(s). The next collect confirms the stopped worker and releases
+admission. For a queued/scheduled task, stop uses `herdr-task reopen` to return it to todo and verifies that the queue was cancelled before reporting stop_sent. If the scheduler already started it, stop reports uncertainty instead of claiming cancellation. A failure with unverified partial effects retains its slot until
+`coordination release --confirmed-stopped` after inspection.
+
+`collect --run CWD RUN_ID --run ... --until any|all --wait-ms N` observes multiple runs. `--wait-ms 0` returns
+immediately after submission; the task timeout still bounds add/start. Neither collect nor re-dispatch sends a
+new prompt. Receipts from `projects` / `projects-1.2` are deliberately not converted to `shepherdr-3`: inspect and
+control those workers using the retained old installation. Legacy control commands never target the new core.
+
+## Headless Execution
+
+Headless Herdr runs now create a normal Shepherdr card and worktree, then start a one-shot CLI through the
+public task `start --argv` option. The CLI reads input.txt and records its exit code beside the durable receipt.
+Its terminal and the card are linked by Shepherdr's own task labels. Headless tell/resume remain unsupported.
+
+Every new Herdr run starts a separate core observer (`monitor` in the output). It collects and validates results
+automatically, updates the card's progress text, and waits for merge. Callers can still collect whenever they
+need the returned result; they need not poll to keep the board updated. An observer launch error is reported
+in `monitor.error`. The observer retries transient Git/core errors every five seconds.
+
+After validation, the observer checks that the worktree is clean and its committed changes are integrated into
+repository HEAD (ancestry or an equivalent squash-merge tree). It then sends `herdr-task done`, removes the
+worktree, compare-and-deletes its task and private base branches, and ends/removes remaining task terminals.
+The observer removes itself on exit. Results and receipts remain outside the removed worktree. Cleanup details
+are recorded in `cleanup`. No-change clean tasks can finish immediately. Dirty or unmerged work is retained;
+merge itself stays the caller's decision. A live working/blocked terminal also defers cleanup.
 
 ## Parallel Dispatch
 
-`parallel` stores each member's receipt at `<cwd>/.bench-router/groups/GROUP/members/LABEL`; this is `receipt_cwd` in the output and the value used with `collect`, `tell`, `stop`, `resume`, and `feedback`.
-The board receives the original repository as `--repo` and creates the member's only worktree. Until the runner creates it, `worktree` and `branch` are `null`; the confirmed path and branch then replace them in the member output and receipt.
-The `shared` scratchpad resides outside the agent worktree, requiring approval on each write under `worker.access ask`.
-Comparing, merging, and pruning worktrees is managed by the upstream agent. Execution resources are never provisioned before all selections complete. Group 2.0 allows repeated selections with identical profiles, assigning distinct labels and receipts. Bounded by 8 tasks per group, 16 items per group total, and `max_parallel` 1–4. Preserves Policy 6, bulk rejection of stale assessments, replay of frozen plans, and partial failure retention, passing `delivery_state` and `reassignment` to member rounds. See [Routing Contracts](routing-contracts.md) for version specifications.
+Receipts live at `<cwd>/.bench-router/groups/GROUP/members/LABEL` (`receipt_cwd`). Interactive members each get a
+Shepherdr task and worktree; headless members each get a router worktree and core terminal. The shared scratchpad
+is outside these worktrees, so writes may require approval under the user's CLI settings. The caller compares,
+merges and prunes worktrees. The shared four-active admission limit and overlapping-workspace guard still apply.
 
 ## Verification
 
 ```bash
-python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn
+python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codexbar test_evidence_policy
 ```
 
-The Projects CLI is substituted with a test double conforming to 1.2.1 source code (`brief`/`details` in `src/cli/tasks.rs`, stage→state mapping in `crates/flow/src/state.rs`), creating real `git worktree` instances for each task.
-Actual model behavior, PTY terminal handling, and board ticker recovery are not certified by this test suite.
+Tests use synthetic herdr-task/hc responses and real temporary Git worktrees. They cover split add/start recovery,
+identity drift, permissions, result validation, worktrees-off refusal, legacy receipt isolation and local/external
+runner compatibility. Historical Herdr TUI evidence remains in docs/evidence and does not certify this platform.
+
+Manual web-only smoke on 2026-11-07 used upstream commit `4552191829b5e67dee60a1c780f41224575ef685`,
+Shepherdr 3.1.14 and hc 0.1.18 on WSL2. `shepherdr doctor`, the authenticated Tailscale HTTPS API, and
+interactive start/collect/release, resume with a handoff, explicit send, and headless completion passed.
+The smoke used a synthetic Python worker and real herdr-task/hc commands; it made no paid model request and
+does not certify a provider's login, model access or exact-session recovery. The offline suite ran 218 tests
+with 2 skipped. Existing TUI installations and the two pre-existing untracked wiki notes were preserved.

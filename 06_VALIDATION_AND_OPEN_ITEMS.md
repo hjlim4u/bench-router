@@ -5,7 +5,7 @@ Updated: 2026-10-24. Current test suites extend the original V01–V40 test scen
 ## Offline Verification
 
 ```bash
-python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn
+python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codexbar
 python3 -m bench_router.cli wiki compile --check
 ```
 
@@ -16,7 +16,7 @@ python3 -m bench_router.cli wiki compile --check
 | `test_p2.py` | Projects and headless execution, argv, receipts, result paths/nonces/hashes, blocked, timeout, uncertain delivery, recovery, explicit controls, selection revalidation |
 | `test_p3.py` | Worktree isolation, shared scratchpads, group selection, frozen plans, recovery, repeated selection, delivery states, limits |
 | `test_coordination.py` | Shared admission (limit 4), path overlaps, ownership, quiescence checks, result adoption, Projects integration |
-| `test_codeburn.py` | CodeBurn availability, quotas, usage tracking, profile discovery fixtures |
+| `test_codexbar.py` | CodexBar availability, quotas, usage tracking, profile discovery fixtures |
 
 External CLIs are mocked/faked, while Git worktrees are created for real in temporary directories. Offline tests do not certify the behavior of live models, PTYs, board tickers, or account quotas. Execution outcomes and dates are recorded in [Implementation Status](docs/implementation-status.md).
 
@@ -57,7 +57,7 @@ Efficacy evaluation must compare fixed profiles, low-cost priority, and current 
 | Projects Interactive / Headless Live | Verified with fake CLIs and real temporary worktrees; live models, PTYs, and recovery smoke tests must be validated in operational environments |
 | Task-level Quality & Cost under Policy 6 | Provides official guidance compliance and comparative evidence without guaranteeing success or lowest cost; held-out task cohort evaluation needed |
 | Workflow Effort Improvements | Retains `workflow_gain_unverified`; upstream reviews and accepts based on real task comparative evaluations |
-| Accounts, Models, Quotas | Discovery and CodeBurn provide preliminary data; do not guarantee execution viability or entire team remaining budget |
+| Accounts, Models, Quotas | Discovery and CodexBar provide preliminary data; do not guarantee execution viability or entire team remaining budget |
 | Exact Benchmark Data | Recognizes only rows matching model, harness, effort, and evaluation conditions; never fills gaps with proxies |
 | OS Timers & Retention Policies | No automated timer installation; 30-day snapshot and user log retention parameters adjusted by operator |
 | Overall Team Budget & Pattern Selection | Upstream responsibility; router contains no reservation, billing, DAG, or voting engines |

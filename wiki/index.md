@@ -187,6 +187,7 @@ Benchmark knowledge for bench-router. Schema: [[AGENTS]]. Compiled into `index.j
 - [[entities/benchmarks/hf/wbench]] — Multi-turn evaluation of interactive video world models ( #benchmark #hf-official #out-of-scope)
 - [[entities/benchmarks/hf/wildclawbench]] — 60 original end-to-end tasks in a live OpenClaw personal-assistant environment ( #benchmark #hf-official #agentic)
 - [[entities/benchmarks/hf/yc-bench]] — The model runs an AI startup as CEO for one simulated year through CLI tools (hundreds of turns) ( #benchmark #hf-official #agentic)
+- [[entities/benchmarks/or/tau2-bench-airline]] — Multi-turn airline service agent making tool calls under strict policy constraints, run by OpenRouter against production provider endpoints. ( #benchmark #agentic)
 - [[entities/benchmarks/hf/chi-bench]] — End-to-end U.S. healthcare workflows: prior authorization, utilization management, population care management ( #benchmark #hf-official #agentic)
 
 ## References

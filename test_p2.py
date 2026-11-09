@@ -1,4 +1,4 @@
-"""P2 검증 V19–V29 (06 문서). herdr는 0.9.3 실측 응답 형식을 따르는 fake.
+"""P2 검증 V19–V29 (06 문서). Shepherdr 3.1.14 / hc CLI 형식을 따르는 fake.
 실행: python3 -m unittest -v test_p2"""
 import hashlib
 import json
@@ -38,14 +38,14 @@ def cleanup_temp(tmp):
 
 
 def git_repo(path):
-    """Projects 1.2.1 works on git repositories: a top-level repo with one commit."""
+    """Shepherdr worktrees need git repositories: a top-level repo with one commit."""
     git = ["git", "-C", str(path), "-c", "user.name=t", "-c", "user.email=t@t"]
     subprocess.run(git[:3] + ["init", "-q"], check=True)
     subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "init"], check=True)
 
 
 def projects_environment(case, base):
-    case.enterContext(patch.dict(os.environ, {"BENCH_ROUTER_HERDR_SESSION": "brtest",
+    case.enterContext(patch.dict(os.environ, {"BENCH_ROUTER_HERDR_SESSION": "default",
                                             "BENCH_ROUTER_COORDINATION_DIR": str(Path(base) / "admission")}))
     case.enterContext(patch.object(hd, "probe_profiles", side_effect=lambda profiles, which=hd.shutil.which:
                                   {p["id"]: hd.probe(p, which) for p in profiles}))
@@ -57,18 +57,19 @@ def projects_environment(case, base):
 
 
 class FakeProjects:
-    """Projects 1.2.1 CLI JSON shapes (src/cli/tasks.rs brief/details); every task gets a real git worktree."""
+    """Shepherdr 3.1.14 herdr-task and hc JSON contracts, with real isolated git worktrees."""
 
     def __init__(self, prompt_error=None, after_status="idle", on_prompt=None, profiles=None):
         self.calls, self.prompts, self.kwargs, self.adds, self.ws_cwds = [], [], [], [], []
         self.prompt_error, self.on_prompt, self.status = prompt_error, on_prompt, after_status
         self.profiles = profiles or {}
-        self.version = "herdr-projects 1.2.1 (/fake/bin/herdr-projects)"
+        self.version, self.core_version = "1", "hc 0.1.18"
         self.tasks, self.gone, self.pending, self.updates, self.detail_updates = {}, False, False, {}, {}
         self.panes, self.closed, self.pane_error = {}, [], None
         self.tells, self.tell_error = [], None
-        self.runs, self.reports, self.on_run = [], [], None  # headless: herdr pane run, board report
+        self.runs, self.reports, self.on_run = [], [], None
         self.stopped = set()
+        self.add_error, self.start_error, self.mode = None, None, "worktree"
         self.lock = __import__("threading").Lock()
 
     def _ok(self, obj):
@@ -78,111 +79,130 @@ class FakeProjects:
         return next(t["worktree"] for t in self.tasks.values() if t["prompt"] == prompt)
 
     def _row(self, t):
-        stage, state, msg = {"idle": ("approval", "blocked", "Approve to merge?"), "working": ("working", "working", ""),
-                             "blocked": ("asks", "blocked", "approval or question: command not found")}[self.status]
+        state, status, needs, why = {"idle": ("ready", "ready", None, None),
+            "working": ("running", "working", None, None),
+            "blocked": ("running", "needs", "asks", "approval or question: command not found")}[self.status]
+        if not t.get("started"):
+            state, status, needs = "todo", "todo", None
         if self.pending:
-            stage, state, msg = "starting", "working", "Starting"
-        if self.gone:
-            stage, state, msg = "failed", "error", "The agent has exited"
-        if t["id"] in self.stopped:
-            stage, state, msg = "stopped", "idle", "Stopped"
-        return {"id": t["id"], "state": state, "app": t["agent"], "title": t["title"], "msg": msg, "stage": stage,
-                **self.updates}
+            state, status, needs = "queued", "queued", None
+        if self.gone or t["key"] in self.stopped:
+            state, status, needs, why = "running", "needs", "stopped", "Agent stopped"
+        live = [{"address": p["address"], "status": "idle" if self.status == "idle" else self.status}
+                for p in self.panes.values() if p.get("task") == t["key"]]
+        return {**t, "state": state, "status": status, "needs": needs, "why": why, "live": live,
+                **self.updates, **self.detail_updates}
 
     def _pane(self, t):
-        self.panes[t["id"]] = {"pane_id": f"w{t['id'].split('/')[1]}:p1", "cwd": t["worktree"], "agent": t["agent"],
-                               "agent_session": {"value": f"sess-{t['id']}"}}
+        self.panes[t["key"]] = {"address": f"t{t['id']}", "cwd": t["worktree"], "agent": t["agent"],
+                                "task": t["key"], "state": "live"}
 
-    def _herdr(self, argv):
-        """herdr 0.9.x `pane list` / `pane close` shapes; each task's agent pane sits in its worktree."""
-        self.calls.append(["herdr", *argv[:2]])
+    def _core(self, argv):
+        self.calls.append(["hc", *argv[:2]])
+        if argv == ["--version"]:
+            return subprocess.CompletedProcess([], 0, self.core_version + "\n", "")
         if self.pane_error:
             return subprocess.CompletedProcess([], 1, "", self.pane_error)
-        if argv == ["pane", "list"]:
-            status = {"idle": "idle", "working": "working", "blocked": "blocked"}[self.status]
-            return self._ok({"result": {"panes": [{**p, "agent_status": status} for p in self.panes.values()]}})
-        if argv[:2] == ["worktree", "create"]:
-            path, branch, repo = (argv[argv.index(f) + 1] for f in ("--path", "--branch", "--cwd"))
-            subprocess.run(["git", "-C", repo, "worktree", "add", "-q", "-b", branch, path, "HEAD"],
-                           check=True, capture_output=True)
-            pane = {"pane_id": f"h{len(self.panes) + 1}:p1", "workspace_id": f"h{len(self.panes) + 1}", "cwd": path,
-                    "agent": None, "agent_session": None}
-            self.panes[path] = pane
-            return self._ok({"result": {"root_pane": pane, "workspace": {"workspace_id": pane["pane_id"][:-3]},
-                                        "worktree": {"path": path, "branch": branch}}})
-        if argv[:2] == ["pane", "run"]:
-            self.runs.append(argv[3])
+        if argv[0] == "ls":
+            label = argv[argv.index("--label") + 1]
+            value = label.split("=", 1)[1]
+            panes = [p for p in self.panes.values() if p.get("task") == value or p.get("run") == value]
+            return self._ok({"terminals": [{**p, "status": {"state": self.status}} for p in panes]})
+        if argv[0] == "run" and "bench_router.lifecycle" in argv:
+            return self._ok({"address": "observer"})
+        if argv[0] == "run":
+            script = argv[-1]
+            self.runs.append(shlex.join(["sh", "-c", script]))
+            wt = argv[argv.index("--cwd") + 1]
+            address = f"h{len(self.runs)}"
+            self.panes[address] = {"address": address, "cwd": wt, "agent": None, "state": "live",
+                                   "run": argv[argv.index("--label") + 1].split("=", 1)[1]}
             if self.on_run:
-                self.on_run(self, argv[3])
-            return self._ok({"result": {"type": "ok"}})
-        if argv[:2] == ["pane", "get"]:
-            if any(p["pane_id"] == argv[2] for p in self.panes.values()):
-                return self._ok({"result": {"pane": {"pane_id": argv[2]}}})
-            return subprocess.CompletedProcess([], 1, json.dumps({"error": {"code": "pane_not_found"}}), "")
-        if argv[:2] == ["workspace", "close"]:
-            self.panes = {k: p for k, p in self.panes.items() if p.get("workspace_id") != argv[2]}
-            return self._ok({"result": {"type": "ok"}})
-        if argv[:2] == ["pane", "close"]:
-            self.closed.append(argv[2])
-            self.panes = {k: p for k, p in self.panes.items() if p["pane_id"] != argv[2]}
-            return self._ok({"result": {"type": "ok"}})
+                self.on_run(self, self.runs[-1])
+            return self._ok({"address": address})
+        if argv[0] == "get":
+            return self._ok(next((p for p in self.panes.values() if p["address"] == argv[1]),
+                                 {"address": argv[1], "state": "exited"}))
+        if argv[0] in ("keep", "rm"):
+            return self._ok({"ok": True})
+        if argv[0] == "kill":
+            self.closed.append(argv[1])
+            for key, p in list(self.panes.items()):
+                if p["address"] == argv[1]:
+                    if p.get("task"):
+                        self.stopped.add(p["task"])
+                    del self.panes[key]
+            return self._ok({"ok": True})
+        if argv[0] == "send":
+            if self.tell_error:
+                raise subprocess.TimeoutExpired(argv, 15)
+            self.tells.append((argv[1], argv[2]))
+            return self._ok({"ok": True})
         raise AssertionError(argv)
 
     def __call__(self, cmd, **kw):
         assert kw["shell"] is False
         if cmd[0] == hd.HERDR_BIN:
-            return self._herdr(cmd[1:])
+            return self._core(cmd[1:])
         assert cmd[0] == hd.PROJECTS_BIN
         argv = cmd[1:]
         self.kwargs.append((argv[0], kw))
         self.calls.append(argv[:2])
-        if argv == ["version"]:
+        if argv == ["--version"]:
             return subprocess.CompletedProcess(cmd, 0, self.version + "\n", "")
-        if argv[0] == "add" and "--delegate" not in argv:  # headless: an agent-less board task, nothing starts
-            with self.lock:
-                tid = f"repo/{len(self.tasks) + 1}"
-                self.tasks[tid] = {"id": tid, "title": argv[1], "prompt": argv[argv.index("--desc") + 1],
-                                   "worktree": None, "branch": None, "agent": None}
-                self.adds.append(argv)
-            return self._ok({"id": tid, "state": "idle", "title": argv[1], "stage": "todo"})
-        if argv[0] == "stop":
-            self.stopped.add(argv[1])
-            return subprocess.CompletedProcess(cmd, 0, "stopped\n", "")
-        if argv[0] == "report":
-            self.reports.append(argv[argv.index("--state") + 1])
-            return subprocess.CompletedProcess(cmd, 0, "ok\n", "")
         if argv[0] == "add":
-            title, prompt, repo = argv[1], argv[argv.index("--desc") + 1], argv[argv.index("--repo") + 1]
-            wt = Path(repo) / ".bench-router" / "wt" / title
-            subprocess.run(["git", "-C", repo, "worktree", "add", "-q", "-b", f"work/{title}", str(wt), "HEAD"],
+            with self.lock:
+                n = len(self.tasks) + 1
+                key = f"repo#{n}"
+                self.tasks[key] = {"id": n, "key": key, "ref": f"REPO-{n}", "mode": self.mode,
+                    "title": argv[1], "prompt": Path(argv[argv.index("--prompt-file") + 1]).read_text(),
+                    "folder": argv[argv.index("--folder") + 1], "worktree": None,
+                    "branch": argv[argv.index("--branch") + 1], "agent": argv[argv.index("--agent") + 1]}
+                self.adds.append(argv)
+            if self.add_error:
+                raise subprocess.TimeoutExpired(cmd, 15)
+            return self._ok(self._row(self.tasks[key]))
+        if argv[0] == "start":
+            t = self.tasks[argv[1]]
+            t["argv"] = json.loads(argv[argv.index("--argv") + 1]) if "--argv" in argv else [t["agent"]]
+            if self.pending and getattr(self, "queue_only", False):
+                return self._ok(self._row(t))
+            repo, branch = t["folder"], t["branch"]
+            wt = Path(repo) / ".bench-router" / "wt" / t["title"]
+            base = next(a[a.index("--base") + 1] for a in self.adds if a[1] == t["title"])
+            subprocess.run(["git", "-C", repo, "worktree", "add", "-q", "-b", branch, str(wt), base],
                            check=True, capture_output=True)
             with self.lock:
-                tid = f"repo/{len(self.tasks) + 1}"
-                self.tasks[tid] = {"id": tid, "title": title, "prompt": prompt, "worktree": str(wt),
-                                   "branch": f"work/{title}", "agent": argv[argv.index("--worker.agent") + 1].split("/")[0]}
-                self._pane(self.tasks[tid])
-                self.prompts.append(prompt)
-                self.adds.append(argv)
+                t.update(worktree=str(wt), started=True)
+                self._pane(t)
+                self.prompts.append(t["prompt"])
                 self.ws_cwds.append(repo)
+            if "--argv" in argv and t["argv"][:2] == ["sh", "-c"]:
+                self.runs.append(shlex.join(t["argv"]))
+                if self.on_run:
+                    self.on_run(self, self.runs[-1])
             if self.on_prompt:
-                self.on_prompt(self, prompt)
-            if self.prompt_error:
+                self.on_prompt(self, t["prompt"])
+            if self.prompt_error or self.start_error:
                 raise subprocess.TimeoutExpired(cmd, 15)
-            return self._ok({"id": tid, "state": "working", "title": title, "stage": "starting"})
-        if argv[:1] == ["list"]:
-            return self._ok([self._row(t) for t in self.tasks.values()])
-        if argv[0] == "reopen":
-            self._pane(self.tasks[argv[1]])
-            return self._ok({"pane": self.panes[argv[1]]["pane_id"], "hasAgent": True})
-        if argv[0] == "tell":
-            if self.tell_error:
-                raise subprocess.TimeoutExpired(cmd, 15)
-            self.tells.append((argv[1], argv[2]))
-            return self._ok({"id": argv[1]})
-        if argv[0] == "details":
+            return self._ok({**self._row(t), "terminal": f"t{t['id']}"})
+        if argv[0] == "resume":
             t = self.tasks[argv[1]]
-            return self._ok({"task": {"id": t["id"], "title": t["title"], "stage": self._row(t)["stage"]},
-                             "agent": t["agent"], "worktree": t["worktree"], "branch": t["branch"], **self.detail_updates})
+            t["resumed_argv"] = list(t["argv"])
+            self._pane(t)
+            self.stopped.discard(t["key"])
+            return self._ok({**self._row(t), "terminal": f"t{t['id']}", "resumed": True})
+        if argv[0] == "done":
+            return self._ok({**self._row(self.tasks[argv[1]]), "state": "done"})
+        if argv[0] == "status":
+            return self._ok({"ok": True})
+        if argv[0] == "reopen":
+            t = self.tasks[argv[1]]
+            self.pending = False
+            t["started"] = False
+            return self._ok(self._row(t))
+        if argv[0] == "show":
+            return self._ok(self._row(self.tasks[argv[1]]))
         raise AssertionError(argv)
 
 
@@ -197,6 +217,8 @@ def headless_cli(exit_code=0, result=True):
         script = shlex.split(cmd)[2]
         wt = shlex.split(script.split(" && ")[0])[1]
         rd = Path(re.search(r"cat (\S+)/input\.txt", script).group(1))
+        if wt == ".":
+            wt = fake.worktree_of((rd / "input.txt").read_text("utf-8"))
         if result:
             write_result()(SimpleNamespace(worktree_of=lambda prompt: wt), (rd / "input.txt").read_text("utf-8"))
         (rd / "exit_code").write_text(f"{exit_code}\n", "utf-8")
@@ -242,29 +264,19 @@ class P2(unittest.TestCase):
 
     def run_(self, fake, t=None, w=which, **kw):
         fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
-        return hd.dispatch(t or self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=w,
+        return hd.dispatch(t or self.task(), self.cfg, MAPPING, None, [], session="default", runner=fake, which=w,
                            profile_id="a", selection_mode="orchestrator_pinned", **kw)
 
     def receipt(self, out):
         return json.loads(Path(out["receipt_path"]).read_text("utf-8"))
 
-    def test_v99_discovers_profiles_from_codeburn_models_and_quota(self):
-        rows = [{"provider": "codex", "model": "gpt-6.1-sol"},
-                {"provider": "claude", "model": "claude-opus-5-5"},
-                {"provider": "unknown", "model": "skip"}]
-        quota = {"providers": [{"id": "codex", "available": True, "windows": [{"usedPct": 20}]},
-                               {"id": "claude", "available": False, "windows": []}]}
+    def test_v99_discovery_uses_native_models_without_usage_queries(self):
         def runner(cmd, **kw):
-            if cmd[0] == "agy":
-                return SimpleNamespace(returncode=0, stdout="gemini-4-argon-high\tGemini 4 Argon (High)\n", stderr="")
-            return SimpleNamespace(returncode=0, stdout=json.dumps(rows if cmd[1] == "models" else quota), stderr="")
-        no_cache = Path(self.tmp.name) / "missing.json"
+            self.assertEqual(cmd, ["agy", "models"])
+            return SimpleNamespace(returncode=0, stdout="gemini-4-argon-high\tGemini 4 Argon (High)\n", stderr="")
         profiles = hd.discover_profiles(which=lambda name: None if name == "claude" else "/usr/bin/tool", runner=runner,
-                                        codex_cache=no_cache, claude_models=[])
-        self.assertEqual([p["id"] for p in profiles], ["agy-gemini-4-argon-high", "codex-gpt-6-1-sol-high",
-                                                          "codex-gpt-6-1-sol-low", "codex-gpt-6-1-sol-medium",
-                                                          "codex-gpt-6-1-sol-xhigh"])
-        self.assertEqual(profiles[1]["args"], ["-m", "gpt-6.1-sol", "-c", 'model_reasoning_effort="high"'])
+                                        codex_cache=Path(self.tmp.name) / "missing.json", claude_models=[])
+        self.assertEqual([p["id"] for p in profiles], ["agy-gemini-4-argon-high"])
         self.assertEqual(r.load_profiles(self._write_profiles(profiles))["profile"], profiles)
 
     def test_v108_discovers_unused_models_from_codex_cache_and_claude_guidance(self):
@@ -287,7 +299,7 @@ class P2(unittest.TestCase):
         # the cache's own efforts replace the default list; hidden internal models are not registered
         self.assertEqual(by_id["codex-gpt-6-1-sol-medium"]["config_revision"], "codex-models-cache")
         self.assertEqual(by_id["claude-claude-haiku-5-5-max"]["args"], ["--model", "claude-haiku-5-5", "--effort", "max"])
-        self.assertEqual(by_id["claude-claude-opus-5-5-low"]["config_revision"], "codeburn-discovery")
+        self.assertEqual(by_id["claude-claude-opus-5-5-low"]["config_revision"], "claude-guidance")
         self.assertEqual(hd.codex_models(Path(self.tmp.name) / "missing.json"), {})
 
     def test_v97b_long_model_names_keep_distinct_effort_ids(self):
@@ -316,7 +328,7 @@ class P2(unittest.TestCase):
         selection = decision.bind(assessment, "b", {"id": "team", "version": "1"}, "specialist", True)
         fake = FakeProjects(on_prompt=write_result(), profiles={p["id"]: p for p in self.cfg["profile"]})
         def dispatch():
-            return hd.dispatch(t, self.cfg, MAPPING, None, [], session="brtest", runner=fake, which=which,
+            return hd.dispatch(t, self.cfg, MAPPING, None, [], session="default", runner=fake, which=which,
                                selection=selection, decision_options={"host": "codex", "env": {}})
         out = dispatch()
         self.assertEqual((out["status"], out["selected"]["profile"], out["selection"]["schema_version"]),
@@ -330,17 +342,17 @@ class P2(unittest.TestCase):
         fake = FakeProjects(on_prompt=write_result())
         fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
         opts = {"host": "codex", "env": {}}
-        pending = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake,
+        pending = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], session="default", runner=fake,
                               which=which, decision_options=opts)
         self.assertEqual((pending["status"], fake.calls), ("decision_required", []))
         self.assertFalse((Path(self.cwd) / ".bench-router").exists())
         response = guided_responses(pending, lambda response: r.route(
             self.task(), self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response), "a")
-        first = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake,
+        first = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], session="default", runner=fake,
                             which=which, decision_options={**opts, "response": response})
         self.assertEqual((first["status"], first["selection"]["schema_version"]), ("completed", "5.0"))
         with patch.object(decision, "load_guidelines", side_effect=AssertionError("must recover without new choice")):
-            again = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], session="brtest", runner=fake,
+            again = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], session="default", runner=fake,
                                 which=which, decision_options=opts)
         self.assertEqual((again["reused_receipt"], len(fake.prompts)), (True, 1))
 
@@ -409,26 +421,28 @@ class P2(unittest.TestCase):
     def test_v20_uses_returned_ids_and_one_run_settings(self):
         fake = FakeProjects(on_prompt=write_result())
         out = self.run_(fake)
-        t = fake.tasks["repo/1"]
-        self.assertEqual((out["thread_id"], out["worktree"], out["branch"]), ("repo/1", t["worktree"], t["branch"]))
+        t = fake.tasks["repo#1"]
+        self.assertEqual((out["thread_id"], out["worktree"], out["branch"]), ("repo#1", t["worktree"], t["branch"]))
         add = fake.adds[0]
         self.assertEqual(add[1], "br-" + out["run_id"])
-        self.assertEqual(add[add.index("--worker.agent") + 1:add.index("--worker.agent") + 4],
-                         ["claude/m", "--worker.effort", "high"])
-        self.assertIn("--delegate", add)
-        self.assertEqual(add[add.index("--review.when") + 1], "never")
-        self.assertNotIn("--worker.access", add)  # the board's own access setting applies
+        self.assertEqual(add[add.index("--agent") + 1:add.index("--agent") + 6],
+                         ["claude", "--model", "m", "--effort", "high"])
+        self.assertNotIn("--delegate", add)
+        self.assertIn("review=off", add)
+        self.assertIn("merge=ask me first", add)
+        self.assertNotIn("--worker.access", add)
+        self.assertIn("--prompt-file", add)
         self.assertTrue(Path(out["result_path"]).is_relative_to(self.cwd))  # copied next to the receipt
 
     def test_completed_agent_is_released_then_resumed(self):
         fake = FakeProjects(on_prompt=write_result())
         out = self.run_(fake)
-        self.assertEqual((out["status"], fake.closed), ("completed", ["w1:p1"]))
-        self.assertEqual(out["release"]["panes"], [{"pane_id": "w1:p1", "agent": "claude", "session": "sess-repo/1"}])
+        self.assertEqual((out["status"], fake.closed), ("completed", ["t1"]))
+        self.assertEqual(out["release"]["terminals"], [{"terminal_id": "t1", "agent": "claude"}])
         res = hd.resume_run(self.cwd, out["run_id"], runner=fake)
-        self.assertEqual((res["resumed"]["pane_id"], res["resumed"]["has_agent"]), ("w1:p1", True))
+        self.assertEqual((res["resumed"]["terminal_id"], res["resumed"]["session_resumed"]), ("t1", True))
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "completed")
-        self.assertEqual(fake.closed, ["w1:p1"])  # a resumed session is never closed again by the router
+        self.assertEqual(fake.closed, ["t1"])  # a resumed session is never closed again by the router
         self.assertEqual(len(fake.prompts), 1)  # resume sends nothing
 
     def test_poll_near_deadline_keeps_call_budget(self):
@@ -437,12 +451,12 @@ class P2(unittest.TestCase):
         fake.kwargs.clear()
         res = hd.collect_run(self.cwd, out["run_id"], 1, runner=fake)  # the wait ends before the poll returns
         self.assertEqual(res["status"], "timed_out")  # still working, not delivery_uncertain
-        self.assertEqual({kw["timeout"] for cmd, kw in fake.kwargs if cmd == "list"}, {hd.OBSERVE_FLOOR_S})
+        self.assertEqual({kw["timeout"] for cmd, kw in fake.kwargs if cmd == "show"}, {hd.OBSERVE_FLOOR_S})
 
     def test_wait_zero_returns_after_submission(self):
         fake = FakeProjects(after_status="working", on_prompt=write_result())
         out = self.run_(fake, wait_ms=0)
-        self.assertEqual((out["status"], len(fake.adds), out["thread_id"]), ("timed_out", 1, "repo/1"))
+        self.assertEqual((out["status"], len(fake.adds), out["thread_id"]), ("timed_out", 1, "repo#1"))
         self.assertFalse([c for c in fake.calls if c[:1] == ["list"]])  # returned without waiting on the board
         fake.status = "idle"
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "completed")
@@ -460,11 +474,11 @@ class P2(unittest.TestCase):
         fake.on_run = headless_cli()
         out = self.run_(fake, self.task(execution="headless"))
         self.assertEqual((out["status"], out["task_outcome"]), ("completed", "success"), out)
-        self.assertNotIn("--delegate", fake.adds[0])  # the board task is a view; no board agent
+        self.assertEqual(len(fake.adds), 1)  # headless has a tracked board task
         cmd = shlex.split(fake.runs[0])[2]
         self.assertIn("claude -p --model m --effort high --dangerously-skip-permissions", cmd)
         self.assertNotIn("do the thing", cmd)  # the prompt reaches the CLI from input.txt only
-        self.assertEqual((fake.reports, len(fake.closed)), (["working", "done"], 1))
+        self.assertEqual((fake.reports, len(fake.closed)), ([], 1))
         with self.assertRaisesRegex(r.InputError, "headless"):
             hd.tell_run(self.cwd, out["run_id"], "hi", runner=fake)
 
@@ -475,7 +489,6 @@ class P2(unittest.TestCase):
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "timed_out")
         fake.panes.clear()  # closed by hand = stopped
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "execution_failed")
-        self.assertEqual(fake.reports[-1], "error")
 
     def test_headless_failing_cli_without_result(self):
         fake = FakeProjects()
@@ -522,7 +535,7 @@ class P2(unittest.TestCase):
         out = self.run_(fake)
         self.assertEqual(out["status"], "timed_out")
         res = hd.tell_run(self.cwd, None, "use the v2 API", runner=fake)  # the only live run under cwd
-        self.assertEqual((res["status"], fake.tells), ("sent", [("repo/1", "use the v2 API")]))
+        self.assertEqual((res["status"], fake.tells), ("sent", [("t1", "use the v2 API")]))
         log = [json.loads(x) for x in Path(res["messages_path"]).read_text("utf-8").splitlines()]
         self.assertEqual([x["state"] for x in log], ["attempted", "sent"])
         self.assertEqual(log[0]["text"], "use the v2 API")
@@ -560,7 +573,7 @@ class P2(unittest.TestCase):
         out = self.run_(fake)
         self.assertEqual((out["status"], out["release"], fake.closed), ("completed", None, []))
         fake.pane_error = None
-        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["release"]["panes"][0]["pane_id"], "w1:p1")
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["release"]["terminals"][0]["terminal_id"], "t1")
 
     def test_v21_inexpressible_profile_sends_nothing(self):
         self.cfg = config([profile("a", kind="claude", executable="claude", args=["--add-dir", "/x"])])
@@ -640,13 +653,144 @@ class P2(unittest.TestCase):
         with self.assertRaises(r.InputError):
             hd.resolve_runner("cloud", which)
 
+    def test_board_and_resources_finalize_only_after_merge(self):
+        from bench_router.lifecycle import finalize
+        fake = FakeProjects(on_prompt=write_result())
+        out = self.run_(fake)
+        rc = self.receipt(out)
+        wt = Path(out["worktree"])
+        git = lambda cwd, *args: subprocess.run(["git", "-C", str(cwd), "-c", "user.name=t",
+            "-c", "user.email=t@t", *args], check=True, capture_output=True)
+        (wt / "change.txt").write_text("implementation")
+        self.assertFalse(finalize(rc, fake))  # never discard dirty work
+        git(wt, "add", "change.txt")
+        git(wt, "commit", "-qm", "implementation")
+        self.assertFalse(finalize(rc, fake))  # committed but not merged
+        git(self.cwd, "merge", "--squash", out["branch"])
+        git(self.cwd, "commit", "-qm", "squash result")
+        self.assertTrue(finalize(rc, fake, dry_run=True))
+        self.assertTrue(wt.exists())
+        self.assertTrue(finalize(rc, fake))
+        self.assertFalse(wt.exists())
+        self.assertTrue(Path(out["result_path"]).exists())
+        self.assertEqual(self.receipt(out)["cleanup"]["board"], "done")
+        for branch in (out["branch"], rc["base_branch"]):
+            self.assertNotEqual(subprocess.run(["git", "-C", self.cwd, "rev-parse", "--verify", branch],
+                               capture_output=True).returncode, 0)
+
     def test_worker_settings(self):
         p = lambda kind, args: {"kind": kind, "args": args}
-        self.assertEqual(hd.worker_settings(p("claude", [])), ["--worker.agent", "claude"])
+        self.assertEqual(hd.worker_settings(p("claude", [])), ["--agent", "claude", "--model", "default"])
         self.assertEqual(hd.worker_settings(p("codex", ["-m", "x", "-c", 'model_reasoning_effort="high"'])),
-                         ["--worker.agent", "codex/x", "--worker.effort", "high"])
+                         ["--agent", "codex", "--model", "x", "--effort", "high"])
         for bad in (["--add-dir", "/x"], ["-m"], ["-c", "sandbox=x"]):
             self.assertIsNone(hd.worker_settings(p("codex", bad)), bad)
+
+    def test_agy_interactive_keeps_profile_flags_through_start_and_resume(self):
+        for i, args in enumerate((["--model", "gemini-4-argon", "--effort", "high"],
+                                  ["--model", "gemini-4-argon-high"], [])):
+            with self.subTest(args=args):
+                self.cfg = config([profile("a", kind="agy", executable="agy", args=args)])
+                fake = FakeProjects(on_prompt=write_result())
+                out = self.run_(fake, self.task(task_id=f"agy-{i}"))
+                self.assertEqual(out["status"], "completed")
+                task = fake.tasks[out["thread_id"]]
+                expected = ["agy", *args, "--prompt-interactive"]
+                self.assertEqual(task["argv"], expected)
+                self.assertNotIn("--dangerously-skip-permissions", task["argv"])
+                hd.resume_run(self.cwd, out["run_id"], runner=fake)
+                self.assertEqual(task["resumed_argv"], expected)
+
+    def test_shepherdr_split_start_recovers_without_starting_twice(self):
+        fake = FakeProjects(on_prompt=write_result())
+        fake.start_error = True
+        out = self.run_(fake)
+        self.assertEqual((out["status"], out["thread_id"]), ("delivery_uncertain", "repo#1"))
+        fake.start_error = False
+        self.assertEqual(self.run_(fake)["status"], "completed")
+        self.assertEqual((len(fake.adds), len(fake.prompts)), (1, 1))
+
+    def test_shepherdr_worktrees_off_never_starts_in_user_checkout(self):
+        fake = FakeProjects()
+        fake.mode = "here"
+        out = self.run_(fake)
+        self.assertEqual((out["status"], fake.prompts), ("execution_failed", []))
+        self.assertEqual(len(fake.adds), 1)
+        from bench_router import coordination
+        self.assertEqual(coordination.inspect()["active"], 0)
+
+    def test_pin_failure_settles_before_submission(self):
+        from bench_router import parallel, coordination
+        original = parallel._git
+        def git(cwd, *args, **kwargs):
+            if args[0] == "branch":
+                raise r.InputError("cannot lock ref")
+            return original(cwd, *args, **kwargs)
+        fake = FakeProjects()
+        with patch.object(parallel, "_git", side_effect=git):
+            out = self.run_(fake)
+        self.assertEqual((out["status"], out["delivery_state"], fake.adds),
+                         ("execution_failed", "not_attempted", []))
+        self.assertEqual(coordination.inspect()["active"], 0)
+
+    def test_shepherdr_finished_turn_collects_without_ready_or_pr(self):
+        fake = FakeProjects(on_prompt=write_result())
+        fake.updates = {"state": "running", "status": "working", "needs": None}
+        out = self.run_(fake)
+        self.assertEqual(out["status"], "completed")
+        self.assertIn("do not call herdr-task ready", fake.prompts[0])
+        self.assertFalse(any(c[0] in ("ready", "accept", "done") for c in fake.calls))
+
+    def test_legacy_receipt_never_controls_new_core(self):
+        fake = FakeProjects(after_status="working")
+        out = self.run_(fake, wait_ms=0)
+        rc = self.receipt(out)
+        rc["backend"] = "projects-1.2"
+        hd.save(rc)
+        fake.calls.clear()
+        for operation in (lambda: hd.collect(rc, 0, runner=fake),
+                          lambda: hd.stop_run(self.cwd, out["run_id"], runner=fake),
+                          lambda: hd.resume_run(self.cwd, out["run_id"], runner=fake),
+                          lambda: hd.tell_run(self.cwd, out["run_id"], "hello", runner=fake)):
+            with self.assertRaises(r.InputError):
+                operation()
+        self.assertEqual(fake.calls, [])
+
+    def test_auto_requires_core_and_task_cli(self):
+        for missing in (hd.HERDR_BIN, hd.PROJECTS_BIN):
+            self.assertEqual(hd.resolve_runner("auto", lambda name: None if name == missing else "/bin/tool"),
+                             hd.LOCAL_BACKEND)
+
+    def test_stop_cancels_queued_task_without_starting_it_again(self):
+        fake = FakeProjects(after_status="working")
+        fake.pending = fake.queue_only = True
+        out = self.run_(fake, wait_ms=0)
+        self.assertEqual(hd.stop_run(self.cwd, out["run_id"], runner=fake)["status"], "stop_sent")
+        got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual(got["status"], "execution_failed")
+        self.assertTrue(self.receipt(got)["process_exited"])
+        self.assertEqual(len(fake.prompts), 0)
+
+    def test_stop_cancels_queued_headless_card(self):
+        fake = FakeProjects(after_status="working")
+        fake.pending = fake.queue_only = True
+        out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        self.assertEqual(hd.stop_run(self.cwd, out["run_id"], runner=fake)["status"], "stop_sent")
+        got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual(got["status"], "execution_failed")
+        self.assertTrue(self.receipt(got)["process_exited"])
+
+    def test_per_repository_space_is_recorded_and_replayed(self):
+        path = Path(self.cwd) / ".bench-router" / "shepherdr.json"
+        path.parent.mkdir(exist_ok=True)
+        path.write_text('{"space":"sp-repository"}', "utf-8")
+        fake = FakeProjects(on_prompt=write_result())
+        with patch.dict(os.environ, {"BENCH_ROUTER_HERDR_SESSION":"", "BENCH_ROUTER_SPACE":""}):
+            out = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], runner=fake, which=which, profile_id="a")
+            self.assertEqual(self.receipt(out)["herdr_session"], "sp-repository")
+            path.unlink()
+            again = hd.dispatch(self.task(), self.cfg, MAPPING, None, [], runner=fake, which=which, profile_id="a")
+            self.assertEqual((again["status"], len(fake.prompts)), ("completed", 1))
 
     def test_v22_not_started_cannot_complete(self):
         fake = FakeProjects(on_prompt=write_result())
@@ -698,7 +842,7 @@ class P2(unittest.TestCase):
         fake = FakeProjects(after_status="working")
         out = self.run_(fake)
         self.assertEqual(out["status"], "timed_out")
-        self.assertTrue(all(0 < kw["timeout"] <= 5 for cmd, kw in fake.kwargs if cmd != "version"))
+        self.assertTrue(all(0 < kw["timeout"] <= 5 for cmd, kw in fake.kwargs if cmd not in ("--version",)))
         again = self.run_(fake)
         self.assertEqual((len(fake.prompts), again["reused_receipt"], again["run_id"]), (1, True, out["run_id"]))
         write_result()(fake, fake.prompts[0])
@@ -743,6 +887,20 @@ class P2(unittest.TestCase):
         self.assertEqual(blocked["warnings"][-1]["code"], "coordination")
         self.assertEqual(first["status"], "completed")
 
+    def test_dispatch_lock_waits_out_a_brief_holder(self):
+        import threading
+        held = threading.Event()
+        def observer():
+            with hd.dispatch_lock(self.cwd):
+                held.set()
+                REAL_SLEEP(0.3)
+        th = threading.Thread(target=observer)
+        th.start()
+        held.wait()
+        with hd.dispatch_lock(self.cwd):  # a brief observer poll is not a conflict
+            pass
+        th.join()
+
     def test_v29_agent_gone_or_partial(self):
         fake = FakeProjects(after_status="working")
         out = self.run_(fake)
@@ -764,15 +922,22 @@ class P2(unittest.TestCase):
 
     def test_v60_version_drift_blocks_submission(self):
         fake = FakeProjects(on_prompt=write_result())
-        fake.version = "herdr-projects 1.2.0 (/fake)"
+        fake.version = "2"
         with self.assertRaises(r.InputError):
             self.run_(fake)
         self.assertEqual((fake.prompts, hd.receipts(self.cwd)), ([], []))
 
-    def test_newer_projects_version_is_accepted(self):
+    def test_newer_core_version_is_accepted(self):
         fake = FakeProjects(on_prompt=write_result())
-        fake.version = "herdr-projects 1.3.0 (/fake)"
+        fake.core_version = "hc 0.1.19"
         self.assertEqual(self.run_(fake)["status"], "completed")
+
+    def test_message_log_survives_unicode_line_separator(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rc = {"run_dir": tmp}
+            hd._log_event(rc, {"state": "sent", "text": "pasted\u2028text"})
+            hd._log_event(rc, {"state": "stop_sent"})
+            self.assertEqual([e["state"] for e in hd._events(rc)], ["sent", "stop_sent"])
 
     def test_prompt_size_limit(self):
         with self.assertRaises(r.InputError):
@@ -809,11 +974,11 @@ class P2(unittest.TestCase):
 
 
 class P2Availability(unittest.TestCase):
-    def test_agy_native_model_list_overrides_codeburn_quota(self):
+    def test_agy_native_model_list_precedes_codexbar_quota(self):
         def runner(cmd, **kw):
             if cmd[:2] == ["agy", "models"]:
                 return SimpleNamespace(returncode=0, stdout="gemini-4-argon-high\tGemini 4 Argon (High)\n", stderr="")
-            return SimpleNamespace(returncode=0, stdout=json.dumps({"providers": [{"id": "antigravity", "available": False}]}), stderr="")
+            return SimpleNamespace(returncode=0, stdout=json.dumps([{"provider": "antigravity", "source": "cli", "usage": {"updatedAt": hd._iso(hd._now()), "primary": {"usedPercent": 10}}}]), stderr="")
         profiles = [profile("ok", kind="agy", executable="agy", args=["--model", "gemini-4-argon-high"]),
                     profile("missing", kind="agy", executable="agy", args=["--model", "gone-high"])]
         with patch.object(hd.shutil, "which", return_value="/usr/bin/tool"):

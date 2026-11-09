@@ -15,26 +15,26 @@ Updated: 2026-10-24. Initial P0–P3 implementation is complete. Reuse existing 
 | `herdr.py` | Profile discovery, availability probing, Projects interactive / Herdr headless execution, receipt, collect, tell, stop, resume, result contract validation |
 | `parallel.py` | Group validation, selection pre-flight checks, worktrees, frozen execution plans, parallel dispatch and collection |
 | `coordination.py` / `locking.py` | Shared user admission, path overlap prevention / OS-specific file locking |
-| `eval/` | Comparative task benchmarks, token/cost analysis, CodeBurn auxiliary utilities |
+| `eval/` | Comparative task benchmarks, token/cost analysis, CodexBar auxiliary utilities |
 | `skills/bench-router/` | Installable Skill and CLI / decision entrypoint scripts |
 
 ## When Starting Changes
 
 1. Check `git status` and applicable `AGENTS.md` files; preserve user modifications.
 2. Verify touched contracts and callers directly in code. Cross-reference selection against [Vendor-guided Routing](docs/vendor-guided-routing.md), context/selection against [Routing Contracts](docs/routing-contracts.md), and execution against [Projects](docs/projects.md).
-3. For behavioral changes, add synthetic fixtures to the corresponding `test_p*.py`, coordination, or codeburn tests. Never run unit tests against live external services.
+3. For behavioral changes, add synthetic fixtures to the corresponding `test_p*.py`, coordination, or codexbar tests. Never run unit tests against live external services.
 4. Update documentation, CLI examples, and schema version impacts simultaneously. Do not reinterpret prior selection versions or alter receipt recovery precedence for task/round.
 5. Ensure the entire offline test suite and relevant documentation checks pass. Explicitly distinguish test suite passes, real data runs, and live smoke tests in reports.
 
 ```bash
 python3 -m bench_router.cli --help
-python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn
+python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codexbar
 python3 -m bench_router.cli wiki compile --check
 ```
 
 ## Installation and Setup
 
-The core CLI runs entirely on the Python 3.11+ standard library. Arena refresh requires `pyarrow`, and the CodeBurn CLI is an optional utility for availability and quota monitoring.
+The core CLI runs entirely on the Python 3.11+ standard library. Arena refresh requires `pyarrow`, and the pinned CodexBar CLI is installed by mise setup for live quota and credit checks.
 
 ```bash
 mise install
@@ -44,7 +44,7 @@ mise run test
 mise run refresh # refreshes all sources with --force
 ```
 
-User configuration and API credentials must never be committed to the repository. Copy and activate `examples/profiles.example.toml`, or generate via `profiles discover`. Discovery inspects installed CLI models, Codex caches, guidelines, and CodeBurn models, but cannot guarantee successful live account calls. Use `--force` explicitly when replacing an existing configuration file.
+User configuration and API credentials must never be committed to the repository. Copy and activate `examples/profiles.example.toml`, or generate via `profiles discover`. Discovery inspects installed CLI model lists, Codex caches, and Claude guidelines, but cannot guarantee successful live account calls. Use `--force` explicitly when replacing an existing configuration file.
 
 ## From Selection to Collection
 

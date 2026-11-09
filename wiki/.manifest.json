@@ -257,5 +257,24 @@
         "references/sources/openrouter-benchmarks.md"
       ]
     }
-  }
+  },
+  "research": [
+    {
+      "type": "research",
+      "topic": "per-model quota visibility and CodeBurn replacement",
+      "researched_at": "2026-11-08T15:19:13Z",
+      "rounds_completed": 3,
+      "sources_fetched": 14,
+      "pages_created": [
+        "_staging/references/sources/antigravity-cli-usage.md",
+        "_staging/references/sources/claude-code-usage-reporting.md",
+        "_staging/references/sources/codex-app-server-rate-limits.md",
+        "_staging/references/sources/codexbar.md",
+        "_staging/references/sources/local-token-cost-trackers.md",
+        "_staging/concepts/quota-scopes.md",
+        "_staging/synthesis/research-per-model-quota-codeburn-replacement.md"
+      ],
+      "pages_updated": []
+    }
+  ]
 }

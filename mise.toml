@@ -1,9 +1,9 @@
 [tools]
 uv = "latest"
 node = "lts"
-"npm:codeburn" = "latest"  # eval/codeburn.py shells out to the codeburn CLI
 
 [tasks.setup]
+depends = ["install-codexbar"]
 description = "one-stop environment setup (uv sync, default profiles/aliases, and initial public data)"
 run = """
 uv sync --extra arena
@@ -13,7 +13,11 @@ uv run python -m bench_router.cli refresh --source mg
 
 [tasks.install]
 description = "install the shared CLI and global skill instructions; rerun after git pull"
-depends = ["install-cli", "install-skill"]
+depends = ["install-codexbar", "install-cli", "install-skill"]
+
+[tasks.install-codexbar]
+description = "install the pinned, checksum-verified Linux CodexBar CLI"
+run = "sh eval/install-codexbar.sh"
 
 [tasks.install-cli]
 description = "install the CLI once per user (editable, follows this clone)"
@@ -28,7 +32,7 @@ run = 'npx -y skills add "$PWD" -g -a claude-code codex antigravity -y'
 
 [tasks.test]
 description = "offline test suite"
-run = "uv run python -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn test_evidence_policy"
+run = "uv run python -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codexbar test_usage test_evidence_policy"
 
 [tasks.refresh]
 description = "fetch all sources and publish the routing snapshot"

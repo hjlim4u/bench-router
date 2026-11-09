@@ -234,7 +234,13 @@ def predicted_tags(spec, c, index, threshold):
         return rule_tags(c, index)
     d, variant, rep = spec.split(":")  # DIR:VARIANT:REP
     got = read_answers(OUT / d / "tag" / variant, c["id"], int(rep))
-    return None if got is None else rule_tags(c, index) | {k for k, v in got[0].items() if v >= threshold}
+    return None if got is None else merge_tags(c, index, variant, got[0], threshold)
+
+
+def merge_tags(c, index, variant, answers, threshold):
+    """One prediction rule for filtering and scoring: llm_all ignores rule tags."""
+    rules = rule_tags(c, index) if variant != "llm_all" else set()
+    return (rules | {k for k, v in answers.items() if v >= threshold}) - always_facets(index)
 
 
 def run_filter(c, tags, index, gains):
@@ -357,8 +363,7 @@ def cmd_score(args, index):
             sc, tags = [], {}
             for (cid, rep), (ans, _, _, _) in runs.items():
                 c = byid[cid]
-                pred = (rule_tags(c, index) if variant != "llm_all" else set()) | {k for k, v in ans.items() if v >= th}
-                pred -= always_facets(index)
+                pred = merge_tags(c, index, variant, ans, th)
                 tags[cid, rep] = pred
                 sc.append(tag_scores(pred, set(c["facets_required"]), set(c["facets_acceptable"])))
                 if th == args.threshold and variant == "rule_llm_v2":
@@ -453,6 +458,8 @@ def selftest():
     s = retrieval_scores(["x", "a", "b"], {"a": 2, "b": 2}, 2)
     assert (s["p"], s["r"], s["r_all"], s["irrelevant"], s["buried"], s["r2"]) == (0.5, 0.5, 1.0, 1, 1, 0.5)
     assert jaccard({"a"}, {"a", "b"}) == 0.5
+    idx = {"facets": {"lang": {"en": {"detect": "rule:always"}}, "task": {"coding": {"detect": "keyword"}}}}
+    assert merge_tags(None, idx, "llm_all", {"task:coding": 0.0, "lang:en": 1.0, "task:x": 0.9}, 0.5) == {"task:x"}
     print("selftest ok")
 
 

@@ -89,14 +89,19 @@ def _load(args):
                               wait_ms=args.wait_ms, backend=herdr.resolve_runner(args.runner))
     now = datetime.now(timezone.utc)
     if args.cmd == "evaluate":
+        availability = None
+        if getattr(args, "preflight", False):
+            from . import herdr
+            availability = herdr._availability(None, cfg, herdr.shutil.which, herdr.resolve_runner(args.runner), [(task, context)])
         if args.format == "3":
             from . import decision
-            result = decision.evaluate(task, cfg, mapping, snap, snap_warnings, now, context=context, **options)
+            result = decision.evaluate(task, cfg, mapping, snap, snap_warnings, now,
+                                       availability=availability, context=context, **options)
         else:
             if response is not None:
                 raise r.InputError("--decision-response requires evaluate --format 3")
             result = (r.evaluate_v1 if args.format == "1" else r.evaluate)(task, cfg, mapping, snap, snap_warnings, now,
-                                                                         context=context)
+                                                                         availability=availability, context=context)
         if refresh_report is not None:
             result["benchmark_refresh"] = refresh_report
         return result
@@ -421,11 +426,11 @@ CLI_EPILOG = """choose a command:
 
 first use:
   A profile is a named agent CLI + model + effort configuration in profiles.toml.
-  Live dispatch needs Herdr/Projects and the target agent CLI configured on
+  Live dispatch needs Shepherdr/herdr-core and the target agent CLI configured on
   Linux/WSL2, and a trusted git repository with a commit. See docs/projects.md.
   1. bench-router init
   2. Create task.json; see "bench-router evaluate --help" for a minimal task.
-  3. bench-router evaluate --format 3 --task task.json --host codex > assessment.json
+  3. bench-router evaluate --preflight --format 3 --task task.json --host codex > assessment.json
      Replace codex with your calling host. If exit 17 requests a decision,
      follow "evaluate --help" and repeat with --decision-response responses.json.
   4. Once assessment status is ok, choose an eligible suitable profile, then:
@@ -469,13 +474,16 @@ Example: bench-router route --task task.json --selection selection.json --dry-ru
 Then omit --dry-run to execute; --wait-ms 0 returns immediately after submission.
 The JSON candidate list is capped at three; use explain to inspect all.""",
     "evaluate": """Start with format 3 for caller-owned profile selection:
-  bench-router evaluate --task task.json --format 3 --host codex > assessment.json
+  bench-router evaluate --preflight --task task.json --format 3 --host codex > assessment.json
   # After resolving the current decision request and saving responses.json:
-  bench-router evaluate --task task.json --format 3 --host codex --decision-response responses.json > assessment.json
+  bench-router evaluate --preflight --task task.json --format 3 --host codex --decision-response responses.json > assessment.json
 When status is ok, inspect candidates, suitability, observations and diagnostics;
 choose a profile and use select --assessment assessment.json (see select --help).
 --decision-response requires --format 3; --host is unused for formats 1 and 2.
-All formats are offline: no dispatch, network access or file writes by the router.""",
+All formats are offline unless --refresh or --preflight is supplied.
+--preflight filters static constraints, then checks CodexBar quotas/credits before decision
+requests; keep it on response replays. It never dispatches. External runners
+leave availability to the caller. Live route checks availability again.""",
     "select": """Example (replace PROFILE with a candidate ID from the completed assessment):
   bench-router select --assessment assessment.json --profile PROFILE --policy-id caller --policy-version 1 --reason "Fits task requirements" > choice.json
 Save only the output's selection object as selection.json, then:
@@ -595,14 +603,15 @@ def main(argv=None):
     ap.add_argument("--cache-dir", type=Path, default=_xdg("XDG_CACHE_HOME", ".cache"),
                     help="holds the benchmark snapshot and index (default: %(default)s)")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    ap.add_argument("--herdr-session", default=os.environ.get("BENCH_ROUTER_HERDR_SESSION") or None,
-                    help="Herdr session for dispatch; if supplied on collect, must match the run (default: BENCH_ROUTER_HERDR_SESSION, else unset)")
+    ap.add_argument("--herdr-space", "--herdr-session", dest="herdr_session", metavar="SPACE",
+                    default=os.environ.get("BENCH_ROUTER_SPACE") or os.environ.get("BENCH_ROUTER_HERDR_SESSION") or None,
+                    help="local Shepherdr space id for dispatch (BENCH_ROUTER_SPACE); --herdr-session is a legacy alias")
     ap.add_argument("--runner", choices=("auto", "herdr", "local", "external"),
                     default=os.environ.get("BENCH_ROUTER_RUNNER") or "auto",
-                    help="live route/parallel executor: herdr board/pane, local one-shot CLI subprocess (headless tasks), "
+                    help="live route/parallel executor: Shepherdr task/core terminal, local one-shot CLI subprocess (headless tasks), "
                          "or external (returns an invocation; you run the agent, then collect). auto = herdr when "
-                         "herdr-projects is on PATH, else local. Recorded runs keep theirs (default: %(default)s)")
-    rp = sub.add_parser("route", help="select a profile and delegate via Projects (--dry-run: select only)")
+                         "herdr-task and hc are on PATH, else local. Recorded runs keep theirs (default: %(default)s)")
+    rp = sub.add_parser("route", help="select a profile and delegate via Shepherdr (--dry-run: select only)")
     rp.add_argument("--task", required=True, help=TASK_HELP)
     rp.add_argument("--context", help="optional context JSON file (1.0|2.0) of caller-supplied estimates, prices and signals; see docs/routing-contracts.md")
     pin = rp.add_mutually_exclusive_group()
@@ -614,8 +623,9 @@ def main(argv=None):
     vp.add_argument("--task", required=True, help=TASK_HELP)
     vp.add_argument("--context", help="optional context JSON file (1.0|2.0) of caller-supplied estimates, prices and signals; see docs/routing-contracts.md")
     vp.add_argument("--refresh", action="store_true", help="check due benchmark sources before the initial assessment; report failures and keep last-good data; omit when replaying decision responses")
+    vp.add_argument("--preflight", action="store_true", help="check CLI/model access, CodexBar quotas/credits and default 10% reserve before candidate decisions; includes preflight observations; may access the network; keep on response replays; external runner skips local checks")
     vp.add_argument("--format", choices=["1", "2", "3"], default="2",
-                    help="output format: 1 = legacy candidate evidence; 2 = facts, constraints and benchmark evaluations (default); 3 = staged vendor-guided assessment for select; offline unless --refresh")
+                    help="output format: 1 = legacy candidate evidence; 2 = facts, constraints and benchmark evaluations (default); 3 = staged vendor-guided assessment for select; offline unless --refresh or --preflight")
     selp = sub.add_parser("select", help="record an upstream choice from an evaluate --format 3 assessment; no dispatch")
     selp.add_argument("--assessment", required=True, help="saved output of evaluate --format 3 (status ok)")
     selp.add_argument("--profile", required=True, help="the chosen profile ID from the assessment")
@@ -701,7 +711,7 @@ def main(argv=None):
             sections.append(TASK_EPILOG)
         if parser in (rp, pp, cp):
             sections.append(RECOVERY_EPILOG)
-        sections.append("Global options (--config-dir, --cache-dir, --herdr-session, --runner) go BEFORE the command.")
+        sections.append("Global options (--config-dir, --cache-dir, --herdr-space, --runner) go BEFORE the command.")
         parser.epilog = "\n\n".join(sections)
     args = ap.parse_args(argv)
 

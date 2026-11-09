@@ -40,7 +40,7 @@ sequenceDiagram
 
 1. **Request**: The Orchestrator (the agent or person handing off work) describes the task in a small `task.json` file.
 2. **Selection**: bench-router finds which of your configured agents fit the task and shows the evidence. If exactly one fits, it picks it; if several fit, the Orchestrator chooses.
-3. **Execution**: The chosen agent works in its own copy of the repository (a Git worktree) and writes `result.md` and `result.json` when done. A *runner* launches it: [herdr](https://herdr.dev) with `herdr-projects` (used automatically when installed), a plain local subprocess (`local`), or your own executor such as an API or host Agent tool (`external`). Herdr is optional; see [Runners](#runners-herdr-optional).
+3. **Execution**: The chosen agent works in its own copy of the repository (a Git worktree) and writes `result.md` and `result.json` when done. A *runner* launches it: [herdr](https://herdr.dev) with Shepherdr (used automatically when installed), a plain local subprocess (`local`), or your own executor such as an API or host Agent tool (`external`). Herdr is optional; see [Runners](#runners-herdr-optional).
 4. **Collection**: bench-router checks that the result files are complete and untampered (SHA-256) and hands them back. Whether the work is actually correct is the Orchestrator's call, recorded with `bench-router feedback`.
 
 > [!NOTE]
@@ -55,11 +55,11 @@ sequenceDiagram
 |---|---|
 | **Orchestrator** | Delegation decision, task decomposition, final profile selection based on evidence tables, result review, and final verdict |
 | **bench-router** | Benchmark evidence query & aggregation, hard constraint filtering, duplicate execution prevention, result format validation |
-| **Runner** (`herdr` / `local` / `external`) | Isolated Git worktree and Agent process execution. `herdr` (with `herdr-projects`) also handles permission waiting (`blocked`), state observation, and session recovery; `local` runs a one-shot CLI subprocess; with `external` the caller runs the agent and bench-router only validates the result |
+| **Runner** (`herdr` / `local` / `external`) | Isolated Git worktree and Agent process execution. `herdr` (with Shepherdr) also handles permission waiting (`blocked`), state observation, and session recovery; `local` runs a one-shot CLI subprocess; with `external` the caller runs the agent and bench-router only validates the result |
 | **Agent CLI** (`claude`, `codex`, `agy`, …) | Task execution and subagent result contract compliance (`result.md`, `result.json`) |
 
 > [!TIP]
-> With the `herdr` runner, bench-router uses `herdr` and `herdr-projects` to run tasks in isolated Git worktrees, handling permission approval pauses (`blocked`) or timeouts via `collect` observation, and `resume` reopens completed conversations. Without Herdr, the `local` and `external` runners keep the same receipts, concurrency limits and result contract. The core CLI relies **strictly on the standard library** for Python 3.11+, with `pyarrow` as an optional dependency for Arena refresh.
+> With the `herdr` runner, bench-router uses `herdr-task` and `hc` to run tasks in isolated Git worktrees, handling permission approval pauses (`blocked`) or timeouts via `collect` observation, and `resume` reopens completed conversations. Without Herdr, the `local` and `external` runners keep the same receipts, concurrency limits and result contract. The core CLI relies **strictly on the standard library** for Python 3.11+, with `pyarrow` as an optional dependency for Arena refresh.
 
 ---
 
@@ -190,20 +190,20 @@ Without a clone, install the CLI with `uv tool install 'bench-router[arena] @ gi
 | **Arena Refresh** | **`pyarrow`** | Required for Arena refresh | Handled automatically by `mise run setup` (or `uv sync --extra arena`) |
 | **Router Config** | **`profiles.toml`** | **Required** | `~/.config/bench-router/profiles.toml` — Handled automatically by `mise run setup` (or copy from `examples/profiles.default.toml`) |
 | **Router Config** | **`aliases.toml`** | Recommended | `~/.config/bench-router/aliases.toml` — Handled automatically by `mise run setup` (or copy from `examples/aliases.example.toml`) |
-| **Live Dispatch** | **[Herdr](https://herdr.dev)** | Only for `--runner herdr` | **Linux / WSL2**, version **0.9.3+** (`herdr --version`, default `~/.local/bin/herdr`) |
-| **Live Dispatch** | **`herdr-projects` plugin** | Only for `--runner herdr` | Version **>= 1.2.1** (`herdr plugin install eliasstravik/herdr-projects` → verify `herdr-projects version`). Its presence on PATH is what makes `auto` choose `herdr` |
+| **Live Dispatch** | **[herdr-core](https://herdr.dev/core/)** | Only for `--runner herdr` | **Linux / WSL2**, version **0.1.17+** (`hc --version`) |
+| **Live Dispatch** | **[Shepherdr](https://github.com/eliasstravik/shepherdr)** | Only for `--runner herdr` | 3.x (certified 3.1.14), `herdr-task` protocol 1. Create a space for the repo; select with `--herdr-space` or local config ([setup](docs/projects.md)) |
 | **Live Dispatch** | **Target Agent CLIs** | Required for `herdr` and `local` runs | Target CLIs (`claude`, `codex`, `agy`, etc.) installed, authenticated, and project directories trusted. Not needed by `external`, where your executor runs the agent |
 | **Optional API Key** | **`ARTIFICIAL_ANALYSIS_API_KEY`** | Optional (for `refresh`) | For fetching Artificial Analysis scores ([free key](https://artificialanalysis.ai)). **LMArena and The Model Gap public data work without it** |
 | **Optional API Key** | **`TYPESAFE_API_KEY` (`JEV_API_KEY`)** | Optional (Skill helper) | Optional external LLM decision API key for `decide.py` in Skill workflows. **Not needed if using the host agent's built-in `bench-decider` subagent** |
 
 > [!NOTE]
 > **Live Dispatch Environment Setup (Linux / WSL2)**
-> `--dry-run`, `explain`, `evaluate`, and `evidence` require no Herdr installation, and live runs can also work without it: see [Runners](#runners-herdr-optional). Only the `herdr` runner (the `auto` choice when `herdr-projects` is on PATH) needs the following environment ([Details](docs/projects.md)):
+> `--dry-run`, `explain`, `evaluate`, and `evidence` require no Herdr installation, and live runs can also work without it: see [Runners](#runners-herdr-optional). Only the `herdr` runner (the `auto` choice when `herdr-task` and `hc` are on PATH) needs the following environment ([Details](docs/projects.md)):
 > ```bash
 > export PATH="$HOME/.local/bin:$PATH"
-> herdr --version                                      # Confirm 0.9.3+ (https://herdr.dev)
-> herdr plugin install eliasstravik/herdr-projects     # Install herdr-projects plugin
-> herdr-projects version                               # Confirm 1.x+ (1.2+ recommended)
+> hc --version                                        # Confirm 0.1.17+ (https://herdr.dev/core/)
+> # Install Shepherdr with ./install.sh --web (docs/projects.md)
+> herdr-task --version                                 # Confirm task protocol 1
 > ```
 
 > [!TIP]
@@ -258,7 +258,7 @@ bench-router init
 `init` installs defaults matching `examples/profiles.default.toml`, with active profiles for standard Claude (`claude-opus-high`), Codex (`codex-sol-high`), and Gemini (`agy-argon-medium`). It never overwrites existing files. Alternatively, `bench-router profiles discover` scans locally available model/effort configurations from installed CLIs; replacing existing profiles requires `--force`.
 
 > [!NOTE]
-> If using `examples/profiles.example.toml` instead, note that it contains disabled placeholders (`enabled = false`) for custom setups. At least one profile must be enabled to prevent `no_eligible_profile` (exit 13). Live dispatch `args` must contain only model and effort flags; with the `herdr` runner, execution permissions follow Projects `worker.access`. Profiles for agents your own executor runs (API, host tool) can omit `kind`/`executable`/`args` under `schema_version = "2.0"`. See [Profile Configuration Reference](docs/reference.md#profilestoml).
+> If using `examples/profiles.example.toml` instead, note that it contains disabled placeholders (`enabled = false`) for custom setups. At least one profile must be enabled to prevent `no_eligible_profile` (exit 13). Live dispatch `args` must contain only model and effort flags; with the `herdr` runner, execution permissions follow the user’s CLI and Shepherdr settings. Profiles for agents your own executor runs (API, host tool) can omit `kind`/`executable`/`args` under `schema_version = "2.0"`. See [Profile Configuration Reference](docs/reference.md#profilestoml).
 
 <details>
 <summary><b>📝 Minimal working <code>profiles.toml</code> configuration example</b></summary>
@@ -323,7 +323,7 @@ bench-router explain --task task.json                       # Human-readable exp
 bench-router evidence --task task.json --format table       # Tabulate benchmark evidence matching task facets
 ```
 
-`--dry-run`, `explain`, `evaluate`, and `evidence` run without network access, Herdr invocations, or file writes. Default dry-run outputs the decision packet for the current stage. Supply `{"stages": [...]}` containing completed responses via `--decision-response` to advance phases, and validate finalized `--selection` offline. Even without a snapshot, decision requests with recorded data gaps can still be produced. Weighted-sum automated selection and `--policy legacy` have been removed.
+`--dry-run`, `explain`, plain `evaluate`, and `evidence` run without network access, Herdr invocations, or file writes. `evaluate --preflight` opts into CLI/model access and CodexBar quota and model-credit checks before decision requests; the Skill uses it to avoid evaluating known unavailable profiles. Keep it on response replays and use the same global runner for evaluation and dispatch. External runners leave availability to the caller. Static task constraints filter queries first. Unknown/stale quota or less than the default 10% reserve excludes the candidate before paid decisions. The `preflight` map reports remaining quota, scoped resets, source/account binding, and advisory pace; tune the reserve with `BENCH_ROUTER_MIN_REMAINING`. Claude Pro Fable also requires fresh, same-account Claude.ai Usage credits; missing web authentication excludes Fable. Live execution rechecks availability. See [CodexBar setup and reporting](docs/codexbar.md). `evaluate --refresh` separately opts into benchmark refresh. Default dry-run outputs the decision packet for the current stage. Supply `{"stages": [...]}` containing completed responses via `--decision-response` to advance phases, and validate finalized `--selection` offline. Even without a snapshot, decision requests with recorded data gaps can still be produced. Weighted-sum automated selection and `--policy legacy` have been removed.
 
 When multiple viable candidates remain, complete evaluation with the same response file and select via upstream policy. Extract only the inner `selection` object from `select` output:
 
@@ -400,11 +400,11 @@ profiles (raw pPERCENTILE effort; effort≠profile effort means a different effo
 <a id="runners-herdr-optional"></a>
 #### Runners (Herdr optional)
 
-Live `route` and `parallel` run through a *runner*, chosen with the global `--runner auto|herdr|local|external` option (environment variable `BENCH_ROUTER_RUNNER`, default `auto`). `auto` uses `herdr` when `herdr-projects` is on PATH and `local` otherwise. The chosen runner is recorded in the run's receipt: `collect`, `stop` and re-running the same task/round follow the recorded runner, never the current flag, so a run is not resent through another runner. All runners share the receipts, the limit of 4 active runs, the workspace-overlap guard and the result contract.
+Live `route` and `parallel` run through a *runner*, chosen with the global `--runner auto|herdr|local|external` option (environment variable `BENCH_ROUTER_RUNNER`, default `auto`). `auto` uses `herdr` when `herdr-task` and `hc` are on PATH and `local` otherwise. The chosen runner is recorded in the run's receipt: `collect`, `stop` and re-running the same task/round follow the recorded runner, never the current flag, so a run is not resent through another runner. All runners share the receipts, the limit of 4 active runs, the workspace-overlap guard and the result contract.
 
 | Runner | Needs | Runs | Notes |
 |---|---|---|---|
-| `herdr` | Herdr, `herdr-projects` >= 1.2.1, Agent CLI | Board agent (`interactive`) or Herdr pane (`headless`) | Permission waiting (`blocked`), `tell`, `resume`; see [Projects Setup Guide](docs/projects.md) |
+| `herdr` | Shepherdr 3.x, hc >= 0.1.17, Agent CLI | Board task with automatic observer (`interactive` or `headless`) | Permission waiting (`blocked`), `tell`, `resume`; see [Projects Setup Guide](docs/projects.md) |
 | `local` | Agent CLI only | The profile's one-shot CLI (`claude -p`, `codex exec`, `agy -p`) as a local subprocess | `"execution": "headless"` tasks only; approvals are off; `stop` ends the process; no `tell`/`resume` |
 | `external` | Nothing | Nothing: the router returns `handed_off` (exit 11) with an `invocation` | Your API/host-tool executor runs the agent and writes the result files into `invocation.result_dir`, then you `collect`. Caller-owned schema 2.0 profiles are eligible |
 
@@ -412,8 +412,8 @@ Task `cwd` must be the **root of a Git repository containing at least one commit
 
 ```bash
 # 4. Live execution, collection, and verification (Linux/WSL2)
-# Herdr runner (herdr, herdr-projects, and Agent CLIs installed):
-bench-router --herdr-session work route --task task.json --selection selection.json  # 'work' is the herdr session name
+# Herdr runner (Shepherdr, herdr-core, and Agent CLIs installed):
+bench-router --herdr-space SPACE route --task task.json --selection selection.json  # Shepherdr space id
 # Without Herdr: a local one-shot CLI (task.json needs "execution": "headless") ...
 bench-router --runner local route --task task.json --selection selection.json
 # ... or hand the run to your own executor, which writes the results into invocation.result_dir
@@ -434,7 +434,7 @@ bench-router feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success          
   - Bundles a pre-compiled index (`bench_router/index.json`) for immediate use without wiki setup (run `wiki compile` only when modifying `wiki/` files).
   - Explicit task facets (math, creative, web search) not covered by automatic filename/extension heuristics can be tagged in `task.json` using vocabulary from `wiki facets`.
 - **Post-Execution Session Resumption and Slot Management (`resume` & `coordination`)**:
-  - With the `herdr` runner, completed agent terminal panes close automatically to release system resources. Reopen the conversation context using `resume --run-id <RUN_ID> --cwd <DIR>` (not available for `local`/`external` runs).
+  - With the `herdr` runner, completed idle agent programs end automatically to release system resources. Reopen the conversation context using `resume --run-id <RUN_ID> --cwd <DIR>` (not available for `local`/`external` runs).
   - When failed or uncertain executions occupy shared concurrency slots (limit 4), verify process termination and release manually via `coordination release --key <KEY> --confirmed-stopped --note "..."`.
 - **Parallel Dispatch (`parallel`)**:
   - Dispatches an explicit list of selections from group 2.0 into isolated worktrees. Repeated profiles run as separate workers, bounded by 8 tasks per group, 16 items per group, and `max_parallel` 1–4. Group 1.0 also uses vendor-guided selection without automatic fan-out across multiple candidates. → [Detailed Reference](docs/reference.md#parallel-dispatch-and-collaboration-levels)
@@ -448,7 +448,7 @@ bench-router feedback --run-id <RUN_ID> --cwd "$PWD" --outcome success          
 The offline test suite runs with standard library tools (or `mise run test`) without requiring external services or network access:
 
 ```bash
-python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeburn
+python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codexbar
 ```
 
 - **Scope of Offline Tests**: Verifies facet filtering, hard constraint enforcement, guideline parsing, snapshot publishing, parallel worktree isolation, and receipt validation contracts using synthetic test doubles and isolated Git repositories.
@@ -464,7 +464,7 @@ python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codeb
 |---|---|---|
 | [docs/reference.md](docs/reference.md) | EN | Configuration formats, complete CLI reference, exit codes, evaluation pathways, data refresh, result contracts, test guides |
 | [docs/vendor-guided-routing.md](docs/vendor-guided-routing.md) | EN | Vendor-guided routing policy (Policy 6), phased decision packets, and selection rules |
-| [docs/projects.md](docs/projects.md) | EN | Live execution setup (herdr-projects 1.2.1), permissions, collection, and session resumption contracts |
+| [docs/projects.md](docs/projects.md) | EN | Live execution setup (Shepherdr 3.x), permissions, collection, and session resumption contracts |
 | [docs/orchestrator.md](docs/orchestrator.md) · [docs/routing-contracts.md](docs/routing-contracts.md) | EN | Orchestrator integration (`evaluate`, `context.json`, `selection.json`) and I/O contracts |
 | [docs/execution-boundary.md](docs/execution-boundary.md) | KO | Herdr-optional execution boundary: selection-only use, caller-owned profiles, local/external runners and auto detection (implemented), external availability (proposed) |
 | [wiki/AGENTS.md](wiki/AGENTS.md) · [docs/benchmark-index-analysis.md](docs/benchmark-index-analysis.md) | EN | Benchmark wiki (`wiki/`) schema and multi-attribute index architecture |
