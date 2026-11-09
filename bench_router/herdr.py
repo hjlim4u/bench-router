@@ -22,7 +22,9 @@ HERDR_BIN = os.environ.get("BENCH_ROUTER_HC", "hc")
 BACKEND = "shepherdr-3"
 LOCAL_BACKEND = "local-1"  # one-shot CLI as a local subprocess (runners.py)
 EXTERNAL_BACKEND = "external-1"  # the caller runs the agent; the router keeps receipt and result contract
-RUNNERS = {"herdr": BACKEND, "local": LOCAL_BACKEND, "external": EXTERNAL_BACKEND}
+TUI_BACKEND = "herdr-tui-1"  # one-shot CLI in its own herdr TUI workspace, through the herdr CLI only (runners.py)
+TUI_BIN = os.environ.get("BENCH_ROUTER_HERDR", "herdr")
+RUNNERS = {"herdr": BACKEND, "herdr-tui": TUI_BACKEND, "local": LOCAL_BACKEND, "external": EXTERNAL_BACKEND}
 TASK_PROTOCOL = "1"  # herdr-task --version is its protocol, not Shepherdr's release number
 SHORT_CALL_S = 15
 OBSERVE_FLOOR_S = 2  # one task observation; keeps calls inside a 5s task budget
@@ -470,7 +472,7 @@ def _binding_unchanged(rc, session, runner):
 def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=None):
     if rc["backend"] != BACKEND:
         from . import runners
-        return runners.start(rc, prompt, profile, wait_ms)
+        return runners.start(rc, prompt, profile, wait_ms, runner)
     if not _binding_unchanged(rc, session, runner):
         return rc
     settings = worker_settings(profile)
@@ -625,7 +627,7 @@ def _task(rc, runner, timeout_s=SHORT_CALL_S):
 
 def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     """Observe the recorded board task only; never delegate, retry or re-prompt it."""
-    if rc.get("backend") not in (BACKEND, LOCAL_BACKEND, EXTERNAL_BACKEND):
+    if rc.get("backend") not in (BACKEND, LOCAL_BACKEND, EXTERNAL_BACKEND, TUI_BACKEND):
         raise r.InputError("legacy receipt: inspect the original worker; automatic backend migration is refused")
     native = rc["backend"] == BACKEND
     if rc["status"] == "completed" and rc.get("settled_contract"):
@@ -648,7 +650,7 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
         try:
             if not native:
                 from . import runners
-                runners.poll(rc)
+                runners.poll(rc, runner)
             elif headless:
                 _poll_headless(rc, runner, timeout())
             elif project_binding(session, runner) != rc["project_binding"]:
@@ -711,8 +713,8 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
             if existing:
                 co.observe_receipt(existing[0])
                 backend = existing[0].get("backend", BACKEND)
-            elif backend == LOCAL_BACKEND and t["execution"] != "headless":
-                raise r.InputError('the local runner runs one-shot CLIs: set "execution": "headless", '
+            elif backend in (LOCAL_BACKEND, TUI_BACKEND) and t["execution"] != "headless":
+                raise r.InputError('the local and herdr-tui runners run one-shot CLIs: set "execution": "headless", '
                                    "or use --runner herdr|external")
             if not existing:
                 availability = _availability(availability, cfg, which, backend, [(t, context)])
@@ -920,7 +922,7 @@ def stop_run(cwd, run_id, runner=subprocess.run):
     rc = _target(os.path.realpath(cwd), run_id)
     if rc["status"] in SETTLED_STATUSES:
         raise r.InputError(f"run is already settled ({rc['status']}); nothing to stop")
-    if rc.get("backend") in (LOCAL_BACKEND, EXTERNAL_BACKEND):
+    if rc.get("backend") in (LOCAL_BACKEND, EXTERNAL_BACKEND, TUI_BACKEND):
         from . import runners
         external = rc["backend"] == EXTERNAL_BACKEND
         try:
@@ -931,7 +933,7 @@ def stop_run(cwd, run_id, runner=subprocess.run):
                     if rc["status"] in SETTLED_STATUSES:
                         raise r.InputError(f"run is already settled ({rc['status']}); nothing to stop")
                 _log_event(rc, {"state": "stop_attempted"})
-                err = runners.stop(rc)
+                err = runners.stop(rc, runner)
         except Busy as e:
             return {"schema_version": r.SCHEMA_VERSION, "status": "conflict", "run_id": rc["run_id"],
                     "warnings": [r.warn("dispatch_lock", f"{e}; retry stop when collect returns")]}

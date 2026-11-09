@@ -30,10 +30,11 @@ Use the [vendor-guided decision workflow](references/decision.md) for semantic f
 
 ## Runners (Herdr optional)
 
-The global `--runner auto|herdr|local|external` option (default `auto`, or `BENCH_ROUTER_RUNNER`) picks the executor for live `route`/`parallel`. `auto` uses Herdr when `herdr-task` and `hc` are on PATH, otherwise `local`. Every runner keeps the same receipt, admission limit, `collect` and result contract, and a recorded run always recovers through its own runner (`backend` in the output).
+The global `--runner auto|herdr|herdr-tui|local|external` option (default `auto`, or `BENCH_ROUTER_RUNNER`) picks the executor for live `route`/`parallel`. `auto` uses Herdr when `herdr-task` and `hc` are on PATH, otherwise `local`. Every runner keeps the same receipt, admission limit, `collect` and result contract, and a recorded run always recovers through its own runner (`backend` in the output).
 
 - `herdr`: board agent (`interactive`) or core terminal (`headless`), as described below.
 - `local`: runs the profile's one-shot CLI (`claude -p`, `codex exec`, `agy -p`) as a local subprocess in a router worktree. Only `"execution": "headless"` tasks are accepted. `stop` ends the process; `tell` and `resume` are not available.
+- `herdr-tui`: the same one-shot CLI as `local`, run in the root pane of its own herdr TUI workspace through the `herdr` CLI (no plugin), so the human can watch it. Headless tasks only; the workspace closes when the run settles (output stays in `runs/RUN/output.log`); `stop` closes it; no `tell`/`resume`.
 - `external`: the router prepares the worktree, prompt and receipt and returns `handed_off` (exit 11) with an `invocation` (`cwd`, `prompt_path`, `result_dir`, suggested `argv`, `model_id`, `deadline_at`). Run the agent yourself (API, subprocess, host Agent tool), have it write the result files into `result_dir`, then `collect`. Use `stop` to record that your agent stopped. Local CLI availability is not probed, and schema 2.0 caller-owned profiles are eligible.
 
 To only select, finish steps 1–2 and run `route --task TASK_FILE --selection SELECTION_FILE --dry-run`.

@@ -1,10 +1,13 @@
 """Herdr-free execution behind the same receipts, admission and result contract as herdr.py.
 
 local: the profile's one-shot CLI runs as a detached local subprocess in a router git worktree.
+herdr-tui: the same one-shot CLI, typed into the root pane of its own herdr TUI workspace (herdr CLI only, no
+plugin), so a human can watch it; the workspace is closed once the run settles.
 external: the router prepares worktree, prompt and receipt, returns an `invocation`, and the caller runs the
 agent however its environment allows (API, host Agent tool, remote job); `collect` then checks the result files.
 """
 import os
+import shlex
 import signal
 import subprocess
 from pathlib import Path
@@ -30,10 +33,44 @@ def _fail(rc, note):
     return rc
 
 
-def start(rc, prompt, profile, wait_ms):
+def _herdr(argv, runner, raw=False):
+    return h.project_call(argv, runner, raw=raw, exe=h.TUI_BIN)
+
+
+def _start_tui(rc, argv, runner, wait_ms):
+    obj, err = _herdr(["workspace", "create", "--cwd", rc["worktree"], "--no-focus",
+                       "--label", f"bench-router {rc['task_id']} r{rc['round']}"], runner)
+    try:
+        res = obj["result"]
+        rc.update(workspace_id=res["workspace"]["workspace_id"], pane_id=res["root_pane"]["pane_id"])
+    except (KeyError, TypeError):
+        return _fail(rc, f"herdr-tui: workspace create failed ({(err or {}).get('message')}); nothing started")
+    rc["delivery_state"] = "submission_attempted"
+    h.save(rc)  # Persist before typing the command: a lost response must never start a second CLI.
+    log = shlex.quote(str(Path(rc["run_dir"]) / "output.log"))
+    _, err = _herdr(["pane", "run", rc["pane_id"],
+                     f"{shlex.join(['sh', '-c', h.headless_script(rc, argv)])} 2>&1 | tee {log}"], runner,
+                    raw=True)  # pane run prints nothing on success
+    if err:
+        rc.update(status="delivery_uncertain", delivery_state="uncertain")
+        h._observe(rc, error=err, note="herdr-tui: pane run unconfirmed; inspect the pane, never rerun")
+        h.save(rc)
+        return rc
+    h.save(rc)
+    return h.collect(rc, h._wait(rc, wait_ms), runner=runner)
+
+
+def _release_tui(rc, runner):
+    """Close the run's own workspace once it settled; the CLI has exited and output.log keeps its output."""
+    _, err = _herdr(["workspace", "close", rc["workspace_id"]], runner)
+    # shortcut: a failed close is recorded, not retried; the workspace then stays open until a human closes it
+    rc["release"] = {"at": h._iso(h._now()), "workspace_id": rc["workspace_id"], **({"error": err} if err else {})}
+
+
+def start(rc, prompt, profile, wait_ms, runner=subprocess.run):
     argv = h.headless_argv(profile) if profile.get("kind") else None
-    if rc["backend"] == h.LOCAL_BACKEND and argv is None:
-        return _fail(rc, f"local: no one-shot CLI for kind {profile.get('kind')!r} or args beyond model/effort")
+    if rc["backend"] in (h.LOCAL_BACKEND, h.TUI_BACKEND) and argv is None:
+        return _fail(rc, f"{rc['backend']}: no one-shot CLI for kind {profile.get('kind')!r} or args beyond model/effort")
     try:
         _prepare(rc, prompt)
     except (r.InputError, OSError) as e:
@@ -46,6 +83,8 @@ def start(rc, prompt, profile, wait_ms):
         h._observe(rc, note="handed off: run the agent, then collect; never resend under a new task_id")
         h.save(rc)
         return rc
+    if rc["backend"] == h.TUI_BACKEND:
+        return _start_tui(rc, argv, runner, wait_ms)
     rc["delivery_state"] = "submission_attempted"
     h.save(rc)  # Persist before starting: a lost response must never start a second CLI.
     try:
@@ -61,8 +100,8 @@ def start(rc, prompt, profile, wait_ms):
     return h.collect(rc, h._wait(rc, wait_ms))
 
 
-def poll(rc):
-    """One observation of a local or external run; settled receipts stay settled."""
+def poll(rc, runner=subprocess.run):
+    """One observation of a local, herdr-tui or external run; settled receipts stay settled."""
     if rc["status"] in h.SETTLED_STATUSES:
         return
     if rc["backend"] == h.EXTERNAL_BACKEND:
@@ -73,7 +112,22 @@ def poll(rc):
             rc["status"] = "handed_off"
             h._observe(rc, note=f"waiting for the caller's result ({why})")
         return
+    tui = rc["backend"] == h.TUI_BACKEND
     if h.settle_exit(rc):
+        if tui:
+            _release_tui(rc, runner)
+        return
+    if tui:
+        _, err = _herdr(["pane", "get", rc["pane_id"]], runner)
+        if not err:
+            rc["status"] = "timed_out"
+            h._observe(rc, "working", note="herdr-tui CLI still running")
+        elif "pane_not_found" in err["message"]:  # closed by stop or a human before the CLI wrote its exit code
+            rc.update(status="execution_failed", process_exited=True)
+            h._observe(rc, note="herdr-tui pane closed without an exit code (stopped or closed)")
+        else:
+            rc["status"] = "timed_out"
+            h._observe(rc, error=err, note="herdr unreachable; the CLI may still be running, collect again")
         return
     try:
         os.waitpid(rc["pid"], os.WNOHANG)  # reap our own child so a dead shell is not seen as a live zombie
@@ -89,8 +143,11 @@ def poll(rc):
     # shortcut: pid reuse is not detected, compare /proc start time if runs outlive a reboot or last for days
 
 
-def stop(rc):
-    """local: end the process group. external: record the caller's word that its agent stopped. Returns an error."""
+def stop(rc, runner=subprocess.run):
+    """local: end the process group. herdr-tui: close the run's own workspace, which ends its CLI.
+    external: record the caller's word that its agent stopped. Returns an error."""
+    if rc["backend"] == h.TUI_BACKEND:
+        return _herdr(["workspace", "close", rc["workspace_id"]], runner)[1]
     if rc["backend"] == h.EXTERNAL_BACKEND:
         rc.update(status="execution_failed", process_exited=True)
         h._observe(rc, note="caller declared the external run stopped")

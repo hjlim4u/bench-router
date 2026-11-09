@@ -357,12 +357,13 @@ WantedBy=timers.target
 <a id="runners"></a>
 ### Runners
 
-The global `--runner auto|herdr|local|external` option (env `BENCH_ROUTER_RUNNER`, default `auto`) selects the executor of a new live `route`/`parallel` run. `auto` resolves to `herdr` when both `herdr-task` and `hc` are on PATH and to `local` otherwise. The choice is recorded as the receipt `backend` (`shepherdr-3`, `local-1`, `external-1`). `collect`, `stop` and re-dispatch of the same task/round follow the recorded backend, not the current flag. Every runner shares the receipt, coordination (four-active limit, overlap guard), nonce and result contract below.
+The global `--runner auto|herdr|herdr-tui|local|external` option (env `BENCH_ROUTER_RUNNER`, default `auto`) selects the executor of a new live `route`/`parallel` run. `auto` resolves to `herdr` when both `herdr-task` and `hc` are on PATH and to `local` otherwise; `herdr-tui` is never chosen automatically. The choice is recorded as the receipt `backend` (`shepherdr-3`, `herdr-tui-1`, `local-1`, `external-1`). `collect`, `stop` and re-dispatch of the same task/round follow the recorded backend, not the current flag. Every runner shares the receipt, coordination (four-active limit, overlap guard), nonce and result contract below.
 
 | Runner | Executes | Tasks | Worktree | `stop` | `tell`/`resume` |
 |---|---|---|---|---|---|
 | `herdr` | Shepherdr task agent or core terminal | interactive, headless | herdr-task/hc | hc kill | yes (interactive runs) |
 | `local` | profile one-shot CLI as a detached `sh -c` subprocess (own session, output in `runs/RUN/output.log`) | headless only | `git worktree add` under `.bench-router/worktrees/runs/RUN` | SIGTERM to the process group | no |
+| `herdr-tui` | the same `sh -c` one-shot CLI typed into the root pane of its own herdr TUI workspace (`herdr workspace create` + `pane run`; output teed to `runs/RUN/output.log`); the workspace is closed once the run settles | headless only | same as local | `herdr workspace close` (ends the CLI) | no |
 | `external` | nothing; the caller runs the agent | any | same as local | records the caller's statement that its agent stopped | no |
 
 `external` returns `handed_off` (exit 11) plus `invocation`: `cwd` (worktree), `prompt_path` (prompt with result contract), `result_dir`, `argv` (suggested one-shot CLI for CLI profiles, else null), `model_id` and `deadline_at`. It does not probe local CLIs (availability stays unverified), so schema 2.0 caller-owned profiles are eligible; `local` and `herdr` exclude them as `unsupported_execution_profile`. `collect` on an external run completes once `result_dir` holds a valid `result.json`/`result.md` pair; a re-dispatch of the same round reports without waiting.

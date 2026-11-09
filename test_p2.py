@@ -206,6 +206,45 @@ class FakeProjects:
         raise AssertionError(argv)
 
 
+class FakeTui(FakeProjects):
+    """herdr 0.9.5 TUI CLI shapes seen live (workspace create, pane run/get, workspace close), one real sh per pane.
+    Like herdr, a pane outlives its CLI until its workspace closes, and closing it hangs up what still runs."""
+
+    def __init__(self, run_error=None):
+        super().__init__()
+        self.procs, self.ws_closed, self.run_error = {}, [], run_error
+
+    def __call__(self, cmd, **kw):
+        if cmd[0] != hd.TUI_BIN:
+            return super().__call__(cmd, **kw)
+        op, arg = cmd[1:3], (cmd[3] if len(cmd) > 3 else None)
+        if op == ["workspace", "create"]:
+            w = f"w{len(self.ws_closed) + len(self.procs) + 1}x{len(self.runs)}"
+            self.runs.append(cmd)
+            return self._ok({"result": {"workspace": {"workspace_id": w}, "root_pane": {"pane_id": f"{w}:p1"}}})
+        if op == ["pane", "run"]:
+            if self.run_error:
+                return subprocess.CompletedProcess(cmd, 1, "", self.run_error)
+            self.procs[arg] = subprocess.Popen(["sh", "-c", cmd[4]], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                               start_new_session=True)
+            return subprocess.CompletedProcess(cmd, 0, "", "")  # herdr 0.9.5 prints nothing here
+        if op == ["pane", "get"]:
+            if arg not in self.procs:
+                return subprocess.CompletedProcess(cmd, 1, "", '{"error":{"code":"pane_not_found"}}')
+            return self._ok({"result": {"pane": {"pane_id": arg}}})
+        if op == ["workspace", "close"]:
+            self.ws_closed.append(arg)
+            for pane in [p for p in self.procs if p.startswith(arg + ":")]:
+                proc = self.procs.pop(pane)
+                try:
+                    os.killpg(proc.pid, 1)  # SIGHUP, as a closed terminal does
+                except ProcessLookupError:
+                    pass
+                proc.wait()
+            return self._ok({"result": {"type": "ok"}})
+        raise AssertionError(cmd)
+
+
 def result_dir(fake, prompt):
     rel = re.search(r"결과 디렉터리\(현재 worktree 기준 상대 경로\): (.+)", prompt).group(1)
     return Path(fake.worktree_of(prompt)) / rel
@@ -647,6 +686,38 @@ class P2(unittest.TestCase):
         self.assertEqual((res["status"], self.receipt(res)["process_exited"]), ("execution_failed", True))
         with self.assertRaisesRegex(r.InputError, "headless"):
             self.run_(FakeProjects(), self.task(task_id="board"), backend=hd.LOCAL_BACKEND)
+
+    def test_v113b_herdr_tui_runner_runs_in_its_own_workspace(self):
+        self.enterContext(patch.object(hd, "time", time))  # a real process needs real waiting
+        writer = (f"import os, sys; sys.path.insert(0, {str(Path(__file__).parent)!r}); from test_p2 import write_result; "
+                  "from types import SimpleNamespace; write_result()(SimpleNamespace(worktree_of=lambda _: os.getcwd()), sys.argv[1])")
+        for i, (argv, status, code) in enumerate((([sys.executable, "-c", writer], "completed", "0"),
+                                                  (["sh", "-c", "echo boom; exit 3", "x"], "execution_failed", "3"))):
+            fake = FakeTui()
+            with patch.object(hd, "headless_argv", return_value=argv):
+                out = self.run_(fake, self.task(task_id=f"t{i}", execution="headless"), backend=hd.TUI_BACKEND)
+            rc = self.receipt(out)
+            self.assertEqual((out["status"], rc["exit_code"], out["backend"]), (status, code, hd.TUI_BACKEND), out["last_observation"])
+            self.assertEqual((fake.ws_closed, rc["release"]["workspace_id"]), ([rc["workspace_id"]], rc["workspace_id"]))
+            self.assertEqual(fake.runs[0][fake.runs[0].index("--cwd") + 1], rc["worktree"])  # the run's own worktree
+        self.assertIn("boom", (Path(rc["run_dir"]) / "output.log").read_text("utf-8"))  # output survives the close
+        fake = FakeTui()
+        with patch.object(hd, "headless_argv", return_value=["sleep", "30"]):
+            out = self.run_(fake, self.task(task_id="slow", execution="headless"), backend=hd.TUI_BACKEND, wait_ms=0)
+        self.assertEqual(out["status"], "timed_out")
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "timed_out")  # pane still there
+        self.assertEqual(hd.stop_run(self.cwd, out["run_id"], runner=fake)["status"], "stop_sent")
+        res = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((res["status"], self.receipt(res)["process_exited"]), ("execution_failed", True))
+        fake = FakeTui(run_error="herdr: server not running")
+        with patch.object(hd, "headless_argv", return_value=["true"]):
+            out = self.run_(fake, self.task(task_id="lost", execution="headless"), backend=hd.TUI_BACKEND)
+        self.assertEqual(out["status"], "delivery_uncertain")
+        again = self.run_(fake, self.task(task_id="lost", execution="headless"), backend=hd.TUI_BACKEND)
+        self.assertEqual((again["reused_receipt"], len(fake.runs)), (True, 1))  # never typed a second time
+        with self.assertRaisesRegex(r.InputError, "headless"):
+            self.run_(FakeTui(), self.task(task_id="board"), backend=hd.TUI_BACKEND)
+        self.assertEqual(hd.resolve_runner("herdr-tui", lambda _: None), hd.TUI_BACKEND)
 
     def test_v114_auto_runner_follows_herdr_projects_on_path(self):
         self.assertEqual(hd.resolve_runner("auto", which), hd.BACKEND)
