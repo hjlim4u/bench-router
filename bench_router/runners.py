@@ -118,17 +118,18 @@ def _poll_agent(rc, runner):
             rc["status"] = "timed_out"
             h._observe(rc, error=err, note="herdr unreachable; the agent may still be working, collect again")
         return
-    status = obj["result"]["agent"]["agent_status"]
+    agent = obj["result"]["agent"]
+    status = agent["agent_status"]
     if status == "blocked":  # a question or permission: a human answers it in herdr, then collect again
         rc.update(status="blocked", diagnostic_tail=_screen_tail(rc, runner))
         h._observe(rc, "blocked", note="herdr-tui agent waits for an answer in its pane")
-    elif status in ("idle", "done"):  # the turn was seen working at submission, so this is its end
+    elif status in ("idle", "done") and agent.get("completion_seq") is not None:  # herdr: a turn really ended
         h.settle(rc, "done")
         if rc["status"] == "completed":
             _release_tui(rc, runner)
-    else:
+    else:  # working, unknown, or idle without a finished turn (the prompt may never have landed)
         rc["status"] = "timed_out"
-        h._observe(rc, status, note="herdr-tui agent still working")
+        h._observe(rc, status, note="herdr-tui agent has not finished a turn")
 
 
 def _release_tui(rc, runner):

@@ -911,7 +911,9 @@ def tell_run(cwd, run_id, text, runner=subprocess.run):
             raise r.InputError("run is settled and its workspace is closed; dispatch a new round")
         from . import runners
         runners._same_server(rc, runner)
-        send = lambda: project_call(["agent", "prompt", rc["agent_name"], text], runner, exe=TUI_BIN)
+        # wait until the new turn is seen: before that the agent still reads idle and collect would settle it
+        send = lambda: project_call(["agent", "prompt", rc["agent_name"], text, "--wait", "--until", "working",
+                                     "--until", "blocked", "--timeout", "20000"], runner, exe=TUI_BIN)
     else:
         if project_binding(rc["herdr_session"], runner) != rc["project_binding"]:
             raise r.InputError("Shepherdr protocol, space or core version changed; inspect the recorded worker")

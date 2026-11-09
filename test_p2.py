@@ -215,8 +215,12 @@ class FakeTui(FakeProjects):
         self.procs, self.ws_closed, self.typed, self.run_error, self.close_fail = {}, [], [], run_error, 0
         self.socket = "/home/u/.config/herdr/herdr.sock"
         self.agents, self.agent_status, self.agent_prompts, self.prompt_calls = {}, "idle", [], 0
+        self.completion_seq = None  # set by finish(): herdr marks an idle transition that ended real work
         self.start_error = self.prompt_error = self.on_agent_prompt = self.last_prompt_cmd = None
         self.screen = "Quick safety check: Is this a project you trust?"
+
+    def finish(self, status="done"):
+        self.agent_status, self.completion_seq = status, (self.completion_seq or 0) + 1
 
     def __call__(self, cmd, **kw):
         if cmd[0] != hd.TUI_BIN:
@@ -248,12 +252,16 @@ class FakeTui(FakeProjects):
             if self.prompt_error or self.agent_status == "blocked":
                 return subprocess.CompletedProcess(cmd, 1, "", self.prompt_error or '{"error":{"code":"agent_blocked"}}')
             self.agent_prompts.append((arg, cmd[4]))
-            self.agent_status = "working"
-            return self._ok({"result": {"agent": {"name": arg, "agent_status": "working"}}})
+            if "--wait" in cmd:  # herdr returns once it saw the turn; without --wait it still reads idle for a while
+                self.agent_status = "working"
+            return self._ok({"result": {"agent": {"name": arg, "agent_status": self.agent_status}}})
         if op == ["agent", "get"]:
             if arg not in self.agents:
                 return subprocess.CompletedProcess(cmd, 1, "", '{"error":{"code":"agent_not_found"}}')
-            return self._ok({"result": {"agent": {"name": arg, "agent_status": self.agent_status}}})
+            agent = {"name": arg, "agent_status": self.agent_status}
+            if self.completion_seq is not None:
+                agent["completion_seq"] = self.completion_seq
+            return self._ok({"result": {"agent": agent}})
         if op == ["agent", "read"]:
             return subprocess.CompletedProcess(cmd, 0, self.screen, "")
         if op == ["pane", "get"]:
@@ -800,6 +808,7 @@ class P2(unittest.TestCase):
         self.assertIn("end your turn", prompt)
         self.assertEqual(hd.tell_run(self.cwd, out["run_id"], "also this", runner=fake)["status"], "sent")
         self.assertEqual(fake.agent_prompts[-1], (name, "also this"))
+        self.assertIn("--wait", fake.last_prompt_cmd)  # tell, too, returns only once herdr saw the turn
         fake.agent_status = "blocked"  # a permission question: surfaced, nothing closed
         res = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
         self.assertEqual((res["status"], self.receipt(res)["diagnostic_tail"], fake.ws_closed),
@@ -811,7 +820,9 @@ class P2(unittest.TestCase):
         with self.assertRaisesRegex(r.InputError, "another herdr server"):
             hd.tell_run(self.cwd, out["run_id"], "x", runner=fake)
         fake.socket = "/home/u/.config/herdr/herdr.sock"
-        fake.agent_status = "done"  # turn ended without results: invalid, workspace stays for inspection
+        fake.agent_status = "idle"  # idle but herdr marks no finished turn: not settled
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "timed_out")
+        fake.finish()  # turn ended without results: invalid, workspace stays for inspection
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "result_invalid")
         self.assertEqual(fake.ws_closed, [])
         # a second run, finished with valid results: completed, its own workspace closed
@@ -822,7 +833,11 @@ class P2(unittest.TestCase):
         self.assertEqual(seen, ["submission_attempted"])
         rc = self.receipt(out)
         write_result()(SimpleNamespace(worktree_of=lambda _: rc["worktree"]), fake.agent_prompts[0][1])
-        fake.agent_status = "idle"
+        fake.finish("idle")  # the first turn wrote valid results, but nobody collected yet
+        self.assertEqual(hd.tell_run(self.cwd, out["run_id"], "one more change", runner=fake)["status"], "sent")
+        res = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((res["status"], fake.ws_closed), ("timed_out", []))  # the told turn runs on, not cut off
+        fake.finish()
         res = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
         self.assertEqual((res["status"], fake.ws_closed), ("completed", [rc["workspace_id"]]))
         with self.assertRaisesRegex(r.InputError, "settled"):
@@ -852,6 +867,8 @@ class P2(unittest.TestCase):
         self.assertEqual(out["status"], "delivery_uncertain")
         self.run_(fake, self.task(task_id="lost2"), backend=hd.TUI_BACKEND, wait_ms=0)
         self.assertEqual(fake.prompt_calls, 1)
+        res = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)  # idle, but no turn ever finished
+        self.assertEqual(res["status"], "timed_out")  # left for a human to inspect, never settled as invalid
 
     def test_v114_auto_runner_follows_herdr_projects_on_path(self):
         self.assertEqual(hd.resolve_runner("auto", which), hd.BACKEND)
