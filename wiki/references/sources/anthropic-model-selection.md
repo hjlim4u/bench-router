@@ -5,10 +5,10 @@ category: references
 tags: [source, agentic, coding]
 sources: ["url:https://platform.claude.com/docs/en/about-claude/models/choosing-a-model"]
 created: 2026-10-19T01:52:29Z
-updated: 2026-10-24T12:45:00Z
-as_of: 2026-10-24
+updated: 2026-11-13T03:08:44Z
+as_of: 2026-11-13
 summary: >-
-  Anthropic's model matrix (most workloads start with Opus 5.5), efficiency-first and capability-first strategies, and effort defaults, quoted verbatim.
+  Current Claude model roles including Fable 5.2, Opus 5.5 as the usual starting point, and dated selection strategies.
 provenance:
   extracted: 1.0
   inferred: 0.0
@@ -20,6 +20,7 @@ tier: supporting
 snapshots:
   - "[[_raw/_archived/2026-10-19-anthropic-model-selection|2026-10-19-anthropic-model-selection]]"
   - "[[_raw/_archived/2026-10-24-anthropic-model-selection|2026-10-24-anthropic-model-selection]]"
+  - "[[_raw/_archived/2026-11-13-anthropic-model-selection|2026-11-13-anthropic-model-selection]]"
 ---
 
 # Anthropic model-selection strategies
@@ -73,7 +74,15 @@ The matrix is a starting recommendation dated 2026-10-24. Account access, model 
 - [[synthesis/vendor-guided-model-selection]]
 - [[concepts/facets/agent_signal]]
 
+## Current guidance — checked 2026-11-13
+
+The current highest-capability entry is Claude Fable 5.2, replacing Fable 5.1 in the current selection matrix. Most workloads still start with Opus 5.5. Capability-first starts with Opus 5.5 and considers Fable 5.2 when evaluations at xhigh or max fall short on demanding reasoning or long-horizon agentic work. Fable 5.2 defaults to high; Opus 5.5 and Haiku 5.5 default to medium. Mythos 5.2 has the same capabilities but restricted organizational access; it is not a general availability substitute. The older Fable 5.1 matrix below is historical.
+
+Related: [[concepts/model-effort-selection]], [[synthesis/vendor-guided-model-selection]].
+
 ## Sources
 
 - [[_raw/_archived/2026-10-24-anthropic-model-selection]] — verbatim excerpts of the matrix, strategies and effort criterion.
 - [[_raw/_archived/2026-10-19-anthropic-model-selection]] — earlier bounded excerpt and canonical origin.
+
+- [[_raw/_archived/2026-11-13-anthropic-model-selection]] — 2026-11-13 capture; extraction limitations are recorded in its frontmatter.

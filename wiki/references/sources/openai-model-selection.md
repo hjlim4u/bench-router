@@ -5,10 +5,10 @@ category: references
 tags: [source, agentic, reasoning]
 sources: ["url:https://developers.openai.com/api/docs/guides/model-selection"]
 created: 2026-10-19T01:52:29Z
-updated: 2026-10-27T13:28:00Z
-as_of: 2026-10-27
+updated: 2026-11-13T03:08:12Z
+as_of: 2026-11-13
 summary: >-
-  OpenAI's documented model/effort starting points, quoted verbatim, and its advice to keep the lightest setting that meets the quality bar. Includes GPT-6.1 Terra consideration guidance.
+  Official OpenAI starting combinations, Terra workload guidance without a fixed effort, and task-based quality, time and cost comparisons.
 provenance:
   extracted: 1.0
   inferred: 0.0
@@ -21,6 +21,7 @@ snapshots:
   - "[[_raw/_archived/2026-10-19-openai-model-selection|2026-10-19-openai-model-selection]]"
   - "[[_raw/_archived/2026-10-24-openai-model-selection|2026-10-24-openai-model-selection]]"
   - "[[_raw/_archived/2026-10-27-openai-model-selection|2026-10-27-openai-model-selection]]"
+  - "[[_raw/_archived/2026-11-13-openai-model-selection|2026-11-13-openai-model-selection]]"
 ---
 
 # OpenAI model and reasoning-effort selection
@@ -65,8 +66,16 @@ These are dated starting points. The page distinguishes product/version availabi
 - [[synthesis/vendor-guided-model-selection]]
 - [[concepts/facets/task]]
 
+## Current guidance — checked 2026-11-13
+
+The seven documented Luna/Sol/Astra starting combinations remain unchanged. Terra is recommended for concise writing from supplied material, defined-outcome computer use and scoped code fixes; the captured page does not prescribe a fixed Terra effort. Compare Terra and Sol with the same inputs and effort. Define acceptance criteria first; check writing quality, saved computer-use results and regression tests. Evaluate completion time including review and repair, then vary effort with the model and inputs held fixed. Interactive recommendations were not fully captured. Earlier interactive examples below remain dated historical evidence, not a fresh verification.
+
+Related: [[concepts/model-effort-selection]], [[synthesis/vendor-guided-model-selection]].
+
 ## Sources
 
 - [[_raw/_archived/2026-10-27-openai-model-selection]] — defuddle markdown capture of updated guide including GPT-6.1 Terra.
 - [[_raw/_archived/2026-10-24-openai-model-selection]] — verbatim excerpts of every quoted row and sentence.
 - [[_raw/_archived/2026-10-19-openai-model-selection]] — earlier bounded excerpt; canonical link and capture scope are recorded there.
+
+- [[_raw/_archived/2026-11-13-openai-model-selection]] — 2026-11-13 capture; extraction limitations are recorded in its frontmatter.

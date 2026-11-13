@@ -12,8 +12,8 @@ sources:
   - "conversation:2026-10-19"
   - "conversation:2026-10-22"
 created: 2026-10-19T01:52:29Z
-updated: 2026-10-22T07:20:11Z
-as_of: 2026-10-22
+updated: 2026-11-13T03:06:09Z
+as_of: 2026-11-13
 summary: >-
   Entry point for official vendor guidance, the current bench-router policy audit, and a proposed approach to selecting model/effort configurations.
 provenance:
@@ -31,6 +31,9 @@ snapshots:
   - "[[_raw/_archived/2026-10-19-google-gemini-models|2026-10-19-google-gemini-models]]"
   - "[[_raw/_archived/2026-10-19-google-gemini-thinking|2026-10-19-google-gemini-thinking]]"
   - "[[_raw/_archived/2026-10-19-routing-research-context|2026-10-19-routing-research-context]]"
+  - "[[_raw/_archived/2026-11-13-anthropic-fable-5-2-prompting|2026-11-13-anthropic-fable-5-2-prompting]]"
+  - "[[_raw/_archived/2026-11-13-google-gemini-thinking|2026-11-13-google-gemini-thinking]]"
+  - "[[_raw/_archived/2026-11-13-openai-model-selection|2026-11-13-openai-model-selection]]"
 ---
 
 # Vendor-guided model selection — research map
@@ -82,6 +85,12 @@ These boundaries are research interpretations. ^[inferred]
 - [[concepts/facets/difficulty]]
 - [[concepts/facets/agent_signal]]
 
+## Current vendor calibration (2026-11-13)
+
+Fable 5.2 starts at high, with xhigh conditional on measured gains and max reserved for ceiling measurement or rare unconstrained work. Gemini 4 Hydrogen starts at high for complex work and reserves xhigh for cases where high falls short. Terra has a published workload role but no fixed effort recommendation in the new capture. Preserve role-only guidance rather than inventing a vendor-endorsed effort. ^[inferred]
+
+See [[references/sources/anthropic-prompting-fable-5-2]], [[references/sources/google-gemini-thinking]] and [[references/sources/openai-model-selection]].
+
 ## Sources
 
 - [[_raw/_archived/2026-10-19-openai-model-selection]]
@@ -92,3 +101,9 @@ These boundaries are research interpretations. ^[inferred]
 - [[_raw/_archived/2026-10-19-routing-research-context]]
 
 Source captures contain bounded excerpts and origin links, not complete copies of the official documents.
+
+- [[_raw/_archived/2026-11-13-anthropic-fable-5-2-prompting]]
+
+- [[_raw/_archived/2026-11-13-google-gemini-thinking]]
+
+- [[_raw/_archived/2026-11-13-openai-model-selection]]
