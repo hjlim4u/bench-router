@@ -504,7 +504,7 @@ Offline: no selection, dispatch, network access or file writes.""",
   bench-router refresh --source mg
   bench-router refresh --source swe --import observations.json
 Automatic sources: aa = Artificial Analysis (ARTIFICIAL_ANALYSIS_API_KEY needed),
-arena = LMArena (pyarrow needed), mg = The Model Gap, tb_auto = Terminal-Bench 4.0
+arena = LMArena (pyarrow needed), mg = The Model Gap, tb_auto = Terminal-Bench latest
 public page, or = OpenRouter keyless daily export. Omitting --source refreshes
 all automatic sources. Manual sources swe = SWE-bench and tb = Terminal-Bench
 require --import; --import requires --source swe or --source tb.

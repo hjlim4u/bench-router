@@ -20,7 +20,7 @@ from pathlib import Path
 from . import locking
 from . import routing as r
 
-ADAPTER_VERSION = "7"  # 3: arena effort; 4: AA effort; 5: Model Gap effort; 6: Terminal-Bench proxy rows; 7: OpenRouter
+ADAPTER_VERSION = "8"  # 8: discover Terminal-Bench leaderboard versions
 DB_SCHEMA_VERSION = 2
 HTTP_TIMEOUT_S = 30
 HTTP_MAX_BYTES = 20 * 1024 * 1024
@@ -64,7 +64,7 @@ SOURCES = {
     "tb": {"url": "https://www.tbench.ai/", "ttl_hours": 168, "max_stale_hours": 720, "manual": True,
            "attribution": "Terminal-Bench (manual import)"},
     "tb_auto": {"url": TB_URL, "ttl_hours": 168, "max_stale_hours": 720, "max_requests": 3,
-                "attribution": "Terminal-Bench 4.0 public leaderboard (model proxy)"},
+                "attribution": "Terminal-Bench latest public leaderboard (model proxy)"},
     "or": {"url": OR_URL, "ttl_hours": 24, "max_stale_hours": 168, "max_requests": 4,
            "attribution": "Source: OpenRouter (openrouter.ai), licensed under CC BY 4.0: reuse and republish with attribution to OpenRouter."},
 }
@@ -389,10 +389,11 @@ def parse_mg(payload):
 
 
 TB_FLIGHT = re.compile(r"self\.__next_f\.push\((\[.*?\])\)</script>", re.S)
+TB_VERSION = re.compile(r"(0|[1-9][0-9]*)-(0|[1-9][0-9]*)-(0|[1-9][0-9]*)")
 
 
 def fetch_tb_auto(get_text, env):
-    """Terminal-Bench embeds the official 4.0 leaderboard in a Next hydration packet."""
+    """Select the newest official leaderboard embedded in the public page."""
     page = get_text(TB_URL, None)
     chunks = []
     for match in TB_FLIGHT.finditer(page):
@@ -403,6 +404,7 @@ def fetch_tb_auto(get_text, env):
         except (ValueError, r.InputError):
             continue
     # ponytail: parse the current public Flight records as JSON, never execute scripts; fail closed on layout changes.
+    boards = []
     for record in "".join(chunks).splitlines():
         if "reasoning_effort" not in record:
             continue
@@ -412,19 +414,27 @@ def fetch_tb_auto(get_text, env):
                 data = query["state"].get("data")
                 if isinstance(data, dict) and isinstance(data.get("leaderboard"), dict) and isinstance(data.get("rows"), list):
                     board = data["leaderboard"]
-                    if board.get("name") == "4-0-0":
-                        return data, board.get("id"), board.get("updated_at")
+                    name = board.get("name")
+                    if (isinstance(name, str) and TB_VERSION.fullmatch(name)
+                            and board.get("package", "terminal-bench/terminal-bench") == "terminal-bench/terminal-bench"):
+                        boards.append(data)
         except (IndexError, KeyError, TypeError, ValueError, AttributeError, r.InputError):
             continue
-    raise SourceError("Terminal-Bench: official leaderboard hydration data missing")
+    if not boards:
+        raise SourceError("Terminal-Bench: versioned official leaderboard hydration data missing")
+    data = max(boards, key=lambda d: tuple(map(int, d["leaderboard"]["name"].split("-"))))
+    board = data["leaderboard"]
+    return data, board.get("id"), board.get("updated_at")
 
 
 def parse_tb_auto(payload):
     board, rows = payload.get("leaderboard"), payload.get("rows")
-    if (not isinstance(board, dict) or board.get("name") != "4-0-0" or not isinstance(board.get("id"), str)
+    if (not isinstance(board, dict) or not isinstance(board.get("name"), str)
+            or not TB_VERSION.fullmatch(board["name"]) or not isinstance(board.get("id"), str)
             or not board["id"] or board.get("package", "terminal-bench/terminal-bench") != "terminal-bench/terminal-bench"
             or not isinstance(rows, list) or not rows):
-        raise SourceError("Terminal-Bench: expected nonempty 4.0 leaderboard")
+        raise SourceError("Terminal-Bench: expected nonempty versioned official leaderboard")
+    version = board["name"].replace("-", ".")
     revision = board.get("dataset_version_ids") or [board["id"]]
     if not isinstance(revision, list) or not all(isinstance(value, str) and value for value in revision):
         raise SourceError("Terminal-Bench: invalid dataset revision")
@@ -453,15 +463,15 @@ def parse_tb_auto(payload):
         if key in seen:
             raise SourceError(f"Terminal-Bench: duplicate row {key}")
         seen.add(key)
-        conditions = {"suite": "terminal-bench", "version": "4.0", "subset": "official", "metric": "accuracy",
+        conditions = {"suite": "terminal-bench", "version": version, "subset": "official", "metric": "accuracy",
                       "direction": "higher", "variant": "leaderboard", "dataset_revision": ",".join(sorted(revision)),
                       "evaluation_harness": "terminal-bench-official", "aggregation": "pass@1",
                       "agent_scaffold": agent, "reasoning_effort": effort, "n_trials": trials,
                       "model_display": display["label"], "model_url": model_url, "reported_metrics": metrics,
                       "model_release_date": meta.get("date")}
-        obs.append({"evidence_id": TB_PROXY, "cohort_id": f"terminal-bench:4.0:{board['id']}:{agent}",
+        obs.append({"evidence_id": TB_PROXY, "cohort_id": f"terminal-bench:{version}:{board['id']}:{agent}",
                     "source_model": model, "raw": score / 100,
-                    "metric_version": "4.0", "scope": "model_proxy", "harness_id": None,
+                    "metric_version": version, "scope": "model_proxy", "harness_id": None,
                     "reasoning_effort": effort, "conditions": conditions, "published_at": row.get("updated_at"),
                     "evaluated_at": None})  # metadata.date is the model release date, not an evaluation timestamp
     if not obs:

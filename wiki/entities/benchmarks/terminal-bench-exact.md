@@ -21,7 +21,7 @@ updated: 2026-10-18T00:00:00Z
 
 Manual Terminal-Bench 4.0 import matched to the profile's harness and effort. The import contract is `EXACT_PINS` in `bench_router/data.py`.
 
-The automatic public leaderboard preserves its published model, agent and effort, but has no installed profile harness/version proof. It is model-proxy evidence; the manual import remains the only exact-profile path.
+The automatic source follows the newest official leaderboard exposed on the public page and records its version. Only the current source snapshot enters routing under the single `terminal_proxy` evidence ID; historical versions do not add votes. The public leaderboard preserves its published model, agent and effort, but has no installed profile harness/version proof. It is model-proxy evidence; the manual import remains the only exact-profile path.
 
 Related: [[entities/benchmarks/mg/terminal-bench-4-0]]
 
@@ -39,7 +39,7 @@ facets = { task = ["terminal_ops"] }
 
 [[unit]]
 id = "terminal_proxy"
-desc = "Official Terminal-Bench 4.0 public leaderboard completion rate, compared only within the published agent scaffold"
+desc = "Official latest Terminal-Bench public leaderboard completion rate, compared only within the published agent scaffold"
 metric = "pass_pct"
 status = "current"
 adoption = "active"
