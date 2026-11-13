@@ -256,6 +256,48 @@
       "pages_produced": [
         "references/sources/openrouter-benchmarks.md"
       ]
+    },
+    "_raw/_archived/2026-11-13-openai-model-selection.md": {
+      "content_hash": "403c717466eafac3cff04d7efc88ad00bd3da7bd1ca88ab0e83202645b9f2346",
+      "last_ingested": "2026-11-13T03:08:44.432475+00:00",
+      "pages_produced": [
+        "references/sources/openai-model-selection.md"
+      ]
+    },
+    "_raw/_archived/2026-11-13-anthropic-model-selection.md": {
+      "content_hash": "163f6fab7fe74409e87303c79607aa12215645090609b3758e16427ff18e366b",
+      "last_ingested": "2026-11-13T03:08:44.545646+00:00",
+      "pages_produced": [
+        "references/sources/anthropic-model-selection.md"
+      ]
+    },
+    "_raw/_archived/2026-11-13-anthropic-effort.md": {
+      "content_hash": "04c3b89224d7fae4699242b725090990e2f303a58fa38ce591c647ab5785d56f",
+      "last_ingested": "2026-11-13T03:08:44.668035+00:00",
+      "pages_produced": [
+        "references/sources/anthropic-effort.md"
+      ]
+    },
+    "_raw/_archived/2026-11-13-anthropic-fable-5-2-prompting.md": {
+      "content_hash": "703f138726a302b1edb9a7cfafe6a064b07aab468c315ca8e86ccd6697306981",
+      "last_ingested": "2026-11-13T03:08:44.789346+00:00",
+      "pages_produced": [
+        "references/sources/anthropic-prompting-fable-5-2.md"
+      ]
+    },
+    "_raw/_archived/2026-11-13-google-gemini-models.md": {
+      "content_hash": "024f9699982df715efd3a391853fb18d3c10bfba6afabd582915fd3da0a8703e",
+      "last_ingested": "2026-11-13T03:08:44.904782+00:00",
+      "pages_produced": [
+        "references/sources/google-gemini-models.md"
+      ]
+    },
+    "_raw/_archived/2026-11-13-google-gemini-thinking.md": {
+      "content_hash": "04f1cda2122f939d29f355717222ec6abcb7f46fdcf0b380ae260daab039a3d1",
+      "last_ingested": "2026-11-13T03:08:45.030020+00:00",
+      "pages_produced": [
+        "references/sources/google-gemini-thinking.md"
+      ]
     }
   },
   "research": [

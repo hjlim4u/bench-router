@@ -1515,8 +1515,8 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertNotIn("claude-", text[1])
         self.assertNotIn("lightest", text[0])  # OpenAI's rule stays in OpenAI's request
         self.assertIn("lightest", text[1])
-        self.assertEqual(set(requests[0]["state"]["models"]), {"claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"})
-        self.assertNotIn("models", requests[1]["state"])  # OpenAI's page has no separate model matrix
+        self.assertEqual(set(requests[0]["state"]["models"]), {"claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"})
+        self.assertEqual(set(requests[1]["state"]["models"]), {"gpt-6.1-terra"})  # role without a fixed effort
         guide_claude = guide["vendors"]["claude"]
         self.assertNotIn("claude-fable-5-1:xhigh", guide_claude["options"])  # a step up, never a starting point
         self.assertIn(("claude-fable-5-1", "xhigh"), guide_claude["escalations"])
@@ -1666,6 +1666,18 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertEqual((fits["f-low"]["status"], fits["f-high"]["status"], fits["f-low"]["guided"]),
                          ("documented", "alternative", "gemini-3.8-flash:low"))
 
+    def test_v108_refreshed_vendor_effort_conditions(self):
+        guide = self.d.load_guidelines()
+        claude = guide["vendors"]["claude"]
+        self.assertIn("claude-fable-5-2:high", claude["options"])
+        self.assertNotIn("claude-fable-5-2:max", claude["options"])
+        self.assertIn("rare task", claude["escalations"]["claude-fable-5-2", "max"])
+        gemini = guide["vendors"]["gemini"]
+        self.assertEqual(gemini["levels"]["gemini-4-hydrogen"]["advanced"], "high")
+        self.assertIn("falls short", gemini["escalations"]["gemini-4-hydrogen", "xhigh"])
+        self.assertEqual(gemini["levels"]["gemini-4-carbon"]["ordinary"], "medium")
+        self.assertFalse(any(o["model"] == "gpt-6.1-terra" for o in guide["vendors"]["openai"]["options"].values()))
+
     def test_v109_prompt_guidance_is_quoted_from_the_captured_vendor_pages(self):
         guide = self.d.load_guidelines()
         wiki = Path(__file__).resolve().parent / "wiki"
@@ -1687,10 +1699,10 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertEqual({i["source"]["id"].split("_")[0] for i in self.d.prompt_guidance(guide, "gpt-6-luna")["items"]}, {"openai"})
         self.assertIsNone(self.d.prompt_guidance(guide, "gpt-7-new"))
         terra = guide["models"]["gpt-6.1-terra"]
-        self.assertEqual((terra["vendor"], set(terra["efforts"])), ("openai", {"low", "medium"}))
+        self.assertEqual((terra["vendor"], set(terra["efforts"])), ("openai", set()))
         self.assertIn("GPT-6.1 Terra evaluation", {i["topic"] for i in self.d.prompt_guidance(guide, "gpt-6.1-terra")["items"]})
         # only the selected model's references: the Gemini 3 page does not reach gemini-4-argon
-        self.assertEqual(self.d.prompt_guidance(guide, "gemini-4-argon")["items"], [])
+        self.assertEqual({i["source"]["id"] for i in self.d.prompt_guidance(guide, "gemini-4-argon")["items"]}, {"gemini_thinking"})
         self.assertTrue(self.d.prompt_guidance(guide, "gemini-3.8-flash")["items"])
         with mock.patch.object(r, "_load_toml", return_value={**r._load_toml(self.d.GUIDELINES)}) as load:
             raw = load.return_value

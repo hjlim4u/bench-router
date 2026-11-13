@@ -5,10 +5,10 @@ category: references
 tags: [source, agentic, coding]
 sources: ["url:https://ai.google.dev/gemini-api/docs/models"]
 created: 2026-10-19T01:52:29Z
-updated: 2026-10-24T12:45:00Z
-as_of: 2026-10-24
+updated: 2026-11-13T03:08:44Z
+as_of: 2026-11-13
 summary: >-
-  Google's published Gemini model descriptions and new-project advice, quoted verbatim; distinct from thinking settings and measured routing results.
+  Gemini 4 Carbon, Argon and Hydrogen roles, alongside dated descriptions of earlier models.
 provenance:
   extracted: 1.0
   inferred: 0.0
@@ -20,6 +20,7 @@ tier: supporting
 snapshots:
   - "[[_raw/_archived/2026-10-19-google-gemini-models|2026-10-19-google-gemini-models]]"
   - "[[_raw/_archived/2026-10-24-google-gemini-models|2026-10-24-google-gemini-models]]"
+  - "[[_raw/_archived/2026-11-13-google-gemini-models|2026-11-13-google-gemini-models]]"
 ---
 
 # Google Gemini model roles
@@ -47,7 +48,15 @@ A family label does not establish task success, actual spend, or availability in
 - [[synthesis/vendor-guided-model-selection]]
 - [[concepts/facets/task]]
 
+## Current guidance — checked 2026-11-13
+
+The catalog now lists Gemini 4 Carbon, Argon and Hydrogen. Carbon is described as the strongest reasoning model for complex software engineering, multimodal knowledge work, scientific reasoning and cybersecurity defense. Argon is the efficient frontier reasoning model, with faster responses and lower token spend per turn than Carbon across complex coding, agentic, math and science tasks. Hydrogen targets speed and efficiency for everyday coding and agentic workflows. Each lists 1M context and 65K / 1M output, with runtime conditions documented separately. Older model roles below remain dated historical evidence; a catalog role does not establish installed CLI availability or a cross-vendor ranking.
+
+Related: [[concepts/model-effort-selection]], [[synthesis/vendor-guided-model-selection]].
+
 ## Sources
 
 - [[_raw/_archived/2026-10-24-google-gemini-models]] — verbatim model descriptions and selection advice.
 - [[_raw/_archived/2026-10-19-google-gemini-models]] — earlier bounded excerpt and canonical origin.
+
+- [[_raw/_archived/2026-11-13-google-gemini-models]] — 2026-11-13 capture; extraction limitations are recorded in its frontmatter.

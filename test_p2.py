@@ -469,7 +469,8 @@ class P2(unittest.TestCase):
                                 which=which, decision_options=opts)
         self.assertEqual((again["reused_receipt"], len(fake.prompts)), (True, 1))
 
-    def test_v35_pinned_profile_replay_and_retry_guidance(self):
+    @patch("bench_router.herdr._now", return_value=NOW)
+    def test_v35_pinned_profile_replay_and_retry_guidance(self, _now):
         self.cfg = config([*self.cfg["profile"], profile("b", kind="claude", executable="claude")])
         fake = FakeProjects(on_prompt=write_result())
         context = {"schema_version": "1.0", "profiles": {"a": {

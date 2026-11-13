@@ -5,10 +5,10 @@ category: references
 tags: [source, reasoning, coding]
 sources: ["url:https://platform.claude.com/docs/en/build-with-claude/effort"]
 created: 2026-10-19T01:52:29Z
-updated: 2026-10-24T12:45:00Z
-as_of: 2026-10-24
+updated: 2026-11-13T03:08:44Z
+as_of: 2026-11-13
 summary: >-
-  Claude effort affects response, tool-call, and thinking tokens; per-model recommendations, quoted verbatim, override the general level table.
+  Model-specific Claude effort guidance, Fable 5.2 calibration from its prompting guide, and explicit capture limitations.
 provenance:
   extracted: 1.0
   inferred: 0.0
@@ -20,6 +20,7 @@ tier: supporting
 snapshots:
   - "[[_raw/_archived/2026-10-19-anthropic-effort|2026-10-19-anthropic-effort]]"
   - "[[_raw/_archived/2026-10-24-anthropic-effort|2026-10-24-anthropic-effort]]"
+  - "[[_raw/_archived/2026-11-13-anthropic-effort|2026-11-13-anthropic-effort]]"
 ---
 
 # Anthropic effort is model-specific
@@ -55,7 +56,15 @@ Model-specific recommendations take precedence over the general table. Support a
 - [[concepts/model-effort-selection]]
 - [[concepts/facets/agent_signal]]
 
+## Current guidance — checked 2026-11-13
+
+The new effort-page extraction omits model-specific recommendation tabs. It establishes supported effort levels but cannot refresh those tab recommendations. The Fable 5.2 prompting capture independently supplies the missing calibration: start at high; low suits quick, well-specified or high-volume work; medium suits interactive coding, chat and everyday knowledge work. Use xhigh only for the hardest long-running work with measured gains. Reserve max for ceiling measurement or rare tasks unconstrained by time and tokens, particularly open-ended science and mathematics. Re-run effort sweeps instead of inheriting 5.1 settings. Earlier per-model tables below retain their original dates; absence from the extracted text is not evidence of changed recommendations.
+
+Related: [[concepts/model-effort-selection]], [[synthesis/vendor-guided-model-selection]].
+
 ## Sources
 
 - [[_raw/_archived/2026-10-24-anthropic-effort]] — verbatim per-model excerpts.
 - [[_raw/_archived/2026-10-19-anthropic-effort]] — earlier bounded excerpt and canonical origin.
+
+- [[_raw/_archived/2026-11-13-anthropic-effort]] — 2026-11-13 capture; extraction limitations are recorded in its frontmatter.

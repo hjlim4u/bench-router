@@ -1,4 +1,4 @@
-# Extraction from each vendor's official pages; selection passages rechecked 2026-10-26 in Windows Ego.
+# Official source captures refreshed 2026-11-13. Older model-specific passages remain dated by their source captures.
 # Every `strategy`, `role`, `when` text is quoted from that vendor's own page only; never mix vendors.
 # No prefix matching or cross-version aliases. These are model IDs, not CLI flags.
 # `start` rows: (model, effort) starting points as the guide states them. `escalation` rows: effort changes the
@@ -7,19 +7,24 @@
 # take part in selection or hashes). `models` is required: only the models the quoted page itself covers. `when` is verbatim page text; `text` is the prompt snippet the page supplies.
 # Gemini gives model roles and a model-independent thinking rule (`effort_class`), resolved per model from
 # that page's `default`/`supported` levels.
-version = "2026-10-26.1"
-as_of = "2026-10-26"
+version = "2026-11-13.1"
+as_of = "2026-11-13"
 
 [sources.openai]
 url = "https://developers.openai.com/api/docs/guides/model-selection"
 wiki = "references/sources/openai-model-selection.md"
-capture = "_raw/_archived/2026-10-27-openai-model-selection.md"
+capture = "_raw/_archived/2026-11-13-openai-model-selection.md"
 [sources.claude_models]
 url = "https://platform.claude.com/docs/en/about-claude/models/choosing-a-model"
 wiki = "references/sources/anthropic-model-selection.md"
+capture = "_raw/_archived/2026-11-13-anthropic-model-selection.md"
+
 [sources.claude_effort]
+note = "The 2026-11-13 Defuddle capture omits model-specific recommendation tabs; older per-model passages retain their prior source dates. Fable 5.2 calibration comes from its prompting guide."
 url = "https://platform.claude.com/docs/en/build-with-claude/effort"
 wiki = "references/sources/anthropic-effort.md"
+capture = "_raw/_archived/2026-11-13-anthropic-effort.md"
+
 [sources.claude_prompting_fable_5_1]
 url = "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-1"
 wiki = "references/sources/anthropic-prompting-effort.md"
@@ -51,12 +56,20 @@ capture = "_raw/_archived/2026-10-24-google-gemini-prompting-strategies.md"
 [sources.gemini_models]
 url = "https://ai.google.dev/gemini-api/docs/models"
 wiki = "references/sources/google-gemini-models.md"
+capture = "_raw/_archived/2026-11-13-google-gemini-models.md"
+
 [sources.gemini_thinking]
 url = "https://ai.google.dev/gemini-api/docs/thinking"
 wiki = "references/sources/google-gemini-thinking.md"
+capture = "_raw/_archived/2026-11-13-google-gemini-thinking.md"
+
+[sources.claude_prompting_fable_5_2]
+url = "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-2"
+wiki = "references/sources/anthropic-prompting-fable-5-2.md"
+capture = "_raw/_archived/2026-11-13-anthropic-fable-5-2-prompting.md"
 
 [vendor.openai]
-revision = "2026-10-26.1"
+revision = "2026-11-13.1"
 sources = ["openai"]
 strategy = "If cost and latency aren’t a concern, you can default to Astra. To reduce costs or latency, use the guidance below to choose a model and reasoning effort for your needs. If you can, experiment using the same inputs to compare results and keep the lightest setting that meets your quality bar."
 
@@ -101,23 +114,18 @@ when = "Ambitious projects that need broad context, reliable interactions, and c
 model = "gpt-6-astra"
 effort = "xhigh"
 when = "Demanding analysis and complex deliverables with exacting requirements."
-[[vendor.openai.start]]
-model = "gpt-6.1-terra"
-effort = "low"
-when = "Concise writing based on supplied material, computer-use tasks with a defined outcome, and scoped code fixes."
-[[vendor.openai.start]]
-model = "gpt-6.1-terra"
-effort = "medium"
-when = "Scoped code fixes and computer-use tasks with a defined outcome."
+[[vendor.openai.model]]
+id = "gpt-6.1-terra"
+role = "Try GPT-6.1 Terra for concise writing based on supplied material, computer-use tasks with a defined outcome, and scoped code fixes. Provide clear inputs, requirements, and a way to verify the result, such as checking saved records or running regression tests. Compare it with GPT-6.1 Sol on the same inputs and reasoning effort."
 
 [vendor.claude]
-revision = "2026-10-24.2"
-sources = ["claude_models", "claude_effort", "claude_prompting_fable_5_1", "claude_prompting_opus_5_5", "claude_prompting_sonnet_5_5", "claude_prompting_haiku_5_5"]
+revision = "2026-11-13.1"
+sources = ["claude_models", "claude_effort", "claude_prompting_fable_5_1", "claude_prompting_opus_5_5", "claude_prompting_sonnet_5_5", "claude_prompting_haiku_5_5", "claude_prompting_fable_5_2"]
 strategy = "Most workloads start with Claude Opus 5.5. Start efficiency-first: For many applications, starting with a faster, more cost-effective model such as Claude Haiku 5.5 can be the optimal approach (best for: Initial prototyping and development; Applications with tight latency requirements; Cost-sensitive implementations; High-volume, straightforward tasks). Start capability-first: For complex tasks where intelligence and advanced capabilities are paramount, you might want to start capability-first (best for: Complex reasoning tasks; Scientific or mathematical applications; Tasks requiring nuanced understanding; Applications where accuracy outweighs cost considerations; Advanced coding and high-autonomy agentic work). Tuning effort is often a better lever than switching models."
 
 # Model selection matrix: "When you need..." / "Example use cases".
 [[vendor.claude.model]]
-id = "claude-fable-5-1"
+id = "claude-fable-5-2"
 role = "The highest available capability. Agent sessions that run for hours, multistep deep research, analysis carried through to a finished document, spreadsheet, or deck"
 [[vendor.claude.model]]
 id = "claude-opus-5-5"
@@ -180,10 +188,32 @@ model = "claude-haiku-5-5"
 efforts = ["xhigh", "max"]
 when = "Use `xhigh` or `max` only where your evals show a quality gain, and compare them with Claude Sonnet 5.5 on performance, cost, and speed."
 
+
+[[vendor.claude.start]]
+model = "claude-fable-5-2"
+effort = "low"
+when = "`low` suits quick back-and-forth, well-specified tasks, and high-volume workloads (intelligent and fast subagents, for example). On coding evaluations, Claude Fable 5.2 performs better than past models at `low` effort. In Anthropic\u2019s testing, it scored close to what Claude Fable 5.1 did at higher effort."
+[[vendor.claude.start]]
+model = "claude-fable-5-2"
+effort = "medium"
+when = "`medium` suits interactive coding, chat, and everyday knowledge work."
+[[vendor.claude.start]]
+model = "claude-fable-5-2"
+effort = "high"
+when = "Start at `high`, the default for Claude Fable 5.2 on the Claude API. `high` suits hard coding, research, agentic work, and long unattended runs. Turns take noticeably longer to finish than at `medium`."
+[[vendor.claude.escalation]]
+model = "claude-fable-5-2"
+efforts = ["xhigh"]
+when = "`xhigh` is for your hardest long-running coding and agentic work where you\u2019ve measured a gain. It raised scores slightly on Anthropic\u2019s internal coding evaluations and used many more tokens."
+[[vendor.claude.escalation]]
+model = "claude-fable-5-2"
+efforts = ["max"]
+when = "`max` is for measuring the model\u2019s ceiling or for the rare task where time and tokens don\u2019t matter. It is most reasonable to use `max` for open-ended problems such as scientific discovery and mathematics. Turns are slow and use many more tokens than at `xhigh`."
+
 [vendor.gemini]
-revision = "2026-10-24.1"
+revision = "2026-11-13.1"
 sources = ["gemini_models", "gemini_thinking"]
-strategy = "For any new projects, use our latest models: 3.5 Flash-Lite or 3.8 Flash. Most production apps should use a specific stable model."
+strategy = "Start with `high` for most complex tasks, and reserve `xhigh` for hard, multi-step problems where `high` falls short. Using `xhigh` increases latency and token use and can cause overthinking or exhaust `max_output_tokens` on simpler prompts such as text or JSON extraction. Run your evaluations at all four levels with a high `max_output_tokens` so the limit doesn’t cut answers short, then pick the lowest `thinking_level` that meets your quality bar."
 
 [[vendor.gemini.model]]
 id = "gemini-3.5-flash-lite"
@@ -197,13 +227,28 @@ default = "medium"
 supported = ["low", "medium", "high"]
 [[vendor.gemini.model]]
 id = "gemini-4-argon"
-role = "Our flagship reasoning model with a unified 1M context window and long decodes up to 1M tokens."
+role = "Our efficient Gemini 4 frontier reasoning model, delivering faster responses and lower token spend per turn compared to Gemini 4 Carbon across complex coding, agentic, math, and science tasks."
 default = "medium"
 supported = ["low", "medium", "high"]
 [[vendor.gemini.model]]
 id = "gemini-3.1-pro-preview"  # listed on the models page without a description
 default = "high"
 supported = ["low", "medium", "high"]
+
+
+[[vendor.gemini.model]]
+id = "gemini-4-carbon"
+role = "Our strongest reasoning model, built for complex software engineering, multimodal knowledge work, scientific reasoning, and cybersecurity defense."
+default = "medium"
+supported = ["low", "medium", "high"]
+
+
+[[vendor.gemini.model]]
+id = "gemini-4-hydrogen"
+role = "Brings cutting-edge intelligence to everyone, with speed and efficiency for everyday coding and agentic workflows, featuring a shared 1M context window and long decodes up to 1M tokens."
+default = "high"
+supported = ["low", "medium", "high", "xhigh"]
+advanced = "high"
 
 [[vendor.gemini.effort_class]]
 id = "lookup"
@@ -213,7 +258,7 @@ id = "ordinary"
 when = "Use default thinking for comparing concepts or creative reasoning"
 [[vendor.gemini.effort_class]]
 id = "advanced"
-when = "Use maximum thinking for advanced coding, math, or multi-step planning"
+when = "Start with `high` for most complex tasks, and reserve `xhigh` for hard, multi-step problems where `high` falls short."
 
 # Prompting guides: quoted per vendor, shown for the finally selected model only (`prompt-guidance` command).
 # --- vendor: openai
@@ -376,3 +421,25 @@ models = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-pro-preview"]
 source = "gemini_prompting_strategies"
 topic = "Persistence and recovery"
 when = "**Persistence and Recovery:** The degree to which the model attempts to self-correct errors. High persistence increases success rates but risks higher token costs or loops."
+
+[[vendor.gemini.escalation]]
+model = "gemini-4-hydrogen"
+efforts = ["xhigh"]
+when = "Reserve for hard, multi-step coding and agentic problems where `high` falls short, when you can trade higher latency and token use (supported on `gemini-4-hydrogen`)."
+
+[[vendor.claude.prompt_guidance]]
+models = ["claude-fable-5-2"]
+source = "claude_prompting_fable_5_2"
+topic = "Calibrate effort"
+when = "With Claude Fable 5.2, the [effort](https://platform.claude.com/docs/en/build-with-claude/effort) level sets how much the model thinks, how many tool calls it makes, how long a turn takes, and how many tokens it uses. Tune the effort level alongside your prompt.\n\nStart at `high`, the default for Claude Fable 5.2 on the Claude API. Depending on the use case, you might move effort up or down, testing against your own evals. Effort levels rank the same way across Claude models, but the amount of thinking at each level can differ. So, rerun your effort sweep rather than carrying over a setting you tuned on Claude Fable 5.1 or Claude Opus 5.5.\n\n- `low` suits quick back-and-forth, well-specified tasks, and high-volume workloads (intelligent and fast subagents, for example). On coding evaluations, Claude Fable 5.2 performs better than past models at `low` effort. In Anthropic\u2019s testing, it scored close to what Claude Fable 5.1 did at higher effort.\n- `medium` suits interactive coding, chat, and everyday knowledge work.\n- `high` suits hard coding, research, agentic work, and long unattended runs. Turns take noticeably longer to finish than at `medium`.\n- `xhigh` is for your hardest long-running coding and agentic work where you\u2019ve measured a gain. It raised scores slightly on Anthropic\u2019s internal coding evaluations and used many more tokens.\n- `max` is for measuring the model\u2019s ceiling or for the rare task where time and tokens don\u2019t matter. It is most reasonable to use `max` for open-ended problems such as scientific discovery and mathematics. Turns are slow and use many more tokens than at `xhigh`.\n\nYou get most of the capability gain when using `high` effort. The step from `medium` to `high` raised scores on most of the coding and knowledge-work evaluations that Anthropic tracks. That step also uses more tokens and more time, so move down to `medium` wherever your evals hold. Above `high`, gains are uneven and task-dependent.\n\nFor agentic work at `low` or `medium`, add the text in [Finish the whole task](#finish-the-whole-task). The model is more likely to stop early at lower effort levels.\n\nAt `high` and above, the model thinks before almost every reply, including a reply to a greeting. If you find basic requests taking a while or costing you more, use a lower effort for those turns. In Anthropic\u2019s testing, an instruction to answer directly without deliberating didn\u2019t stop the model from thinking at `medium` and above.\n\nEffort has little effect on the length of assistant turn responses. Use prompting to change the length and tone of replies.\n\nYou can also mix levels in one workflow. For example, you might plan and iterate with the model at `medium`, then raise effort for the long, unattended part. To change levels within a conversation and keep the prompt cache, use [Per-message effort](https://platform.claude.com/docs/en/build-with-claude/effort-per-message) (beta, `mid-conversation-output-config-2026-07-01` header). That page lists the platforms where it\u2019s available. A change holds until another one replaces it. Where per-message effort isn\u2019t available, set a new top-level `effort` value on the next request, which can invalidate the cached messages."
+
+[[vendor.gemini.prompt_guidance]]
+models = ["gemini-4-carbon", "gemini-4-argon", "gemini-4-hydrogen"]
+source = "gemini_thinking"
+topic = "Gemini 4 thinking calibration"
+when = "The `thinking_level` is your main control over quality, latency, and token use in [Gemini 4 Hydrogen](/docs/whats-new-gemini-4-hydrogen). The model defaults to `high` and introduces `xhigh`:\n\n| Thinking level | Token use | When to use |\n| :--- | :--- | :--- |\n| `low` | Fewest tokens, lowest latency | Cost- and latency-sensitive workloads, such as fast chat and high-throughput processing. Still capable on agentic tasks. |\n| `medium` | Lower token use, faster responses | Interactive coding, live UI prototyping, responsive chat, and latency-sensitive tool calls. (Default on `gemini-4-carbon`, `gemini-4-argon`, `gemini-3.8-flash`, and `gemini-3.6-flash`.) |\n| `high` (default on `gemini-4-hydrogen`) | Balanced intelligence and speed | Recommended default on `gemini-4-hydrogen` for most tasks, including complex coding, agentic execution, tool calling, and multimodal knowledge work. Maximum reasoning depth on `gemini-4-carbon`, `gemini-4-argon`, and Gemini 3 models. |\n| `xhigh` | Most tokens, deepest reasoning | Reserve for hard, multi-step coding and agentic problems where `high` falls short, when you can trade higher latency and token use (supported on `gemini-4-hydrogen`). |\n| `minimal` | Near-off thinking, lowest latency | Matches a near-off setting for most queries on `gemini-3.6-flash`, `gemini-3.5-flash-lite` (default), `gemini-3.1-flash-lite`, `gemini-3-flash-preview`, and `gemini-robotics-er-2-preview`. Not supported on Gemini 4 models or `gemini-3.8-flash`. |\n\nStart with `high` for most complex tasks, and reserve `xhigh` for hard, multi-step problems where `high` falls short. Using `xhigh` increases latency and token use and can cause overthinking or exhaust `max_output_tokens` on simpler prompts such as text or JSON extraction. Run your evaluations at all four levels with a high `max_output_tokens` so the limit doesn't cut answers short, then pick the lowest `thinking_level` that meets your quality bar."
+
+[[vendor.gemini.escalation]]
+model = "gemini-4-hydrogen"
+efforts = ["medium"]
+when = "Interactive coding, live UI prototyping, responsive chat, and latency-sensitive tool calls."
