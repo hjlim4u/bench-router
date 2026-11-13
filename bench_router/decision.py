@@ -60,7 +60,7 @@ def _gemini_level(model, cls):
     levels = model["supported"]
     if cls == "lookup":
         return "minimal" if "minimal" in levels else "low" if "low" in levels else min(levels, key=EFFORT_ORDER.index)
-    return model["default"] if cls == "ordinary" else max(levels, key=EFFORT_ORDER.index)
+    return model["default"] if cls == "ordinary" else model.get("advanced", max(levels, key=EFFORT_ORDER.index))
 
 
 def load_guidelines():
@@ -105,9 +105,16 @@ def load_guidelines():
             for m in v["model"]:
                 if not m["supported"] or m["default"] not in [_effort(x, m["id"]) for x in m["supported"]]:
                     raise r.InputError(f"guideline {m['id']}: default must be a supported effort")
+                if "advanced" in m and _effort(m["advanced"], m["id"]) not in m["supported"]:
+                    raise r.InputError(f"guideline {m['id']}: advanced must be a supported effort")
                 entry["models"][m["id"]] = m.get("role")  # None: the page lists the model without a description
                 entry["levels"][m["id"]] = {cls: _gemini_level(m, cls) for cls in classes}
-                add_model(m["id"], vid, v, {_gemini_level(m, cls): when for cls, when in reversed(classes.items())}, m.get("role"))
+                add_model(m["id"], vid, v, {**{e: w for (mid, e), w in escalations.items() if mid == m["id"]},
+                                           **{_gemini_level(m, cls): when for cls, when in reversed(classes.items())}}, m.get("role"))
+        # A published role without an effort recommendation must not invent a starting effort.
+        for m in v.get("model", []):
+            if m["id"] not in models:
+                add_model(m["id"], vid, v, {}, m.get("role"))
         vendors[vid] = entry
     for vid, entry in vendors.items():
         known = {m for m, mm in models.items() if mm["vendor"] == vid}
