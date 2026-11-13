@@ -332,6 +332,37 @@ class P1(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(d.SourceError):
                 d.parse_tb_auto(bad)
 
+    def test_v18_terminal_latest_version_replaces_routing_evidence(self):
+        from copy import deepcopy
+        row = {"metadata": {"model_display": {"label": "Model A"},
+                            "agent_display": {"label": "Codex"}, "reasoning_effort": "high"},
+               "metrics": {"accuracy": 60}, "n_trials": 330}
+        boards = []
+        for i, name in enumerate(("4-0-0", "4-1-0", "5-0-0", "10-0-1")):
+            boards.insert(0, {"leaderboard": {"name": name, "id": name,
+                                             "package": "terminal-bench/terminal-bench"}, "rows": [row]})
+            unrelated = deepcopy(boards[0])
+            unrelated["leaderboard"].update(name="99-0-0", package="terminal-bench/terminal-bench-cpu")
+            tree = [None, None, None, {"state": {"queries": [
+                {"state": {"data": b}} for b in [unrelated, *boards]]}}]
+            html = "<script>self.__next_f.push(" + json.dumps([1, "1:" + json.dumps(tree)]) + ")</script>"
+            with mock.patch.object(d, "http_get_text", return_value=html):
+                result = d.refresh(self.cache, self.cfg, MAPPING, {"tb_auto": {"Model A": "model-a"}},
+                                   NOW + timedelta(minutes=i), only="tb_auto", force=True)
+            self.assertEqual(result["sources"]["tb_auto"]["result"], "updated")
+            snap = self.snap()
+            evidence = snap["profiles"]["a"]["evidence"]
+            self.assertEqual(list(evidence), ["terminal_proxy"])
+            cell = evidence["terminal_proxy"]
+            self.assertEqual(cell["metric_version"], name.replace("-", "."))
+            self.assertEqual(cell["conditions"]["version"], cell["metric_version"])
+            self.assertEqual(list(snap["cohorts"]), [f"terminal-bench:{cell['metric_version']}:{name}:Codex"])
+        for name in ("latest", "4-1", "4-1-0-preview", "", None):
+            bad = deepcopy(boards[0])
+            bad["leaderboard"]["name"] = name
+            with self.subTest(name=name), self.assertRaises(d.SourceError):
+                d.parse_tb_auto(bad)
+
     def test_v18_terminal_failed_refresh_retains_last_good_and_profile_effort(self):
         rows = [{"metadata": {"model_display": {"label": "GPT-6 Astra"}, "agent_display": {"label": "Codex"},
                               "reasoning_effort": effort}, "metrics": {"accuracy": value}, "n_trials": 330}
