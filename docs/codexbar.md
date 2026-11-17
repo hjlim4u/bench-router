@@ -74,9 +74,9 @@ erase an OAuth spend cap. Missing balance remains unknown, not zero.
 
 ## Reserve and observations
 
-The default reserve is **10% remaining**, matching CodexBar guard's default and
-inclusive threshold. A candidate with exactly 10% remaining passes; less than
-10% gives `codexbar_quota_low`. Known 100% exhaustion always excludes it.
+The default reserve is **5% remaining** (inclusive threshold). A candidate with
+exactly 5% remaining passes; less than 5% gives `codexbar_quota_low`. Weekly windows are exempt from the reserve.
+Known 100% exhaustion of any window always excludes it.
 Set `BENCH_ROUTER_MIN_REMAINING=0` to disable the reserve, or any finite percentage
 from 0 through 100 to tune it. Invalid values fail explicitly. The existing usage
 snapshot supplies this guard across all applicable model/shared windows without

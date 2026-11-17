@@ -95,12 +95,20 @@ def needs_credits(provider, model, plan):
 def reserve_percent():
     from .routing import InputError
     try:
-        value = float(os.environ.get("BENCH_ROUTER_MIN_REMAINING", "10"))
+        value = float(os.environ.get("BENCH_ROUTER_MIN_REMAINING", "5"))
         if math.isfinite(value) and 0 <= value <= 100:
             return value
     except ValueError:
         pass
     raise InputError("BENCH_ROUTER_MIN_REMAINING must be a finite percentage from 0 to 100")
+
+
+def _weekly(o, w):
+    """Weekly windows are exempt from the reserve; only exhaustion excludes them."""
+    if number(w.minutes) is not None:
+        return w.minutes >= 10080
+    # Antigravity primary/secondary are pool representatives, not time windows.
+    return isinstance(w.scope, str) and ("weekly" in w.scope or (o.provider != "antigravity" and w.scope in ("secondary", "tertiary")))
 
 
 def _reason(o, now, threshold):
@@ -136,7 +144,7 @@ def _reason(o, now, threshold):
             return "credits_unverified"
         if any(b.amount <= 0 for b in balances):
             return "credits_exhausted"
-    if any(100 - w.used_percent < threshold for w in o.windows):
+    if any(100 - w.used_percent < threshold for w in o.windows if not _weekly(o, w)):
         return "quota_low"
     return None
 
@@ -161,6 +169,8 @@ def _details(o, reason, now, threshold):
         if row not in rows:
             rows.append(row)
     remaining = min((w["remaining_percent"] for w in rows), default=None)
+    weekly = {_safe(w.scope) for w in o.windows if isinstance(w, Window) and _weekly(o, w)}
+    guarded = min((w["remaining_percent"] for w in rows if w["scope"] not in weekly), default=100)
     pace = {}
     if isinstance(o.pace, dict):
         for scope, raw in o.pace.items():
@@ -179,7 +189,7 @@ def _details(o, reason, now, threshold):
            "updated_at": next((w.observed_at for w in o.windows if isinstance(w, Window) and fresh(w.observed_at, now)), None),
            "checked_at": now.isoformat(), "account_binding": o.binding, "windows": rows,
            "remaining_percent": remaining, "reason": reason, "pace": pace,
-           "guard": {"min_remaining_percent": threshold, "decision": "unknown" if remaining is None else "low" if remaining < threshold or remaining == 0 else "safe"},
+           "guard": {"min_remaining_percent": threshold, "decision": "unknown" if remaining is None else "low" if guarded < threshold or remaining == 0 else "safe"},
            "warnings": (["ambient_account_unverified"] if o.binding == "ambient_cli" else []) +
                        (["pace_runs_out_before_reset"] if any(p.get("will_last_to_reset") is False for p in pace.values()) else [])}
     if needs_credits(o.provider, o.model, o.plan):

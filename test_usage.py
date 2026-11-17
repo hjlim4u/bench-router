@@ -20,7 +20,7 @@ class CollectorCompatibility(unittest.TestCase):
 
     def test_collectors_give_same_decisions_at_reserve_and_exhaustion_boundaries(self):
         ps = [profile("c", "gpt-6", "codex")]
-        for used, expected in ((0, None), (90, None), (91, "codexbar_quota_low"), (100, "codexbar_quota_exhausted")):
+        for used, expected in ((0, None), (95, None), (96, "codexbar_quota_low"), (100, "codexbar_quota_exhausted")):
             with self.subTest(used=used):
                 collectors = [partial(codexbar.collect, runner=self.runner([payload("codex", used)]), which=lambda _: "/tool"),
                               partial(codeburn.collect, runner=self.runner(self.burn(used)), which=lambda _: "/tool")]
