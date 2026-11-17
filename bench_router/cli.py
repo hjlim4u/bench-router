@@ -635,7 +635,7 @@ def main(argv=None):
     vp.add_argument("--task", required=True, help=TASK_HELP)
     vp.add_argument("--context", help="optional context JSON file (1.0|2.0) of caller-supplied estimates, prices and signals; see docs/routing-contracts.md")
     vp.add_argument("--refresh", action="store_true", help="check due benchmark sources before the initial assessment; report failures and keep last-good data; omit when replaying decision responses")
-    vp.add_argument("--preflight", action="store_true", help="check CLI/model access, CodexBar quotas/credits and default 10% reserve before candidate decisions; includes preflight observations; may access the network; keep on response replays; external runner skips local checks")
+    vp.add_argument("--preflight", action="store_true", help="check CLI/model access, CodexBar quotas/credits and default 5% reserve before candidate decisions; includes preflight observations; may access the network; keep on response replays; external runner skips local checks")
     vp.add_argument("--format", choices=["1", "2", "3"], default="2",
                     help="output format: 1 = legacy candidate evidence; 2 = facts, constraints and benchmark evaluations (default); 3 = staged vendor-guided assessment for select; offline unless --refresh or --preflight")
     selp = sub.add_parser("select", help="record an upstream choice from an evaluate --format 3 assessment; no dispatch")

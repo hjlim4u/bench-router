@@ -175,21 +175,27 @@ class CodexBarTests(unittest.TestCase):
         self.assertEqual(got.details["a"]["windows"], [])
 
     def test_guard_boundary_pace_and_redacted_output(self):
-        p = payload("codex", 90)
+        p = payload("codex", 95)
         p["usage"]["primary"].update(windowMinutes=300, resetsAt="2026-11-09T03:00:00Z")
         p["pace"] = {"primary": {"stage": "farAhead", "willLastToReset": False, "etaSeconds": 600,
                                   "summary": "PRIVATE MESSAGE"}}
         p["credits"] = {"events": ["PRIVATE CREDIT ID"]}
         ps = [profile("c", "gpt-6", "codex")]
         got, _ = self.check(ps, {"codex": p})
-        self.assertEqual(got["c"], None)  # inclusive 10% boundary
+        self.assertEqual(got["c"], None)  # inclusive 5% boundary
         details = got.details["c"]
-        self.assertEqual(details["remaining_percent"], 10)
+        self.assertEqual(details["remaining_percent"], 5)
         self.assertEqual(details["windows"][0]["resets_at"], "2026-11-09T03:00:00+00:00")
         self.assertEqual(details["pace"]["primary"]["eta_seconds"], 600)
         self.assertIn("pace_runs_out_before_reset", details["warnings"])
         self.assertNotIn("PRIVATE", json.dumps(details))
-        p["usage"]["primary"]["usedPercent"] = 91
+        p["usage"]["secondary"]["usedPercent"] = 95  # weekly window is exempt from the reserve
+        got, _ = self.check(ps, {"codex": p})
+        self.assertEqual((got["c"], got.details["c"]["guard"]["decision"]), (None, "safe"))
+        p["usage"]["secondary"]["usedPercent"] = 100
+        self.assertEqual(self.check(ps, {"codex": p})[0]["c"], "codexbar_quota_exhausted")
+        p["usage"]["secondary"]["usedPercent"] = 20
+        p["usage"]["primary"]["usedPercent"] = 96
         self.assertEqual(self.check(ps, {"codex": p})[0]["c"], "codexbar_quota_low")
         with patch.dict(os.environ, {"BENCH_ROUTER_MIN_REMAINING": "0"}):
             self.assertEqual(self.check(ps, {"codex": p})[0]["c"], None)
