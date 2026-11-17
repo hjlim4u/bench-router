@@ -162,15 +162,18 @@ def _stable(value):
 
 
 def prepare(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=None, index=None, omit_profiles=()):
-    """One assessment supplies compatibility output, constraints and metric facts."""
+    """Keep recorded suitability stable while live availability gates execution."""
     asmt = r.assess(t, cfg, mapping, snap, snap_warnings, now, availability, context, benchmarks=False)
+    # Only live dispatch probes CLIs. An unchosen unavailable profile must not change the recorded decision.
+    fit = asmt if availability is None else r.assess(t, cfg, mapping, snap, snap_warnings, now, None, context,
+                                                   benchmarks=False)
     base = r._result_v1(asmt, r._legacy_cands(asmt), "ok", None, "vendor-guided", asmt["warnings"])
     base["candidates"] = [c for c in sorted(base["candidates"], key=lambda c: c["profile"])
                           if c["profile"] not in omit_profiles]
     base.update(policy_version=POLICY["version"], availability_verified=availability is not None,
-                fit_profiles=[c["profile"] for c in asmt["candidates"] if c["eligible"]],
+                fit_profiles=[c["profile"] for c in fit["candidates"] if c["eligible"]],
                 candidate_facts={c["profile"]: _stable({k: m for k, m in c["metrics"].items() if k in r.METRICS})
-                                 for c in asmt["candidates"] if c["eligible"] and c["profile"] not in omit_profiles},
+                                 for c in fit["candidates"] if c["eligible"] and c["profile"] not in omit_profiles},
                 task_facts=_stable(asmt["task_metrics"]), decision_inputs={
                     "assessment": r._inputs(asmt), "task_facets": t["facets"],
                     "omitted_profiles": sorted(omit_profiles), "snapshot_hash": r.canonical_hash(snap),
@@ -529,14 +532,14 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
     if selection is not None:
         eligible_profiles = selection["decision"]["inputs"].get("eligible_profiles")
     elif assessment_only and availability is not None:
-        eligible_profiles = base["fit_profiles"]
+        eligible_profiles = [c["profile"] for c in base["candidates"]]
     if eligible_profiles is not None:
         # Replay the assessed cohort offline; fresh live checks can still exclude its members.
         base["decision_inputs"]["eligible_profiles"] = eligible_profiles
         base["candidates"] = [c for c in base["candidates"] if c["profile"] in eligible_profiles]
         base["fit_profiles"] = [pid for pid in base["fit_profiles"] if pid in eligible_profiles]
         base["candidate_facts"] = {pid: facts for pid, facts in base["candidate_facts"].items() if pid in eligible_profiles}
-    if not base["candidates"]:
+    if not base["candidates"] and (selection is None or not base["candidate_facts"]):
         return {**base, "status": "stale_assessment" if selection else "no_eligible_profile"}
     guide = load_guidelines()
     base["guidelines_version"] = guide["version"]
@@ -632,9 +635,9 @@ def route(t, cfg, mapping, snap, snap_warnings, now, availability=None, context=
                   "policy": POLICY, "reason": reason, "decision": d}
         return apply_record(base, cfg, record, check_digest)
 
-    if _user_pinned(semantic_task) and len(base["candidates"]) == 1:
+    if _user_pinned(semantic_task) and len(base["candidate_facts"]) == 1:
         # The user already chose model and effort; asking guides or benchmarks would only repeat that choice.
-        pid = base["candidates"][0]["profile"]
+        pid = next(iter(base["candidate_facts"]))
         model_id = next(p["model_id"] for p in cfg["profile"] if p["id"] == pid)
         fits = {pid: {"status": "user_specified", "rule": "profile_filter", "guided": None,
                       "guidance": guide["models"].get(model_id, {}), "diagnostics": []}}

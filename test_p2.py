@@ -470,6 +470,7 @@ class P2(unittest.TestCase):
     def test_v98_external_selection_dispatch_and_receipt_first_recovery(self):
         from bench_router import decision
         self.cfg = config([*self.cfg["profile"], profile("b")])
+        self.cfg["profile"][0].update(kind="claude", executable="claude")
         t = self.task()
         def evaluate(response=None):
             return decision.evaluate(t, self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response)
@@ -478,10 +479,13 @@ class P2(unittest.TestCase):
         self.assertIn("upstream_selection_required", assessment["recommendation"]["diagnostics"])
         selection = decision.bind(assessment, "b", {"id": "team", "version": "1"}, "specialist", True)
         fake = FakeProjects(on_prompt=write_result(), profiles={p["id"]: p for p in self.cfg["profile"]})
-        def dispatch():
+        def dispatch(which=which):
             return hd.dispatch(t, self.cfg, MAPPING, None, [], session="default", runner=fake, which=which,
                                selection=selection, decision_options={"host": "codex", "env": {}})
-        out = dispatch()
+        blocked = dispatch(lambda name: None if name == "codex" else which(name))
+        self.assertEqual((blocked["status"], fake.prompts), ("no_eligible_profile", []))
+        self.assertIn({"profile": "b", "reasons": ["executable_not_found"]}, blocked["excluded"])
+        out = dispatch(lambda name: None if name == "claude" else which(name))
         self.assertEqual((out["status"], out["selected"]["profile"], out["selection"]["schema_version"]),
                      ("completed", "b", "6.0"))
         with patch.object(decision, "load_guidelines", side_effect=AssertionError("must collect saved run")):

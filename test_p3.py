@@ -140,13 +140,20 @@ class P3(unittest.TestCase):
         raw = {"schema_version": "2.0", "group_id": "external", "cwd": self.cwd,
                "tasks": [{"task": task, "selections": [selection, selection]}]}
         fake = FakeProjects(on_prompt=write_result(), profiles={p["id"]: p for p in self.cfg["profile"]})
-        def run(raw, runner):
+        def run(raw, runner, which=which):
             return pl.run_group(pl.validate_group(raw), self.cfg, MAPPING, None, [], session="default",
                                 runner=runner, which=which, decision_options={"host": "codex", "env": {}})
         out = run(raw, fake)
         self.assertEqual((out["status"], [m["profile"] for m in out["members"]]), ("completed", ["b", "b"]))
         self.assertEqual(len({m["rounds"][0]["run_id"] for m in out["members"]}), 2)
         self.assertEqual((run(raw, fake)["status"], len(fake.prompts)), ("completed", 2))
+        no_claude = lambda name: None if name == "claude" else which(name)
+        self.assertEqual(run({**raw, "group_id": "unselected-unavailable"}, fake, no_claude)["status"], "completed")
+        no_codex = lambda name: None if name == "codex" else which(name)
+        blocked = FakeProjects()
+        out = run({**raw, "group_id": "selected-unavailable"}, blocked, no_codex)
+        self.assertEqual((out["status"], blocked.prompts), ("no_eligible_profile", []))
+        self.assertIn({"profile": "b", "reasons": ["executable_not_found"]}, out["members"][0]["excluded"])
         self.cfg = config([*self.cfg["profile"], profile("c")])
         stale_fake = FakeProjects()
         self.assertEqual(run({**raw, "group_id": "stale-external"}, stale_fake)["status"], "stale_assessment")

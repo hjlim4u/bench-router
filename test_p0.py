@@ -1192,6 +1192,11 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertIn("upstream_selection_required", assessment["recommendation"]["diagnostics"])
         self.assertNotIn("tie_resolved_by_configuration", assessment["candidates"][1]["diagnostics"])
         self.assertIn("comparable_evaluation_missing", assessment["diagnostics"])
+        preflight = self.d.evaluate(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", env={},
+                                    response=response, availability={"light": None, "strong": None})
+        self.assertEqual(preflight["decision"]["evaluation"], assessment["decision"]["evaluation"])
+        self.assertEqual(preflight["inputs"], {**assessment["inputs"], "eligible_profiles": ["light", "strong"]})
+        self.assertEqual((assessment["availability_verified"], preflight["availability_verified"]), (False, True))
         selection = self.d.bind(assessment, "light", {"id": "team", "version": "1"}, "reserve strong for another role",
                                 accept_provisional=True)
         with patch.object(self.d.provider, "decide", side_effect=AssertionError("must replay without calls")):
@@ -1200,7 +1205,14 @@ class P0VendorGuidance(unittest.TestCase):
                           ("6.0", "selected", "light"))
         self.assertEqual(out["selection_mode"], "orchestrator_assessed")
         self.assertEqual(self.route(selection=selection, availability={"light": "quota_exhausted"})["status"],
-                         "stale_assessment")
+                         "no_eligible_profile")
+        for availability in ({"strong": "agy_model_unavailable"},
+                             {"strong": "cli_missing", "light": "quota_exhausted"}):
+            with self.subTest(availability=availability):
+                out = self.route(selection=selection, availability=availability)
+                self.assertEqual(out["status"], "no_eligible_profile" if availability.get("light") else "selected")
+                self.assertTrue(out["availability_verified"])
+                self.assertEqual(out["selection"]["decision"], selection["decision"])
         with self.assertRaises(r.InputError):
             self.d.bind(assessment, "disabled", {"id": "team", "version": "1"}, "no")
         self.task["prompt"] += " Changed requirements."
@@ -1360,7 +1372,7 @@ class P0VendorGuidance(unittest.TestCase):
 
         self.assertEqual(replay()["selected"]["profile"], "light")  # offline replay
         self.assertEqual(replay({"light": None, "strong": None})["status"], "selected")
-        self.assertEqual(replay({"light": "codexbar_quota_exhausted", "strong": None})["status"], "stale_assessment")
+        self.assertEqual(replay({"light": "codexbar_quota_exhausted", "strong": None})["status"], "no_eligible_profile")
 
     def test_v99_cli_preflight_all_unavailable_skips_decisions_and_external_skips_probe(self):
         from bench_router import herdr
@@ -1611,6 +1623,8 @@ class P0VendorGuidance(unittest.TestCase):
             selection = {k: v for k, v in out["selection"].items() if k != "source"}
             self.assertEqual((selection["decision"]["stages"], selection["decision"]["provider"]), ([], "user"))
             self.assertEqual(self.route(selection=selection)["selected"], out["selected"])  # replays offline
+            blocked = self.route(selection=selection, availability={"light-high": "executable_not_found"})
+            self.assertEqual((blocked["status"], blocked["selected"]), ("no_eligible_profile", None))
             assessment = self.d.evaluate(self.task, self.cfg, MAPPING, None, [], NOW, host="codex", env={})
         self.assertEqual((assessment["status"], assessment["recommendation"]["profile"]), ("ok", "light-high"))
         self.assertEqual(self.d.bind(assessment, "light-high", {"id": "user", "version": "1"}, "named")["profile"], "light-high")
