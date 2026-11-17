@@ -229,8 +229,18 @@ def codex_models(path=CODEX_MODELS_CACHE):
         return {}
 
 
-def discover_profiles(which=shutil.which, runner=subprocess.run, codex_cache=CODEX_MODELS_CACHE, claude_models=None):
-    """Discover accepted models from native CLI caches and vendor guidance, never usage history."""
+def cost_tier(model, output_prices):
+    """List output price per 1M tokens: < $5 low, < $20 medium, else high; unpriced models stay high."""
+    from .data import model_key
+    price = output_prices.get(model_key(model)[0])
+    return "high" if price is None else "low" if price < 5 else "medium" if price < 20 else "high"
+
+
+def discover_profiles(which=shutil.which, runner=subprocess.run, codex_cache=CODEX_MODELS_CACHE, claude_models=None,
+                      output_prices=None):
+    """Discover accepted models from native CLI caches and vendor guidance, never usage history.
+    output_prices: data.aa_output_prices() result that sets cost_tier; without it every profile is high."""
+    output_prices = output_prices or {}
     if claude_models is None:
         from . import decision  # the guidance file is the only local list of current Claude models
         claude_models = [m for m, x in decision.load_guidelines()["models"].items() if x["vendor"] == "claude"]
@@ -255,7 +265,7 @@ def discover_profiles(which=shutil.which, runner=subprocess.run, codex_cache=COD
             profiles.append({"id": profile_id, "enabled": True, "kind": kind, "executable": kind,
                              "args": args, "model_id": model, "harness_id": harness_id,
                              "reasoning_effort": effort, "config_revision": revision,
-                             "cost_tier": "high", "inference_local": False, "context_tokens": 0,
+                             "cost_tier": cost_tier(model, output_prices), "inference_local": False, "context_tokens": 0,
                              "capabilities": ["filesystem_write"]})
     profiles = [p for p in profiles if probe(p, which) is None]
     if which("agy"):
@@ -270,7 +280,7 @@ def discover_profiles(which=shutil.which, runner=subprocess.run, codex_cache=COD
             profiles.append({"id": profile_id, "enabled": True, "kind": "agy", "executable": "agy",
                              "args": ["--model", model], "model_id": model_id, "harness_id": "antigravity-cli",
                              "reasoning_effort": effort, "config_revision": "agy-models",
-                             "cost_tier": "high", "inference_local": False, "context_tokens": 0,
+                             "cost_tier": cost_tier(model_id, output_prices), "inference_local": False, "context_tokens": 0,
                              "capabilities": ["filesystem_write"]})
     if not profiles:
         raise r.InputError("No supported CLI models found; refresh the Codex model cache or check installed CLI model lists")

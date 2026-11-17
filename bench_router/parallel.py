@@ -106,7 +106,8 @@ def plan(g, cfg, mapping, snap, snap_warnings, availability, decision_options=No
                     chk = r.apply_selection(res, cfg, None, sel)
                 members.append({"label": f"{t['task_id']}-{k}", "index": i, "task_id": t["task_id"],
                                 "profile": sel["profile"], "selection": sel, "rounds": [],
-                                "status": "planned" if chk["status"] == "selected" else chk["status"]})
+                                "status": "planned" if chk["status"] == "selected" else chk["status"],
+                                **({"excluded": chk["excluded"]} if chk["status"] == "no_eligible_profile" else {})})
             continue
         picked = []
         for k in range(1, g["fanout"] + 1):

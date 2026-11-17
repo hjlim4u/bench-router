@@ -424,6 +424,44 @@ class P2(unittest.TestCase):
         self.assertEqual((len(ids), len(set(ids))), (len(profiles), len(profiles)))
         self.assertTrue(len(profiles) > 1 and all(len(i) <= 48 for i in ids))
 
+    def test_v118_discover_merge_appends_missing_profiles_priced_from_aa(self):
+        import io
+        import sqlite3
+        from bench_router import cli
+        base = Path(self.tmp.name)
+        config_dir, cache_dir = base / "config", base / "cache"
+        config_dir.mkdir()
+        cache_dir.mkdir()
+        db = sqlite3.connect(cache_dir / "bench-router.db")
+        db.executescript("CREATE TABLE sources(id TEXT, current_snapshot TEXT); CREATE TABLE snapshots(id TEXT, payload TEXT);"
+                         "INSERT INTO sources VALUES ('aa', 's1');")
+        rows = [{"slug": "claude-fable-5-2-high", "pricing": {"price_1m_output_tokens": 40}},
+                {"slug": "claude-haiku-5-5", "pricing": {"price_1m_output_tokens": 0.5}},
+                {"slug": "claude-sonnet-5-5", "pricing": {"price_1m_output_tokens": 0}}]  # 0 = unpriced
+        db.execute("INSERT INTO snapshots VALUES ('s1', ?)", (json.dumps({"pages": [{"data": rows}]}),))
+        db.commit()
+        db.close()
+        existing = [{**profile("claude-haiku-5-5-low", "medium"), "kind": "claude", "model_id": "claude-haiku-5-5",
+                     "reasoning_effort": "low"}]
+        path = config_dir / "profiles.toml"
+        path.write_text("# hand-tuned\n" + hd.profiles_toml(existing), "utf-8")
+        before = path.read_text("utf-8")
+        runner = lambda cmd, **kw: SimpleNamespace(returncode=0 if cmd[0] == "claude" else 1, stderr="",
+                                                   stdout="  --effort <level>  Effort level (low, high)\n")
+        real = hd.discover_profiles
+        fake = lambda **kw: real(which=lambda name: "/usr/bin/tool", runner=runner, codex_cache=base / "none.json",
+                                 claude_models=["claude-fable-5-2", "claude-haiku-5-5", "claude-sonnet-5-5"], **kw)
+        argv = ["--config-dir", str(config_dir), "--cache-dir", str(cache_dir), "profiles", "discover"]
+        with patch.object(hd, "discover_profiles", side_effect=fake), patch("sys.stdout", io.StringIO()):
+            self.assertNotEqual(cli.main(argv), 0)  # an existing file still needs --merge or --force
+            self.assertEqual(cli.main(argv + ["--merge"]), 0)
+        self.assertTrue(path.read_text("utf-8").startswith(before))
+        tiers = {p["id"]: p["cost_tier"] for p in r.load_profiles(path)["profile"]}
+        self.assertEqual(tiers, {"claude-haiku-5-5-low": "medium",  # existing entry kept, not re-priced or duplicated
+                                 "claude-claude-haiku-5-5-high": "low",
+                                 "claude-claude-fable-5-2-low": "high", "claude-claude-fable-5-2-high": "high",
+                                 "claude-claude-sonnet-5-5-low": "high", "claude-claude-sonnet-5-5-high": "high"})
+
     def _write_profiles(self, profiles):
         path = Path(self.tmp.name) / "profiles.toml"
         path.write_text(hd.profiles_toml(profiles), "utf-8")
@@ -432,6 +470,7 @@ class P2(unittest.TestCase):
     def test_v98_external_selection_dispatch_and_receipt_first_recovery(self):
         from bench_router import decision
         self.cfg = config([*self.cfg["profile"], profile("b")])
+        self.cfg["profile"][0].update(kind="claude", executable="claude")
         t = self.task()
         def evaluate(response=None):
             return decision.evaluate(t, self.cfg, MAPPING, None, [], NOW, host="codex", env={}, response=response)
@@ -440,10 +479,13 @@ class P2(unittest.TestCase):
         self.assertIn("upstream_selection_required", assessment["recommendation"]["diagnostics"])
         selection = decision.bind(assessment, "b", {"id": "team", "version": "1"}, "specialist", True)
         fake = FakeProjects(on_prompt=write_result(), profiles={p["id"]: p for p in self.cfg["profile"]})
-        def dispatch():
+        def dispatch(which=which):
             return hd.dispatch(t, self.cfg, MAPPING, None, [], session="default", runner=fake, which=which,
                                selection=selection, decision_options={"host": "codex", "env": {}})
-        out = dispatch()
+        blocked = dispatch(lambda name: None if name == "codex" else which(name))
+        self.assertEqual((blocked["status"], fake.prompts), ("no_eligible_profile", []))
+        self.assertIn({"profile": "b", "reasons": ["executable_not_found"]}, blocked["excluded"])
+        out = dispatch(lambda name: None if name == "claude" else which(name))
         self.assertEqual((out["status"], out["selected"]["profile"], out["selection"]["schema_version"]),
                      ("completed", "b", "6.0"))
         with patch.object(decision, "load_guidelines", side_effect=AssertionError("must collect saved run")):

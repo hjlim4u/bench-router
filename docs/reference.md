@@ -143,7 +143,7 @@ context_tokens = 0
 capabilities = []
 ```
 
-`profiles discover [--force]` generates candidate configurations in `profiles.toml` from installed CLIs. Codex inspects `models_cache.json` and per-model effort; Claude inspects guidelines models and CLI help effort flags; agy inspects account model listings. Usage history is not used as a runnable model catalog. Generated profiles default to `enabled=true`, `cost_tier=high`, and `context_tokens=0`. Review permissions, capabilities, context limits, and live account invocation status before use. Overwriting existing files requires `--force`.
+`profiles discover [--force]` generates candidate configurations in `profiles.toml` from installed CLIs. Codex inspects `models_cache.json` and per-model effort; Claude inspects guidelines models and CLI help effort flags; agy inspects account model listings. Usage history is not used as a runnable model catalog. Generated profiles default to `enabled=true` and `context_tokens=0`; `cost_tier` follows the cached AA list output price per 1M tokens (< $5 low, < $20 medium, otherwise high; `high` when unpriced or before an AA refresh). Review permissions, capabilities, context limits, and live account invocation status before use. Overwriting existing files requires `--force`; `--merge` instead appends only profiles whose ID or (kind, model, effort) is not already present, leaving existing entries untouched.
 
 <a id="aliasestoml"></a>
 ### aliases.toml

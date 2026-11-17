@@ -24,4 +24,6 @@
 - [2026-10-30T23:43:41Z] INGEST source=_raw/_archived/2026-10-3*-openrouter-*.md,_raw/_archived/2026-10-31-artificial-analysis-*.md,_raw/web/openrouter-*.json pages_created=3 pages_updated=6 mode=append qmd=skipped_collection_unset
 - [2026-11-08T15:21:01Z] WIKI_RESEARCH topic="per-model quota and CodeBurn replacement" rounds=3 sources_fetched=14 pages_created=7 backends_used=none
 - [2026-11-08T15:23:26Z] WIKI_RESEARCH topic="per-model quota and CodeBurn replacement" rounds=3 sources_fetched=16 pages_created=7 backends_used=none
+- [2026-11-10T00:27:29Z] WIKI_RESEARCH topic="Claude Fable 5.2 and Claude Mythos 5.2 release and benchmarks" rounds=3 sources_fetched=4 pages_created=5 backends_used=none
+- [2026-11-10T00:35:55Z] INGEST source=_raw pages_created=8 pages_updated=2
 - [2026-11-13T03:09:22Z] INGEST source=vendor-guidance-2026-11-13 pages_created=0 pages_updated=8 mode=raw

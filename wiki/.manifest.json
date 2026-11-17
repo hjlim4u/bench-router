@@ -257,6 +257,97 @@
         "references/sources/openrouter-benchmarks.md"
       ]
     },
+    "_raw/_archived/2026-11-07-herdr-app-vs-tui-plugin-compat.md": {
+      "content_hash": "4bb5675ec99245567f59e6883e3cde746c4d70f5a6e4c6ed002e21286f0197e7",
+      "last_ingested": "2026-11-10T00:35:13.305262+00:00",
+      "pages_produced": [
+        "projects/bench-router/synthesis/herdr-app-vs-tui-plugin-compat.md"
+      ]
+    },
+    "_raw/_archived/2026-11-07-herdr-projects-unique-features-adapter-alternatives.md": {
+      "content_hash": "134e104e941cef3fa5bc77635297abc891b25dc47b740a7ee5e51a6df4d581ce",
+      "last_ingested": "2026-11-10T00:35:13.416228+00:00",
+      "pages_produced": [
+        "projects/bench-router/synthesis/herdr-projects-features-and-adapters.md"
+      ]
+    },
+    "_raw/_archived/2026-11-07-shepherdr-rename-herdr-projects.md": {
+      "content_hash": "51d5e43875ddeec5949c713b5b10002f956c1d7f400e18e350da7cec138d9c30",
+      "last_ingested": "2026-11-10T00:35:13.550521+00:00",
+      "pages_produced": [
+        "projects/bench-router/synthesis/herdr-projects-shepherdr-rename.md"
+      ]
+    },
+    "_raw/_archived/2026-11-10-herdr-plugin-install-renamed-repo-and-skill-symlinks.md": {
+      "content_hash": "eefea035fc8c98c742ba61268613f084504c89b9a4db615d280a3b0cb5574b6a",
+      "last_ingested": "2026-11-10T00:35:13.662017+00:00",
+      "pages_produced": [
+        "projects/bench-router/synthesis/herdr-projects-install-and-skill-symlinks.md"
+      ]
+    },
+    "_raw/_archived/2026-11-10-herdr-tui-cli-automation-gotchas.md": {
+      "content_hash": "82187b17feb1371aaa6236e903b60fb32df6059895dff597413ad6c399dc4ac5",
+      "last_ingested": "2026-11-10T00:35:13.761472+00:00",
+      "pages_produced": [
+        "projects/bench-router/synthesis/herdr-tui-cli-automation.md"
+      ]
+    },
+    "_raw/_archived/2026-11-10-anthropic-fable-5-2-mythos-5-2-announcement.md": {
+      "content_hash": "0cb7aafb2ddbb15b38d2671b58594c6e0a7e0a7367c1d9f985c13c537b1c5dd2",
+      "last_ingested": "2026-11-10T00:35:13.870463+00:00",
+      "pages_produced": [
+        "references/sources/anthropic-claude-fable-and-mythos-5-2.md"
+      ]
+    },
+    "_raw/_archived/2026-11-10-anthropic-fable-5-2-mythos-5-2-system-card.md": {
+      "content_hash": "b57118bf694ec6994a2c1588abf4a45676f1214a8b1b581f2c1b23b8772c2c5c",
+      "last_ingested": "2026-11-10T00:35:13.978121+00:00",
+      "pages_produced": [
+        "references/sources/anthropic-claude-fable-and-mythos-5-2.md"
+      ]
+    },
+    "_raw/_archived/2026-11-10-anthropic-fable-5-2-model-overview.md": {
+      "content_hash": "8ac1daf2c4590fbd6af1a160dda8757bd67272c415317a512d405db5a6fd0cfb",
+      "last_ingested": "2026-11-10T00:35:14.085697+00:00",
+      "pages_produced": [
+        "references/sources/anthropic-claude-fable-and-mythos-5-2.md"
+      ]
+    },
+    "_raw/_archived/2026-11-10-anthropic-whats-new-fable-5-2.md": {
+      "content_hash": "e56d796813547b6431fca438baeca87bd8722d58ef2232df15285d5e9031f932",
+      "last_ingested": "2026-11-10T00:35:14.193379+00:00",
+      "pages_produced": [
+        "references/sources/anthropic-fable-5-2-migration.md"
+      ]
+    },
+    "_raw/_archived/2026-11-10-anthropic-fable-5-2-migration-guide.md": {
+      "content_hash": "540a894f86a1728c122e81aa3d97917bbfea3863cea10659b48c44bfbb754279",
+      "last_ingested": "2026-11-10T00:35:14.305939+00:00",
+      "pages_produced": [
+        "references/sources/anthropic-fable-5-2-migration.md"
+      ]
+    },
+    "_raw/_archived/2026-11-10-anthropic-advisor-tool.md": {
+      "content_hash": "2351dc16fae6acedd90c64d5ba6e919e4c0c348394526afb724dbb55223d370a",
+      "last_ingested": "2026-11-10T00:35:14.425454+00:00",
+      "pages_produced": [
+        "references/sources/anthropic-claude-code-advisor-fable.md"
+      ]
+    },
+    "_raw/_archived/2026-11-10-claudedev-multi-agent-teams-fable-5-2.md": {
+      "content_hash": "431e584dd65b79a6bc1a6c9856fa84105cd650a9ceddb16e65a3a41ac7ce0dd1",
+      "last_ingested": "2026-11-10T00:35:14.535807+00:00",
+      "pages_produced": [
+        "references/sources/anthropic-multi-agent-scaling-fable-5-2.md"
+      ]
+    },
+    "_raw/_archived/2026-11-10-anthropic-prompting-fable-5-2.md": {
+      "content_hash": "4689a0385d5e1af6cf3c6c0d6ecc5f7f698ffe6d3fb1b3cab4527b6e3d17898b",
+      "last_ingested": "2026-11-10T00:35:14.643450+00:00",
+      "pages_produced": [
+        "references/sources/anthropic-prompting-fable-5-2.md"
+      ]
+    },
     "_raw/_archived/2026-11-13-openai-model-selection.md": {
       "content_hash": "403c717466eafac3cff04d7efc88ad00bd3da7bd1ca88ab0e83202645b9f2346",
       "last_ingested": "2026-11-13T03:08:44.432475+00:00",
@@ -315,6 +406,25 @@
         "_staging/references/sources/local-token-cost-trackers.md",
         "_staging/concepts/quota-scopes.md",
         "_staging/synthesis/research-per-model-quota-codeburn-replacement.md"
+      ],
+      "pages_updated": []
+    },
+    {
+      "type": "research",
+      "topic": "Claude Fable 5.2 and Claude Mythos 5.2 release and benchmarks",
+      "researched_at": "2026-11-10T00:25:00Z",
+      "rounds_completed": 3,
+      "sources_fetched": 4,
+      "pages_created": [
+        "_raw/2026-11-10-anthropic-claude-fable-and-mythos-5-2-announcement.md",
+        "_raw/2026-11-10-anthropic-system-card-fable-5-2-mythos-5-2-capabilities-benchmarks.md",
+        "_raw/2026-11-10-anthropic-claude-code-advisor-fable-guide.md",
+        "_raw/2026-11-10-anthropic-claude-dev-scaling-multi-agent-teams-fable-5-2.md",
+        "references/sources/anthropic-claude-fable-and-mythos-5-2.md",
+        "references/sources/anthropic-claude-code-advisor-fable.md",
+        "concepts/dual-safeguard-deployment.md",
+        "concepts/fable-advisor-pattern.md",
+        "synthesis/Research: Claude Fable 5.2 and Mythos 5.2.md"
       ],
       "pages_updated": []
     }

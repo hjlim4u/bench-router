@@ -302,13 +302,22 @@ def _status(args):
 
 
 def _profiles(args):
-    from . import herdr
+    from . import data, herdr
     path = args.config_dir / "profiles.toml"
-    if path.exists() and not args.force:
-        raise r.InputError(f"{path} exists; use profiles discover --force to replace it")
-    profiles = herdr.discover_profiles()
+    merge = args.merge and path.exists()
+    if path.exists() and not (args.force or args.merge):
+        raise r.InputError(f"{path} exists; use profiles discover --merge to add missing profiles or --force to replace it")
+    prices = data.aa_output_prices(args.cache_dir, data.load_aliases(args.config_dir / "aliases.toml"))
+    profiles = herdr.discover_profiles(output_prices=prices)
+    text = herdr.profiles_toml(profiles)
+    if merge:  # append only what is missing so hand-tuned profiles stay byte-identical
+        old = r.load_profiles(path)["profile"]
+        have = {(p.get("kind"), p["model_id"], p["reasoning_effort"]) for p in old} | {p["id"] for p in old}
+        profiles = [p for p in profiles if (p["kind"], p["model_id"], p["reasoning_effort"]) not in have and p["id"] not in have]
+        text = path.read_text("utf-8").rstrip("\n") + "\n" + herdr.profiles_toml(profiles).split("\n", 1)[1]
     path.parent.mkdir(parents=True, exist_ok=True)
-    r.atomic_write(path, herdr.profiles_toml(profiles).encode("utf-8"))
+    if profiles or not merge:
+        r.atomic_write(path, text.encode("utf-8"))
     return {"schema_version": r.SCHEMA_VERSION, "status": "ok", "written": str(path),
             "profiles": [p["id"] for p in profiles]}
 
@@ -530,8 +539,10 @@ Creates profiles.toml and aliases.toml under --config-dir, preserving existing
 files. Offline; benchmark refresh and live agent setup are separate steps.""",
     "profiles": """Example: bench-router profiles discover
 Queries supported local agent CLIs to build profiles.toml. Existing configuration
-is preserved unless --force is supplied. This discovers execution profiles,
-not benchmark data; init provides bundled defaults without discovery.""",
+is preserved unless --force is supplied; --merge appends only missing profiles.
+cost_tier comes from the cached AA list output price (<$5 low, <$20 medium,
+else high; unpriced high). This discovers execution profiles, not benchmark
+data; init provides bundled defaults without discovery.""",
     "parallel": """Prefer group schema 2.0 with explicit selections from evaluate/select:
   {"schema_version":"2.0","group_id":"group-001","cwd":"/absolute/path/to/repo",
    "tasks":[{"task":<task object without cwd>,"selections":[<selection object>]}]}
@@ -659,7 +670,9 @@ def main(argv=None):
     sub.add_parser("init", help="create shared default profiles and aliases offline; keep existing files")
     profiles = sub.add_parser("profiles", help="create profiles.toml from every model each CLI's model flag accepts")
     profiles.add_argument("action", choices=["discover"], help="discover model/effort execution profiles from supported local agent CLIs and write profiles.toml")
-    profiles.add_argument("--force", action="store_true", help="replace an existing profiles.toml")
+    mode = profiles.add_mutually_exclusive_group()
+    mode.add_argument("--force", action="store_true", help="replace an existing profiles.toml")
+    mode.add_argument("--merge", action="store_true", help="append only profiles missing from an existing profiles.toml; existing entries are untouched")
     pp = sub.add_parser("parallel", help="dispatch tasks × fanout agents concurrently, each in its own git worktree")
     pp.add_argument("--group", required=True, help="group JSON file (1.0|2.0) of tasks and worker allocations; schema 2.0 uses selections per task; see example below")
     pp.add_argument("--dry-run", action="store_true", help="plan/validate only; no network, herdr calls, worktrees or file writes")

@@ -695,6 +695,29 @@ def auto_canonical(cfg):
     return {model_key(m)[0]: m for m in {p["model_id"] for p in cfg["profile"]}}
 
 
+def aa_output_prices(cache_dir, aliases):
+    """model_key → highest AA list output price ($/1M tokens) in the current AA snapshot; {} without one."""
+    path = Path(cache_dir) / "bench-router.db"
+    if not path.exists():
+        return {}
+    db = sqlite3.connect(path)  # not open_db: reading must not create a schema
+    try:
+        row = db.execute("SELECT sn.payload FROM sources s JOIN snapshots sn ON sn.id = s.current_snapshot "
+                         "WHERE s.id = 'aa'").fetchone()
+    except sqlite3.Error:
+        return {}
+    finally:
+        db.close()
+    names, out = aliases.get("aa", {}), {}
+    for body in json.loads(row[0])["pages"] if row else ():
+        for m in body["data"]:
+            price = (m.get("pricing") or {}).get("price_1m_output_tokens")
+            if type(price) in (int, float) and price > 0:  # AA reports 0 for unpriced models
+                key = model_key(names[m["slug"]])[0] if m["slug"] in names else model_key(m["slug"])[1]
+                out[key] = max(price, out.get(key, 0))
+    return out
+
+
 def build_snapshot(db, cfg, mapping, aliases, now):
     sources, cohorts, index, unmatched, ambiguous = {}, {}, {}, {}, []
     auto = auto_canonical(cfg)
