@@ -1,7 +1,7 @@
 ---
 title: Hot Cache
-updated: 2026-11-08T15:23:26Z
-pages: 104
+updated: 2026-11-13T03:10:26Z
+pages: 118
 generated_by: obsidian-wiki memory hot
 ---
 
@@ -11,9 +11,9 @@ generated_by: obsidian-wiki memory hot
 
 ## Recent Activity
 
-- [2026-10-30] INGEST source=_raw/_archived/2026-10-3*-openrouter-*.md,_raw/_archived/20... pages_created=3 pages_updated=6 ...
-- [2026-11-08] WIKI_RESEARCH topic=per-model quota and CodeBurn replacement rounds=3 sources_fetched=14 ...
-- [2026-11-08] WIKI_RESEARCH topic=per-model quota and CodeBurn replacement rounds=3 sources_fetched=16 ...
+- [2026-11-10] WIKI_RESEARCH topic=Claude Fable 5.2 and Claude Mythos 5.2 release and benchmar... rounds=3 sources_fetched=4 ...
+- [2026-11-10] INGEST source=_raw pages_created=8 pages_updated=2
+- [2026-11-13] INGEST source=vendor-guidance-2026-11-13 pages_created=0 pages_updated=8 ...
 
 ## Active Threads
 
@@ -25,7 +25,7 @@ generated_by: obsidian-wiki memory hot
 
 ## Key Takeaways
 
-Per-model quotas and Claude Pro Fable usage credits are exposed headlessly by vendor CLIs (agy -p /usage, claude -p /usage stream-json, codex app-server); CodexBar and Tokscale are the strongest multi-agent replacements for CodeBurn.
+Ingested 17 raw drafts: promoted 10 Herdr integration and Anthropic Fable 5.2/Mythos 5.2 reference and synthesis pages, archiving raw files into _raw/_archived/.
 
 ## Flagged Contradictions
 

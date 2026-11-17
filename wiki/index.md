@@ -112,6 +112,8 @@ Benchmark knowledge for bench-router. Schema: [[AGENTS]]. Compiled into `index.j
 
 ## Concepts
 
+- [[concepts/fable-advisor-pattern]] — Architecture pattern that pairs a fast, cost-effective daily driver (Sonnet/Opus) with a high-capability frontier model (Fable) consulted selectively at critical decision points. ( #concept #agentic #orchestration #advisor #claude-code #cost-optimization)
+- [[concepts/dual-safeguard-deployment]] — Deployment pattern where identical underlying model weights are released in two safeguard tiers: standard commercial production safeguards (Fable) vs verified permissive access (Mythos). ( #concept #safety #alignment #anthropic #deployment #dual-use)
 - [[concepts/facets/agent_signal]] — Real-world agent reliability signals. This router always delegates to CLI agents, so most apply to every task. Agent Arena metric is the IPS score (net improvement in percentage points over a rando... ( #facet #index)
 - [[concepts/facets/difficulty]] — Prompt difficulty. ( #facet #index)
 - [[concepts/facets/domain]] — Occupational field. The 8 of 23 BLS-SOC-based fields that have LMArena leaderboards. Gemini 2.5 Flash assigns zero or more per prompt. ( #facet #index)
@@ -119,6 +121,7 @@ Benchmark knowledge for bench-router. Schema: [[AGENTS]]. Compiled into `index.j
 - [[concepts/facets/shape]] — Request shape. ( #facet #index)
 - [[concepts/facets/task]] — Task type. LMArena category names are the base vocabulary; agentic task types that LMArena lacks come from The Model Gap and Hugging Face official benchmarks. ( #facet #index)
 - [[concepts/model-effort-selection]] — Model choice, reasoning effort, feasibility constraints, and measured workflow quality are distinct inputs to agent selection. ( #agentic #reasoning)
+- [[concepts/thinking-block-continuity]] — API constraint where thinking blocks require strict prefix immutability (no turn mutation) and are cryptographically or architecturally bound to the specific model version that generated them. ( #concept #reasoning #adaptive-thinking #api-contracts #claude)
 
 ## Entities
 
@@ -193,9 +196,10 @@ Benchmark knowledge for bench-router. Schema: [[AGENTS]]. Compiled into `index.j
 ## References
 
 - [[references/sources/agent-arena-methodology]] — Agent Arena causal-tracing methodology and signal definitions. ( #source #benchmark)
-- [[references/sources/anthropic-effort]] — Claude effort affects response, tool-call, and thinking tokens; per-model recommendations, quoted verbatim, override the general level table. ( #source #reasoning #coding)
-- [[references/sources/anthropic-model-selection]] — Anthropic's model matrix (most workloads start with Opus 5.5), efficiency-first and capability-first strategies, and effort defaults, quoted verbatim. ( #source #agentic #coding)
+- [[references/sources/anthropic-effort]] — Model-specific Claude effort guidance, Fable 5.2 calibration from its prompting guide, and explicit capture limitations. ( #source #reasoning #coding)
+- [[references/sources/anthropic-model-selection]] — Current Claude model roles including Fable 5.2, Opus 5.5 as the usual starting point, and dated selection strategies. ( #source #agentic #coding)
 - [[references/sources/anthropic-prompting-effort]] — Verbatim effort and agentic-coding passages from Anthropic's per-model prompting guides for Fable 5.1, Opus 5.5, Sonnet 5.5 and Haiku 5.5. ( #source #reasoning #coding)
+- [[references/sources/anthropic-claude-fable-and-mythos-5-2]] — Official Anthropic release of Claude Fable 5.2 & Claude Mythos 5.2: two safeguard tiers, $8/$40 per M tokens, fast mode, 1M context, state-of-the-art benchmarks in SWE-bench Pro (93.0%) and FrontierCode. ( #source #anthropic #fable #mythos #frontier-models #benchmarks)
 - [[references/sources/arena-alignment-index]] — Arena Alignment Index: Unauthorized Action, False Attribution, Deceptive Completion; LLM-judge rubrics; weights 50/25/25 (2026-10-08). ( #source #benchmark)
 - [[references/sources/arena-category]] — Arena category definitions: coding heuristic, long queries over 500 tokens, Polyglot language tags, LLM-classified creative writing. ( #source #benchmark)
 - [[references/sources/arena-expert]] — Expert tagging (zero-shot DeepSeek-v3, prompt only) and the 23 occupational categories, 8 with leaderboards. ( #source #benchmark)
@@ -204,27 +208,37 @@ Benchmark knowledge for bench-router. Schema: [[AGENTS]]. Compiled into `index.j
 - [[references/sources/arena-leaderboard-changelog]] — Leaderboard changelog: WebDev split, Document Arena, Image-to-WebDev, Bash Reliability replacing Bash Recovery. ( #source #benchmark)
 - [[references/sources/arena-vision-categories]] — Current Vision Arena categories: captioning, creative writing, diagrams, entity recognition, homework, humor, OCR. ( #source #benchmark)
 - [[references/sources/artificial-analysis-methodology]] — How Artificial Analysis builds Intelligence Index v5.0 (9 evaluations, 4 categories at 25%) and measures API speed, price and cache hit rate; includes retired constituents. ( #source #benchmark #aa #coding)
+- [[references/sources/anthropic-claude-code-advisor-fable]] — Official Claude Code documentation on configuring and invoking Claude Fable 5.2 via the advisor tool (/advisor, --advisor, advisorModel), model pairings, version requirements, and billing to usage credits. ( #source #claude-code #advisor #fable #configuration)
+- [[references/sources/anthropic-fable-5-2-migration]] — Official migration guide for Claude Fable 5.2 and Mythos 5.2: prefix check rules, model-tied thinking blocks, deprecated computer use tools, and advisor pairing restrictions. ( #source #anthropic #fable #mythos #migration #breaking-changes)
 - [[references/sources/google-gemini-prompting-strategies]] — Verbatim Gemini 3 and agentic-workflow prompting guidance from Google's prompt design page; the router shows these passages for a selected Gemini model. ( #source #reasoning #coding)
-- [[references/sources/google-gemini-models]] — Google's published Gemini model descriptions and new-project advice, quoted verbatim; distinct from thinking settings and measured routing results. ( #source #agentic #coding)
-- [[references/sources/google-gemini-thinking]] — Google's workload-based thinking guidance, automatic effort adjustment, and model-specific supported levels. ( #source #reasoning #agentic)
+- [[references/sources/google-gemini-models]] — Gemini 4 Carbon, Argon and Hydrogen roles, alongside dated descriptions of earlier models. ( #source #agentic #coding)
+- [[references/sources/google-gemini-thinking]] — Model-specific thinking defaults and levels, Hydrogen high starting guidance, conditional xhigh and output-budget constraints. ( #source #reasoning #agentic)
 - [[references/sources/hf-official-benchmarks]] — Hugging Face official benchmark datasets: 49 entries and their card descriptions (fetched 2026-10-17). ( #source #benchmark)
 - [[references/sources/lmarena-leaderboard-dataset]] — LMArena leaderboard dataset: configs, splits, column meanings. ( #source #benchmark)
-- [[references/sources/openai-model-selection]] — OpenAI's documented model/effort starting points, quoted verbatim, and its advice to keep the lightest setting that meets the quality bar. Includes GPT-6.1 Terra consideration guidance. ( #source #agentic #reasoning)
+- [[references/sources/openai-model-selection]] — Official OpenAI starting combinations, Terra workload guidance without a fixed effort, and task-based quality, time and cost comparisons. ( #source #agentic #reasoning)
 - [[references/sources/openai-prompting-guides]] — Verbatim prompting guidance from OpenAI's GPT-6 best practices, prompt engineering and Codex pages; the router shows these passages for a selected OpenAI model. ( #source #reasoning #coding)
 - [[references/sources/openrouter-benchmarks]] — OpenRouter's continuously run benchmark suite (GPQA, τ²-Airline, VGI, search, artifact/media, routers): what each measures, how it is graded, and how to read it. ( #source #benchmark #agentic #search)
+- [[references/sources/anthropic-prompting-fable-5-2]] — Fable 5.2 prompting and effort calibration: high by default, conditional xhigh, rare max, and whole-task completion. ( #source #anthropic #fable #prompt-engineering #effort #subagents)
+- [[references/sources/anthropic-multi-agent-scaling-fable-5-2]] — Research report on formalizing Fermat's Last Theorem in Lean 4 with a 1,000-agent Claude Fable 5.2 team across 28.7 hours using SQLite shared state, sandbox isolation, and command classifier monitoring. ( #source #claude-dev #multi-agent #fable #safety #fermat-theorem)
 - [[references/sources/themodelgap-data]] — The Model Gap benchmark metadata and scores (CC BY 4.0). ( #source #benchmark)
 - [[references/sources/visionarena-battle]] — VisionArena-Battle dataset: question category tag names. ( #source #benchmark)
 - [[references/sources/visionarena-paper]] — VisionArena paper: original categories (Gemini 1.5 Flash classification) and the multi-turn, exclude-ties and exclude-refusal filters. ( #source #benchmark)
 
 ## Synthesis
 
+- [[synthesis/Research: Claude Fable 5.2 and Mythos 5.2]] — Comprehensive synthesis of Anthropic's Claude Fable 5.2 & Mythos 5.2: benchmarks (SWE-bench Pro 93.0%, FrontierCode 49.1, HLE 74.2%), dual-safeguard architecture, Claude Code advisor guide, and multi-agent scaling. ( #research #anthropic #fable #mythos #swe-bench #benchmarks #claude-code #advisor #frontier-models)
 - [[synthesis/vendor-guided-model-selection]] — Entry point for official vendor guidance, the current bench-router policy audit, and a proposed approach to selecting model/effort configurations. ( #agentic #reasoning #coding)
 
 ## Projects
 
 - [[projects/bench-router/synthesis/routing-selection-audit]] — Current automatic and external-choice paths, exact legacy scoring rules, optional cost constraints, and the limits of their empirical grounding. ( #agentic #coding #reasoning)
 - [[projects/bench-router/bench-router]] — Project map separating dated routing audits, current policy documentation, model/effort guidance, and multi-agent planning proposals. ( #agentic #coding)
+- [[projects/bench-router/synthesis/herdr-tui-cli-automation]] — Live-confirmed herdr 0.9.5 CLI behaviors for driving panes and agents from scripts: empty pane run stdout, JSON errors on stderr, server scoping, and agent turn detection. ( #herdr #bench-router #agent-automation #cli)
+- [[projects/bench-router/synthesis/herdr-app-vs-tui-plugin-compat]] — herdr-app (hc/herdr-core runtime, layouts+JS mods) is separate from the herdr 0.9.5 TUI plugin system; of Ovis, reviewr, herdr-projects only Ovis has app support. ( #herdr #herdr-app #plugin #compatibility #bench-router)
+- [[projects/bench-router/synthesis/herdr-projects-shepherdr-rename]] — shepherdr 3.x keeps the board+worktree+review concept but ships as a herdr-app layout (install.sh), not a herdr plugin; bench-router maintains 1.2.x pinning. ( #herdr #herdr-projects #shepherdr #plugin #migration)
+- [[projects/bench-router/synthesis/herdr-projects-install-and-skill-symlinks]] — How to reinstall herdr-projects 1.2.27 from renamed Shepherdr repo, install herdr-app alongside herdr-core, and resolve npx skills symlink drops. ( #herdr #herdr-projects #shepherdr #skills #symlinks #mise)
 - [[projects/bench-router/synthesis/multi-agent-pattern-selection]] — Propose pattern candidates after task analysis, then choose the pattern, role assignments, and aggregation together using workflow evidence before dispatch. ( #agentic #reasoning #coding)
 - [[projects/bench-router/synthesis/openrouter-router-benchmarks]] — OpenRouter's routing leaderboard: on its index the best router ties the best single model at lower cost. Findings plus a labelled proposal for how bench-router could use it. ( #agentic #coding #benchmark)
 - [[projects/bench-router/synthesis/vendor-guided-routing-proposal]] — Unimplemented proposal: use official workload/configuration advice to narrow eligible profiles, then compare quality evidence and explicit cost constraints. ( #agentic #reasoning #coding)
 - [[projects/bench-router/synthesis/router-orchestrator-boundary]] — Original proposal for a pattern-agnostic router, with a 2026-10-23 cross-check linking the consolidated design and corrections. ( #agentic #coding)
+- [[projects/bench-router/synthesis/herdr-projects-features-and-adapters]] — Source-verified herdr-projects 1.2.26 features used by the board runner (turn-end hooks, finish line, WORK_SETTINGS) and A/B/inline research on alternatives. ( #herdr #herdr-projects #adapter #bench-router #coordination)
