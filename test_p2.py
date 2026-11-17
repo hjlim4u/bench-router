@@ -406,13 +406,13 @@ class P2(unittest.TestCase):
         profiles = hd.discover_profiles(which=lambda name: "/usr/bin/tool", runner=runner, codex_cache=cache,
                                         claude_models=["claude-haiku-5-5", "claude-opus-5-5"])
         by_id = {p["id"]: p for p in profiles}
-        self.assertEqual(sorted(by_id), ["claude-claude-haiku-5-5-low", "claude-claude-haiku-5-5-max",
-                                         "claude-claude-opus-5-5-low", "claude-claude-opus-5-5-max",
+        self.assertEqual(sorted(by_id), ["claude-haiku-5-5-low", "claude-haiku-5-5-max",
+                                         "claude-opus-5-5-low", "claude-opus-5-5-max",
                                          "codex-gpt-6-1-sol-medium", "codex-gpt-6-astra-low", "codex-gpt-6-astra-ultra"])
         # the cache's own efforts replace the default list; hidden internal models are not registered
         self.assertEqual(by_id["codex-gpt-6-1-sol-medium"]["config_revision"], "codex-models-cache")
-        self.assertEqual(by_id["claude-claude-haiku-5-5-max"]["args"], ["--model", "claude-haiku-5-5", "--effort", "max"])
-        self.assertEqual(by_id["claude-claude-opus-5-5-low"]["config_revision"], "claude-guidance")
+        self.assertEqual(by_id["claude-haiku-5-5-max"]["args"], ["--model", "claude-haiku-5-5", "--effort", "max"])
+        self.assertEqual(by_id["claude-opus-5-5-low"]["config_revision"], "claude-guidance")
         self.assertEqual(hd.codex_models(Path(self.tmp.name) / "missing.json"), {})
 
     def test_v97b_long_model_names_keep_distinct_effort_ids(self):
@@ -458,9 +458,9 @@ class P2(unittest.TestCase):
         self.assertTrue(path.read_text("utf-8").startswith(before))
         tiers = {p["id"]: p["cost_tier"] for p in r.load_profiles(path)["profile"]}
         self.assertEqual(tiers, {"claude-haiku-5-5-low": "medium",  # existing entry kept, not re-priced or duplicated
-                                 "claude-claude-haiku-5-5-high": "low",
-                                 "claude-claude-fable-5-2-low": "high", "claude-claude-fable-5-2-high": "high",
-                                 "claude-claude-sonnet-5-5-low": "high", "claude-claude-sonnet-5-5-high": "high"})
+                                 "claude-haiku-5-5-high": "low",
+                                 "claude-fable-5-2-low": "high", "claude-fable-5-2-high": "high",
+                                 "claude-sonnet-5-5-low": "high", "claude-sonnet-5-5-high": "high"})
 
     def _write_profiles(self, profiles):
         path = Path(self.tmp.name) / "profiles.toml"

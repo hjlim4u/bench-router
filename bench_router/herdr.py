@@ -256,7 +256,8 @@ def discover_profiles(which=shutil.which, runner=subprocess.run, codex_cache=COD
         kind, harness_id, model_flag = spec
         efforts = efforts or (claude_efforts(runner) if kind == "claude" else ("low", "medium", "high", "xhigh"))
         for effort in efforts or ("unknown",):
-            profile_id = re.sub(r"[^a-z0-9_-]", "-", f"{kind}-{model.lower()[:48 - len(kind) - len(effort) - 2]}-{effort}").rstrip("-")
+            name = model.lower().removeprefix(f"{kind}-")  # guide IDs already start with "claude-"
+            profile_id = re.sub(r"[^a-z0-9_-]", "-", f"{kind}-{name[:48 - len(kind) - len(effort) - 2]}-{effort}").rstrip("-")
             if not profile_id or any(p["id"] == profile_id for p in profiles):
                 continue
             args = [model_flag, model]
