@@ -121,6 +121,7 @@ Benchmark knowledge for bench-router. Schema: [[AGENTS]]. Compiled into `index.j
 - [[concepts/facets/shape]] — Request shape. ( #facet #index)
 - [[concepts/facets/task]] — Task type. LMArena category names are the base vocabulary; agentic task types that LMArena lacks come from The Model Gap and Hugging Face official benchmarks. ( #facet #index)
 - [[concepts/model-effort-selection]] — Model choice, reasoning effort, feasibility constraints, and measured workflow quality are distinct inputs to agent selection. ( #agentic #reasoning)
+- [[concepts/responses-api-prefix-continuity]] — How GPT-6.2 Responses API preserves reasoning items and prompt cache hits by keeping conversation prefixes immutable and placing stable instructions in a leading developer message. ( #concept #openai #responses-api #prompt-caching #reasoning)
 - [[concepts/thinking-block-continuity]] — API constraint where thinking blocks require strict prefix immutability (no turn mutation) and are cryptographically or architecturally bound to the specific model version that generated them. ( #concept #reasoning #adaptive-thinking #api-contracts #claude)
 
 ## Entities
@@ -215,8 +216,11 @@ Benchmark knowledge for bench-router. Schema: [[AGENTS]]. Compiled into `index.j
 - [[references/sources/google-gemini-thinking]] — Model-specific thinking defaults and levels, Hydrogen high starting guidance, conditional xhigh and output-budget constraints. ( #source #reasoning #agentic)
 - [[references/sources/hf-official-benchmarks]] — Hugging Face official benchmark datasets: 49 entries and their card descriptions (fetched 2026-10-17). ( #source #benchmark)
 - [[references/sources/lmarena-leaderboard-dataset]] — LMArena leaderboard dataset: configs, splits, column meanings. ( #source #benchmark)
-- [[references/sources/openai-model-selection]] — Official OpenAI starting combinations, Terra workload guidance without a fixed effort, and task-based quality, time and cost comparisons. ( #source #agentic #reasoning)
+- [[references/openai-gpt-6-2]] — OpenAI's November 2026 flagship (gpt-6.2-astra) and cost-efficient (gpt-6.2-sol) reasoning models for agentic coding, scientific workflows, and professional deliverables. ( #entity #openai #gpt-6.2 #astra #sol #codex)
+- [[references/sources/openai-model-selection]] — Official OpenAI starting combinations (updated 2026-11-18 for GPT-6.2 Astra and Sol), Terra workload guidance, and task-based comparisons. ( #source #agentic #reasoning)
+- [[references/sources/openai-gpt-6-2-prompting]] — Official OpenAI "Using GPT-6.2" guide covering Responses API prefix/caching changes, reasoning effort defaults, and prompting best practices for GPT-6.2 Astra and Sol. ( #source #openai #prompting #responses-api #migration)
 - [[references/sources/openai-prompting-guides]] — Verbatim prompting guidance from OpenAI's GPT-6 best practices, prompt engineering and Codex pages; the router shows these passages for a selected OpenAI model. ( #source #reasoning #coding)
+- [[references/sources/openai-gpt-6-2-release]] — Launch announcement, API pricing, rollout channels, safety thresholds, and benchmark highlights for GPT-6.2 Astra and GPT-6.2 Sol (released 2026-11-17). ( #source #openai #astra #sol #benchmarks)
 - [[references/sources/openrouter-benchmarks]] — OpenRouter's continuously run benchmark suite (GPQA, τ²-Airline, VGI, search, artifact/media, routers): what each measures, how it is graded, and how to read it. ( #source #benchmark #agentic #search)
 - [[references/sources/anthropic-prompting-fable-5-2]] — Fable 5.2 prompting and effort calibration: high by default, conditional xhigh, rare max, and whole-task completion. ( #source #anthropic #fable #prompt-engineering #effort #subagents)
 - [[references/sources/anthropic-multi-agent-scaling-fable-5-2]] — Research report on formalizing Fermat's Last Theorem in Lean 4 with a 1,000-agent Claude Fable 5.2 team across 28.7 hours using SQLite shared state, sandbox isolation, and command classifier monitoring. ( #source #claude-dev #multi-agent #fable #safety #fermat-theorem)
@@ -227,6 +231,7 @@ Benchmark knowledge for bench-router. Schema: [[AGENTS]]. Compiled into `index.j
 ## Synthesis
 
 - [[synthesis/Research: Claude Fable 5.2 and Mythos 5.2]] — Comprehensive synthesis of Anthropic's Claude Fable 5.2 & Mythos 5.2: benchmarks (SWE-bench Pro 93.0%, FrontierCode 49.1, HLE 74.2%), dual-safeguard architecture, Claude Code advisor guide, and multi-agent scaling. ( #research #anthropic #fable #mythos #swe-bench #benchmarks #claude-code #advisor #frontier-models)
+- [[synthesis/Research: OpenAI GPT-6.2 Astra and GPT-6.2 Sol]] — Synthesis of 3-round research on GPT-6.2 Astra and GPT-6.2 Sol: official model-selection & prompting guides, API migration rules, launch benchmarks, and bench-router integration status. ( #openai #gpt-6.2 #astra #sol #benchmarks #research)
 - [[synthesis/vendor-guided-model-selection]] — Entry point for official vendor guidance, the current bench-router policy audit, and a proposed approach to selecting model/effort configurations. ( #agentic #reasoning #coding)
 
 ## Projects

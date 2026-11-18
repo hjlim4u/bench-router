@@ -12,8 +12,8 @@ sources:
   - "conversation:2026-10-19"
   - "conversation:2026-10-22"
 created: 2026-10-19T01:52:29Z
-updated: 2026-11-13T03:06:09Z
-as_of: 2026-11-13
+updated: 2026-11-18T08:00:21Z
+as_of: 2026-11-18
 summary: >-
   Entry point for official vendor guidance, the current bench-router policy audit, and a proposed approach to selecting model/effort configurations.
 provenance:
@@ -34,6 +34,8 @@ snapshots:
   - "[[_raw/_archived/2026-11-13-anthropic-fable-5-2-prompting|2026-11-13-anthropic-fable-5-2-prompting]]"
   - "[[_raw/_archived/2026-11-13-google-gemini-thinking|2026-11-13-google-gemini-thinking]]"
   - "[[_raw/_archived/2026-11-13-openai-model-selection|2026-11-13-openai-model-selection]]"
+  - "[[_raw/_archived/2026-11-18-openai-model-selection|2026-11-18-openai-model-selection]]"
+  - "[[_raw/_archived/2026-11-18-openai-latest-model-gpt-6-2|2026-11-18-openai-latest-model-gpt-6-2]]"
 ---
 
 # Vendor-guided model selection — research map
@@ -84,6 +86,12 @@ These boundaries are research interpretations. ^[inferred]
 - [[concepts/facets/task]]
 - [[concepts/facets/difficulty]]
 - [[concepts/facets/agent_signal]]
+
+## Current vendor calibration (2026-11-18)
+
+OpenAI's 2026-11-17 release of GPT-6.2 Astra and GPT-6.2 Sol updates its model-selection table to place `GPT-6.2 Astra` (`low`, `medium`, `xhigh`) and `GPT-6.2 Sol` (`medium`, `xhigh`) ahead of `GPT-6.1 Terra` (`medium`) and `GPT-6 Luna` across all six work categories, with `medium` as the recommended integration starting effort and `none`/`minimal` unsupported on GPT-6.2. ^[extracted]
+
+See [[references/sources/openai-model-selection]], [[references/sources/openai-gpt-6-2-prompting]], and [[synthesis/Research: OpenAI GPT-6.2 Astra and GPT-6.2 Sol]].
 
 ## Current vendor calibration (2026-11-13)
 

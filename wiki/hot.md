@@ -1,7 +1,7 @@
 ---
 title: Hot Cache
-updated: 2026-11-13T03:10:26Z
-pages: 118
+updated: 2026-11-18T08:01:17Z
+pages: 123
 generated_by: obsidian-wiki memory hot
 ---
 
@@ -11,9 +11,9 @@ generated_by: obsidian-wiki memory hot
 
 ## Recent Activity
 
-- [2026-11-10] WIKI_RESEARCH topic=Claude Fable 5.2 and Claude Mythos 5.2 release and benchmar... rounds=3 sources_fetched=4 ...
 - [2026-11-10] INGEST source=_raw pages_created=8 pages_updated=2
 - [2026-11-13] INGEST source=vendor-guidance-2026-11-13 pages_created=0 pages_updated=8 ...
+- [2026-11-18] WIKI_RESEARCH topic=OpenAI GPT-6.2 Astra and GPT-6.2 Sol release, guides, and b... rounds=3 sources_fetched=4 ...
 
 ## Active Threads
 
@@ -25,7 +25,7 @@ generated_by: obsidian-wiki memory hot
 
 ## Key Takeaways
 
-Ingested 17 raw drafts: promoted 10 Herdr integration and Anthropic Fable 5.2/Mythos 5.2 reference and synthesis pages, archiving raw files into _raw/_archived/.
+GPT-6.2 Astra and Sol released 2026-11-17: updated wiki research, guidelines.toml, bench-router snapshot, and 12 Codex profiles.
 
 ## Flagged Contradictions
 

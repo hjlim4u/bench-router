@@ -5,10 +5,10 @@ category: references
 tags: [source, agentic, reasoning]
 sources: ["url:https://developers.openai.com/api/docs/guides/model-selection"]
 created: 2026-10-19T01:52:29Z
-updated: 2026-11-13T03:08:12Z
-as_of: 2026-11-13
+updated: 2026-11-18T08:00:21Z
+as_of: 2026-11-18
 summary: >-
-  Official OpenAI starting combinations, Terra workload guidance without a fixed effort, and task-based quality, time and cost comparisons.
+  Official OpenAI starting combinations (updated 2026-11-18 for GPT-6.2 Astra and Sol), Terra workload guidance, and task-based comparisons.
 provenance:
   extracted: 1.0
   inferred: 0.0
@@ -22,6 +22,7 @@ snapshots:
   - "[[_raw/_archived/2026-10-24-openai-model-selection|2026-10-24-openai-model-selection]]"
   - "[[_raw/_archived/2026-10-27-openai-model-selection|2026-10-27-openai-model-selection]]"
   - "[[_raw/_archived/2026-11-13-openai-model-selection|2026-11-13-openai-model-selection]]"
+  - "[[_raw/_archived/2026-11-18-openai-model-selection|2026-11-18-openai-model-selection]]"
 ---
 
 # OpenAI model and reasoning-effort selection
@@ -72,8 +73,27 @@ The seven documented Luna/Sol/Astra starting combinations remain unchanged. Terr
 
 Related: [[concepts/model-effort-selection]], [[synthesis/vendor-guided-model-selection]].
 
+## Current guidance — checked 2026-11-18
+
+The Model Selection guide updated on 2026-11-17/18 to introduce **GPT-6.2 Astra** and **GPT-6.2 Sol** alongside **GPT-6.1 Terra** and **GPT-6 Luna**. ^[extracted]
+
+- **GPT-6.2 Astra** (*Complex professional work*): "Create slides and spreadsheets that follow your templates, analyze scientific data, and design complex 3D parts."
+  - **Low**: "Turning a clear brief into polished work that's ready to use."
+  - **Medium**: "Planning and carrying out complex projects, adjusting the approach as new information comes in."
+  - **Extra high**: "Solving open-ended problems that require weighing trade-offs and testing assumptions."
+- **GPT-6.2 Sol** (*Efficient everyday work*): "Write and test code, draft clear documents, and complete multistep workflows across apps."
+  - **Medium**: "Fixing bugs and adding features in an existing codebase, or drafting documents for review."
+  - **Extra high**: "Working through multistep tasks that need testing and revision along the way."
+- **GPT-6.1 Terra** (*Visual reasoning and computer use*): **Medium** — "Navigating desktop apps, updating records, and making focused fixes you can verify."
+- **GPT-6 Luna** (*Frequent, bounded tasks*): **Low** / **Extra high** unchanged.
+
+Across all six listed work types (3D and design, Software engineering, Data analysis, Creating deliverables, Computer use, Research decisions), the guide orders models from strongest fit to weakest fit as: `GPT-6.2 Astra, GPT-6.2 Sol, GPT-6.1 Terra, GPT-6 Luna`. ^[extracted]
+
+Related: [[concepts/model-effort-selection]], [[synthesis/vendor-guided-model-selection]], [[references/sources/openai-gpt-6-2-prompting]].
+
 ## Sources
 
+- [[_raw/_archived/2026-11-18-openai-model-selection]] — 2026-11-18 bounded text excerpt of the updated guide with GPT-6.2 Astra and Sol.
 - [[_raw/_archived/2026-10-27-openai-model-selection]] — defuddle markdown capture of updated guide including GPT-6.1 Terra.
 - [[_raw/_archived/2026-10-24-openai-model-selection]] — verbatim excerpts of every quoted row and sentence.
 - [[_raw/_archived/2026-10-19-openai-model-selection]] — earlier bounded excerpt; canonical link and capture scope are recorded there.

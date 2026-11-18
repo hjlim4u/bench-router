@@ -427,6 +427,24 @@
         "synthesis/Research: Claude Fable 5.2 and Mythos 5.2.md"
       ],
       "pages_updated": []
+    },
+    {
+      "type": "research",
+      "topic": "OpenAI GPT-6.2 Astra and GPT-6.2 Sol release, guides, and benchmarks",
+      "researched_at": "2026-11-18T08:00:21Z",
+      "rounds_completed": 3,
+      "sources_fetched": 4,
+      "pages_created": [
+        "references/sources/openai-gpt-6-2-release.md",
+        "references/sources/openai-gpt-6-2-prompting.md",
+        "concepts/responses-api-prefix-continuity.md",
+        "references/openai-gpt-6-2.md",
+        "synthesis/Research: OpenAI GPT-6.2 Astra and GPT-6.2 Sol.md"
+      ],
+      "pages_updated": [
+        "references/sources/openai-model-selection.md",
+        "synthesis/vendor-guided-model-selection.md"
+      ]
     }
   ]
 }
