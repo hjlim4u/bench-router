@@ -28,3 +28,6 @@
 - [2026-11-10T00:35:55Z] INGEST source=_raw pages_created=8 pages_updated=2
 - [2026-11-13T03:09:22Z] INGEST source=vendor-guidance-2026-11-13 pages_created=0 pages_updated=8 mode=raw
 - [2026-11-18T08:01:17Z] WIKI_RESEARCH topic="OpenAI GPT-6.2 Astra and GPT-6.2 Sol release, guides, and benchmarks" rounds=3 sources_fetched=4 pages_created=5 backends_used=none
+- [2026-11-19T08:03:55Z] WIKI_RESEARCH topic="Google Gemini 4 Neon release, model selection guide, and benchmarks" rounds=3 sources_fetched=7 pages_created=6 backends_used=none
+- [2026-11-19T08:21:49Z] QUERY query="Google Gemini 4 Neon Carbon Hydrogen vendor model selection guide and thinking levels" result_pages=8 mode=normal escalated=false candidates_seen=8 candidates_used=6 dropped=2
+- [2026-11-19T08:29:38Z] WIKI_UPDATE source=wiki/references/google-gemini-4-neon.md pages_created=0 pages_updated=6

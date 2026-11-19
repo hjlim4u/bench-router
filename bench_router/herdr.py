@@ -271,7 +271,7 @@ def discover_profiles(which=shutil.which, runner=subprocess.run, codex_cache=COD
     profiles = [p for p in profiles if probe(p, which) is None]
     if which("agy"):
         for model in agy_models(runner) or ():
-            match = re.fullmatch(r"(.+)-(low|medium|high)", model)
+            match = re.fullmatch(r"(.+)-(low|medium|high|xhigh)", model)
             if not match:
                 continue
             model_id, effort = match.groups()

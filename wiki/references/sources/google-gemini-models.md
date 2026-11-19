@@ -48,6 +48,10 @@ A family label does not establish task success, actual spend, or availability in
 - [[synthesis/vendor-guided-model-selection]]
 - [[concepts/facets/task]]
 
+## Current guidance — checked 2026-11-19
+
+Google released **Gemini 4 Neon** (`gemini-4-neon`) on 2026-11-18 between Hydrogen and Carbon. See [[references/sources/google-gemini-choosing-a-model]] for the updated official selection table (`gemini-4-carbon`, `gemini-4-neon`, `gemini-4-hydrogen`, `gemini-3.5-flash-lite`) and [[references/sources/google-gemini-4-neon-release]] for launch details.
+
 ## Current guidance — checked 2026-11-13
 
 The catalog now lists Gemini 4 Carbon, Argon and Hydrogen. Carbon is described as the strongest reasoning model for complex software engineering, multimodal knowledge work, scientific reasoning and cybersecurity defense. Argon is the efficient frontier reasoning model, with faster responses and lower token spend per turn than Carbon across complex coding, agentic, math and science tasks. Hydrogen targets speed and efficiency for everyday coding and agentic workflows. Each lists 1M context and 65K / 1M output, with runtime conditions documented separately. Older model roles below remain dated historical evidence; a catalog role does not establish installed CLI availability or a cross-vendor ranking.

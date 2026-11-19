@@ -445,6 +445,24 @@
         "references/sources/openai-model-selection.md",
         "synthesis/vendor-guided-model-selection.md"
       ]
+    },
+    {
+      "type": "research",
+      "topic": "Google Gemini 4 Neon release, model selection guide, and benchmarks",
+      "researched_at": "2026-11-19T08:02:38Z",
+      "rounds_completed": 3,
+      "sources_fetched": 7,
+      "pages_created": [
+        "references/sources/google-gemini-4-neon-release.md",
+        "references/sources/google-gemini-choosing-a-model.md",
+        "references/sources/artificial-analysis-gemini-4-neon.md",
+        "references/sources/vals-ai-gemini-4-neon.md",
+        "references/google-gemini-4-neon.md",
+        "synthesis/Research: Google Gemini 4 Neon.md"
+      ],
+      "pages_updated": [
+        "references/sources/google-gemini-models.md"
+      ]
     }
   ]
 }

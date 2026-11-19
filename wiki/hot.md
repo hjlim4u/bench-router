@@ -1,7 +1,7 @@
 ---
 title: Hot Cache
-updated: 2026-11-18T08:01:17Z
-pages: 123
+updated: 2026-11-19T08:29:38Z
+pages: 129
 generated_by: obsidian-wiki memory hot
 ---
 
@@ -11,9 +11,9 @@ generated_by: obsidian-wiki memory hot
 
 ## Recent Activity
 
-- [2026-11-10] INGEST source=_raw pages_created=8 pages_updated=2
-- [2026-11-13] INGEST source=vendor-guidance-2026-11-13 pages_created=0 pages_updated=8 ...
-- [2026-11-18] WIKI_RESEARCH topic=OpenAI GPT-6.2 Astra and GPT-6.2 Sol release, guides, and b... rounds=3 sources_fetched=4 ...
+- [2026-11-19] WIKI_RESEARCH topic=Google Gemini 4 Neon release, model selection guide, and be... rounds=3 sources_fetched=7 ...
+- [2026-11-19] QUERY query=Google Gemini 4 Neon Carbon Hydrogen vendor model selection... result_pages=8 mode=normal ...
+- [2026-11-19] WIKI_UPDATE source=wiki/references/google-gemini-4-neon.md pages_created=0 pages_updated=6
 
 ## Active Threads
 
@@ -25,7 +25,7 @@ generated_by: obsidian-wiki memory hot
 
 ## Key Takeaways
 
-GPT-6.2 Astra and Sol released 2026-11-17: updated wiki research, guidelines.toml, bench-router snapshot, and 12 Codex profiles.
+Moved gemini-4-neon.md from entities/ to references/google-gemini-4-neon.md to satisfy bench-router wiki compiler.
 
 ## Flagged Contradictions
 

@@ -7,8 +7,8 @@
 # take part in selection or hashes). `models` is required: only the models the quoted page itself covers. `when` is verbatim page text; `text` is the prompt snippet the page supplies.
 # Gemini gives model roles and a model-independent thinking rule (`effort_class`), resolved per model from
 # that page's `default`/`supported` levels.
-version = "2026-11-18.1"
-as_of = "2026-11-18"
+version = "2026-11-19.1"
+as_of = "2026-11-19"
 
 [sources.openai]
 url = "https://developers.openai.com/api/docs/guides/model-selection"
@@ -66,6 +66,16 @@ capture = "_raw/_archived/2026-11-13-google-gemini-models.md"
 url = "https://ai.google.dev/gemini-api/docs/thinking"
 wiki = "references/sources/google-gemini-thinking.md"
 capture = "_raw/_archived/2026-11-13-google-gemini-thinking.md"
+
+[sources.gemini_choosing_a_model]
+url = "https://aistudio.google.com/docs/choosing-a-model.md"
+wiki = "references/sources/google-gemini-choosing-a-model.md"
+capture = "_raw/_archived/2026-11-19-google-gemini-choosing-a-model.md"
+
+[sources.gemini_whats_new_neon]
+url = "https://aistudio.google.com/docs/whats-new-gemini-4-neon.md"
+wiki = "references/sources/google-gemini-4-neon-release.md"
+capture = "_raw/_archived/2026-11-19-google-whats-new-gemini-4-neon.md"
 
 [sources.claude_prompting_fable_5_2]
 url = "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-2"
@@ -235,8 +245,8 @@ efforts = ["max"]
 when = "`max` is for measuring the model\u2019s ceiling or for the rare task where time and tokens don\u2019t matter. It is most reasonable to use `max` for open-ended problems such as scientific discovery and mathematics. Turns are slow and use many more tokens than at `xhigh`."
 
 [vendor.gemini]
-revision = "2026-11-13.1"
-sources = ["gemini_models", "gemini_thinking"]
+revision = "2026-11-19.1"
+sources = ["gemini_models", "gemini_thinking", "gemini_choosing_a_model", "gemini_whats_new_neon"]
 strategy = "Start with `high` for most complex tasks, and reserve `xhigh` for hard, multi-step problems where `high` falls short. Using `xhigh` increases latency and token use and can cause overthinking or exhaust `max_output_tokens` on simpler prompts such as text or JSON extraction. Run your evaluations at all four levels with a high `max_output_tokens` so the limit doesn’t cut answers short, then pick the lowest `thinking_level` that meets your quality bar."
 
 [[vendor.gemini.model]]
@@ -265,6 +275,14 @@ id = "gemini-4-carbon"
 role = "Our strongest reasoning model, built for complex software engineering, multimodal knowledge work, scientific reasoning, and cybersecurity defense."
 default = "medium"
 supported = ["low", "medium", "high"]
+
+
+[[vendor.gemini.model]]
+id = "gemini-4-neon"
+role = "Sits between Hydrogen and Carbon. Finishes faster with fewer output tokens than Carbon while handling harder reasoning than Hydrogen. Choose it for complex software engineering, dense knowledge work, and science workflows where Hydrogen isn't enough and you don't need Carbon's extra verification."
+default = "high"
+supported = ["low", "medium", "high", "xhigh"]
+advanced = "high"
 
 
 [[vendor.gemini.model]]
@@ -553,3 +571,101 @@ when = "The `thinking_level` is your main control over quality, latency, and tok
 model = "gemini-4-hydrogen"
 efforts = ["medium"]
 when = "Interactive coding, live UI prototyping, responsive chat, and latency-sensitive tool calls."
+
+[[vendor.gemini.escalation]]
+model = "gemini-4-neon"
+efforts = ["xhigh"]
+when = "Reserve for hard, multi-step engineering, analytical, and scientific problems where `high` falls short, when you can trade higher latency and token use."
+
+[[vendor.gemini.escalation]]
+model = "gemini-4-neon"
+efforts = ["medium"]
+when = "Interactive coding, live UI prototyping, responsive chat, and latency-sensitive tool calls."
+
+[[vendor.gemini.prompt_guidance]]
+models = ["gemini-4-carbon", "gemini-4-neon", "gemini-4-hydrogen", "gemini-3.5-flash-lite"]
+source = "gemini_choosing_a_model"
+topic = "General-purpose and reasoning models"
+when = '''
+Gemini 4 Carbon, Neon, and Hydrogen share a 1M unified context window, [long decode](/docs/long-decode) up to 1M tokens, and built-in tools ([Google Search](/docs/google-search), [code execution](/docs/code-execution), [function calling](/docs/function-calling), [computer use](/docs/computer-use), and [structured outputs](/docs/structured-output)). They differ in how many thinking tokens they spend per turn, how fast they respond, and what they cost.
+
+| Model | Speed | Thinking levels | Price per 1M tokens (input / output) |
+| :--- | :--- | :--- | :--- |
+| [`gemini-4-carbon`](/docs/models/gemini-4-carbon) | Deliberate | `low`, `medium` (default), `high` | $2.00 / $10.00 (intro thru Nov 30) |
+| [`gemini-4-neon`](/docs/models/gemini-4-neon) | Moderate | `low`, `medium`, `high` (default), `xhigh` | $3.00 / $15.00 |
+| [`gemini-4-hydrogen`](/docs/models/gemini-4-hydrogen) | Fast | `low`, `medium`, `high` (default), `xhigh` | $1.50 / $7.50 |
+| [`gemini-3.5-flash-lite`](/docs/models/gemini-3.5-flash-lite) | Fastest | `minimal` (default), `low`, `medium`, `high` | $0.30 / $2.50 |
+
+A few details the table leaves out:
+
+* **Introductory pricing:** Carbon's price is introductory through November 30, 2026. From December 1, 2026, it's $4.00 input and $20.00 output per 1M tokens. Neon has no introductory price.
+* **Free tier:** Hydrogen and Flash-Lite are available on the free tier. Carbon and Neon aren't.
+* **Context and output:** Flash-Lite has a 1M-token input window and a separate 64K output limit, rather than the unified 1M window.
+'''
+
+[[vendor.gemini.prompt_guidance]]
+models = ["gemini-4-carbon", "gemini-4-neon", "gemini-4-hydrogen", "gemini-3.5-flash-lite"]
+source = "gemini_choosing_a_model"
+topic = "When to choose each model"
+when = '''
+* **Gemini 4 Hydrogen (`gemini-4-hydrogen`):** Start here for most new projects. Hydrogen cuts fabricated claims by more than 5x compared to [Gemini 3.8 Flash](/docs/whats-new-gemini-3.8) by flagging missing context instead of guessing, and batches read and search tool calls in parallel. Choose it for everyday coding, interactive web apps, multimodal document pipelines, and parallel worker agents.
+* **Gemini 4 Neon (`gemini-4-neon`):** Sits between Hydrogen and Carbon. Finishes faster with fewer output tokens than Carbon while handling harder reasoning than Hydrogen. Choose it for complex software engineering, dense knowledge work, and science workflows where Hydrogen isn't enough and you don't need Carbon's extra verification.
+* **Gemini 4 Carbon (`gemini-4-carbon`):** Our strongest reasoning model. Carbon spends more thinking tokens per turn to test hypotheses, isolate root causes across repositories, and check fixes against tests. Choose it for system architecture, multi-file debugging, dense multimodal analysis, formal proofs, and security audits, or when a faster model gets stuck.
+* **Gemini 3.5 Flash-Lite (`gemini-3.5-flash-lite`):** Our fastest, lowest-cost general model. Choose it when you need generated text at high volume, such as translation, summarization, and structured JSON extraction, or when you have sub-second latency targets. If your code only needs a label, a yes/no, or a score to branch on (classification, routing, or moderation), consider [`gemini-decision-1`](/docs/decisions-api), which returns calibrated answers with zero output tokens.
+'''
+
+[[vendor.gemini.prompt_guidance]]
+models = ["gemini-4-carbon", "gemini-4-neon", "gemini-4-hydrogen"]
+source = "gemini_choosing_a_model"
+topic = "Pair models in multi-step workflows"
+when = '''
+You don't have to pick one model for your whole app. Because Carbon, Neon, and Hydrogen share the same request schema, context window, and tools, you can route each step to the model that fits it.
+
+A common pattern pairs `gemini-4-carbon` with `gemini-4-hydrogen`. Have Carbon design system interfaces or isolate a hard bug on the first turn. Then pass `previous_interaction_id` to Hydrogen to write the code edits, run parallel subagent tasks, and iterate on tests at lower latency and cost.
+'''
+
+[[vendor.gemini.prompt_guidance]]
+models = ["gemini-4-neon"]
+source = "gemini_whats_new_neon"
+topic = "Gemini 4 Neon thinking levels"
+when = '''
+The [thinking level](/docs/thinking) is your main control over quality, latency, and token use in Gemini 4 Neon. The model defaults to `high` and supports `xhigh`.
+
+| Thinking level | Token use | When to use |
+| :--- | :--- | :--- |
+| `low` | Fewest tokens, lowest latency | Cost- and latency-sensitive workloads, such as fast chat and high-throughput processing. Still capable on agentic tasks. |
+| `medium` | Lower token use, faster responses | Interactive coding, live UI prototyping, responsive chat, and latency-sensitive tool calls. |
+| `high` (default) | Balanced intelligence and speed | Recommended default for most tasks, including complex coding, agentic execution, tool calling, and multimodal knowledge work. |
+| `xhigh` | Most tokens, deepest reasoning | Reserve for hard, multi-step engineering, analytical, and scientific problems where `high` falls short, when you can trade higher latency and token use. |
+
+Start with `high` for most complex tasks, and reserve `xhigh` for hard, multi-step problems where `high` falls short. Using `xhigh` increases latency and token use. Run your evaluations at all four levels with a high `max_output_tokens` so the limit doesn't cut answers short. Then pick the lowest `thinking_level` that meets your quality bar. To learn more, see the [thinking guide](/docs/thinking).
+'''
+
+[[vendor.gemini.prompt_guidance]]
+models = ["gemini-4-neon"]
+source = "gemini_whats_new_neon"
+topic = "Gemini 4 Neon output token limits and long decode"
+when = '''
+The `max_output_tokens` field caps combined thinking and output tokens for a response. Use these starting values to prevent truncated answers while bounding spend:
+
+* **Standard tasks:** Keep the 65,536 default or omit `max_output_tokens`.
+* **Existing apps with a low cap:** Remove hardcoded low caps (such as 8,192) or raise `max_output_tokens` to 65,536. To use fewer tokens, lower the thinking level instead.
+* **Long outputs and multi-step tasks:** Set `background` to `true` and set `max_output_tokens` to 131,072 or 262,144, up to 1,048,576 minus your input tokens.
+'''
+
+[[vendor.gemini.prompt_guidance]]
+models = ["gemini-4-neon"]
+source = "gemini_whats_new_neon"
+topic = "Gemini 4 Neon migration and request rules"
+when = '''
+* **Update model ID:** Change your model string to `gemini-4-neon`.
+* **Account for the unified 1M context window:** Gemini 3.8 Flash separates 1M input and 64K output budgets. Neon shares one 1,048,576-token window across input, thinking, and output tokens while keeping the 65,536 single-request default and cap across both streaming and non-streaming calls. Remove hardcoded low `max_output_tokens` caps or raise them to 65,536.
+* **Configure `thinking_level`:** Neon defaults to `high` rather than `medium`, adds `xhigh`, and rejects `minimal` with an error. Test `medium` and `high` on your evaluation suite to balance speed and cost.
+* **Move off explicit context caching:** Gemini 4 Neon does not support explicit caching (`cachedContents` and `caches.create`). Remove `cached_content` fields from requests. [Implicit caching](/docs/caching) runs by default on prompts of at least 4,096 tokens and discounts cached input tokens by 95% on cache hits.
+* **Remove sampling parameters:** Remove `temperature`, `top_p`, and `top_k` from requests. The server ignores in-range custom values if sent. Out-of-range values return a `400` validation error.
+* **Declare native tools or structured output schemas:** Do not prompt the model via system instructions to emit custom raw-text JSON tool calls with zero declared tools, which can return `MALFORMED_FUNCTION_CALL`. Always declare tools natively with [function calling](/docs/function-calling) or constrain JSON responses with [structured outputs](/docs/structured-output).
+* **Preserve conversation state and thought signatures:** Use `previous_interaction_id` in the Interactions API for multi-turn and tool-calling sessions. In client-managed `generateContent` histories, return prior model turns and thought signatures unchanged across every turn. Do not copy a thought signature across parallel `functionCall` parts.
+* **Use background execution for outputs past 64K:** Set `background` to `true` and `max_output_tokens` above 65,536 for responses longer than 64K tokens (or use client-side continuation in the latest SDKs).
+* **Increase client timeouts:** Hard prompts can take several minutes. Use background execution, or set HTTP client timeouts to at least 15 minutes.
+* **Review token billing estimates:** We count and bill every token the model processes, including thinking tokens and internal grounding system instructions and function declarations.
+'''
