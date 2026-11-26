@@ -10,11 +10,13 @@ import sys
 import tempfile
 import time
 import unittest
+from datetime import datetime, timedelta
 from unittest.mock import patch
 from pathlib import Path
 from types import SimpleNamespace
 
 from bench_router import herdr as hd
+from bench_router import lifecycle
 from bench_router import routing as r
 from test_p0 import MAPPING, config, profile, guided_reply, guided_responses, NOW
 
@@ -93,8 +95,11 @@ class FakeProjects:
         return {**t, "state": state, "status": status, "needs": needs, "why": why, "live": live,
                 **self.updates, **self.detail_updates}
 
+    def _terminal_address(self, t):
+        return f"t{t['id']}"
+
     def _pane(self, t):
-        self.panes[t["key"]] = {"address": f"t{t['id']}", "cwd": t["worktree"], "agent": t["agent"],
+        self.panes[t["key"]] = {"address": self._terminal_address(t), "cwd": t["worktree"], "agent": t["agent"],
                                 "task": t["key"], "state": "live"}
 
     def _core(self, argv):
@@ -185,13 +190,13 @@ class FakeProjects:
                 self.on_prompt(self, t["prompt"])
             if self.prompt_error or self.start_error:
                 raise subprocess.TimeoutExpired(cmd, 15)
-            return self._ok({**self._row(t), "terminal": f"t{t['id']}"})
+            return self._ok({**self._row(t), "terminal": self._terminal_address(t)})
         if argv[0] == "resume":
             t = self.tasks[argv[1]]
             t["resumed_argv"] = list(t["argv"])
             self._pane(t)
             self.stopped.discard(t["key"])
-            return self._ok({**self._row(t), "terminal": f"t{t['id']}", "resumed": True})
+            return self._ok({**self._row(t), "terminal": self._terminal_address(t), "resumed": True})
         if argv[0] in ("ready", "done"):
             return self._ok({**self._row(self.tasks[argv[1]]), "state": argv[0]})
         if argv[0] == "status":
@@ -204,6 +209,69 @@ class FakeProjects:
         if argv[0] == "show":
             return self._ok(self._row(self.tasks[argv[1]]))
         raise AssertionError(argv)
+
+
+class FakeSessionProjects(FakeProjects):
+    """The board launches in its own session. Each core session can own a different t1."""
+
+    def __init__(self, board_session="default", hc_session=None, **kw):
+        super().__init__(**kw)
+        self.board_session = board_session
+        self.hc_session = hc_session
+        self.sessions = {board_session: self.panes}
+        self.commands = []
+        self.acknowledge_kill = False
+        self.reject_start = False
+
+    def _terminal_address(self, t):
+        return "t1"
+
+    def add_unrelated_terminal(self, session):
+        pane = {"address": "t1", "task": "other#1", "state": "live"}
+        self.sessions[session] = {pane["task"]: pane}
+        return pane
+
+    def __call__(self, cmd, **kw):
+        exe, op = cmd[:2]
+        requested_session = kw.get("env", os.environ).get("HC_SESSION") or "default"
+        if exe == hd.HERDR_BIN:
+            session = self.hc_session or requested_session
+            self.commands.append((session, tuple(cmd)))
+            if op == "--version":
+                return super().__call__(cmd, **kw)  # The client version is available without a running session.
+            panes = self.sessions.get(session)
+            if panes is None:
+                return subprocess.CompletedProcess(cmd, 1, "", f"core session {session!r} is unavailable")
+            if op == "ls" and "--label" not in cmd and not self.pane_error:
+                return self._ok({"terminals": list(panes.values())})
+            if op == "kill" and self.acknowledge_kill:
+                return self._ok({"ok": True})
+            with patch.object(self, "panes", panes):
+                return super().__call__(cmd, **kw)
+
+        self.commands.append((self.board_session, tuple(cmd)))
+        if op == "start" and self.reject_start:
+            return subprocess.CompletedProcess(cmd, 1, "", f"core session {requested_session!r} rejected by board")
+        return super().__call__(cmd, **kw)
+
+    def mutations(self):
+        reads = {"--version", "show", "status", "list", "ls", "get"}
+        return [(session, cmd) for session, cmd in self.commands if cmd[1] not in reads]
+
+
+class ObserverClock:
+    def __init__(self, deadline_at, remaining):
+        self.start = datetime.fromisoformat(deadline_at) - timedelta(seconds=remaining)
+        self.elapsed = 0.0
+
+    def now(self):
+        return self.start + timedelta(seconds=self.elapsed)
+
+    def monotonic(self):
+        return self.elapsed
+
+    def sleep(self, seconds):
+        self.elapsed += seconds
 
 
 class FakeTui(FakeProjects):
@@ -382,6 +450,23 @@ class P2(unittest.TestCase):
 
     def receipt(self, out):
         return json.loads(Path(out["receipt_path"]).read_text("utf-8"))
+
+    def watch_(self, out, runner, clock):
+        collect_run = hd.collect_run
+        statuses = []
+
+        def collect_offline(*args, **kw):
+            if len(statuses) == 3 or "execution_failed" in statuses:
+                self.fail(f"observer kept polling at {clock.elapsed}s after {statuses}")
+            kw["runner"] = runner
+            result = collect_run(*args, **kw)
+            statuses.append(result["status"])
+            return result
+
+        with patch.object(hd, "collect_run", side_effect=collect_offline), \
+             patch.object(hd, "time", clock), patch.object(hd, "_now", clock.now), \
+             patch.object(lifecycle, "time", clock):
+            lifecycle.watch(self.cwd, out["run_id"])
 
     def test_v99_discovery_uses_native_models_without_usage_queries(self):
         def runner(cmd, **kw):
@@ -1329,6 +1414,185 @@ class P2(unittest.TestCase):
         out = self.run_(fake)
         self.assertEqual(out["status"], "delivery_uncertain")
         self.assertEqual(fake.closed, [])
+
+    @unittest.expectedFailure
+    def test_v119_collect_after_32_core_session_mismatch_keeps_run_uncertain(self):
+        fake = FakeSessionProjects(board_session="shepherdr", hc_session="default", after_status="working")
+        foreign = fake.add_unrelated_terminal("default")
+        with patch.dict(os.environ, {"HC_SESSION": "shepherdr"}):
+            out = self.run_(fake, wait_ms=0)
+        key = out["thread_id"]
+        self.assertEqual((out["status"], fake.sessions["shepherdr"][key]["address"]), ("delivery_uncertain", "t1"))
+        write_result()(fake, fake.prompts[0])
+        fake.status = "idle"
+        fake.commands.clear()
+
+        got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        foreign_controls = [cmd for session, cmd in fake.mutations() if session == "default" and cmd[0] == hd.HERDR_BIN]
+        self.assertEqual((got["status"], got["thread_id"], got["release"], foreign_controls,
+                          fake.sessions["default"].get(foreign["task"])),
+                         ("delivery_uncertain", key, None, [], foreign))
+
+    @unittest.expectedFailure
+    def test_v120_31_missing_named_session_is_diagnosed_before_add(self):
+        fake = FakeSessionProjects(after_status="working")
+        with patch.dict(os.environ, {"HC_SESSION": "misspelled"}):
+            try:
+                out = self.run_(fake, wait_ms=0)
+            except r.InputError as exc:
+                diagnosis = str(exc)
+            else:
+                observation = self.receipt(out)["last_observation"] if out.get("receipt_path") else None
+                diagnosis = f"{observation} {out.get('warnings')}"
+
+        self.assertEqual(fake.mutations(), [], diagnosis)
+        self.assertRegex(diagnosis, r"(?i)session.*misspelled|misspelled.*session")
+
+    @unittest.expectedFailure
+    def test_v121_31_start_rejection_records_unstarted_card_without_resubmission(self):
+        fake = FakeSessionProjects(after_status="working")
+        fake.add_unrelated_terminal("other")  # The named core is reachable before the board rejects start.
+        fake.reject_start = True
+        with patch.dict(os.environ, {"HC_SESSION": "other"}):
+            out = self.run_(fake, wait_ms=0)
+            before_replay = self.receipt(out)
+            fake.commands.clear()
+            replay = self.run_(fake, wait_ms=0)
+
+        self.assertEqual((before_replay["thread_id"], replay["thread_id"], replay["run_id"]),
+                         ("repo#1", "repo#1", out["run_id"]))
+        self.assertEqual((fake.mutations(), len(fake.tasks), fake.prompts), ([], 1, []))
+        observation = before_replay["last_observation"]
+        self.assertRegex(f"{observation.get('agent_status')} {observation.get('note')}",
+                         r"(?i)todo|not[ _-]started|nothing started|never started|start (?:was )?(?:refused|rejected)")
+
+    def test_v122_missing_headless_terminal_without_board_confirmation_stays_uncertain(self):
+        fake = FakeSessionProjects(after_status="working")
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        del fake.panes[out["thread_id"]]
+        fake.commands.clear()
+
+        got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((got["status"], bool(self.receipt(got).get("process_exited")), fake.mutations()),
+                         ("delivery_uncertain", False, []))
+
+    @unittest.expectedFailure
+    def test_v123_terminal_absence_board_stop_and_lookup_error_are_distinct(self):
+        fake = FakeSessionProjects(after_status="working")
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        del fake.panes[out["thread_id"]]
+        fake.commands.clear()
+
+        def observe():
+            return self.receipt(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake))
+
+        missing = observe()
+        fake.pane_error = "synthetic core lookup timeout"
+        transient = observe()
+        fake.pane_error = None
+        fake.stopped.add(out["thread_id"])
+        confirmed = observe()
+
+        def observation(rc):
+            evidence = {key: value for key, value in rc["last_observation"].items() if key != "at"}
+            return rc["status"], evidence
+
+        self.assertEqual((missing["status"], confirmed["status"], observation(missing) == observation(transient),
+                          fake.mutations()), ("delivery_uncertain", "execution_failed", False, []))
+
+    @unittest.expectedFailure
+    def test_v124_observer_retries_transient_lookup_and_ends_on_board_stop(self):
+        fake = FakeSessionProjects(after_status="working")
+        task = self.task(execution="headless", constraints={"timeout_ms": 20000})
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, task, wait_ms=0)
+        remaining = 12
+        clock = ObserverClock(self.receipt(out)["deadline_at"], remaining)
+        board_queries = []
+        failures = []
+        fake.commands.clear()
+
+        def runner(cmd, **kw):
+            if cmd[:2] == [hd.PROJECTS_BIN, "show"]:
+                board_queries.append(clock.elapsed)
+            if cmd[:2] == [hd.HERDR_BIN, "ls"] and "--label" in cmd and not failures:
+                failures.append(clock.elapsed)
+                fake.pane_error = "synthetic core lookup timeout"
+                try:
+                    return fake(cmd, **kw)
+                finally:
+                    fake.pane_error = None
+                    del fake.panes[out["thread_id"]]
+                    fake.stopped.add(out["thread_id"])
+            return fake(cmd, **kw)
+
+        self.watch_(out, runner, clock)
+        self.assertEqual((len(failures), self.receipt(out)["status"], fake.mutations()), (1, "execution_failed", []))
+        self.assertGreaterEqual(len(board_queries), 2)
+        self.assertTrue(all(query < remaining for query in board_queries), board_queries)
+        self.assertLess(clock.elapsed, remaining)
+
+    @unittest.expectedFailure
+    def test_v125_observer_never_requeries_transient_lookup_after_deadline(self):
+        fake = FakeSessionProjects(after_status="working")
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        remaining = 1
+        clock = ObserverClock(self.receipt(out)["deadline_at"], remaining)
+        queries = []
+        fake.commands.clear()
+
+        def runner(cmd, **kw):
+            if cmd[:2] == [hd.PROJECTS_BIN, "show"] or (cmd[:2] == [hd.HERDR_BIN, "ls"] and "--label" in cmd):
+                queries.append((cmd[1], clock.elapsed))
+            if cmd[:2] == [hd.HERDR_BIN, "ls"] and "--label" in cmd:
+                clock.elapsed += remaining  # The transient lookup consumes the remaining budget.
+                fake.pane_error = "synthetic core lookup timeout"
+            return fake(cmd, **kw)
+
+        self.watch_(out, runner, clock)
+        self.assertIn(("ls", 0), queries)
+        self.assertEqual(([query for query in queries if query[1] >= remaining], fake.mutations()), ([], []))
+
+    @unittest.expectedFailure
+    def test_v126_unsupported_protocol_headless_collect_sends_no_mutations(self):
+        fake = FakeSessionProjects()
+        fake.on_run = headless_cli()
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        self.assertEqual(out["status"], "timed_out")
+        self.assertTrue(Path(out["receipt_path"]).with_name("exit_code").exists())
+        fake.version = "2"
+        fake.commands.clear()
+
+        try:
+            hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        except r.InputError:
+            pass
+
+        ready_calls = [cmd for _, cmd in fake.commands if cmd[:2] == (hd.PROJECTS_BIN, "ready")]
+        self.assertEqual((fake.mutations(), ready_calls), ([], []))
+
+    @unittest.expectedFailure
+    def test_v127_unsupported_protocol_cleanup_retry_sends_no_mutations(self):
+        fake = FakeSessionProjects(on_prompt=write_result())
+        # Produce a completed receipt interrupted before either ready or terminal cleanup ran.
+        with patch.dict(os.environ, {"HC_SESSION": "default"}), patch.object(hd, "release"):
+            out = self.run_(fake)
+        rc = self.receipt(out)
+        self.assertEqual((rc["status"], rc.get("ready"), rc.get("release")), ("completed", None, None))
+        fake.version = "2"
+        fake.commands.clear()
+
+        try:
+            hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        except r.InputError:
+            pass
+
+        ready_calls = [cmd for _, cmd in fake.commands if cmd[:2] == (hd.PROJECTS_BIN, "ready")]
+        self.assertEqual((fake.mutations(), ready_calls), ([], []))
 
     def test_message_log_survives_unicode_line_separator(self):
         with tempfile.TemporaryDirectory() as tmp:
