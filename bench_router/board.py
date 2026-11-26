@@ -21,8 +21,16 @@ Observation (observe and stop return the same shape):
     turn_done    the turn ended; validate the result  (ready, done, or all live workers idle/done)
     stopped      agent stopped                         (needs=stopped)
     turn_done is not success: the router decides success from the run's result files.
+    working needs a live worker: Shepherdr shows status=working with live=[] for 2-5 s after a kill,
+    so the adapter then falls back to the process axis (docs/evidence/shepherdr-spike.md).
+    stopped is not termination: 3.2 `herdr-task stop` sets needs=stopped while the terminal stays live.
   process   terminal evidence, one of PROCESS_STATES (from hc get state, ls --label):
     live | exited | gone | unknown
+    (hc 0.1.20 reports an ended terminal as state "finished" -> exited; get rc 3 not_found -> gone)
+
+Binding (bind/start): the board's core session comes from the installed Shepherdr release, not from
+the caller (3.1: default only; 3.2: $SHEPHERDR_SESSION or shepherdr), and `herdr-task --version` is 1 on
+both, so bind() must return that session and core id and every later board/hc call must use them.
   identity  "ok" | "mismatch"; mismatch = the card/terminal found is not the one recorded
             (or a resumed session was not the recorded one) -> manual reconciliation, never auto-repair
   retryable True when the read failed transiently; task is then None and nothing else is inferred
