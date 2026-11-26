@@ -1,0 +1,4 @@
+usage: herdr-task [-h]
+                  {where,list,add,show,start,ready,reviewed,review-more,status,alert,feedback,done,accept,reopen,unarchive,edit,rm,config,tick,review,scheduler,backup,restore-spaces,auto,autopilot,progress,star,complete,machines,home,assistants,tell-assistant,fix,merge,resume,switch,_allow,_session-note,_hold-news,_track}
+                  ...
+herdr-task: error: argument cmd: invalid choice: 'stop' (choose from 'where', 'list', 'add', 'show', 'start', 'ready', 'reviewed', 'review-more', 'status', 'alert', 'feedback', 'done', 'accept', 'reopen', 'unarchive', 'edit', 'rm', 'config', 'tick', 'review', 'scheduler', 'backup', 'restore-spaces', 'auto', 'autopilot', 'progress', 'star', 'complete', 'machines', 'home', 'assistants', 'tell-assistant', 'fix', 'merge', 'resume', 'switch', '_allow', '_session-note', '_hold-news', '_track')

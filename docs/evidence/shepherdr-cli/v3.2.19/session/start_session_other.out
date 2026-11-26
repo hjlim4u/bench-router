@@ -1,0 +1,1 @@
+{"error": "refusing to run hc: HC_SESSION is other, not Shepherdr's own (shepherdr). This shell's environment is wrong: unset HC_SOCKET, and leave HC_SESSION unset or shepherdr (a test names its throwaway session with SHEPHERDR_SESSION too): another session's core isn't Shepherdr's, and a changed one can reach the real core and wipe its spaces."}
