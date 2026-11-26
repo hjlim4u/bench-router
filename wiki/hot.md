@@ -1,7 +1,7 @@
 ---
 title: Hot Cache
-updated: 2026-11-19T08:29:38Z
-pages: 129
+updated: 2026-11-26T00:50:51Z
+pages: 132
 generated_by: obsidian-wiki memory hot
 ---
 
@@ -11,9 +11,9 @@ generated_by: obsidian-wiki memory hot
 
 ## Recent Activity
 
-- [2026-11-19] WIKI_RESEARCH topic=Google Gemini 4 Neon release, model selection guide, and be... rounds=3 sources_fetched=7 ...
-- [2026-11-19] QUERY query=Google Gemini 4 Neon Carbon Hydrogen vendor model selection... result_pages=8 mode=normal ...
 - [2026-11-19] WIKI_UPDATE source=wiki/references/google-gemini-4-neon.md pages_created=0 pages_updated=6
+- [2026-11-26] WIKI_RESEARCH topic=Google Gemini 4 Lineup, Effort Guidelines, and Benchmark St... rounds=2 sources_fetched=7 ...
+- [2026-11-26] WIKI_RESEARCH topic=Anthropic and OpenAI Unreflected Models, Effort Guides, and... rounds=2 sources_fetched=10 ...
 
 ## Active Threads
 
@@ -25,7 +25,7 @@ generated_by: obsidian-wiki memory hot
 
 ## Key Takeaways
 
-Moved gemini-4-neon.md from entities/ to references/google-gemini-4-neon.md to satisfy bench-router wiki compiler.
+Added OpenAI specialized configs (gpt-6-cyber, astra-for-law-6-2, Healthcare), recovered Anthropic effort tabs & Codex Max/Ultra rules, and recorded AA/Vals/Arena benchmarks for Fable 5.2 & GPT-6.2 Astra/Sol.
 
 ## Flagged Contradictions
 

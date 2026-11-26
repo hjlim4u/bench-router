@@ -463,6 +463,41 @@
       "pages_updated": [
         "references/sources/google-gemini-models.md"
       ]
+    },
+    {
+      "type": "research",
+      "topic": "Google Gemini 4 Lineup, Effort Guidelines, and Benchmark Status (Nov 2026)",
+      "researched_at": "2026-11-26T00:32:19Z",
+      "rounds_completed": 2,
+      "sources_fetched": 7,
+      "pages_created": [
+        "synthesis/Research: Google Gemini 4 Lineup and Benchmark Status (Nov 2026).md"
+      ],
+      "pages_updated": [
+        "references/sources/google-gemini-thinking.md",
+        "references/sources/google-gemini-models.md",
+        "references/sources/google-gemini-choosing-a-model.md",
+        "synthesis/vendor-guided-model-selection.md"
+      ]
+    },
+    {
+      "type": "research",
+      "topic": "Anthropic and OpenAI Unreflected Models, Effort Guides, and Benchmarks (Nov 2026)",
+      "researched_at": "2026-11-26T00:49:17Z",
+      "rounds_completed": 2,
+      "sources_fetched": 10,
+      "pages_created": [
+        "references/sources/openai-specialized-models.md",
+        "synthesis/Research: Anthropic and OpenAI Unreflected Models and Benchmarks (Nov 2026).md"
+      ],
+      "pages_updated": [
+        "references/sources/anthropic-effort.md",
+        "references/sources/anthropic-model-selection.md",
+        "references/sources/openai-model-selection.md",
+        "synthesis/Research: Claude Fable 5.2 and Mythos 5.2.md",
+        "synthesis/Research: OpenAI GPT-6.2 Astra and GPT-6.2 Sol.md",
+        "synthesis/vendor-guided-model-selection.md"
+      ]
     }
   ]
 }

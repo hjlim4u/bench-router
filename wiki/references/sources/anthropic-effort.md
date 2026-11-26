@@ -5,8 +5,8 @@ category: references
 tags: [source, reasoning, coding]
 sources: ["url:https://platform.claude.com/docs/en/build-with-claude/effort"]
 created: 2026-10-19T01:52:29Z
-updated: 2026-11-13T03:08:44Z
-as_of: 2026-11-13
+updated: 2026-11-26T00:49:17Z
+as_of: 2026-11-26
 summary: >-
   Model-specific Claude effort guidance, Fable 5.2 calibration from its prompting guide, and explicit capture limitations.
 provenance:
@@ -21,6 +21,7 @@ snapshots:
   - "[[_raw/_archived/2026-10-19-anthropic-effort|2026-10-19-anthropic-effort]]"
   - "[[_raw/_archived/2026-10-24-anthropic-effort|2026-10-24-anthropic-effort]]"
   - "[[_raw/_archived/2026-11-13-anthropic-effort|2026-11-13-anthropic-effort]]"
+  - "[[_raw/_archived/2026-11-26-anthropic-effort|2026-11-26-anthropic-effort]]"
 ---
 
 # Anthropic effort is model-specific
@@ -56,6 +57,16 @@ Model-specific recommendations take precedence over the general table. Support a
 - [[concepts/model-effort-selection]]
 - [[concepts/facets/agent_signal]]
 
+## Current guidance — checked 2026-11-26
+
+Full per-model effort recommendations recovered from the `.md` endpoint (`platform.claude.com/docs/en/build-with-claude/effort.md`) confirm five supported levels (`low`, `medium`, `high`, `xhigh`, `max`) across all current Claude 5/5.2/5.5 models: ^[extracted]
+
+- **Claude Fable 5.2 & Mythos 5.2**: Supports all five levels; API default is `high` (where most capability gain already resides). Adaptive thinking is always on. Step up to `xhigh` for the hardest long-running coding and agentic work where evals show a gain; step down to `medium` or `low` if evals hold; reserve `max` for measuring the model's ceiling or rare unconstrained tasks. Re-run effort sweeps rather than carrying over Fable 5.1 settings, set a large `max_tokens` at `high`+, and prompt explicitly for reply length/tone because effort barely changes reply length.
+- **Claude Opus 5.5**: Supports all five levels with `medium` as default (one level lower than Opus 5's `high`). Adaptive thinking is always on and cannot be disabled (`thinking: {"type": "disabled"}` returns HTTP 400 at every effort level). Set a large `max_tokens` at `xhigh` or `max`.
+- **Claude Sonnet 5.5**: Supports all five levels with `high` as default. For agentic coding and multistep tool use, start at `medium` for well-specified tasks and `high` for harder/longer ones (setting `max_tokens` to 128,000 with streaming). To respond without thinking up front, send `thinking: {"type": "between_tools"}` (not `"disabled"`) at `low`, `medium`, or `high`; at `xhigh` or `max`, `between_tools` returns HTTP 400.
+- **Claude Haiku 5.5**: Supports all five levels with `medium` as default. At `low` on long agent prompts, the model is more likely to skip a search, stop early, or skip a check. Supports `thinking: {"type": "disabled"}` at `high` or below (returns HTTP 400 at `xhigh` or `max`).
+- **Mid-conversation per-message effort**: Fable 5.2, Mythos 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5 all support changing `output_config.effort` per message while preserving the prompt cache (except when `between_tools` on Sonnet 5.5 or `disabled` thinking on Haiku 5.5 is active, which returns HTTP 400 on mid-conversation effort change).
+
 ## Current guidance — checked 2026-11-13
 
 The new effort-page extraction omits model-specific recommendation tabs. It establishes supported effort levels but cannot refresh those tab recommendations. The Fable 5.2 prompting capture independently supplies the missing calibration: start at high; low suits quick, well-specified or high-volume work; medium suits interactive coding, chat and everyday knowledge work. Use xhigh only for the hardest long-running work with measured gains. Reserve max for ceiling measurement or rare tasks unconstrained by time and tokens, particularly open-ended science and mathematics. Re-run effort sweeps instead of inheriting 5.1 settings. Earlier per-model tables below retain their original dates; absence from the extracted text is not evidence of changed recommendations.
@@ -68,3 +79,4 @@ Related: [[concepts/model-effort-selection]], [[synthesis/vendor-guided-model-se
 - [[_raw/_archived/2026-10-19-anthropic-effort]] — earlier bounded excerpt and canonical origin.
 
 - [[_raw/_archived/2026-11-13-anthropic-effort]] — 2026-11-13 capture; extraction limitations are recorded in its frontmatter.
+- [[_raw/_archived/2026-11-26-anthropic-effort]] — 2026-11-26 full Markdown capture including per-model recommendations for Fable 5.2, Mythos 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5.

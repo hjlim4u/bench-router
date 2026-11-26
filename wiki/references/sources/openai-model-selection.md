@@ -5,8 +5,8 @@ category: references
 tags: [source, agentic, reasoning]
 sources: ["url:https://developers.openai.com/api/docs/guides/model-selection"]
 created: 2026-10-19T01:52:29Z
-updated: 2026-11-18T08:00:21Z
-as_of: 2026-11-18
+updated: 2026-11-26T00:49:17Z
+as_of: 2026-11-26
 summary: >-
   Official OpenAI starting combinations (updated 2026-11-18 for GPT-6.2 Astra and Sol), Terra workload guidance, and task-based comparisons.
 provenance:
@@ -23,6 +23,8 @@ snapshots:
   - "[[_raw/_archived/2026-10-27-openai-model-selection|2026-10-27-openai-model-selection]]"
   - "[[_raw/_archived/2026-11-13-openai-model-selection|2026-11-13-openai-model-selection]]"
   - "[[_raw/_archived/2026-11-18-openai-model-selection|2026-11-18-openai-model-selection]]"
+  - "[[_raw/_archived/2026-11-26-openai-model-selection|2026-11-26-openai-model-selection]]"
+  - "[[_raw/_archived/2026-11-26-openai-codex-models|2026-11-26-openai-codex-models]]"
 ---
 
 # OpenAI model and reasoning-effort selection
@@ -73,6 +75,18 @@ The seven documented Luna/Sol/Astra starting combinations remain unchanged. Terr
 
 Related: [[concepts/model-effort-selection]], [[synthesis/vendor-guided-model-selection]].
 
+## Current guidance — checked 2026-11-26
+
+Two official guidance details from `developers.openai.com/api/docs/guides/model-selection.md` and `developers.openai.com/codex/models.md` supplement the 2026-11-18 capture: ^[extracted]
+
+- **Explicit API workflow default**: *"For most API workflows, start with **GPT-6.2 Sol** at medium reasoning effort."* Use **GPT-6.2 Astra** for demanding engineering or analysis, **GPT-6.1 Terra** to interpret visual information (charts, screenshots), and **GPT-6 Luna** for small, repeatable tasks.
+- **Codex & ChatGPT Work guidance**:
+  - **Max vs Ultra**: **Max** allocates more single-task reasoning time when depth outweighs speed/usage; **Ultra** uses parallel subagents when complex work can be divided into meaningful parts (most tasks need neither). **GPT-6 Luna** supports reasoning efforts up to **Max**, but **not Ultra**.
+  - **Codex starting effort & context**: For `GPT-6.2 Astra` or `GPT-6.2 Sol`, start with the client-selected default effort and adjust per task (both support up to 1M context via `model_context_window` in `config.toml`; `GPT-6.1 Sol` uses 500K by default in Codex/Work). Start `Luna` at **High**, and `GPT-6 Astra` at **Light** (`low`).
+  - **Multi-agent & retirements**: `GPT-6.2 Astra` and `GPT-6.2 Sol` support subagent delegation via the Responses API Multi-agent beta. `GPT-5.3-Codex-Spark` retired on 2026-09-14, and `GPT-5.5` retired from ChatGPT-authenticated Codex on 2026-10-14 (replaced by `gpt-6.1-sol` on paid plans and `gpt-6-luna` on Free/Go).
+
+See also [[references/sources/openai-specialized-models]] for `gpt-6-cyber`, `astra-for-law-6-2`, and Healthcare configurations.
+
 ## Current guidance — checked 2026-11-18
 
 The Model Selection guide updated on 2026-11-17/18 to introduce **GPT-6.2 Astra** and **GPT-6.2 Sol** alongside **GPT-6.1 Terra** and **GPT-6 Luna**. ^[extracted]
@@ -93,6 +107,8 @@ Related: [[concepts/model-effort-selection]], [[synthesis/vendor-guided-model-se
 
 ## Sources
 
+- [[_raw/_archived/2026-11-26-openai-model-selection]] — 2026-11-26 full Markdown capture confirming GPT-6.2 Sol medium API default.
+- [[_raw/_archived/2026-11-26-openai-codex-models]] — 2026-11-26 full Markdown capture of Codex Max/Ultra rules, context defaults, and retirements.
 - [[_raw/_archived/2026-11-18-openai-model-selection]] — 2026-11-18 bounded text excerpt of the updated guide with GPT-6.2 Astra and Sol.
 - [[_raw/_archived/2026-10-27-openai-model-selection]] — defuddle markdown capture of updated guide including GPT-6.1 Terra.
 - [[_raw/_archived/2026-10-24-openai-model-selection]] — verbatim excerpts of every quoted row and sentence.

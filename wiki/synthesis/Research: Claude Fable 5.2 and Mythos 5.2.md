@@ -11,7 +11,7 @@ sources:
   - "[[_raw/_archived/2026-11-10-anthropic-advisor-tool]]"
   - "[[_raw/_archived/2026-11-10-claudedev-multi-agent-teams-fable-5-2]]"
 created: 2026-11-10T00:25:00Z
-updated: 2026-11-10T00:25:00Z
+updated: 2026-11-26T00:49:17Z
 summary: >-
   Comprehensive synthesis of Anthropic's Claude Fable 5.2 & Mythos 5.2: benchmarks (SWE-bench Pro 93.0%, FrontierCode 49.1, HLE 74.2%), dual-safeguard architecture, Claude Code advisor guide, and multi-agent scaling.
 provenance:
@@ -70,15 +70,27 @@ On November 9, 2026, Anthropic released **Claude Fable 5.2** and **Claude Mythos
 - In a research experiment published on claude.dev, a team of **1,000 Claude Fable 5.2 agents** formalized Fermat's Last Theorem in Lean 4 in **28.7 hours**.
 - Unlike prior formalizations (which required researcher steering and Prove2Me scaffolding), Fable 5.2 required 1/3 as many output tokens and produced a proof 1/7 the length, utilizing an SQLite shared state database, sandbox isolation, and command classifier monitoring.
 
+## Independent Benchmarks (checked 2026-11-26)
+
+- **Artificial Analysis Intelligence Index (2026-11-24 snapshot)**:
+  - **Claude Fable 5.2**: **64.6** (`max` / default top config; ~$26.54/task, ~40.5 min), **62.2** (`xhigh`), **61.8** (`high`), **56.4** (`medium`), **53.9** (`low`).
+  - **Claude Opus 5.5**: **59.1** (`max`), **57.4** (`xhigh`), **51.8** (`high`), **48.2** (`medium`), **34.8** (`low`).
+  - **Claude Sonnet 5.5**: **54.5** (`max`), **49.9** (`xhigh`), **41.5** (`high`), **30.8** (`medium`), **25.6** (`low`).
+  - **Claude Haiku 5.5**: **36.5** (`max`), **34.6** (`xhigh`), **29.9** (`high`), **24.6** (`medium`), **18.6** (`low`).
+- **Vals AI (checked 2026-11-26)**: Fable 5.2 ranks **#1/43** on the Vals Index (**70.06% ± 1.02**, $17.94/test, 43m 42s latency, 1.88% fallback, 0.00% refusal), **#1/29** Vals RSI Index (**37.88%**), **#1/70** Terminal-Bench 4.0, **#1/51** Vibe Code Bench v1.1.1 (**83.52% ± 3.25**), **#1/46** Finance Agent v2.1 (**69.47% ± 1.98**), **#1/54** ProofBench v1.1 (**100.00%**), **#1/48** EMB v1.1 (**77.38% ± 2.19**), **#1/35** BioMysteryBench (**83.70% ± 0.74**), and **#2/31** Code Migration v1.1 (**83.27% ± 3.12**); Vals Science Index **63.74% ± 2.30** (#3/29), Vals Finance Index **63.58% ± 1.38** (#8/46), Vals Legal Index **69.17% ± 1.81** (#24/44).
+- **LMArena & Terminal-Bench Proxy (2026-11-24 snapshot)**: Fable 5.2 (`max`) achieves Arena Text overall **1502.2** (Coding **1525.4**, Expert **1532.1**, Factuality **1483.2**) and Terminal-Bench 4.0 `max` **65.76%**.
+
 ## Core Concepts
 
 - [[concepts/dual-safeguard-deployment]]: Releasing identical foundation model weights under two safeguard regimes (Fable vs Mythos).
 - [[concepts/fable-advisor-pattern]]: Escalating complex decisions from daily drivers (Sonnet/Opus) to Fable 5.2 via Claude Code's advisor tool.
 
-## Sources Consulted
+## Sources
 
 - [[references/sources/anthropic-claude-fable-and-mythos-5-2]] — Official release announcement and System Card data.
 - [[references/sources/anthropic-claude-code-advisor-fable]] — Official Claude Code guide for advisor tool and Fable configuration.
+- [[references/sources/anthropic-effort]] — Official effort guide including Fable 5.2 / Mythos 5.2 / Opus 5.5 / Sonnet 5.5 / Haiku 5.5 per-model recommendations (2026-11-26 capture).
+- [[references/sources/anthropic-model-selection]] — Official Anthropic model selection guide (2026-11-26 capture).
 - [[_raw/_archived/2026-11-10-anthropic-fable-5-2-mythos-5-2-announcement]] — Verbatim release announcement.
 - [[_raw/_archived/2026-11-10-anthropic-fable-5-2-mythos-5-2-system-card]] — Verbatim System Card Section 8 capability evaluations.
 - [[_raw/_archived/2026-11-10-anthropic-advisor-tool]] — Verbatim Claude Code advisor tool documentation.

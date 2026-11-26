@@ -5,10 +5,10 @@ category: references
 tags: [source, agentic, coding]
 sources: ["url:https://ai.google.dev/gemini-api/docs/models"]
 created: 2026-10-19T01:52:29Z
-updated: 2026-11-13T03:08:44Z
-as_of: 2026-11-13
+updated: 2026-11-26T00:32:19Z
+as_of: 2026-11-26
 summary: >-
-  Gemini 4 Carbon, Argon and Hydrogen roles, alongside dated descriptions of earlier models.
+  Gemini 4 Carbon, Neon, Hydrogen, and Argon roles; Helium remains unconfirmed/unreleased; dated descriptions of earlier models.
 provenance:
   extracted: 1.0
   inferred: 0.0
@@ -21,6 +21,7 @@ snapshots:
   - "[[_raw/_archived/2026-10-19-google-gemini-models|2026-10-19-google-gemini-models]]"
   - "[[_raw/_archived/2026-10-24-google-gemini-models|2026-10-24-google-gemini-models]]"
   - "[[_raw/_archived/2026-11-13-google-gemini-models|2026-11-13-google-gemini-models]]"
+  - "[[_raw/_archived/2026-11-26-google-gemini-models|2026-11-26-google-gemini-models]]"
 ---
 
 # Google Gemini model roles
@@ -48,6 +49,10 @@ A family label does not establish task success, actual spend, or availability in
 - [[synthesis/vendor-guided-model-selection]]
 - [[concepts/facets/task]]
 
+## Current guidance — checked 2026-11-26
+
+The official catalog (`aistudio.google.com/docs/models.md`) now lists four Gemini 4 models — `gemini-4-carbon`, `gemini-4-neon`, `gemini-4-hydrogen`, and `gemini-4-argon` — all with 1M context and `64K / 1M tokens` max output. **Gemini 4 Helium (`gemini-4-helium`) is not officially released**: `aistudio.google.com/docs/models/gemini-4-helium.md` returns HTTP 404, and it does not appear in `llms.txt`, `models.md`, or `choosing-a-model.md`; only unconfirmed community leaks/UI sightings exist. ^[extracted]
+
 ## Current guidance — checked 2026-11-19
 
 Google released **Gemini 4 Neon** (`gemini-4-neon`) on 2026-11-18 between Hydrogen and Carbon. See [[references/sources/google-gemini-choosing-a-model]] for the updated official selection table (`gemini-4-carbon`, `gemini-4-neon`, `gemini-4-hydrogen`, `gemini-3.5-flash-lite`) and [[references/sources/google-gemini-4-neon-release]] for launch details.
@@ -64,3 +69,4 @@ Related: [[concepts/model-effort-selection]], [[synthesis/vendor-guided-model-se
 - [[_raw/_archived/2026-10-19-google-gemini-models]] — earlier bounded excerpt and canonical origin.
 
 - [[_raw/_archived/2026-11-13-google-gemini-models]] — 2026-11-13 capture; extraction limitations are recorded in its frontmatter.
+- [[_raw/_archived/2026-11-26-google-gemini-models]] — 2026-11-26 full Markdown capture adding `gemini-4-neon` card and `64K / 1M` output notation.

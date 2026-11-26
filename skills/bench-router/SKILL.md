@@ -1,11 +1,11 @@
 ---
 name: bench-router
-description: Select a benchmark-informed coding agent for a bounded task through bench-router, then run it through Herdr, a local CLI subprocess, or the caller's own executor (API, host Agent tool; no Herdr needed) and collect its result, or fan out several subtasks or best-of-N attempts to agents in isolated git worktrees that can share a scratchpad. Use when an orchestrator wants a benchmark-informed agent handoff; do not invoke from inside a bench-router delegated run.
+description: Select a benchmark-informed coding agent for a bounded task through bench-router, then run it through Herdr, a local CLI subprocess, or the caller's own executor (API, host Agent tool; no Herdr needed) and collect its result, or fan out several subtasks or best-of-N attempts to agents in isolated git worktrees that can share a scratchpad. Use when an orchestrator wants a benchmark-informed agent handoff, or when explicitly asked to check newly released vendor models and refresh bench-router's model catalog, official model/effort guidelines, wiki, or defaults; do not invoke from inside a bench-router delegated run.
 ---
 
 # Bench-router handoff
 
-Use this skill only for a task the caller wants to hand off. The router evaluates and validates the selected profile, then dispatches through Herdr, a local subprocess or the caller (external runner), owns receipts and collects results. The caller still verifies the work and records feedback.
+Use this skill for a bounded task handoff or an explicit request to refresh bench-router's model catalog or official model/effort guidance. For a benchmark snapshot alone, use the existing `bench-router refresh` command. For handoffs, the router evaluates and validates the selected profile, then dispatches through Herdr, a local subprocess or the caller (external runner), owns receipts and collects results. The caller still verifies the work and records feedback.
 
 ## Setup
 
@@ -64,3 +64,7 @@ When `decision.requests` is present, launch one native `bench-decider` per packe
 Routing reads the shared snapshot. One user-level scheduled `refresh` can keep data current; initial `evaluate --refresh` explicitly checks due sources before assessing missing metrics. Plain evaluation and response replay remain offline. SWE/TB still need approved manual imports. Concurrent refreshes and dispatches to the same `cwd` return a busy/conflict result; do not work around their locks. See `status` and the JSON warnings for stale or missing evidence.
 
 New Herdr runs return monitor status. Their core observer validates and copies results, attempts the Ready handoff for successful outcomes, and exits after collection. It does not watch for merge or clean Git resources. Check the receipt’s `ready` field for the handoff state; results and receipts remain outside the worktree.
+
+## Model & guideline refresh
+
+When the user explicitly asks to check newly released vendor models or refresh bench-router's model catalog or official model/effort guidance, read [references/model-refresh.md](references/model-refresh.md). For routine benchmark snapshot updates alone, use `bench-router refresh` directly. Never invoke this workflow from inside a delegated run.

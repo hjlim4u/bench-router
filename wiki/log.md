@@ -31,3 +31,5 @@
 - [2026-11-19T08:03:55Z] WIKI_RESEARCH topic="Google Gemini 4 Neon release, model selection guide, and benchmarks" rounds=3 sources_fetched=7 pages_created=6 backends_used=none
 - [2026-11-19T08:21:49Z] QUERY query="Google Gemini 4 Neon Carbon Hydrogen vendor model selection guide and thinking levels" result_pages=8 mode=normal escalated=false candidates_seen=8 candidates_used=6 dropped=2
 - [2026-11-19T08:29:38Z] WIKI_UPDATE source=wiki/references/google-gemini-4-neon.md pages_created=0 pages_updated=6
+- [2026-11-26T00:33:13Z] WIKI_RESEARCH topic="Google Gemini 4 Lineup, Effort Guidelines, and Benchmark Status (Nov 2026)" rounds=2 sources_fetched=7 pages_created=1 pages_updated=4 backends_used=none
+- [2026-11-26T00:50:51Z] WIKI_RESEARCH topic="Anthropic and OpenAI Unreflected Models, Effort Guides, and Benchmarks (Nov 2026)" rounds=2 sources_fetched=10 pages_created=2 pages_updated=6 backends_used=none

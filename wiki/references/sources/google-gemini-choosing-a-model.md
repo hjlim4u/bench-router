@@ -8,8 +8,8 @@ sources:
   - "url:https://aistudio.google.com/docs/models/gemini-4-neon.md"
 source_url: "https://aistudio.google.com/docs/choosing-a-model.md"
 created: 2026-11-19T08:02:38Z
-updated: 2026-11-19T08:02:38Z
-as_of: 2026-11-19
+updated: 2026-11-26T00:32:19Z
+as_of: 2026-11-26
 summary: >-
   Official Google AI Studio model selection guide comparing Gemini 4 Carbon, Neon, Hydrogen, and 3.5 Flash-Lite, thinking levels, and multi-step model pairing.
 provenance:
@@ -23,6 +23,7 @@ tier: supporting
 snapshots:
   - "[[_raw/_archived/2026-11-19-google-gemini-choosing-a-model|2026-11-19-google-gemini-choosing-a-model]]"
   - "[[_raw/_archived/2026-11-19-google-gemini-4-neon-model-page|2026-11-19-google-gemini-4-neon-model-page]]"
+  - "[[_raw/_archived/2026-11-26-google-gemini-choosing-a-model|2026-11-26-google-gemini-choosing-a-model]]"
 ---
 
 # Google AI Studio: Choosing a Gemini model
@@ -48,7 +49,12 @@ Google's official selection guide (`aistudio.google.com/docs/choosing-a-model.md
 
 ## Limits
 
-Vendor selection guidance reflects Google's recommended defaults and pricing tiers as of 2026-11-19; it does not establish cross-provider rankings or local CLI quota availability.
+Vendor selection guidance reflects Google's recommended defaults and pricing tiers as of 2026-11-26 (updated from 2026-11-19: Carbon's $2/$10 rate through 2026-11-30 is labeled promotional pricing, and Google AI Studio plan access is clarified — Hydrogen and Flash-Lite are free on all plans, Neon on AI Pro/Ultra, Carbon on AI Ultra, while Carbon and Neon require the paid API tier). It does not establish cross-provider rankings or local CLI quota availability.
+
+## Sources
+
+- [[_raw/_archived/2026-11-19-google-gemini-choosing-a-model]]
+- [[_raw/_archived/2026-11-26-google-gemini-choosing-a-model]]
 
 ## Related
 

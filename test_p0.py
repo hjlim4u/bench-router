@@ -1520,7 +1520,7 @@ class P0VendorGuidance(unittest.TestCase):
         requests = [self.d.guidance_request({}, vendor, guide) for vendor in ("claude", "openai")]
         claude_sources = {sid for sid in guide["sources"] if sid.startswith("claude")}
         self.assertTrue({"claude_models", "claude_effort", "claude_prompting_sonnet_5_5"} <= claude_sources)
-        self.assertEqual([set(req["state"]["sources"]) for req in requests], [claude_sources, {"openai"}])
+        self.assertEqual([set(req["state"]["sources"]) for req in requests], [claude_sources, {"openai", "openai_codex_models"}])
         text = [json.dumps(req) for req in requests]
         self.assertFalse(any(pid in t for pid in ("p-luna", "p-haiku", "p-new") for t in text))  # no profile IDs
         self.assertNotIn("gpt-6", text[0])  # vendors are isolated
@@ -1690,7 +1690,11 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertEqual(gemini["levels"]["gemini-4-hydrogen"]["advanced"], "high")
         self.assertIn("falls short", gemini["escalations"]["gemini-4-hydrogen", "xhigh"])
         self.assertEqual(gemini["levels"]["gemini-4-carbon"]["ordinary"], "medium")
-        self.assertFalse(any(o["model"] == "gpt-6.1-terra" for o in guide["vendors"]["openai"]["options"].values()))
+        self.assertIn("falls short", gemini["escalations"]["gemini-4-neon", "xhigh"])
+        openai = guide["vendors"]["openai"]
+        self.assertIn("gpt-6.1-terra:medium", openai["options"])
+        self.assertIn(("gpt-6-luna", "max"), openai["escalations"])
+        self.assertNotIn(("gpt-6-luna", "ultra"), openai["escalations"])
 
     def test_v109_prompt_guidance_is_quoted_from_the_captured_vendor_pages(self):
         guide = self.d.load_guidelines()
@@ -1713,10 +1717,11 @@ class P0VendorGuidance(unittest.TestCase):
         self.assertEqual({i["source"]["id"].split("_")[0] for i in self.d.prompt_guidance(guide, "gpt-6-luna")["items"]}, {"openai"})
         self.assertIsNone(self.d.prompt_guidance(guide, "gpt-7-new"))
         terra = guide["models"]["gpt-6.1-terra"]
-        self.assertEqual((terra["vendor"], set(terra["efforts"])), ("openai", set()))
+        self.assertEqual((terra["vendor"], set(terra["efforts"])), ("openai", {"medium", "max", "ultra"}))
         self.assertIn("GPT-6.1 Terra evaluation", {i["topic"] for i in self.d.prompt_guidance(guide, "gpt-6.1-terra")["items"]})
         # only the selected model's references: the Gemini 3 page does not reach gemini-4-argon
         self.assertEqual({i["source"]["id"] for i in self.d.prompt_guidance(guide, "gemini-4-argon")["items"]}, {"gemini_thinking"})
+        self.assertIn("gemini_thinking", {i["source"]["id"] for i in self.d.prompt_guidance(guide, "gemini-4-neon")["items"]})
         self.assertTrue(self.d.prompt_guidance(guide, "gemini-3.8-flash")["items"])
         with mock.patch.object(r, "_load_toml", return_value={**r._load_toml(self.d.GUIDELINES)}) as load:
             raw = load.return_value

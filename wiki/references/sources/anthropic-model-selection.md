@@ -5,8 +5,8 @@ category: references
 tags: [source, agentic, coding]
 sources: ["url:https://platform.claude.com/docs/en/about-claude/models/choosing-a-model"]
 created: 2026-10-19T01:52:29Z
-updated: 2026-11-13T03:08:44Z
-as_of: 2026-11-13
+updated: 2026-11-26T00:49:17Z
+as_of: 2026-11-26
 summary: >-
   Current Claude model roles including Fable 5.2, Opus 5.5 as the usual starting point, and dated selection strategies.
 provenance:
@@ -21,6 +21,7 @@ snapshots:
   - "[[_raw/_archived/2026-10-19-anthropic-model-selection|2026-10-19-anthropic-model-selection]]"
   - "[[_raw/_archived/2026-10-24-anthropic-model-selection|2026-10-24-anthropic-model-selection]]"
   - "[[_raw/_archived/2026-11-13-anthropic-model-selection|2026-11-13-anthropic-model-selection]]"
+  - "[[_raw/_archived/2026-11-26-anthropic-model-selection|2026-11-26-anthropic-model-selection]]"
 ---
 
 # Anthropic model-selection strategies
@@ -74,6 +75,10 @@ The matrix is a starting recommendation dated 2026-10-24. Account access, model 
 - [[synthesis/vendor-guided-model-selection]]
 - [[concepts/facets/agent_signal]]
 
+## Current guidance — checked 2026-11-26
+
+Official Anthropic docs (`models/overview.md` and `models/choosing-a-model.md`) confirm the active lineup remains **Claude Fable 5.2** ($8/$40 per 1M tokens, public flagship; `high` default), **Claude Mythos 5.2** (restricted Cyber/Life Sciences verification access), **Claude Opus 5.5** ($4/$20, recommended default starting point for most workloads; `medium` default), **Claude Sonnet 5.5** ($2/$10; `high` default), and **Claude Haiku 5.5** ($0.10/$0.50; `medium` default). All share a 1M-token context window, 128K max output, and June 2026 knowledge cutoff. No Claude 5.6 or Fable 5.3 has been officially released (community stealth-routing rumors only). ^[extracted]
+
 ## Current guidance — checked 2026-11-13
 
 The current highest-capability entry is Claude Fable 5.2, replacing Fable 5.1 in the current selection matrix. Most workloads still start with Opus 5.5. Capability-first starts with Opus 5.5 and considers Fable 5.2 when evaluations at xhigh or max fall short on demanding reasoning or long-horizon agentic work. Fable 5.2 defaults to high; Opus 5.5 and Haiku 5.5 default to medium. Mythos 5.2 has the same capabilities but restricted organizational access; it is not a general availability substitute. The older Fable 5.1 matrix below is historical.
@@ -86,3 +91,4 @@ Related: [[concepts/model-effort-selection]], [[synthesis/vendor-guided-model-se
 - [[_raw/_archived/2026-10-19-anthropic-model-selection]] — earlier bounded excerpt and canonical origin.
 
 - [[_raw/_archived/2026-11-13-anthropic-model-selection]] — 2026-11-13 capture; extraction limitations are recorded in its frontmatter.
+- [[_raw/_archived/2026-11-26-anthropic-model-selection]] — 2026-11-26 full Markdown capture confirming Fable 5.2 / Opus 5.5 / Sonnet 5.5 / Haiku 5.5 lineup.
