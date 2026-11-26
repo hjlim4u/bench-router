@@ -7,10 +7,10 @@ name = "bench-router"
 version = "0.0.0"
 description = "Benchmark-evidence router for coding-agent profiles"
 requires-python = ">=3.11"
-dependencies = []  # core path is stdlib only
+dependencies = ["pyarrow"]  # needed for `refresh --source arena`
 
 [project.optional-dependencies]
-arena = ["pyarrow"]  # needed only for `refresh --source arena`
+arena = ["pyarrow"]  # kept for `--extra arena` / `[arena]` compatibility
 
 [project.scripts]
 bench-router = "bench_router.cli:main"
