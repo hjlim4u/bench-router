@@ -547,7 +547,7 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
     save(rc)
     if rc["terminal_id"]:
         try:
-            _verify_terminal(rc, rc["terminal_id"], runner)
+            board.verify_terminal(rc, rc["terminal_id"])
         except r.InputError as e:
             rc.update(status="delivery_uncertain", delivery_state="uncertain")
             _observe(rc, note=str(e))
@@ -603,8 +603,9 @@ def settle_exit(rc):
 
 
 def _poll_headless(rc, runner, timeout_s):
+    board = _board(BACKEND, runner)
     if rc.get("thread_id"):
-        row = _task(rc, runner, timeout_s)
+        row = board.task(rc, timeout_s)
         if row.get("state") in ("todo", "queued", "scheduled"):
             cancelled = row.get("state") == "todo" and any(e.get("cancelled_queue") for e in _events(rc))
             if cancelled:
@@ -621,13 +622,8 @@ def _poll_headless(rc, runner, timeout_s):
     if any(e.get("state") == "stop_sent" for e in _events(rc)):
         rc.update(status="execution_failed", process_exited=True)
         return
-    _verify_terminal(rc, rc["terminal_id"], runner)
-    obj, err = project_call(["get", rc["terminal_id"], "--json"], runner, timeout_s=timeout_s, exe=HERDR_BIN)
-    if err:
-        raise r.InputError(err["message"])
-    if not isinstance(obj, dict) or obj.get("state") not in ("live", "exited"):
-        raise r.InputError("unexpected hc terminal response")
-    if obj["state"] == "exited":
+    board.verify_terminal(rc, rc["terminal_id"])
+    if board.terminal_state(rc["terminal_id"], timeout_s) == "exited":
         rc.update(status="execution_failed", process_exited=True)
         _observe(rc, note="headless terminal ended before writing its exit code")
     else:
@@ -635,43 +631,49 @@ def _poll_headless(rc, runner, timeout_s):
         _observe(rc, "working", note="headless CLI still running")
 
 
-def _task(rc, runner, timeout_s=SHORT_CALL_S):
-    obj, err = project_call(["show", rc["thread_id"], "--folder", repo_cwd(rc), "--json"], runner, timeout_s=timeout_s)
-    if err or not isinstance(obj, dict) or obj.get("key") != rc["thread_id"] or type(obj.get("id")) is not int or obj.get("id") != rc.get("task_id_on_board") \
-            or obj.get("title") != "br-" + rc["run_id"] or obj.get("folder") != repo_cwd(rc) \
-            or obj.get("agent") != rc["kind"]:
-        raise r.InputError("Shepherdr task identity differs from the receipt")
-    if obj.get("state") not in ("todo", "queued", "scheduled"):
-        wt = obj.get("worktree")
-        if obj.get("mode") != "worktree" or not isinstance(wt, str) or not os.path.isabs(wt) \
-                or os.path.realpath(wt) == os.path.realpath(repo_cwd(rc)) or obj.get("branch") != f"br/{rc['run_id']}":
-            raise r.InputError("Shepherdr task worktree differs from the receipt")
-        if rc.get("worktree") and os.path.realpath(wt) != os.path.realpath(rc["worktree"]):
-            raise r.InputError("Shepherdr task worktree changed")
-        rc.update(worktree=wt, branch=obj["branch"])
-    return obj
-
-
-def _verify_terminal(rc, terminal, runner):
-    label = f"herdr.task={rc['thread_id']}" if rc.get("thread_id") else f"bench-router.run={rc['run_id']}"
-    obj, err = project_call(["ls", "--label", label, "--json"], runner, exe=HERDR_BIN)
-    if err or not isinstance(obj, dict) or not isinstance(obj.get("terminals"), list) or not any(
-            t.get("address") == terminal for t in obj["terminals"] if isinstance(t, dict)):
-        raise r.InputError("recorded terminal is absent from the task's core session")
+def _observe_board(rc, runner):
+    """One Board.observe of a non-Shepherdr board, mapped onto the receipt; success still needs the result files."""
+    obs = _board(rc["backend"], runner).observe(rc)
+    rc.update(obs.get("ids") or {})
+    task, why = obs["task"], obs["why"]
+    if obs["retryable"]:
+        rc["status"] = "timed_out"
+        _observe(rc, note=why or "board read failed; retry")
+    elif obs["identity"] != "ok":
+        raise r.InputError("board card or terminal differs from the receipt; reconcile manually")
+    elif task == "turn_done":
+        if rc.get("terminal_id") or rc["delivery_state"] not in ("uncertain", "submission_attempted"):
+            rc["delivery_state"] = "activity_observed"
+        settle(rc, "done")
+        if rc["status"] == "completed":
+            release(rc, runner)
+    elif task == "blocked":
+        rc.update(status="blocked", delivery_state="activity_observed", diagnostic_tail=why)
+        _observe(rc, "blocked", note=why)
+    elif task == "stopped":
+        rc.update(status="execution_failed", process_exited=obs["process"] == "exited")
+        _observe(rc, task, note=why or "board agent stopped")
+    elif task == "not_started":
+        rc["status"] = "delivery_uncertain"
+        _observe(rc, task, note="card not started; recovery never calls start")
+    else:
+        rc.update(status="timed_out", delivery_state="activity_observed")
+        _observe(rc, task, note=why)
 
 
 def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     """Observe the recorded board task only; never delegate, retry or re-prompt it."""
-    if rc.get("backend") not in (BACKEND, LOCAL_BACKEND, EXTERNAL_BACKEND, TUI_BACKEND):
+    if rc.get("backend") not in (*BOARDS, LOCAL_BACKEND, EXTERNAL_BACKEND, TUI_BACKEND):
         raise r.InputError("legacy receipt: inspect the original worker; automatic backend migration is refused")
     native = rc["backend"] == BACKEND
+    port = rc["backend"] in BOARDS and not native  # any other board, through the Board port only
     if native:
         runner = bound_runner(rc, runner)
     if rc["status"] == "completed" and rc.get("settled_contract"):
-        if native and rc.get("release") is None:  # completed before releasing existed, or the last close failed
+        if (native or port) and rc.get("release") is None:  # completed before releasing existed, or the last close failed
             release(rc, runner)
             save(rc)
-        elif not native:
+        elif not native and not port:
             from . import runners
             if runners.retry_release(rc, runner):
                 save(rc)
@@ -689,7 +691,9 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     timeout = lambda: min(SHORT_CALL_S, max(OBSERVE_FLOOR_S, deadline - time.monotonic())) if wait_ms > 0 else SHORT_CALL_S
     while True:
         try:
-            if not native:
+            if port:
+                _observe_board(rc, runner)
+            elif not native:
                 from . import runners
                 runners.poll(rc, runner, max(0.0, deadline - time.monotonic()))  # herdr-tui waits in herdr
             elif headless:
@@ -697,7 +701,8 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
             elif not same_binding(rc, session, runner):
                 raise r.InputError("Shepherdr protocol, space or core version changed; inspect the recorded worker")
             else:
-                row = _task(rc, runner, timeout())
+                # T5: this still reads raw Shepherdr rows; the mapping to Board.observe states lives in the adapter.
+                row = _board(BACKEND, runner).task(rc, timeout())
                 state, status, needs = row.get("state"), row.get("status"), row.get("needs")
                 if state in ("todo", "queued", "scheduled"):
                     cancelled = state == "todo" and any(e.get("cancelled_queue") for e in _events(rc))
@@ -922,7 +927,7 @@ def resume_run(cwd, run_id, runner=subprocess.run):
         runner = bound_runner(rc, runner)
         if not same_binding(rc, rc["herdr_session"], runner):
             raise r.InputError("Shepherdr protocol or core version changed; inspect the recorded worker")
-        _task(rc, runner)
+        _board(BACKEND, runner).task(rc)
         obj, err = project_call(["resume", rc["thread_id"], "--folder", repo_cwd(rc), "--space", rc["project_binding"]["space"], "--json"], runner, timeout_s=START_CALL_S)
         if err or not isinstance(obj, dict) or not obj.get("terminal"):
             raise r.InputError(f"resume failed: {(err or {}).get('message')}")
@@ -957,12 +962,13 @@ def tell_run(cwd, run_id, text, runner=subprocess.run):
         runner = bound_runner(rc, runner)
         if not same_binding(rc, rc["herdr_session"], runner):
             raise r.InputError("Shepherdr protocol, space or core version changed; inspect the recorded worker")
-        row = _task(rc, runner)
+        board = _board(BACKEND, runner)
+        row = board.task(rc)
         live = row.get("live") or []
         if row.get("state") != "running" or len(live) != 1 or (row.get("needs") == "reply" and not rc.get("resumed")):
             raise r.InputError("task finished on the board or has no single live worker; collect/resume first")
         terminal = live[0]["address"]
-        _verify_terminal(rc, terminal, runner)
+        board.verify_terminal(rc, terminal)
         send = lambda: project_call(["send", terminal, text, "--json"], runner, exe=HERDR_BIN)
     # No dispatch lock or receipt write: a blocking parallel/collect on this cwd must not stall the message.
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -1001,16 +1007,16 @@ def stop_run(cwd, run_id, runner=subprocess.run):
     if rc.get("backend") != BACKEND:
         raise r.InputError("legacy receipt: stop its original herdr-projects worker manually; no automatic migration")
     runner = bound_runner(rc, runner)
+    board = _board(BACKEND, runner)
     if not same_binding(rc, rc["herdr_session"], runner):
         raise r.InputError("Shepherdr protocol or core version changed; inspect the recorded worker")
     if rc.get("execution") == "headless" and not rc.get("thread_id"):
         terminals = [rc["terminal_id"]] if rc.get("terminal_id") else []
     else:
-        row = _task(rc, runner)
+        row = board.task(rc)
         if row.get("state") in ("queued", "scheduled", "todo"):
             _log_event(rc, {"state": "stop_attempted"})
-            obj, err = project_call(["reopen", rc["thread_id"], "--folder", repo_cwd(rc), "--json"], runner)
-            cancelled = not err and isinstance(obj, dict) and obj.get("key") == rc["thread_id"] and obj.get("state") == "todo"
+            cancelled = board.reopen(rc)
             log = _log_event(rc, {"state": "stop_sent" if cancelled else "stop_uncertain", "cancelled_queue": cancelled})
             return {"schema_version": r.SCHEMA_VERSION, "status": "stop_sent" if cancelled else "delivery_uncertain",
                     "run_id": rc["run_id"], "thread_id": rc["thread_id"], "messages_path": str(log)}
@@ -1020,8 +1026,8 @@ def stop_run(cwd, run_id, runner=subprocess.run):
     _log_event(rc, {"state": "stop_attempted"})
     err = None
     for terminal in terminals:
-        _verify_terminal(rc, terminal, runner)
-        _, err = project_call(["kill", terminal, "--json"], runner, raw=True, exe=HERDR_BIN)
+        board.verify_terminal(rc, terminal)
+        err = board.kill(terminal, raw=True)
         if err:
             break
     log = _log_event(rc, {"state": "stop_uncertain" if err else "stop_sent", "error": err})

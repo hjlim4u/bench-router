@@ -18,7 +18,7 @@ def finalize(rc, runner=subprocess.run):
     _, why = h.check_result(rc)  # Results must survive native worktree cleanup.
     if why:
         raise r.InputError(why)
-    h._task(rc, runner)
+    h._board(h.BACKEND, runner).task(rc)
     rc["ready"] = {"state": "attempted"}
     h.save(rc)  # A lost response must not repeat a potentially PR-creating command.
     obj, err = h.project_call(["ready", rc["thread_id"], "--folder", h.repo_cwd(rc),

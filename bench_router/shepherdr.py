@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from . import routing as r
-from .board import CAPABILITIES
+from .board import CAPABILITIES, observation
 
 PROJECTS_BIN = os.environ.get("BENCH_ROUTER_TASKS", "herdr-task")
 HERDR_BIN = os.environ.get("BENCH_ROUTER_HC", "hc")
@@ -85,7 +85,8 @@ def bound_runner(rc, runner):
 
 
 def _repo(rc):
-    return rc.get("repo_cwd", rc["cwd"]) if "cwd" in rc else rc.get("repo_cwd")
+    """herdr.repo_cwd; a port-only rc (no receipt) uses the folder given to bind()."""
+    return rc.get("repo_cwd", rc["cwd"]) if "cwd" in rc else rc.get("repo_cwd") or (rc.get("binding") or {}).get("folder")
 
 
 class ShepherdrBoard:
@@ -105,7 +106,7 @@ class ShepherdrBoard:
 
     def add(self, rc, settings, base, timeout_s):
         """Add this run's card without starting it. Returns (row, err); row is None unless confirmed."""
-        obj, err = self._tasks(["add", "br-" + rc["run_id"], "--prompt-file", str(Path(rc["run_dir"]) / "input.txt"),
+        obj, err = self._tasks(["add", "br-" + rc["run_id"], "--prompt-file", str(Path(rc.get("run_dir", ".")) / "input.txt"),
                                 "--folder", _repo(rc), "--base", base, "--branch", f"br/{rc['run_id']}",
                                 *settings, *WORK_SETTINGS, "--json"], timeout_s=timeout_s)
         if err or not isinstance(obj, dict) or not re.fullmatch(r"[^#\s]+#[0-9]+", str(obj.get("key", ""))) \
@@ -140,10 +141,119 @@ class ShepherdrBoard:
             f"PYTHONPATH={Path(__file__).resolve().parents[1]}", sys.executable, "-m", "bench_router.lifecycle",
             "--cwd", rc["cwd"], "--run-id", rc["run_id"]])
 
+    def task(self, rc, timeout_s=SHORT_CALL_S):
+        """show the recorded card; InputError unless it is this run's. Records the card's worktree/branch in rc."""
+        obj, err = self._tasks(["show", rc["thread_id"], "--folder", _repo(rc), "--json"], timeout_s=timeout_s)
+        if err or not isinstance(obj, dict) or obj.get("key") != rc["thread_id"] or type(obj.get("id")) is not int or obj.get("id") != rc.get("task_id_on_board") \
+                or obj.get("title") != "br-" + rc["run_id"] or obj.get("folder") != _repo(rc) \
+                or obj.get("agent") != rc.get("kind"):
+            raise r.InputError("Shepherdr task identity differs from the receipt")
+        if obj.get("state") not in ("todo", "queued", "scheduled"):
+            wt = obj.get("worktree")
+            if obj.get("mode") != "worktree" or not isinstance(wt, str) or not os.path.isabs(wt) \
+                    or os.path.realpath(wt) == os.path.realpath(_repo(rc)) or obj.get("branch") != f"br/{rc['run_id']}":
+                raise r.InputError("Shepherdr task worktree differs from the receipt")
+            if rc.get("worktree") and os.path.realpath(wt) != os.path.realpath(rc["worktree"]):
+                raise r.InputError("Shepherdr task worktree changed")
+            rc.update(worktree=wt, branch=obj["branch"])
+        return obj
+
+    def verify_terminal(self, rc, terminal):
+        label = f"herdr.task={rc['thread_id']}" if rc.get("thread_id") else f"bench-router.run={rc['run_id']}"
+        obj, err = self._core(["ls", "--label", label, "--json"])
+        if err or not isinstance(obj, dict) or not isinstance(obj.get("terminals"), list) or not any(
+                t.get("address") == terminal for t in obj["terminals"] if isinstance(t, dict)):
+            raise r.InputError("recorded terminal is absent from the task's core session")
+
+    def terminal_state(self, terminal, timeout_s):
+        """hc get state: "live" or "exited"; InputError otherwise."""
+        obj, err = self._core(["get", terminal, "--json"], timeout_s=timeout_s)
+        if err:
+            raise r.InputError(err["message"])
+        # T5: hc 0.1.20 reports an ended terminal as "finished", which this rejects (docs/evidence/shepherdr-spike.md).
+        if not isinstance(obj, dict) or obj.get("state") not in ("live", "exited"):
+            raise r.InputError("unexpected hc terminal response")
+        return obj["state"]
+
+    def kill(self, terminal, raw=False):
+        """End one core terminal; returns the call's error or None."""
+        return self._core(["kill", terminal, "--json"], raw=raw)[1]
+
+    def reopen(self, rc):
+        """Cancel a queued card back to To do; True only when the board confirms it."""
+        obj, err = self._tasks(["reopen", rc["thread_id"], "--folder", _repo(rc), "--json"])
+        return not err and isinstance(obj, dict) and obj.get("key") == rc["thread_id"] and obj.get("state") == "todo"
+
     # ---- Board port ----
 
     def bind(self, session, cwd):
-        return project_binding(session, self.runner, None, self.call)
+        return {**project_binding(session, self.runner, None, self.call), "folder": cwd}
+
+    def _process(self, terminal, key):
+        """(process state, label matches key) from hc get; finished -> exited, rc 3 not_found -> gone."""
+        if not terminal:
+            return "gone", True
+        obj, err = self._core(["get", terminal, "--json"])
+        if err:
+            return ("gone" if "not_found" in (err.get("message") or "") else "unknown"), True
+        if not isinstance(obj, dict):
+            return "unknown", True
+        label = (obj.get("labels") or {}).get("herdr.task")
+        state = obj.get("state")
+        return ("live" if state == "live" else "exited" if state in ("finished", "exited") else "unknown"), label in (None, key)
+
+    @staticmethod
+    def _task_state(row, live, process):
+        state, status, needs = row.get("state"), row.get("status"), row.get("needs")
+        if state == "todo":
+            return "not_started"
+        if state in ("queued", "scheduled"):
+            return "queued"
+        if needs == "stopped":
+            return "stopped"
+        if status in ("ready", "done") or (live and all(x.get("status") in ("idle", "done") for x in live)):
+            return "turn_done"
+        if status == "needs":
+            return "blocked"
+        if live:
+            return "working"
+        # show keeps status=working with live=[] for 2-5 s after a kill: fall back to the terminal.
+        return "working" if process == "live" else "stopped"
+
+    def observe(self, rc):
+        extra, key = {}, rc.get("thread_id")
+        if not key:  # lost create: look the card up by its run-id title only
+            obj, err = self._tasks(["list", "--json"])
+            if err or not isinstance(obj, dict):
+                return observation(None, "unknown", retryable=True, why=(err or {}).get("message"))
+            found = [t for t in obj.get("tasks") or [] if isinstance(t, dict) and t.get("title") == "br-" + rc["run_id"]]
+            if len(found) != 1:
+                raise r.InputError(f"{len(found)} Shepherdr cards titled br-{rc['run_id']}")
+            key = found[0].get("key")
+            extra["ids"] = {"thread_id": key, "task_id_on_board": found[0].get("id")}
+        row, err = self._tasks(["show", key, "--folder", _repo(rc), "--json"])
+        if err or not isinstance(row, dict):
+            return observation(None, "unknown", retryable=True, why=(err or {}).get("message"))
+        live = [x for x in row.get("live") or [] if isinstance(x, dict)]
+        addresses = [x.get("address") for x in live]
+        process, label_ok = self._process(rc.get("terminal_id") or (addresses[0] if addresses else None), key)
+        ok = label_ok and row.get("key") == key and row.get("title") == "br-" + rc["run_id"] \
+            and (not rc.get("task_id_on_board") or row.get("id") == rc["task_id_on_board"]) \
+            and (not rc.get("terminal_id") or not addresses or rc["terminal_id"] in addresses)
+        return observation(self._task_state(row, live, process), process, "ok" if ok else "mismatch",
+                           why=row.get("why"), **extra)
+
+    def stop(self, rc):
+        row = self.task(dict(rc))
+        terminals = [t["address"] for t in row.get("live") or []] or ([rc["terminal_id"]] if rc.get("terminal_id") else [])
+        if not terminals:
+            raise r.InputError("no live terminal to stop")
+        for terminal in terminals:
+            self.verify_terminal(rc, terminal)
+            err = self.kill(terminal, raw=True)
+            if err:
+                raise BoardError(err)
+        return self.observe(rc)
 
     def create(self, rc):
         obj, err = self.add(rc, rc.get("board_settings", []), rc.get("base", "main"), START_CALL_S)
