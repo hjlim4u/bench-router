@@ -650,7 +650,7 @@ class P2(unittest.TestCase):
         self.assertEqual(out["status"], "timed_out")
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "timed_out")
         fake.panes.clear()  # closed by hand = stopped
-        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "execution_failed")
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "delivery_uncertain")
 
     def test_headless_failing_cli_without_result(self):
         fake = FakeProjects()
@@ -731,7 +731,14 @@ class P2(unittest.TestCase):
 
     def test_release_failure_keeps_result_and_retries(self):
         fake = FakeProjects(on_prompt=write_result())
-        fake.pane_error = "herdr server not running"
+        original_core = fake._core
+        # The first ls checks the newly started terminal. Fail the later release.
+        checks = iter((False, True))
+        def core(argv):
+            if argv[0] == "ls" and next(checks, False):
+                fake.pane_error = "herdr server not running"
+            return original_core(argv)
+        fake._core = core
         out = self.run_(fake)
         self.assertEqual((out["status"], out["release"], fake.closed), ("completed", None, []))
         fake.pane_error = None
@@ -1305,6 +1312,23 @@ class P2(unittest.TestCase):
         fake = FakeProjects(on_prompt=write_result())
         fake.core_version = "hc 0.1.19"
         self.assertEqual(self.run_(fake)["status"], "completed")
+
+    def test_core_session_is_recorded_and_used(self):
+        path = Path(self.cwd) / ".bench-router" / "shepherdr.json"
+        path.parent.mkdir(exist_ok=True)
+        path.write_text('{"core_session":"shepherdr"}', "utf-8")
+        fake = FakeProjects(on_prompt=write_result())
+        out = self.run_(fake)
+        self.assertEqual(self.receipt(out)["project_binding"]["session"], "shepherdr")
+        self.assertTrue(all(kw["env"]["HC_SESSION"] == "shepherdr" for _, kw in fake.kwargs if "env" in kw))
+
+    def test_start_rejects_terminal_missing_from_recorded_session(self):
+        fake = FakeProjects(after_status="working")
+        original_core = fake._core
+        fake._core = lambda argv: fake._ok({"terminals": []}) if argv[0] == "ls" else original_core(argv)
+        out = self.run_(fake)
+        self.assertEqual(out["status"], "delivery_uncertain")
+        self.assertEqual(fake.closed, [])
 
     def test_message_log_survives_unicode_line_separator(self):
         with tempfile.TemporaryDirectory() as tmp:

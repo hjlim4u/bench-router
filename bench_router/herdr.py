@@ -70,10 +70,9 @@ def project_call(argv, runner=subprocess.run, raw=False, timeout_s=SHORT_CALL_S,
         return None, {"code": "shepherdr_error", "message": str(e)[:300]}
 
 
-def project_binding(session=None, runner=subprocess.run):
+def project_binding(session=None, runner=subprocess.run, core_session=None):
     """Bind to the task protocol and core build, never interpret legacy Projects receipts as tasks."""
-    if (os.environ.get("HC_SESSION") or "default") != "default":
-        raise r.InputError("Shepherdr uses the default herdr-core session; unset HC_SESSION")
+    core_session = core_session or os.environ.get("HC_SESSION") or "default"
     version, err = project_call(["--version"], runner, raw=True)
     if err or (version or "").strip() != TASK_PROTOCOL:
         raise r.InputError("Shepherdr 3.x herdr-task protocol 1 is required for live dispatch; "
@@ -89,7 +88,7 @@ def project_binding(session=None, runner=subprocess.run):
         space = labels.get("herdr.space") or labels.get("herdr.task.space") or labels.get("herdr.coordinator.space")
     if not isinstance(space, str) or not space.strip() or "/" in space:
         raise r.InputError("a local Shepherdr space is required: use --herdr-space SPACE or BENCH_ROUTER_SPACE")
-    return {"task_protocol": TASK_PROTOCOL, "core_version": core.strip(), "space": space, "session": "default"}
+    return {"task_protocol": TASK_PROTOCOL, "core_version": core.strip(), "space": space, "session": core_session}
 
 
 def resolve_runner(name=None, which=shutil.which):
@@ -106,12 +105,32 @@ def runner_binding(backend, session=None, runner=subprocess.run, cwd=None):
     if backend != BACKEND:
         return {"runner": backend}
     path = Path(cwd) / ".bench-router" / "shepherdr.json" if cwd else None
-    if not session and not (os.environ.get("BENCH_ROUTER_SPACE") or os.environ.get("BENCH_ROUTER_HERDR_SESSION")) and path and path.exists():
+    core_session = None
+    if path and path.exists():
         config = r.load_json_strict(path, r.TASK_MAX_BYTES)
-        if not isinstance(config, dict) or not isinstance(config.get("space"), str):
-            raise r.InputError(f"{path}: an object with a space string is required")
-        session = config["space"]
-    return project_binding(session, runner)
+        if not isinstance(config, dict) or any(k in config and (not isinstance(config[k], str) or not config[k].strip() or "/" in config[k]) for k in ("space", "core_session")):
+            raise r.InputError(f"{path}: space and core_session must be nonempty strings without slashes")
+        if not session and not (os.environ.get("BENCH_ROUTER_SPACE") or os.environ.get("BENCH_ROUTER_HERDR_SESSION")):
+            session = config.get("space")
+        core_session = config.get("core_session")
+    return project_binding(session, runner, core_session)
+
+
+def bound_runner(rc, runner):
+    """Run task and core commands in the session recorded before submission."""
+    core_session = rc["project_binding"]["session"]
+    def run(cmd, **kwargs):
+        env = {**kwargs.pop("env", os.environ), "HC_SESSION": core_session}
+        if (os.environ.get("HC_SESSION") or "default") != core_session:
+            for key in ("HC_SOCKET", "HC_TERMINAL_SOCKET", "HC_TERMINAL_ID"):
+                env.pop(key, None)
+        return runner(cmd, env=env, **kwargs)
+    return run
+
+
+def same_binding(rc, session, runner):
+    current = project_binding(session, runner, rc["project_binding"]["session"])
+    return all(current[k] == rc["project_binding"][k] for k in ("task_protocol", "space", "session"))
 
 
 def _availability(availability, cfg, which, backend, requests=()):
@@ -471,7 +490,7 @@ def headless_script(rc, argv, publish=True):
 def _binding_unchanged(rc, session, runner):
     """Pre-submission check. On failure nothing was sent: settle the receipt so it cannot stay `dispatching`."""
     try:
-        if project_binding(session, runner) == rc["project_binding"]:
+        if same_binding(rc, session, runner):
             return True
         why = "Shepherdr binding changed before submission"
     except r.InputError as e:
@@ -486,6 +505,7 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
     if rc["backend"] != BACKEND:
         from . import runners
         return runners.start(rc, prompt, profile, wait_ms, runner)
+    runner = bound_runner(rc, runner)
     if not _binding_unchanged(rc, session, runner):
         return rc
     settings = worker_settings(profile)
@@ -570,6 +590,14 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
     rc["terminal_id"] = obj.get("terminal")
     rc["worktree"], rc["branch"] = obj.get("worktree"), obj.get("branch")
     save(rc)
+    if rc["terminal_id"]:
+        try:
+            _verify_terminal(rc, rc["terminal_id"], runner)
+        except r.InputError as e:
+            rc.update(status="delivery_uncertain", delivery_state="uncertain")
+            _observe(rc, note=str(e))
+            save(rc)
+            return rc
     # One durable core terminal observes the run and its later merge even when the caller disconnects.
     import sys
     monitor, monitor_error = project_call(["run", "--bg", "--rm", "--json", "--no-parent",
@@ -612,6 +640,10 @@ def _poll_headless(rc, runner, timeout_s):
         return
     if not rc.get("terminal_id"):
         raise r.InputError("hc run response was lost; inspect the recorded run label before resolving")
+    if any(e.get("state") == "stop_sent" for e in _events(rc)):
+        rc.update(status="execution_failed", process_exited=True)
+        return
+    _verify_terminal(rc, rc["terminal_id"], runner)
     obj, err = project_call(["get", rc["terminal_id"], "--json"], runner, timeout_s=timeout_s, exe=HERDR_BIN)
     if err:
         raise r.InputError(err["message"])
@@ -642,11 +674,21 @@ def _task(rc, runner, timeout_s=SHORT_CALL_S):
     return obj
 
 
+def _verify_terminal(rc, terminal, runner):
+    label = f"herdr.task={rc['thread_id']}" if rc.get("thread_id") else f"bench-router.run={rc['run_id']}"
+    obj, err = project_call(["ls", "--label", label, "--json"], runner, exe=HERDR_BIN)
+    if err or not isinstance(obj, dict) or not isinstance(obj.get("terminals"), list) or not any(
+            t.get("address") == terminal for t in obj["terminals"] if isinstance(t, dict)):
+        raise r.InputError("recorded terminal is absent from the task's core session")
+
+
 def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     """Observe the recorded board task only; never delegate, retry or re-prompt it."""
     if rc.get("backend") not in (BACKEND, LOCAL_BACKEND, EXTERNAL_BACKEND, TUI_BACKEND):
         raise r.InputError("legacy receipt: inspect the original worker; automatic backend migration is refused")
     native = rc["backend"] == BACKEND
+    if native:
+        runner = bound_runner(rc, runner)
     if rc["status"] == "completed" and rc.get("settled_contract"):
         if native and rc.get("release") is None:  # completed before releasing existed, or the last close failed
             release(rc, runner)
@@ -674,7 +716,7 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
                 runners.poll(rc, runner, max(0.0, deadline - time.monotonic()))  # herdr-tui waits in herdr
             elif headless:
                 _poll_headless(rc, runner, timeout())
-            elif project_binding(session, runner) != rc["project_binding"]:
+            elif not same_binding(rc, session, runner):
                 raise r.InputError("Shepherdr protocol, space or core version changed; inspect the recorded worker")
             else:
                 row = _task(rc, runner, timeout())
@@ -861,6 +903,7 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
 
 def release(rc, runner=subprocess.run):
     """End only idle terminals belonging to this run; leave working and blocked agents alone."""
+    runner = bound_runner(rc, runner)
     from .lifecycle import finalize
     finalize(rc, runner)
     argv = ["ls", "--label", f"bench-router.run={rc['run_id']}", "--json"] if not rc.get("thread_id") else \
@@ -898,7 +941,8 @@ def resume_run(cwd, run_id, runner=subprocess.run):
             raise r.InputError("only a Shepherdr task run can be resumed")
         if rc.get("execution") == "headless":  # its card has no conversation; resume would rerun the saved argv
             raise r.InputError("headless runs cannot be resumed; dispatch a new round")
-        if project_binding(rc["herdr_session"], runner) != rc["project_binding"]:
+        runner = bound_runner(rc, runner)
+        if not same_binding(rc, rc["herdr_session"], runner):
             raise r.InputError("Shepherdr protocol or core version changed; inspect the recorded worker")
         _task(rc, runner)
         obj, err = project_call(["resume", rc["thread_id"], "--folder", repo_cwd(rc), "--space", rc["project_binding"]["space"], "--json"], runner, timeout_s=START_CALL_S)
@@ -932,13 +976,15 @@ def tell_run(cwd, run_id, text, runner=subprocess.run):
         send = lambda: project_call(["agent", "prompt", rc["agent_name"], text, "--wait", "--until", "working",
                                      "--until", "blocked", "--timeout", "20000"], runner, exe=TUI_BIN)
     else:
-        if project_binding(rc["herdr_session"], runner) != rc["project_binding"]:
+        runner = bound_runner(rc, runner)
+        if not same_binding(rc, rc["herdr_session"], runner):
             raise r.InputError("Shepherdr protocol, space or core version changed; inspect the recorded worker")
         row = _task(rc, runner)
         live = row.get("live") or []
         if row.get("state") != "running" or len(live) != 1 or (row.get("needs") == "reply" and not rc.get("resumed")):
             raise r.InputError("task finished on the board or has no single live worker; collect/resume first")
         terminal = live[0]["address"]
+        _verify_terminal(rc, terminal, runner)
         send = lambda: project_call(["send", terminal, text, "--json"], runner, exe=HERDR_BIN)
     # No dispatch lock or receipt write: a blocking parallel/collect on this cwd must not stall the message.
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -976,7 +1022,8 @@ def stop_run(cwd, run_id, runner=subprocess.run):
                 "run_id": rc["run_id"], "thread_id": None, "messages_path": str(log), **({"error": err} if err else {})}
     if rc.get("backend") != BACKEND:
         raise r.InputError("legacy receipt: stop its original herdr-projects worker manually; no automatic migration")
-    if project_binding(rc["herdr_session"], runner) != rc["project_binding"]:
+    runner = bound_runner(rc, runner)
+    if not same_binding(rc, rc["herdr_session"], runner):
         raise r.InputError("Shepherdr protocol or core version changed; inspect the recorded worker")
     if rc.get("execution") == "headless" and not rc.get("thread_id"):
         terminals = [rc["terminal_id"]] if rc.get("terminal_id") else []
@@ -995,6 +1042,7 @@ def stop_run(cwd, run_id, runner=subprocess.run):
     _log_event(rc, {"state": "stop_attempted"})
     err = None
     for terminal in terminals:
+        _verify_terminal(rc, terminal, runner)
         _, err = project_call(["kill", terminal, "--json"], runner, raw=True, exe=HERDR_BIN)
         if err:
             break

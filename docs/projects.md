@@ -3,7 +3,7 @@
 The live pathway is `route` / `parallel` → Shepherdr 3.x `herdr-task` → herdr-core (`hc`) → Agent CLI.
 The caller chooses decomposition, profiles, review rounds and result adoption. bench-router keeps durable receipts,
 admission limits and result validation. The certified upstream contracts are Shepherdr **3.1.14**, herdr-task
-protocol **1**, and herdr-core **0.1.17+**. Core version or space changes hold an active run as `delivery_uncertain`.
+protocol **1**, and herdr-core **0.1.17+**. Recorded task identity and core session are checked when controlling a run.
 
 ## Setup
 
@@ -32,7 +32,10 @@ Create a space for the repository in the web app. Select it using the global `--
 `BENCH_ROUTER_SPACE`, or a local `<repo>/.bench-router/shepherdr.json` containing `{"space":"SPACE"}`.
 A caller already inside herdr-core can inherit its terminal's space. `--herdr-session` and
 `BENCH_ROUTER_HERDR_SESSION` remain aliases for the space selection; these no longer select a terminal-Herdr
-session. Shepherdr uses the default core session. Recorded runs recover with their recorded space.
+session. Set `core_session` in the same configuration file to the session used by Shepherdr. Use `default` for
+Shepherdr 3.1 and `shepherdr` for 3.2, for example `{"space":"SPACE","core_session":"shepherdr"}`.
+Without `core_session`, the current `HC_SESSION` or `default` is used. Runs retain their recorded core session;
+tasks moved to another session during an upgrade need manual inspection before recovery.
 
 ```bash
 hc --version                         # hc >= 0.1.17
