@@ -16,26 +16,23 @@ from pathlib import Path
 from . import usage
 from . import locking
 from . import routing as r
+from . import shepherdr
+# Shepherdr connect/bind calls live in the adapter; these names stay importable from herdr.
+from .shepherdr import (BACKEND, HERDR_BIN, PROJECTS_BIN, SHORT_CALL_S, START_CALL_S, TASK_PROTOCOL,
+                        WORK_SETTINGS, bound_runner, project_call)
 
-PROJECTS_BIN = os.environ.get("BENCH_ROUTER_TASKS", "herdr-task")
-HERDR_BIN = os.environ.get("BENCH_ROUTER_HC", "hc")
-BACKEND = "shepherdr-3"
 LOCAL_BACKEND = "local-1"  # one-shot CLI as a local subprocess (runners.py)
 EXTERNAL_BACKEND = "external-1"  # the caller runs the agent; the router keeps receipt and result contract
 TUI_BACKEND = "herdr-tui-1"  # one-shot CLI in its own herdr TUI workspace, through the herdr CLI only (runners.py)
 TUI_BIN = os.environ.get("BENCH_ROUTER_HERDR", "herdr")
 RUNNERS = {"herdr": BACKEND, "herdr-tui": TUI_BACKEND, "local": LOCAL_BACKEND, "external": EXTERNAL_BACKEND}
-TASK_PROTOCOL = "1"  # herdr-task --version is its protocol, not Shepherdr's release number
-SHORT_CALL_S = 15
 OBSERVE_FLOOR_S = 2  # one task observation; keeps calls inside a 5s task budget
-START_CALL_S = 60  # task start may prepare a worktree before it answers
 MAX_PROMPT_ARG_BYTES = 120 * 1024  # the prompt is one argv entry (--desc); Linux caps one at 128 KiB
 DISCOVERED_KIND = {"claude": ("claude", "claude-code", "--model"),
                    "codex": ("codex", "codex-cli", "-m")}
 # Codex keeps the models its -m accepts, with each model's efforts; "hide" marks internal models.
 CODEX_MODELS_CACHE = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "models_cache.json"
 RESULT_REL = Path(".bench-router") / "runs"  # agent writes results here, relative to its board worktree
-WORK_SETTINGS = ["--worktree", "--set", "review=off", "--set", "merge=ask me first", "--set", "proof=off"]
 RESULT_MD_MAX = 10 * 1024 * 1024
 RESULT_JSON_MAX = 64 * 1024
 SETTLED_STATUSES = {"completed", "result_invalid", "execution_failed"}  # 이 외의 receipt는 새 live dispatch를 막는다
@@ -54,45 +51,24 @@ def _iso(t):
     return t.isoformat(timespec="seconds")
 
 
-# ---------- Shepherdr public CLIs ----------
+# ---------- Board providers ----------
 
-def project_call(argv, runner=subprocess.run, raw=False, timeout_s=SHORT_CALL_S, exe=None):
-    cmd = [exe or PROJECTS_BIN, *argv]
-    try:
-        p = runner(cmd, capture_output=True, text=True, encoding="utf-8", errors="strict",
-                   timeout=timeout_s, shell=False)
-        if p.returncode:
-            raise ValueError((p.stderr or p.stdout)[:300])
-        if len(p.stdout.encode("utf-8")) > r.SNAPSHOT_MAX_BYTES:
-            raise ValueError("Shepherdr response too large")
-        return (p.stdout if raw else json.loads(p.stdout)), None
-    except (OSError, subprocess.SubprocessError, ValueError) as e:
-        return None, {"code": "shepherdr_error", "message": str(e)[:300]}
+# backend id -> adapter factory(runner). New runs get their backend from resolve_runner, recorded runs from
+# rc["backend"]. project_call is looked up at call time so it stays the one replaceable Shepherdr seam.
+BOARDS = {BACKEND: lambda runner: shepherdr.ShepherdrBoard(runner, project_call)}
+
+
+def _board(backend, runner):
+    return BOARDS[backend](runner)
 
 
 def project_binding(session=None, runner=subprocess.run, core_session=None):
     """Bind to the task protocol and core build, never interpret legacy Projects receipts as tasks."""
-    core_session = core_session or os.environ.get("HC_SESSION") or "default"
-    version, err = project_call(["--version"], runner, raw=True)
-    if err or (version or "").strip() != TASK_PROTOCOL:
-        raise r.InputError("Shepherdr 3.x herdr-task protocol 1 is required for live dispatch; "
-                           "install Shepherdr, use --runner local|external, or use route --dry-run")
-    core, err = project_call(["--version"], runner, raw=True, exe=HERDR_BIN)
-    m = re.fullmatch(r"hc (\d+)\.(\d+)\.(\d+)(?:[-+ ].*)?", (core or "").strip())
-    if err or not m or tuple(map(int, m.groups())) < (0, 1, 17):
-        raise r.InputError("Shepherdr requires herdr-core (hc) >= 0.1.17")
-    space = session or os.environ.get("BENCH_ROUTER_SPACE") or os.environ.get("BENCH_ROUTER_HERDR_SESSION")
-    if not space and os.environ.get("HC_TERMINAL_ID"):
-        obj, err = project_call(["get", os.environ["HC_TERMINAL_ID"], "--json"], runner, exe=HERDR_BIN)
-        labels = (obj or {}).get("labels", {})
-        space = labels.get("herdr.space") or labels.get("herdr.task.space") or labels.get("herdr.coordinator.space")
-    if not isinstance(space, str) or not space.strip() or "/" in space:
-        raise r.InputError("a local Shepherdr space is required: use --herdr-space SPACE or BENCH_ROUTER_SPACE")
-    return {"task_protocol": TASK_PROTOCOL, "core_version": core.strip(), "space": space, "session": core_session}
+    return shepherdr.project_binding(session, runner, core_session, project_call)
 
 
 def resolve_runner(name=None, which=shutil.which):
-    """--runner → receipt backend. auto: Shepherdr when herdr-task and hc are on PATH, else a local subprocess."""
+    """--runner → receipt backend. auto: Shepherdr when its task and core CLIs are on PATH, else a local subprocess."""
     name = name or os.environ.get("BENCH_ROUTER_RUNNER") or "auto"
     if name == "auto":
         name = "herdr" if which(PROJECTS_BIN) and which(HERDR_BIN) else "local"
@@ -102,6 +78,8 @@ def resolve_runner(name=None, which=shutil.which):
 
 
 def runner_binding(backend, session=None, runner=subprocess.run, cwd=None):
+    if backend in BOARDS and backend != BACKEND:
+        return _board(backend, runner).bind(session, cwd)
     if backend != BACKEND:
         return {"runner": backend}
     path = Path(cwd) / ".bench-router" / "shepherdr.json" if cwd else None
@@ -114,18 +92,6 @@ def runner_binding(backend, session=None, runner=subprocess.run, cwd=None):
             session = config.get("space")
         core_session = config.get("core_session")
     return project_binding(session, runner, core_session)
-
-
-def bound_runner(rc, runner):
-    """Run task and core commands in the session recorded before submission."""
-    core_session = rc["project_binding"]["session"]
-    def run(cmd, **kwargs):
-        env = {**kwargs.pop("env", os.environ), "HC_SESSION": core_session}
-        if (os.environ.get("HC_SESSION") or "default") != core_session:
-            for key in ("HC_SOCKET", "HC_TERMINAL_SOCKET", "HC_TERMINAL_ID"):
-                env.pop(key, None)
-        return runner(cmd, env=env, **kwargs)
-    return run
 
 
 def same_binding(rc, session, runner):
@@ -168,7 +134,7 @@ def model_effort(profile):
 
 
 def worker_settings(profile):
-    """Profile model/effort flags expressed by herdr-task; permissions stay the user's CLI settings."""
+    """Profile model/effort flags expressed by the board's task add; permissions stay the user's CLI settings."""
     me = model_effort(profile)
     if me is None:
         return None
@@ -502,10 +468,13 @@ def _binding_unchanged(rc, session, runner):
 
 
 def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=None):
+    if rc["backend"] in BOARDS and rc["backend"] != BACKEND:
+        return _execute_board(rc, prompt, session, runner, wait_ms)
     if rc["backend"] != BACKEND:
         from . import runners
         return runners.start(rc, prompt, profile, wait_ms, runner)
     runner = bound_runner(rc, runner)
+    board = _board(BACKEND, runner)
     if not _binding_unchanged(rc, session, runner):
         return rc
     settings = worker_settings(profile)
@@ -514,9 +483,7 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
         _observe(rc, note="profile args beyond model/effort cannot be expressed; nothing submitted")
         save(rc)
         return rc
-    prompt += ("\nShepherdr: do not call herdr-task ready, done, accept or merge yourself. "
-               "Commit requested code changes, keep this worktree and branch, then write results and end your turn. "
-               "bench-router validates and copies results before marking the task Ready; the person accepts it.\n")
+    prompt += shepherdr.PROMPT_NOTE
     r.atomic_write(Path(rc["run_dir"]) / "input.txt", prompt.encode("utf-8"))
     remaining = (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds()
     if remaining <= 0:
@@ -537,12 +504,8 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
         return rc
     rc["delivery_state"] = "submission_attempted"
     save(rc)  # An add with a lost response must never be repeated, even though it starts nothing.
-    obj, err = project_call(["add", "br-" + rc["run_id"], "--prompt-file", str(Path(rc["run_dir"]) / "input.txt"),
-                             "--folder", repo_cwd(rc), "--base", base, "--branch", f"br/{rc['run_id']}",
-                             *settings, *WORK_SETTINGS, "--json"], runner, timeout_s=min(START_CALL_S, remaining))
-    if err or not isinstance(obj, dict) or not re.fullmatch(r"[^#\s]+#[0-9]+", str(obj.get("key", ""))) \
-            or type(obj.get("id")) is not int or obj["id"] < 1 or not obj["key"].endswith(f"#{obj['id']}") \
-            or obj.get("title") != "br-" + rc["run_id"] or obj.get("folder") != repo_cwd(rc) or obj.get("agent") != rc["kind"]:
+    obj, err = board.add(rc, settings, base, min(START_CALL_S, remaining))
+    if obj is None:
         rc.update(status="delivery_uncertain", delivery_state="uncertain")
         _observe(rc, error=err, note=f"task add unconfirmed; find br-{rc['run_id']}, never resubmit")
         save(rc)
@@ -562,13 +525,7 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
         return rc
     rc["start_attempted"] = True
     save(rc)
-    # Shepherdr only translates model/effort for Claude and Codex. Its public argv override keeps agy's flags.
-    # Codex's workspace-write sandbox cannot commit in a git worktree (the lock files live in the main .git).
-    launch_args = (["--argv", json.dumps([profile["executable"], *profile["args"], "--prompt-interactive"])]
-                   if profile["kind"] == "agy" else
-                   ["--argv", json.dumps([profile["executable"], *profile["args"],
-                                          "--dangerously-bypass-approvals-and-sandbox"])]
-                   if profile["kind"] == "codex" else [])
+    script = None
     if rc.get("execution") == "headless":
         argv = headless_argv(profile)
         if argv is None:
@@ -578,11 +535,9 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
         # tee keeps the pane live while output.log outlives release() closing the terminal (as the local runner's log)
         log = shlex.quote(str(Path(rc["run_dir"]) / "output.log"))
         script = f"{{ {headless_script({**rc, 'worktree': '.'}, argv)}; }} 2>&1 | tee {log}"
-        launch_args = ["--argv", json.dumps(["sh", "-c", script])]
-    obj, err = project_call(["start", rc["thread_id"], "--folder", repo_cwd(rc), "--space", rc["project_binding"]["space"],
-                             *launch_args, "--json"], runner,
-                            timeout_s=min(START_CALL_S, max(0.001, (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds())))
-    if err or not isinstance(obj, dict):
+    obj, err = board.start_task(rc, board.launch_args(profile, script),
+                                min(START_CALL_S, max(0.001, (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds())))
+    if obj is None:
         rc.update(status="delivery_uncertain", delivery_state="uncertain")
         _observe(rc, error=err, note="task start unconfirmed; collect the recorded task, never restart")
         save(rc)
@@ -598,16 +553,39 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
             _observe(rc, note=str(e))
             save(rc)
             return rc
-    # One durable core terminal observes the run and its later merge even when the caller disconnects.
-    import sys
-    monitor, monitor_error = project_call(["run", "--bg", "--rm", "--json", "--no-parent",
-        "--label", f"bench-router.watch={rc['run_id']}", "--", "env",
-        f"PYTHONPATH={Path(__file__).resolve().parents[1]}", sys.executable, "-m", "bench_router.lifecycle",
-        "--cwd", rc["cwd"], "--run-id", rc["run_id"]], runner, exe=HERDR_BIN)
+    monitor, monitor_error = board.watch(rc)
     rc["monitor"] = {"terminal_id": (monitor or {}).get("address"), "error": monitor_error}
     remaining = _wait(rc, wait_ms)
     rc["status"] = "timed_out"
     save(rc)
+    return collect(rc, remaining, session, runner) if remaining > 0 else rc
+
+
+def _execute_board(rc, prompt, session, runner, wait_ms):
+    """A non-Shepherdr board, through the Board port only. Stores before/after each call per board.PERSISTENCE."""
+    board = _board(rc["backend"], runner)
+    rc["binding"] = rc["project_binding"]
+    r.atomic_write(Path(rc["run_dir"]) / "input.txt", prompt.encode("utf-8"))
+    for op, attempted in (("create", ("delivery_state", "submission_attempted")), ("start", ("start_attempted", True))):
+        rc[attempted[0]] = attempted[1]
+        save(rc)  # a lost response is never re-called
+        try:
+            rc.update(getattr(board, op)(rc))
+        except r.InputError as e:
+            rc.update(status="execution_failed", process_exited=True)
+            if op == "create":
+                rc["delivery_state"] = "not_attempted"
+            _observe(rc, note=f"{e}; nothing {'submitted' if op == 'create' else 'started'}")
+            save(rc)
+            return rc
+        except Exception as e:
+            rc.update(status="delivery_uncertain", delivery_state="uncertain")
+            _observe(rc, note=f"board {op} unconfirmed ({e}); collect the recorded card, never resend")
+            save(rc)
+            return rc
+    rc["status"] = "timed_out"
+    save(rc)
+    remaining = _wait(rc, wait_ms)
     return collect(rc, remaining, session, runner) if remaining > 0 else rc
 
 
