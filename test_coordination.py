@@ -55,14 +55,14 @@ class CoordinationTests(unittest.TestCase):
         self.assertEqual(len(fake.adds), 1)
         self.assertTrue(co.load(first["coordination_key"])["active"])
 
-    def test_v47_configuration_change_keeps_submission_uncertain(self):
+    def test_v47_core_upgrade_keeps_existing_task_observable(self):
         fake = FakeProjects(after_status="working")
         out = self.run_(fake)
         fake.core_version = "hc 0.1.19"
         fake.status = "idle"
         write_result()(fake, fake.prompts[0])
-        self.assertEqual(herdr.collect_run(str(self.cwd), out["run_id"], 0, runner=fake)["status"], "delivery_uncertain")
-        self.assertTrue(co.load(out["coordination_key"])["active"])
+        self.assertEqual(herdr.collect_run(str(self.cwd), out["run_id"], 0, runner=fake)["status"], "completed")
+        self.assertFalse(co.load(out["coordination_key"])["active"])
         self.assertEqual(len(fake.prompts), 1)
 
     def test_v48_global_limit_and_workspace_writer_exclusion(self):
