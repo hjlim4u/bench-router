@@ -184,7 +184,32 @@ class ShepherdrBoard:
         obj, err = self._tasks(["reopen", rc["thread_id"], "--folder", _repo(rc), "--json"])
         return not err and isinstance(obj, dict) and obj.get("key") == rc["thread_id"] and obj.get("state") == "todo"
 
+    def verify(self, rc):
+        """Identity check the router runs before a mutating handoff (records worktree/branch like task())."""
+        self.task(rc)
+
+    def tell_target(self, rc):
+        """The single live worker of a running card that may take a message; InputError otherwise."""
+        row = self.task(rc)
+        live = row.get("live") or []
+        if row.get("state") != "running" or len(live) != 1 or (row.get("needs") == "reply" and not rc.get("resumed")):
+            raise r.InputError("task finished on the board or has no single live worker; collect/resume first")
+        terminal = live[0]["address"]
+        self.verify_terminal(rc, terminal)
+        return terminal
+
+    def send(self, terminal, text):
+        return self._core(["send", terminal, text, "--json"])
+
+    def resume_task(self, rc):
+        return self._tasks(["resume", rc["thread_id"], "--folder", _repo(rc), "--space", rc["project_binding"]["space"],
+                            "--json"], timeout_s=START_CALL_S)
+
     # ---- Board port ----
+
+    def _need(self, capability):
+        if capability not in self.capabilities:
+            raise r.InputError(f"this Shepherdr board does not support {capability}")
 
     def bind(self, session, cwd):
         return {**project_binding(session, self.runner, None, self.call), "folder": cwd}
@@ -254,6 +279,52 @@ class ShepherdrBoard:
             if err:
                 raise BoardError(err)
         return self.observe(rc)
+
+    def handoff(self, rc):
+        obj, err = self._tasks(["ready", rc["thread_id"], "--folder", _repo(rc),
+                                "--summary", "Results validated by bench-router", "--json"])
+        if err:
+            raise BoardError(err)
+        return (obj or {}).get("state", "uncertain")
+
+    def cleanup(self, rc):
+        """End only idle terminals belonging to this run; leave working and blocked agents alone.
+        Also returns error (the failed call's error) and terminals ([{terminal_id, agent}] closed)."""
+        argv = ["ls", "--label", f"bench-router.run={rc['run_id']}", "--json"] if not rc.get("thread_id") else \
+            ["ls", "--label", f"herdr.task={rc['thread_id']}", "--json"]
+        obj, err = self._core(argv)
+        terminals = obj.get("terminals") if isinstance(obj, dict) else None
+        if err or not isinstance(terminals, list):
+            return {"closed": [], "left_open": "could not list core terminals, agent left open", "error": err}
+        for t in terminals:
+            status = t.get("status")
+            status = status.get("state") if isinstance(status, dict) else status
+            # T5: hc 0.1.20 reports an ended terminal as "finished", which this treats as active.
+            if t.get("state") != "exited" and status not in ("idle", "done") and rc.get("execution") != "headless":
+                return {"closed": [], "left_open": "task still has an active agent, left open", "error": None}
+        closed = []
+        for t in terminals:
+            err = self.kill(t["address"])
+            if err:
+                return {"closed": [c["terminal_id"] for c in closed], "left_open": "ending the core terminal failed",
+                        "error": err, "terminals": closed}
+            closed.append({"terminal_id": t["address"], "agent": t.get("agent")})
+        return {"closed": [c["terminal_id"] for c in closed], "left_open": None, "error": None, "terminals": closed}
+
+    def tell(self, rc, text):
+        self._need("tell")
+        _, err = self.send(self.tell_target(dict(rc)), text)
+        if err:
+            raise BoardError(err)
+
+    def resume(self, rc):
+        self._need("resume")
+        rc = {**rc, "project_binding": rc.get("project_binding") or rc["binding"]}
+        self.task(rc)
+        obj, err = self.resume_task(rc)
+        if err or not isinstance(obj, dict) or not obj.get("terminal"):
+            raise BoardError(err or {"code": "shepherdr_error", "message": "resume returned no terminal"})
+        return {"terminal_id": obj["terminal"], "resumed": obj.get("resumed") is True}
 
     def create(self, rc):
         obj, err = self.add(rc, rc.get("board_settings", []), rc.get("base", "main"), START_CALL_S)

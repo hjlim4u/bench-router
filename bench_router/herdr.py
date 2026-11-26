@@ -886,33 +886,16 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
 
 def release(rc, runner=subprocess.run):
     """End only idle terminals belonging to this run; leave working and blocked agents alone."""
-    runner = bound_runner(rc, runner)
+    if rc["backend"] == BACKEND:
+        runner = bound_runner(rc, runner)
     from .lifecycle import finalize
     finalize(rc, runner)
-    argv = ["ls", "--label", f"bench-router.run={rc['run_id']}", "--json"] if not rc.get("thread_id") else \
-        ["ls", "--label", f"herdr.task={rc['thread_id']}", "--json"]
-    obj, err = project_call(argv, runner, exe=HERDR_BIN)
-    terminals = obj.get("terminals") if isinstance(obj, dict) else None
-    if err or not isinstance(terminals, list):
+    out = _board(rc["backend"], runner).cleanup(rc)
+    if out["left_open"]:
         rc["release"] = None
-        _observe(rc, error=err, note="completed; could not list core terminals, agent left open")
+        _observe(rc, error=out.get("error"), note=f"completed; {out['left_open']}")
         return
-    closed = []
-    for t in terminals:
-        status = t.get("status")
-        status = status.get("state") if isinstance(status, dict) else status
-        if t.get("state") != "exited" and status not in ("idle", "done") and rc.get("execution") != "headless":
-            rc["release"] = None
-            _observe(rc, note="completed; task still has an active agent, left open")
-            return
-    for t in terminals:
-        _, err = project_call(["kill", t["address"], "--json"], runner, exe=HERDR_BIN)
-        if err:
-            rc["release"] = None
-            _observe(rc, error=err, note="completed; ending the core terminal failed")
-            return
-        closed.append({"terminal_id": t["address"], "agent": t.get("agent")})
-    rc["release"] = {"at": _iso(_now()), "terminals": closed}
+    rc["release"] = {"at": _iso(_now()), "terminals": out.get("terminals") or [{"terminal_id": t} for t in out["closed"]]}
 
 
 def resume_run(cwd, run_id, runner=subprocess.run):
@@ -927,8 +910,9 @@ def resume_run(cwd, run_id, runner=subprocess.run):
         runner = bound_runner(rc, runner)
         if not same_binding(rc, rc["herdr_session"], runner):
             raise r.InputError("Shepherdr protocol or core version changed; inspect the recorded worker")
-        _board(BACKEND, runner).task(rc)
-        obj, err = project_call(["resume", rc["thread_id"], "--folder", repo_cwd(rc), "--space", rc["project_binding"]["space"], "--json"], runner, timeout_s=START_CALL_S)
+        board = _board(BACKEND, runner)
+        board.task(rc)
+        obj, err = board.resume_task(rc)
         if err or not isinstance(obj, dict) or not obj.get("terminal"):
             raise r.InputError(f"resume failed: {(err or {}).get('message')}")
         rc["terminal_id"] = obj["terminal"]
@@ -963,13 +947,8 @@ def tell_run(cwd, run_id, text, runner=subprocess.run):
         if not same_binding(rc, rc["herdr_session"], runner):
             raise r.InputError("Shepherdr protocol, space or core version changed; inspect the recorded worker")
         board = _board(BACKEND, runner)
-        row = board.task(rc)
-        live = row.get("live") or []
-        if row.get("state") != "running" or len(live) != 1 or (row.get("needs") == "reply" and not rc.get("resumed")):
-            raise r.InputError("task finished on the board or has no single live worker; collect/resume first")
-        terminal = live[0]["address"]
-        board.verify_terminal(rc, terminal)
-        send = lambda: project_call(["send", terminal, text, "--json"], runner, exe=HERDR_BIN)
+        terminal = board.tell_target(rc)
+        send = lambda: board.send(terminal, text)
     # No dispatch lock or receipt write: a blocking parallel/collect on this cwd must not stall the message.
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
     _log_event(rc, {"sha256": digest, "state": "attempted", "bytes": len(text.encode("utf-8")), "text": text})

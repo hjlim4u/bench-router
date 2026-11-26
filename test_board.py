@@ -1,7 +1,15 @@
 """Board port contract tests. BoardContract runs against any adapter; MemoryBoard is the reference fake."""
+import hashlib
+import json
+import os
+import subprocess
+import tempfile
 import unittest
 from collections import Counter
+from pathlib import Path
+from unittest.mock import patch
 
+from bench_router import herdr as hd, routing as r, shepherdr
 from bench_router.board import CAPABILITIES, PERSISTENCE, PROCESS_STATES, TASK_STATES, Board, observation
 from bench_router.routing import InputError
 
@@ -297,6 +305,178 @@ class MemoryBoardContract(BoardContract, unittest.TestCase):
 
     def set_unsupported(self, board):
         board.protocol = "mem/1"
+
+
+class FakeShepherdr:
+    """herdr-task and hc argv -> JSON shaped like docs/evidence/shepherdr-cli (3.2.19), in memory. Never runs a CLI."""
+    OPS = {"create": "add", "start": "start", "resume": "resume", "tell": "send", "stop": "kill", "handoff": "ready"}
+
+    def __init__(self):
+        self.version, self.cards, self.terms = "1", {}, {}
+        self.calls, self.lose = Counter(), set()
+        self.flaky = self.stubborn = False
+
+    def __call__(self, cmd, **kw):
+        assert kw["shell"] is False
+        out = self._core(cmd[1], cmd[2:]) if cmd[0] == shepherdr.HERDR_BIN else self._tasks(cmd[1], cmd[2:])
+        code, body = out if isinstance(out, tuple) else (0, out)
+        text = body if isinstance(body, str) else json.dumps(body)
+        if cmd[1] in self.lose:
+            self.lose.discard(cmd[1])
+            raise subprocess.TimeoutExpired(cmd, 15)
+        return subprocess.CompletedProcess(cmd, code, text if code == 0 else "", "" if code == 0 else text)
+
+    def _terminal(self, card):
+        address = f"t{len(self.terms) + 1}"
+        self.terms[address] = {"address": address, "state": "live", "labels": {"herdr.task": card["key"]}}
+        card.update(state="running", status="working", needs=None, live=[{"address": address, "status": "working"}],
+                    worktree=f"{card['folder']}/.wt/{card['title']}")
+        return address
+
+    def _tasks(self, op, a):
+        arg = lambda flag: a[a.index(flag) + 1] if flag in a else None
+        self.calls[op] += 1
+        if op == "--version":
+            return self.version + "\n"
+        if op == "add":
+            n = len(self.cards) + 1
+            card = {"id": n, "key": f"repo#{n}", "ref": f"REPO-{n}", "title": a[0], "folder": arg("--folder"),
+                    "agent": arg("--agent"), "mode": "worktree", "state": "todo", "status": "todo", "needs": None,
+                    "why": None, "live": [], "worktree": None, "branch": arg("--branch")}
+            self.cards[card["key"]] = card
+            return card
+        if op == "list":
+            return {"folder": "/repo", "tasks": list(self.cards.values())}
+        if op == "show":
+            return (1, '{"error": "core busy"}') if self.flaky else self.cards[a[0]]
+        if op in ("start", "resume"):
+            card = self.cards[a[0]]
+            terminal = self._terminal(card)
+            return {**card, "terminal": terminal, **({"resumed": True} if op == "resume" else {})}
+        if op == "ready":
+            self.cards[a[0]]["status"] = "ready"
+            return {**self.cards[a[0]], "state": "ready"}
+        raise AssertionError(op)
+
+    def _core(self, op, a):
+        if op == "--version":
+            return "hc 0.1.20\n"
+        if op == "get":
+            t = self.terms.get(a[0])
+            if t is None:
+                return 3, '{"error": {"kind": "not_found"}}'
+            return (5, '{"error": {"kind": "unavailable"}}') if t.get("unknown") else t
+        if op == "ls":
+            key = a[a.index("--label") + 1].split("=", 1)[1]
+            card = self.cards[key]
+            status = {x["address"]: x["status"] for x in card["live"]}
+            return {"terminals": [{"address": t["address"], "state": t["state"], "status": status.get(t["address"], "done")}
+                                  for t in self.terms.values() if t["labels"]["herdr.task"] == key]}
+        self.calls[op] += 1
+        if op == "kill":
+            t = self.terms[a[0]]
+            self.cards[t["labels"]["herdr.task"]].update(status="needs", needs="stopped", why="Agent stopped", live=[])
+            if not self.stubborn:
+                t["state"] = "finished"
+            return {"ok": True}
+        if op == "send":
+            return {"ok": True}
+        raise AssertionError(op)
+
+
+# Board state -> a Shepherdr card (state, status, needs, live worker status or None).
+SHEPHERDR_ROWS = {"not_started": ("todo", "todo", None, None), "queued": ("queued", "queued", None, None),
+                  "working": ("running", "working", None, "working"), "blocked": ("running", "needs", "input", "working"),
+                  "turn_done": ("running", "ready", None, "idle"), "stopped": ("running", "needs", "stopped", None)}
+
+
+class ShepherdrBoardContract(BoardContract, unittest.TestCase):
+    def make_board(self, capabilities=CAPABILITIES):
+        board = shepherdr.ShepherdrBoard(FakeShepherdr(), capabilities=capabilities)
+        board.fake = board.runner
+        return board
+
+    def force(self, board, rc, task, process):
+        state, status, needs, worker = SHEPHERDR_ROWS[task]
+        t = rc["terminal_id"]
+        board.fake.cards[rc["thread_id"]].update(state=state, status=status, needs=needs,
+                                                 live=[{"address": t, "status": worker}] if worker else [])
+        board.fake.terms.pop(t, None)
+        if process != "gone":
+            board.fake.terms[t] = {"address": t, "state": {"live": "live", "exited": "finished"}.get(process, "live"),
+                                   "labels": {"herdr.task": rc["thread_id"]}, "unknown": process == "unknown"}
+
+    def lose_next(self, board, op):
+        board.fake.lose.add(FakeShepherdr.OPS[op])
+
+    def side_effects(self, board, op):
+        return board.fake.calls[FakeShepherdr.OPS[op]]
+
+    def set_flaky(self, board):
+        board.fake.flaky = True
+
+    def set_stubborn(self, board):
+        board.fake.stubborn = True
+
+    def set_unsupported(self, board):
+        board.fake.version = "2"
+
+
+class WorktreeMemoryBoard(MemoryBoard):
+    """MemoryBoard registered as a router backend; its agent works in a real directory."""
+    backend = "memory-1"
+
+    def __init__(self, root):
+        super().__init__()
+        self.root = root
+
+    def start(self, rc):
+        return {**super().start(rc), "worktree": str(self.root / rc["thread_id"])}
+
+
+class RouterBoardIntegration(unittest.TestCase):
+    def test_v16_memory_board_through_router(self):
+        from test_p0 import MAPPING, config, profile
+        from test_p2 import cleanup_temp, git_repo, projects_environment, which
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(cleanup_temp, tmp)
+        projects_environment(self, tmp.name)
+        cwd = Path(os.path.realpath(tmp.name)) / "repo"
+        cwd.mkdir()
+        git_repo(cwd)
+        cfg = config([profile("a", kind="claude", executable="claude", args=["--model", "m"])])
+        task = r.validate_task({"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "do it",
+                                "cwd": str(cwd), "constraints": {"timeout_ms": 60000}})
+        board, picked, commands = WorktreeMemoryBoard(Path(tmp.name) / "wt"), [], []
+        def runner(cmd, **kw):
+            commands.append(cmd)
+            raise AssertionError(f"no CLI may run for a memory board: {cmd}")
+        with patch.dict(hd.BOARDS, {"memory-1": lambda runner: picked.append(runner) or board}):
+            out = hd.dispatch(task, cfg, MAPPING, None, [], runner=runner, which=which, profile_id="a",
+                              selection_mode="orchestrator_pinned", wait_ms=0, backend="memory-1")
+            self.assertEqual(out["status"], "timed_out", out)
+            rc = json.loads(Path(out["receipt_path"]).read_text("utf-8"))  # recovery starts from the receipt on disk
+            self.assertEqual((rc["backend"], rc["delivery_state"]), ("memory-1", "submission_attempted"))
+            self.assertTrue(rc["thread_id"] and rc["task_id_on_board"] and rc["terminal_id"])
+            # the agent writes its result and ends the turn
+            body = b"# result\n"
+            res = Path(rc["worktree"]) / hd.RESULT_REL / rc["run_id"]
+            res.mkdir(parents=True)
+            (res / "result.md").write_bytes(body)
+            (res / "result.json").write_text(json.dumps({
+                "schema_version": "1.0", "run_id": rc["run_id"], "nonce": rc["nonce"],
+                "profile_fingerprint": rc["profile_fingerprint"], "status": "success", "result_file": "result.md",
+                "result_sha256": hashlib.sha256(body).hexdigest(), "checks": []}), "utf-8")
+            board.cards[rc["thread_id"]]["raw"] = "finished"
+            picked.clear()
+            done = hd.collect_run(str(cwd), rc["run_id"], 0, runner=runner)
+        self.assertTrue(picked)  # collect, handoff and cleanup chose the adapter from rc["backend"]
+        self.assertEqual((done["status"], done["task_outcome"]), ("completed", "success"))
+        self.assertEqual(done["ready"], {"state": "handed_off", "error": None})
+        self.assertEqual(done["release"]["terminals"], [{"terminal_id": rc["terminal_id"]}])
+        self.assertEqual(+board.calls, Counter(create=1, start=1, handoff=1))
+        self.assertEqual([c for c in commands if c[0] in (shepherdr.HERDR_BIN, shepherdr.PROJECTS_BIN)], [])
+        self.assertEqual(commands, [])
 
 
 class ObservationTest(unittest.TestCase):
