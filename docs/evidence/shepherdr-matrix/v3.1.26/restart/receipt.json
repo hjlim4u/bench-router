@@ -1,0 +1,64 @@
+{
+ "schema_version": "1.0",
+ "task_id": "sm-rs",
+ "round": 1,
+ "semantic_task_hash": "58f0f7b8d6b75e2f2eca6d637458b8972fa10165e060dc5d31db20738003a27a",
+ "run_id": "d608ee26-cf79-449a-9963-f01975ff97a3",
+ "nonce": "48b87ed07c719bd36737c9888a6be514",
+ "backend": "shepherdr-3",
+ "project_binding": {
+  "task_protocol": "1",
+  "core_version": "hc 0.1.20",
+  "space": "demo",
+  "session": "default",
+  "core_id": "331e749b16680ddce83447df23c0a458"
+ },
+ "kind": "claude",
+ "thread_id": "w-rs#1",
+ "execution": "interactive",
+ "profile": "claude-opus-medium",
+ "profile_fingerprint": "64dc49331ac2fdb9f3144821df0c238bbd5b5c7a6a7d03de3242b4e9dc39f653",
+ "cwd": "/home/tester/w/rs",
+ "repo_cwd": "/home/tester/w/rs",
+ "run_dir": "/home/tester/w/rs/.bench-router/runs/d608ee26-cf79-449a-9963-f01975ff97a3",
+ "worktree": "/home/tester/.herdr/worktrees/rs/br-d608ee26-cf79-449a-9963-f01975ff97a3",
+ "branch": "br/d608ee26-cf79-449a-9963-f01975ff97a3",
+ "herdr_session": "demo",
+ "status": "completed",
+ "delivery_state": "activity_observed",
+ "timeout_ms": 300000,
+ "created_at": "2026-11-27T03:19:27+00:00",
+ "deadline_at": "2026-11-27T03:24:27+00:00",
+ "result_path": "/home/tester/w/rs/.bench-router/runs/d608ee26-cf79-449a-9963-f01975ff97a3/result.md",
+ "manifest_path": "/home/tester/w/rs/.bench-router/runs/d608ee26-cf79-449a-9963-f01975ff97a3/result.json",
+ "task_outcome": "success",
+ "herdr_state": "done",
+ "settled_contract": true,
+ "last_observation": {
+  "at": "2026-11-27T03:19:53+00:00",
+  "agent_status": "done",
+  "error": null,
+  "note": null
+ },
+ "updated_at": "2026-11-27T03:19:54+00:00",
+ "task_id_on_board": 1,
+ "start_attempted": true,
+ "terminal_id": "t17",
+ "monitor": {
+  "terminal_id": "t18",
+  "error": null
+ },
+ "ready": {
+  "state": "ready",
+  "error": null
+ },
+ "release": {
+  "at": "2026-11-27T03:19:54+00:00",
+  "terminals": [
+   {
+    "terminal_id": "t17",
+    "agent": "sh"
+   }
+  ]
+ }
+}

@@ -1,0 +1,1 @@
+{"error": "refusing to run hc: HC_SOCKET is /home/tester/.local/state/herdr-core/default/default.sock. Run herdr-task with the real HOME, HERDR_APP_HOME, HC_SESSION and HC_SOCKET: changed ones can reach the real window and wipe its spaces."}

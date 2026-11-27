@@ -1,9 +1,25 @@
 # Shepherdr Execution and Collaboration
 
-The live pathway is `route` / `parallel` → Shepherdr 3.x `herdr-task` → herdr-core (`hc`) → Agent CLI.
-The caller chooses decomposition, profiles, review rounds and result adoption. bench-router keeps durable receipts,
-admission limits and result validation. The certified upstream contracts are Shepherdr **3.1.14**, herdr-task
-protocol **1**, and herdr-core **0.1.17+**. Recorded task identity and core session are checked when controlling a run.
+The `herdr` runner uses the `shepherdr-3` backend for live `route` and `parallel` runs. The caller chooses
+decomposition, profiles, review rounds and result adoption.
+
+## Board port
+
+- **Router** (`bench_router/herdr.py`) owns durable receipts, event logs, admission, recovery after an uncertain
+  response, and validation and copying of result files. It records attempted mutations before issuing them
+  where the receipt contract calls for it.
+- **Board** (`bench_router/board.py`) is a `typing.Protocol` for binding, creating, starting, observing,
+  stopping, handing off and cleaning up a run, with optional `tell` and `resume` capabilities. It defines
+  the identifiers the router persists and reports task state and terminal process state separately.
+- **ShepherdrBoard** (`bench_router/shepherdr.py`) translates between that contract and the `herdr-task` and
+  `hc` CLIs. The Shepherdr runner also uses adapter methods for launch arguments, task and terminal identity
+  checks, and starting the core observer.
+
+To add a board provider, implement `Board` and register a factory that takes the command runner in
+`herdr.BOARDS` under the provider's backend ID. A CLI-selectable provider also needs a `herdr.RUNNERS` entry.
+Run the `BoardContract` mixin from `test_board.py` in a `unittest.TestCase` with a fake provider or command
+runner. The memory board integration test shows generic dispatch, collection, handoff and cleanup using
+the receipt's backend. Providers reuse the router's result validation and recovery logic.
 
 ## Setup
 
@@ -30,16 +46,36 @@ including authentication, after installation. No desktop app is required for thi
 
 Create a space for the repository in the web app. Select it using the global `--herdr-space SPACE` option,
 `BENCH_ROUTER_SPACE`, or a local `<repo>/.bench-router/shepherdr.json` containing `{"space":"SPACE"}`.
-A caller already inside herdr-core can inherit its terminal's space. `--herdr-session` and
-`BENCH_ROUTER_HERDR_SESSION` remain aliases for the space selection; these no longer select a terminal-Herdr
-session. Set `core_session` in the same configuration file to the session used by Shepherdr. Use `default` for
-Shepherdr 3.1 and `shepherdr` for 3.2, for example `{"space":"SPACE","core_session":"shepherdr"}`.
-Without `core_session`, the current `HC_SESSION` or `default` is used. Runs retain their recorded core session;
-tasks moved to another session during an upgrade need manual inspection before recovery.
+A caller in the matching core session can also inherit its terminal's space label.
+`--herdr-session` and `BENCH_ROUTER_HERDR_SESSION` remain aliases for selecting the space.
+
+### Core session binding
+
+Shepherdr's installed release determines the core session. Both releases report protocol `1` from
+`herdr-task --version`. The router checks for the `stop` subcommand in `herdr-task --help` to identify
+the 3.2 CLI variant. The CLI contract was captured on 3.1.26 and 3.2.19 with hc 0.1.20.
+[Shepherdr CLI spike](evidence/shepherdr-spike.md)
+
+| Shepherdr release | Core session |
+|---|---|
+| 3.1 | `default` only |
+| 3.2 | `$SHEPHERDR_SESSION` if set and nonempty, otherwise `shepherdr` |
+
+Set `SHEPHERDR_SESSION` for a custom Shepherdr 3.2 session. The optional `core_session` in
+`shepherdr.json` asserts the expected session and must match the selected one. For direct `herdr-task` use,
+leave `HC_SOCKET` unset and keep `HC_SESSION` unset or set to the release's session. When the router runs
+bound commands, it sets `HC_SESSION` and `SHEPHERDR_SESSION` from the binding and clears inherited socket
+and terminal overrides.
+
+Before submission, the router records `session` and `core_id` in the receipt's `project_binding`. It
+reads the session's `core.json` if present and falls back to `hc server status --json` if the file is missing.
+Later commands reuse the recorded session and recheck the binding before acting. A changed core ID or an
+incompatible session blocks control and requires manual reconciliation.
+Collection records an unsettled run with a mismatched binding as `delivery_uncertain`.
 
 ```bash
 hc --version                         # hc >= 0.1.17
-herdr-task --version                  # task protocol: 1 (not the Shepherdr release)
+herdr-task --version                  # task protocol 1 on both releases
 bench-router --herdr-space SPACE --runner herdr route --task task.json --selection selection.json
 ```
 
@@ -67,7 +103,9 @@ inside ordinary TUI panes use the same user environment as the app.
 In the TUI, press **Ctrl+B, H** to select and attach to a live core terminal, or
 **Ctrl+B, Shift+H** to observe without typing or resizing. **Ctrl+backslash** detaches from
 core while leaving its program running. Close/detach this viewer before closing its TUI pane.
-Tasks continue to be created through Shepherdr/bench-router, in the default core session.
+The shortcuts set `HC_SESSION=default`. To attach to a different core, run
+`env -u HC_SOCKET HC_SESSION=SESSION hc attach` from a companion pane using the run's recorded
+session for `SESSION`. Add `--observe` for read-only attachment.
 The TUI has its own server: attaching is a terminal view, not synchronization of the two
 agent sidebars. A task whose worker was released can be reopened through router `resume`.
 No extra agent or duplicate task is started by the attach shortcuts.
@@ -118,8 +156,8 @@ herdr-task show KEY --folder REPO --json
 
 The task's durable `key` (`repo#12`, distinct from its numeric id and display ref) becomes `thread_id`.
 Submission intent is saved before add; identity is saved before start. A lost response or process crash never
-causes automatic add/start retries. An added task without a confirmed start is held for inspection, not started
-by collect. The result is validated against the task's key, numeric id, title, folder, agent, worktree and branch.
+causes automatic add/start retries. Collect holds an added task without a confirmed start for inspection.
+The adapter verifies the card's key, numeric ID, title, folder, agent, worktree and branch.
 
 | Shepherdr observation | Router status |
 |---|---|
@@ -151,9 +189,16 @@ session, otherwise it starts with a handoff (`resumed.session_resumed` reports w
 automatically released again. `tell` uses `hc send` to the sole live worker and logs attempted/sent/uncertain
 message delivery. It never starts a new worker. These commands act only on explicit caller invocation.
 
-`stop` ends the observed live core terminal(s). The next collect confirms the stopped worker and releases
-admission. For a queued/scheduled task, stop uses `herdr-task reopen` to return it to todo and verifies that the queue was cancelled before reporting stop_sent. If the scheduler already started it, stop reports uncertainty instead of claiming cancellation. A failure with unverified partial effects retains its slot until
-`coordination release --confirmed-stopped` after inspection.
+For a running task, router `stop` sends `hc kill` to the verified live terminals and reports `stop_sent`
+when the request succeeds. For a stopped worker, collection checks for `exited` or `gone` in the
+recorded core before releasing admission. hc 0.1.20 reports ended terminals as `finished`, which the
+adapter maps to `exited`. A Shepherdr 3.2 card can show `needs: stopped` after `herdr-task stop` while
+its terminal is still live.
+
+For a queued or scheduled task, router `stop` uses `herdr-task reopen` and checks that the card returned
+to todo before reporting `stop_sent`. If the scheduler already started it, stop reports uncertainty.
+A failure with unverified partial effects retains its slot until `coordination release --confirmed-stopped`
+after inspection.
 
 `collect --run CWD RUN_ID --run ... --until any|all --wait-ms N` observes multiple runs. `--wait-ms 0` returns
 immediately after submission; the task timeout still bounds add/start. Neither collect nor re-dispatch sends a
@@ -174,20 +219,21 @@ Results and receipts remain outside the worktree so Shepherdr can clean it up af
 
 ## Parallel Dispatch
 
-Receipts live at `<cwd>/.bench-router/groups/GROUP/members/LABEL` (`receipt_cwd`). Interactive members each get a
-Shepherdr task and worktree; headless members each get a router worktree and core terminal. The shared scratchpad
+Receipts live at `<cwd>/.bench-router/groups/GROUP/members/LABEL` (`receipt_cwd`). Each new Shepherdr member,
+interactive or headless, gets a Shepherdr task and worktree. The shared scratchpad
 is outside these worktrees, so writes may require approval under the user's CLI settings. The caller compares,
 merges and prunes worktrees. The shared four-active admission limit and overlapping-workspace guard still apply.
 
 ## Verification
 
 ```bash
-python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codexbar test_evidence_policy
+python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codexbar test_usage test_evidence_policy test_board
 ```
 
 Tests use synthetic herdr-task/hc responses and real temporary Git worktrees. They cover split add/start recovery,
 identity drift, permissions, result validation, worktrees-off refusal, legacy receipt isolation and local/external
-runner compatibility. Historical Herdr TUI evidence remains in docs/evidence and does not certify this platform.
+runner compatibility. `test_board.py` runs the Board contract against `MemoryBoard` and `ShepherdrBoard`
+with a fake CLI runner for Shepherdr. Historical Herdr TUI evidence remains in `docs/evidence/`.
 
 Manual web-only smoke on 2026-11-07 used upstream commit `4552191829b5e67dee60a1c780f41224575ef685`,
 Shepherdr 3.1.14 and hc 0.1.18 on WSL2. `shepherdr doctor`, the authenticated Tailscale HTTPS API, and

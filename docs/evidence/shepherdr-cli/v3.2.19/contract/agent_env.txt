@@ -1,0 +1,9 @@
+HC_SCOPE=2840536-a50581e59e6774118c7ebce11f322344
+HC_SESSION=shepherdr
+HC_TERMINAL_ID=t1
+HC_TERMINAL_SOCKET=/home/tester/.local/state/herdr-core/shepherdr/shepherdr.sock
+HERDR_BROWSER_SPACE=demo
+HERDR_BROWSER_TASK=repo#2
+HERDR_GUARD_SESSION=shepherdr
+HC_SCOPE=2840568-888e99c0f31fcca544ec55f450257c3a
+HC_SESSION=shepherdr

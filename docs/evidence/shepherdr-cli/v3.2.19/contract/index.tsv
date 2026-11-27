@@ -1,0 +1,23 @@
+task_version	0	herdr-task --version 
+hc_version	0	hc --version 
+where	0	herdr-task where --json 
+add_router_title	0	env herdr-task add br-00000000-0000-4000-8000-000000000001 --prompt-file /tmp/input.txt --folder /home/tester/repo --base main --branch br/00000000-0000-4000-8000-000000000001 --agent claude --model default --worktree --set review=off --set merge=ask\ me\ first --set proof=off --json 
+add	0	env herdr-task add br-1 --prompt-file /tmp/input.txt --folder /home/tester/repo --base main --branch br/1 --agent claude --model default --worktree --set review=off --set merge=ask\ me\ first --set proof=off --json 
+add_plain	0	herdr-task add plain-title --prompt x --folder /home/tester/repo 
+list	0	herdr-task list --json 
+start	0	herdr-task start repo#2 --folder /home/tester/repo --space demo --json 
+show	0	herdr-task show repo#2 --folder /home/tester/repo --json 
+ls_label_default	0	env HC_SESSION=default hc ls --label herdr.task=repo#2 --json 
+get_default	3	env HC_SESSION=default hc get t1 --json 
+ls_label_shepherdr	0	env HC_SESSION=shepherdr hc ls --label herdr.task=repo#2 --json 
+get_shepherdr	0	env HC_SESSION=shepherdr hc get t1 --json 
+run_bg	0	env HC_SESSION=shepherdr hc run --bg --rm --json --no-parent --label bench-router.watch=00000000-0000-4000-8000-000000000001 -- env X=1 sleep 600 
+ls_watch	0	env HC_SESSION=shepherdr hc ls --label bench-router.watch=00000000-0000-4000-8000-000000000001 --json 
+send	0	env HC_SESSION=shepherdr hc send t1 message\ from\ the\ router --json 
+ready	0	herdr-task ready repo#2 --folder /home/tester/repo --summary Results\ validated\ by\ bench-router --json 
+show_after_ready	0	herdr-task show repo#2 --folder /home/tester/repo --json 
+ls_label_after_ready	0	env HC_SESSION=shepherdr hc ls --label herdr.task=repo#2 --json 
+kill	0	env HC_SESSION=shepherdr hc kill t1 --json 
+get_after_kill	0	env HC_SESSION=shepherdr hc get t1 --json 
+ls_all_after_kill	0	env HC_SESSION=shepherdr hc ls --all --json 
+show_after_kill	0	herdr-task show repo#2 --folder /home/tester/repo --json 

@@ -11,7 +11,8 @@ from unittest.mock import patch
 
 from bench_router import cli, coordination as co, herdr, routing as r
 from test_p0 import MAPPING, config, profile
-from test_p2 import FakeProjects, git_repo, which, write_result, projects_environment, cleanup_temp
+from test_p2 import (FakeProjects, FakeSessionProjects, cleanup_temp, git_repo, headless_cli,
+                     projects_environment, which, write_result)
 
 
 class CoordinationTests(unittest.TestCase):
@@ -98,7 +99,7 @@ class CoordinationTests(unittest.TestCase):
         co.reserve(self.task(), herdr.BACKEND, herdr.project_binding(runner=FakeProjects()))
         fake = FakeProjects()
         self.assertEqual(self.run_(fake)["status"], "conflict")
-        self.assertEqual(fake.calls, [["--version"], ["hc", "--version"]])  # binding only; nothing added
+        self.assertEqual(fake.calls, [["--version"], ["--help"], ["hc", "--version"], ["hc", "server", "status"]])  # binding only; nothing added
 
     def test_v51a_error_before_receipt_releases_admission(self):
         with self.assertRaises(r.InputError):
@@ -201,6 +202,26 @@ class CoordinationTests(unittest.TestCase):
             self.assertEqual(run["thread_id"], "repo#1")
             with redirect_stdout(io.StringIO()):
                 self.assertEqual(cli.main(["collect", "--cwd", str(self.cwd), "--run-id", run["run_id"]]), 0)
+
+    def test_v60_headless_stop_acknowledgment_retains_admission_until_worker_exit(self):
+        fake = FakeSessionProjects(after_status="working")
+        fake.acknowledge_kill = True
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, self.task(execution="headless"))
+        run_id, key = out["run_id"], out["coordination_key"]
+        stopped = herdr.stop_run(str(self.cwd), run_id, runner=fake)
+        self.assertEqual((stopped["status"], fake.panes[out["thread_id"]]["state"]), ("stop_sent", "live"))
+
+        herdr.collect_run(str(self.cwd), run_id, 0, runner=fake)
+        still_running = herdr.load_receipt(str(self.cwd), run_id)
+        held_after_ack = co.load(key)["active"]
+
+        del fake.panes[out["thread_id"]]
+        headless_cli(exit_code=143, result=False)(fake, fake.runs[0])
+        confirmed = herdr.collect_run(str(self.cwd), run_id, 0, runner=fake)
+        self.assertEqual((bool(still_running.get("process_exited")), held_after_ack,
+                          confirmed["status"], co.load(key)["active"]),
+                         (False, True, "execution_failed", False))
 
 
 if __name__ == "__main__":

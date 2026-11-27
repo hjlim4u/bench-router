@@ -1,0 +1,7 @@
+[t9c-completed/evaluate] rc=0
+[t9c-completed/select] rc=0
+[t9c-completed/route] rc=0
+[t9c-completed] PASS status=completed; result_copied=True; terminals=t1:finished/killed; admission_active=False; ready=ready; release=yes
+[t9c-unfinished/evaluate] rc=0
+[t9c-unfinished/select] rc=0
+[t9c-unfinished/route] rc=11

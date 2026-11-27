@@ -1,0 +1,4 @@
+#!/bin/sh
+# stub: no systemd in the container; the web service is not started
+echo "systemctl stub: $*" >&2
+exit 0

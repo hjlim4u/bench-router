@@ -5,18 +5,24 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
+from datetime import datetime, timedelta
 from unittest.mock import patch
 from pathlib import Path
 from types import SimpleNamespace
 
 from bench_router import herdr as hd
+from bench_router import lifecycle
 from bench_router import routing as r
 from test_p0 import MAPPING, config, profile, guided_reply, guided_responses, NOW
+
+
+SPIKE = Path(__file__).parent / "docs/evidence/shepherdr-cli/v3.2.19"
 
 
 def which(name):
@@ -45,7 +51,8 @@ def git_repo(path):
 
 
 def projects_environment(case, base):
-    case.enterContext(patch.dict(os.environ, {"BENCH_ROUTER_HERDR_SESSION": "default",
+    case.enterContext(patch.dict(os.environ, {"BENCH_ROUTER_HERDR_SESSION": "default", "HC_SESSION": "",
+                                            "SHEPHERDR_SESSION": "", "XDG_STATE_HOME": str(Path(base) / "state"),
                                             "BENCH_ROUTER_COORDINATION_DIR": str(Path(base) / "admission")}))
     case.enterContext(patch.object(hd, "probe_profiles", side_effect=lambda profiles, which=hd.shutil.which:
                                   {p["id"]: hd.probe(p, which) for p in profiles}))
@@ -93,14 +100,19 @@ class FakeProjects:
         return {**t, "state": state, "status": status, "needs": needs, "why": why, "live": live,
                 **self.updates, **self.detail_updates}
 
+    def _terminal_address(self, t):
+        return f"t{t['id']}"
+
     def _pane(self, t):
-        self.panes[t["key"]] = {"address": f"t{t['id']}", "cwd": t["worktree"], "agent": t["agent"],
-                                "task": t["key"], "state": "live"}
+        self.panes[t["key"]] = {"address": self._terminal_address(t), "cwd": t["worktree"], "agent": t["agent"],
+                                "task": t["key"], "labels": {"herdr.task": t["key"]}, "state": "live"}
 
     def _core(self, argv):
         self.calls.append(["hc", *argv[:2]])
         if argv == ["--version"]:
             return subprocess.CompletedProcess([], 0, self.core_version + "\n", "")
+        if argv == ["server", "status", "--json"]:
+            return self._ok({"core": {"id": "fake-core"}})
         if self.pane_error:
             return subprocess.CompletedProcess([], 1, "", self.pane_error)
         if argv[0] == "ls":
@@ -121,8 +133,10 @@ class FakeProjects:
                 self.on_run(self, self.runs[-1])
             return self._ok({"address": address})
         if argv[0] == "get":
-            return self._ok(next((p for p in self.panes.values() if p["address"] == argv[1]),
-                                 {"address": argv[1], "state": "exited"}))
+            pane = next((p for p in self.panes.values() if p["address"] == argv[1]), None)
+            if pane is None:
+                return subprocess.CompletedProcess(argv, 3, "", (SPIKE / "stop/get_after_rm.err").read_text())
+            return self._ok(pane)
         if argv[0] in ("keep", "rm"):
             return self._ok({"ok": True})
         if argv[0] == "kill":
@@ -150,6 +164,9 @@ class FakeProjects:
         self.calls.append(argv[:2])
         if argv == ["--version"]:
             return subprocess.CompletedProcess(cmd, 0, self.version + "\n", "")
+        if argv == ["--help"]:
+            modern = getattr(self, "board_session", "default") != "default"
+            return subprocess.CompletedProcess(cmd, 0, "{add,start,stop}" if modern else "{add,start}", "")
         if argv[0] == "add":
             with self.lock:
                 n = len(self.tasks) + 1
@@ -185,13 +202,13 @@ class FakeProjects:
                 self.on_prompt(self, t["prompt"])
             if self.prompt_error or self.start_error:
                 raise subprocess.TimeoutExpired(cmd, 15)
-            return self._ok({**self._row(t), "terminal": f"t{t['id']}"})
+            return self._ok({**self._row(t), "terminal": self._terminal_address(t)})
         if argv[0] == "resume":
             t = self.tasks[argv[1]]
             t["resumed_argv"] = list(t["argv"])
             self._pane(t)
             self.stopped.discard(t["key"])
-            return self._ok({**self._row(t), "terminal": f"t{t['id']}", "resumed": True})
+            return self._ok({**self._row(t), "terminal": self._terminal_address(t), "resumed": True})
         if argv[0] in ("ready", "done"):
             return self._ok({**self._row(self.tasks[argv[1]]), "state": argv[0]})
         if argv[0] == "status":
@@ -201,9 +218,74 @@ class FakeProjects:
             self.pending = False
             t["started"] = False
             return self._ok(self._row(t))
+        if argv[0] == "list":
+            return self._ok({"tasks": [self._row(t) for t in self.tasks.values()]})
         if argv[0] == "show":
             return self._ok(self._row(self.tasks[argv[1]]))
         raise AssertionError(argv)
+
+
+class FakeSessionProjects(FakeProjects):
+    """The board launches in its own session. Each core session can own a different t1."""
+
+    def __init__(self, board_session="default", hc_session=None, **kw):
+        super().__init__(**kw)
+        self.board_session = board_session
+        self.hc_session = hc_session
+        self.sessions = {board_session: self.panes}
+        self.commands = []
+        self.acknowledge_kill = False
+        self.reject_start = False
+
+    def _terminal_address(self, t):
+        return "t1"
+
+    def add_unrelated_terminal(self, session):
+        pane = {"address": "t1", "task": "other#1", "state": "live"}
+        self.sessions[session] = {pane["task"]: pane}
+        return pane
+
+    def __call__(self, cmd, **kw):
+        exe, op = cmd[:2]
+        requested_session = kw.get("env", os.environ).get("HC_SESSION") or "default"
+        if exe == hd.HERDR_BIN:
+            session = self.hc_session or requested_session
+            self.commands.append((session, tuple(cmd)))
+            if op == "--version":
+                return super().__call__(cmd, **kw)  # The client version is available without a running session.
+            panes = self.sessions.get(session)
+            if panes is None:
+                return subprocess.CompletedProcess(cmd, 1, "", f"core session {session!r} is unavailable")
+            if op == "ls" and "--label" not in cmd and not self.pane_error:
+                return self._ok({"terminals": list(panes.values())})
+            if op == "kill" and self.acknowledge_kill:
+                return self._ok({"ok": True})
+            with patch.object(self, "panes", panes):
+                return super().__call__(cmd, **kw)
+
+        self.commands.append((self.board_session, tuple(cmd)))
+        if op == "start" and self.reject_start:
+            return subprocess.CompletedProcess(cmd, 1, "", f"core session {requested_session!r} rejected by board")
+        return super().__call__(cmd, **kw)
+
+    def mutations(self):
+        reads = {"--version", "--help", "server", "show", "status", "list", "ls", "get"}
+        return [(session, cmd) for session, cmd in self.commands if cmd[1] not in reads]
+
+
+class ObserverClock:
+    def __init__(self, deadline_at, remaining):
+        self.start = datetime.fromisoformat(deadline_at) - timedelta(seconds=remaining)
+        self.elapsed = 0.0
+
+    def now(self):
+        return self.start + timedelta(seconds=self.elapsed)
+
+    def monotonic(self):
+        return self.elapsed
+
+    def sleep(self, seconds):
+        self.elapsed += seconds
 
 
 class FakeTui(FakeProjects):
@@ -382,6 +464,23 @@ class P2(unittest.TestCase):
 
     def receipt(self, out):
         return json.loads(Path(out["receipt_path"]).read_text("utf-8"))
+
+    def watch_(self, out, runner, clock):
+        collect_run = hd.collect_run
+        statuses = []
+
+        def collect_offline(*args, **kw):
+            if len(statuses) == 3 or "execution_failed" in statuses:
+                self.fail(f"observer kept polling at {clock.elapsed}s after {statuses}")
+            result = collect_run(*args, **kw)
+            statuses.append(result["status"])
+            return result
+
+        with patch.object(hd, "collect_run", side_effect=collect_offline), \
+             patch.object(hd, "time", clock), patch.object(hd, "_now", clock.now), \
+             patch.object(lifecycle, "time", clock), patch.object(lifecycle, "subprocess",
+                 SimpleNamespace(run=runner, TimeoutExpired=subprocess.TimeoutExpired)):
+            lifecycle.watch(self.cwd, out["run_id"])
 
     def test_v99_discovery_uses_native_models_without_usage_queries(self):
         def runner(cmd, **kw):
@@ -601,6 +700,20 @@ class P2(unittest.TestCase):
         self.assertEqual(fake.closed, ["t1"])  # a resumed session is never closed again by the router
         self.assertEqual(len(fake.prompts), 1)  # resume sends nothing
 
+    def test_completed_receipt_without_core_id_stays_readable(self):
+        fake = FakeProjects(on_prompt=write_result())
+        out = self.run_(fake)
+        rc = self.receipt(out)
+        rc["project_binding"].pop("core_id", None)  # written before T5 recorded the core identity
+        hd.save(rc)
+        path = Path(out["receipt_path"])
+        before = path.read_bytes()
+        fake.closed.clear()
+        got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((got["status"], got["task_outcome"]), ("completed", "success"))
+        self.assertEqual(path.read_bytes(), before)  # a finished record is never rewritten as uncertain
+        self.assertEqual(fake.closed, [])
+
     def test_poll_near_deadline_keeps_call_budget(self):
         fake = FakeProjects(after_status="working")
         out = self.run_(fake)
@@ -649,8 +762,8 @@ class P2(unittest.TestCase):
         out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
         self.assertEqual(out["status"], "timed_out")
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "timed_out")
-        fake.panes.clear()  # closed by hand = stopped
-        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "delivery_uncertain")
+        fake.panes.clear()  # hc get now reports rc 3 not_found
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "execution_failed")
 
     def test_headless_failing_cli_without_result(self):
         fake = FakeProjects()
@@ -1223,7 +1336,7 @@ class P2(unittest.TestCase):
         fake = FakeProjects(after_status="working")
         out = self.run_(fake)
         self.assertEqual(out["status"], "timed_out")
-        self.assertTrue(all(0 < kw["timeout"] <= 5 for cmd, kw in fake.kwargs if cmd not in ("--version",)))
+        self.assertTrue(all(0 < kw["timeout"] <= 5 for cmd, kw in fake.kwargs if cmd not in ("--version", "--help")))
         again = self.run_(fake)
         self.assertEqual((len(fake.prompts), again["reused_receipt"], again["run_id"]), (1, True, out["run_id"]))
         write_result()(fake, fake.prompts[0])
@@ -1317,10 +1430,31 @@ class P2(unittest.TestCase):
         path = Path(self.cwd) / ".bench-router" / "shepherdr.json"
         path.parent.mkdir(exist_ok=True)
         path.write_text('{"core_session":"shepherdr"}', "utf-8")
-        fake = FakeProjects(on_prompt=write_result())
+        fake = FakeSessionProjects(board_session="shepherdr", on_prompt=write_result())
         out = self.run_(fake)
         self.assertEqual(self.receipt(out)["project_binding"]["session"], "shepherdr")
-        self.assertTrue(all(kw["env"]["HC_SESSION"] == "shepherdr" for _, kw in fake.kwargs if "env" in kw))
+        # --version/--help probe the protocol before a session is chosen; they only drop inherited sockets.
+        self.assertTrue(all(kw["env"]["HC_SESSION"] == "shepherdr" for op, kw in fake.kwargs
+                            if "env" in kw and op not in ("--version", "--help")))
+
+    def test_custom_32_session_uses_passive_core_identity_and_detects_replacement(self):
+        fixtures = Path(__file__).parent / "docs/evidence/shepherdr-cli/v3.2.19/session"
+        core = Path(os.environ["XDG_STATE_HOME"]) / "herdr-core/custom/core.json"
+        core.parent.mkdir(parents=True)
+        core.write_bytes((fixtures / "core_json_after_shepherdr.out").read_bytes())
+        fake = FakeSessionProjects(board_session="custom", after_status="working")
+        with patch.dict(os.environ, {"SHEPHERDR_SESSION": "custom", "HC_SESSION": "default",
+                                     "HC_SOCKET": "/foreign.sock"}):
+            out = self.run_(fake, wait_ms=0)
+            binding = self.receipt(out)["project_binding"]
+            self.assertEqual((binding["session"], binding["core_id"]), ("custom", json.loads(core.read_text())["id"]))
+            self.assertFalse(any(cmd[1] == "server" for _, cmd in fake.commands))
+            with patch.dict(os.environ, {"SHEPHERDR_SESSION": "other"}):
+                self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "timed_out")
+            core.write_text('{"id":"replacement"}')
+            fake.commands.clear()
+            got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+            self.assertEqual((got["status"], fake.mutations()), ("delivery_uncertain", []))
 
     def test_start_rejects_terminal_missing_from_recorded_session(self):
         fake = FakeProjects(after_status="working")
@@ -1329,6 +1463,534 @@ class P2(unittest.TestCase):
         out = self.run_(fake)
         self.assertEqual(out["status"], "delivery_uncertain")
         self.assertEqual(fake.closed, [])
+
+    def test_v119_collect_after_32_core_session_mismatch_keeps_run_uncertain(self):
+        fake = FakeSessionProjects(board_session="shepherdr", hc_session="default", after_status="working")
+        foreign = fake.add_unrelated_terminal("default")
+        with patch.dict(os.environ, {"HC_SESSION": "shepherdr"}):
+            out = self.run_(fake, wait_ms=0)
+        key = out["thread_id"]
+        self.assertEqual((out["status"], fake.sessions["shepherdr"][key]["address"]), ("delivery_uncertain", "t1"))
+        write_result()(fake, fake.prompts[0])
+        fake.status = "idle"
+        fake.commands.clear()
+
+        got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        foreign_controls = [cmd for session, cmd in fake.mutations() if session == "default" and cmd[0] == hd.HERDR_BIN]
+        self.assertIn("session", self.receipt(got)["last_observation"]["note"])
+        self.assertEqual((got["status"], got["thread_id"], got["release"], foreign_controls,
+                          fake.sessions["default"].get(foreign["task"])),
+                         ("delivery_uncertain", key, None, [], foreign))
+
+    def test_v120_31_missing_named_session_is_diagnosed_before_add(self):
+        fake = FakeSessionProjects(after_status="working")
+        with patch.dict(os.environ, {"HC_SESSION": "misspelled"}):
+            try:
+                out = self.run_(fake, wait_ms=0)
+            except r.InputError as exc:
+                diagnosis = str(exc)
+            else:
+                observation = self.receipt(out)["last_observation"] if out.get("receipt_path") else None
+                diagnosis = f"{observation} {out.get('warnings')}"
+
+        self.assertEqual(fake.mutations(), [], diagnosis)
+        self.assertRegex(diagnosis, r"(?i)session.*misspelled|misspelled.*session")
+
+    def test_v121_31_start_rejection_records_unstarted_card_without_resubmission(self):
+        fake = FakeSessionProjects(after_status="working")
+        fake.add_unrelated_terminal("other")  # The named core is reachable before the board rejects start.
+        fake.reject_start = True
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, wait_ms=0)
+            before_replay = self.receipt(out)
+            fake.commands.clear()
+            replay = self.run_(fake, wait_ms=0)
+
+        self.assertEqual((before_replay["thread_id"], replay["thread_id"], replay["run_id"]),
+                         ("repo#1", "repo#1", out["run_id"]))
+        self.assertEqual((fake.mutations(), len(fake.tasks), fake.prompts), ([], 1, []))
+        observation = before_replay["last_observation"]
+        self.assertRegex(f"{observation.get('agent_status')} {observation.get('note')}",
+                         r"(?i)todo|not[ _-]started|nothing started|never started|start (?:was )?(?:refused|rejected)")
+
+    def test_board_stopped_with_live_terminal_holds_headless_admission(self):
+        fake = FakeSessionProjects(board_session="shepherdr", after_status="working")
+        fake.on_run = headless_cli(exit_code=143, result=False)
+        out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        fake.stopped.add(out["thread_id"])
+        got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        from bench_router import coordination
+        self.assertEqual((got["status"], coordination.load(out["coordination_key"])["active"]), ("timed_out", True))
+        self.assertFalse(self.receipt(got).get("process_exited"))
+
+    def test_finished_fixture_ends_headless_run_and_allows_cleanup(self):
+        fake = FakeProjects(after_status="working")
+        out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        pane = fake.panes[out["thread_id"]]
+        ended = json.loads((SPIKE / "stop/get_t0.out").read_text())
+        pane.update(ended, address=pane["address"], labels=pane["labels"], task=pane["task"])
+        got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertTrue(self.receipt(got)["process_exited"])
+        self.assertEqual(got["status"], "execution_failed")
+        rc = dict(self.receipt(got), execution="interactive")
+        hd.release(rc, fake)
+        self.assertEqual(fake.closed, [pane["address"]])
+
+    def test_v122_not_found_in_bound_core_confirms_headless_terminal_gone(self):
+        fake = FakeSessionProjects(after_status="working")
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        del fake.panes[out["thread_id"]]
+        fake.commands.clear()
+
+        got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((got["status"], bool(self.receipt(got).get("process_exited")), fake.mutations()),
+                         ("execution_failed", True, []))
+
+    def test_v123_terminal_absence_board_stop_and_lookup_error_are_distinct(self):
+        fake = FakeSessionProjects(after_status="working")
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        del fake.panes[out["thread_id"]]
+        fake.commands.clear()
+
+        def observe():
+            return self.receipt(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake))
+
+        missing = observe()
+        fake.pane_error = "synthetic core lookup timeout"
+        transient = observe()
+        fake.pane_error = None
+        fake.stopped.add(out["thread_id"])
+        confirmed = observe()
+
+        def observation(rc):
+            evidence = {key: value for key, value in rc["last_observation"].items() if key != "at"}
+            return rc["status"], evidence
+
+        self.assertEqual((missing["status"], confirmed["status"], observation(missing) == observation(transient),
+                          fake.mutations()), ("execution_failed", "execution_failed", False, []))
+        self.assertEqual(transient["status"], "delivery_uncertain")
+
+    def test_v124_observer_retries_transient_lookup_and_ends_on_board_stop(self):
+        fake = FakeSessionProjects(after_status="working")
+        task = self.task(execution="headless", constraints={"timeout_ms": 20000})
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, task, wait_ms=0)
+        remaining = 12
+        clock = ObserverClock(self.receipt(out)["deadline_at"], remaining)
+        board_queries = []
+        failures = []
+        fake.commands.clear()
+
+        def runner(cmd, **kw):
+            if cmd[:2] == [hd.PROJECTS_BIN, "show"]:
+                board_queries.append(clock.elapsed)
+            if cmd[:2] == [hd.HERDR_BIN, "get"] and not failures:
+                failures.append(clock.elapsed)
+                fake.pane_error = "synthetic core lookup timeout"
+                try:
+                    return fake(cmd, **kw)
+                finally:
+                    fake.pane_error = None
+                    del fake.panes[out["thread_id"]]
+                    fake.stopped.add(out["thread_id"])
+            return fake(cmd, **kw)
+
+        self.watch_(out, runner, clock)
+        self.assertEqual((len(failures), self.receipt(out)["status"], fake.mutations()), (1, "execution_failed", []))
+        self.assertGreaterEqual(len(board_queries), 2)
+        self.assertTrue(all(query < remaining for query in board_queries), board_queries)
+        self.assertLess(clock.elapsed, remaining)
+
+    def test_v125_observer_never_requeries_transient_lookup_after_deadline(self):
+        fake = FakeSessionProjects(after_status="working")
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        remaining = 1
+        clock = ObserverClock(self.receipt(out)["deadline_at"], remaining)
+        queries = []
+        fake.commands.clear()
+
+        def runner(cmd, **kw):
+            if cmd[:2] == [hd.PROJECTS_BIN, "show"] or cmd[:2] == [hd.HERDR_BIN, "get"]:
+                queries.append((cmd[1], clock.elapsed))
+            if cmd[:2] == [hd.HERDR_BIN, "get"]:
+                self.assertLessEqual(kw["timeout"], remaining)
+                clock.elapsed += remaining  # The transient lookup consumes the remaining budget.
+                fake.pane_error = "synthetic core lookup timeout"
+            return fake(cmd, **kw)
+
+        self.watch_(out, runner, clock)
+        self.assertIn(("get", 0), queries)
+        self.assertEqual(([query for query in queries if query[1] >= remaining], fake.mutations()), ([], []))
+
+    def test_v126_unsupported_protocol_headless_collect_sends_no_mutations(self):
+        fake = FakeSessionProjects()
+        fake.on_run = headless_cli()
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        self.assertEqual(out["status"], "timed_out")
+        self.assertTrue(Path(out["receipt_path"]).with_name("exit_code").exists())
+        fake.version = "2"
+        fake.commands.clear()
+
+        try:
+            hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        except r.InputError:
+            pass
+
+        ready_calls = [cmd for _, cmd in fake.commands if cmd[:2] == (hd.PROJECTS_BIN, "ready")]
+        self.assertEqual((fake.mutations(), ready_calls), ([], []))
+
+    def test_v127_unsupported_protocol_cleanup_retry_sends_no_mutations(self):
+        fake = FakeSessionProjects(on_prompt=write_result())
+        # Produce a completed receipt interrupted before either ready or terminal cleanup ran.
+        with patch.dict(os.environ, {"HC_SESSION": "default"}), patch.object(hd, "release"):
+            out = self.run_(fake)
+        rc = self.receipt(out)
+        self.assertEqual((rc["status"], rc.get("ready"), rc.get("release")), ("completed", None, None))
+        fake.version = "2"
+        fake.commands.clear()
+
+        try:
+            hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        except r.InputError:
+            pass
+
+        ready_calls = [cmd for _, cmd in fake.commands if cmd[:2] == (hd.PROJECTS_BIN, "ready")]
+        self.assertEqual((fake.mutations(), ready_calls), ([], []))
+
+    def test_v128_resumed_terminal_without_task_label_is_identity_mismatch(self):
+        from bench_router import coordination
+        fake = FakeSessionProjects(after_status="working")
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, wait_ms=0)
+            key = out["thread_id"]
+
+            def runner(cmd, **kw):
+                got = fake(cmd, **kw)
+                if cmd[:2] == [hd.PROJECTS_BIN, "resume"]:  # the new terminal belongs to another card
+                    fake.panes[key]["labels"] = {"herdr.task": "other#9"}
+                return got
+
+            with self.assertRaisesRegex(r.InputError, "identity mismatch"):
+                hd.resume_run(self.cwd, out["run_id"], runner=runner)
+            self.assertEqual(self.receipt(out)["identity"], "mismatch")
+            fake.commands.clear()
+            for control in (lambda: hd.tell_run(self.cwd, out["run_id"], "hi", runner=fake),
+                            lambda: hd.stop_run(self.cwd, out["run_id"], runner=fake)):
+                with self.assertRaisesRegex(r.InputError, "reconcile manually"):
+                    control()
+            got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((got["status"], fake.commands, fake.tells, fake.closed), ("delivery_uncertain", [], [], []))
+        self.assertTrue(coordination.load(got["coordination_key"])["active"])
+
+    def test_v129_partial_stop_records_each_terminal_and_holds_admission(self):
+        from bench_router import coordination
+        fake = FakeSessionProjects(after_status="working")
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, wait_ms=0)
+            key = out["thread_id"]
+            fake.panes["second"] = {"address": "t2", "task": key, "labels": {"herdr.task": key}, "state": "live"}
+
+            def runner(cmd, **kw):
+                if cmd[:3] == [hd.HERDR_BIN, "kill", "t2"]:
+                    return subprocess.CompletedProcess(cmd, 1, "", "synthetic kill failure")
+                return fake(cmd, **kw)
+
+            stop = hd.stop_run(self.cwd, out["run_id"], runner=runner)
+            self.assertEqual(stop["status"], "delivery_uncertain")
+            self.assertEqual(fake.closed, ["t1"])
+            fake.panes["second"]["task"] = None  # the board no longer lists t2, but hc still has it live
+            got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+            rc = self.receipt(got)
+            self.assertEqual([(x["terminal_id"], bool(x["error"])) for x in rc["stop"]["terminals"]],
+                             [("t1", False), ("t2", True)])
+            self.assertEqual((got["status"], rc["process_exited"]), ("execution_failed", False))
+            self.assertTrue(coordination.load(got["coordination_key"])["active"])
+            del fake.panes["second"]  # exit evidence for the last terminal
+            got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertTrue(self.receipt(got)["process_exited"])
+        self.assertFalse(coordination.load(got["coordination_key"])["active"])
+
+    def test_v130_collect_and_stop_calls_are_bounded_by_the_run_deadline(self):
+        fake = FakeSessionProjects(after_status="working")
+        timeouts = []
+
+        def runner(cmd, **kw):
+            timeouts.append((cmd[0], cmd[1], kw["timeout"]))
+            return fake(cmd, **kw)
+
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, wait_ms=0)  # timeout_ms 5000: under 5 s remain
+            hd.collect_run(self.cwd, out["run_id"], 0, runner=runner)
+            hd.stop_run(self.cwd, out["run_id"], runner=runner)
+        self.assertIn((hd.HERDR_BIN, "kill"), {call[:2] for call in timeouts})
+        self.assertTrue(all(0 < t <= 5 for *_, t in timeouts), timeouts)
+
+    def test_v131_inherited_foreign_sockets_never_reach_task_or_core_calls(self):
+        fake = FakeSessionProjects(after_status="working")
+        envs = []
+
+        def runner(cmd, **kw):
+            envs.append((cmd[:2], kw.get("env", os.environ)))
+            return fake(cmd, **kw)
+
+        with patch.dict(os.environ, {"HC_SESSION": "default", "HC_SOCKET": "/run/foreign.sock",
+                                     "HC_TERMINAL_SOCKET": "/run/foreign-terminal.sock", "HC_TERMINAL_ID": "t77"}):
+            fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
+            out = self.run_(runner, wait_ms=0)
+            hd.collect_run(self.cwd, out["run_id"], 0, runner=runner)
+            hd.stop_run(self.cwd, out["run_id"], runner=runner)
+        leaked = [(cmd, k) for cmd, env in envs for k in hd.shepherdr.INHERITED_SOCKETS if k in env]
+        self.assertEqual(leaked, [])
+        self.assertIn([hd.PROJECTS_BIN, "--version"], [cmd for cmd, _ in envs])
+
+    def test_v132_compatible_hc_patch_update_still_binds_and_runs(self):
+        fake = FakeProjects(on_prompt=write_result())
+        fake.core_version = "hc 0.1.21"
+        out = self.run_(fake)
+        self.assertEqual((out["status"], self.receipt(out)["project_binding"]["core_version"]), ("completed", "hc 0.1.21"))
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "completed")
+
+    def test_v133_unknown_task_protocol_or_release_is_refused_before_any_mutation(self):
+        def unknown_release(fake):
+            original = fake.__call__
+            return lambda cmd, **kw: (subprocess.CompletedProcess(cmd, 0, "usage: herdr-task [-h] COMMAND", "")
+                                      if cmd[1:] == ["--help"] else original(cmd, **kw))
+
+        cases = {"protocol 2": lambda fake: setattr(fake, "version", "2") or fake, "unrecognised release": unknown_release}
+        for name, make in cases.items():
+            with self.subTest(name), patch.dict(os.environ, {"HC_SESSION": "default"}):
+                fake = FakeSessionProjects(on_prompt=write_result())
+                with self.assertRaises(r.InputError):
+                    self.run_(make(fake))
+                ready = [cmd for _, cmd in fake.commands if cmd[1] == "ready"]
+                self.assertEqual((fake.mutations(), ready, fake.prompts, hd.receipts(self.cwd)), ([], [], [], []))
+        fake = FakeSessionProjects(after_status="working")
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, wait_ms=0)
+            fake.version = "2"
+            fake.commands.clear()
+            with self.assertRaises(r.InputError):
+                hd.stop_run(self.cwd, out["run_id"], runner=fake)
+        self.assertEqual((fake.mutations(), fake.closed), ([], []))
+
+    def test_v134_foreign_core_blocks_mutating_hc(self):
+        fake = FakeSessionProjects(board_session="shepherdr", after_status="working")
+        path = Path(os.environ["XDG_STATE_HOME"]) / "herdr-core/shepherdr/core.json"
+        path.parent.mkdir(parents=True)
+        path.write_bytes((SPIKE / "session/core_json_after_shepherdr.out").read_bytes())
+        out = self.run_(fake, wait_ms=0)
+        key = out["thread_id"]
+        foreign = fake.add_unrelated_terminal("default")
+        foreign.update(task=key, labels={"herdr.task": key}, cwd="/another/worktree")
+        fake.hc_session = "default"
+        fake.commands.clear()
+
+        def runner(cmd, **kw):
+            if cmd[:3] == [hd.HERDR_BIN, "server", "status"]:
+                return subprocess.CompletedProcess(cmd, 0, (SPIKE / "session/status_default.out").read_text(), "")
+            return fake(cmd, **kw)
+
+        response = hd.stop_run(self.cwd, out["run_id"], runner=runner)
+        self.assertEqual((response["status"], "other#1" in fake.sessions["default"], fake.closed),
+                         ("delivery_uncertain", True, []))
+        self.assertEqual(fake.mutations(), [])
+        self.assertIn("error", response)
+
+        # Release/cleanup also refuses when the live core mismatches core.json, with 0 mutations.
+        rc = self.receipt(out)
+        rc.update(status="completed", task_outcome="success", settled_contract=True)
+        write_result()(fake, fake.prompts[0])
+        src = Path(rc["worktree"]) / hd.RESULT_REL / rc["run_id"]
+        for name in ("result.json", "result.md"):
+            Path(rc["run_dir"], name).write_bytes((src / name).read_bytes())
+        fake.commands.clear()
+        rel = hd.release(rc, runner=runner)
+        self.assertEqual((rel["status"], rc["release"], fake.mutations(), fake.closed),
+                         ("delivery_uncertain", None, [], []))
+        self.assertEqual(rc["last_observation"]["error"]["code"], "core_id_mismatch")
+
+    def test_v135_headless_partial_stop_holds_admission(self):
+        from bench_router import coordination
+        fake = FakeSessionProjects(after_status="working")
+        out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        key = out["thread_id"]
+        fake.panes["second"] = {"address": "t2", "task": key, "labels": {"herdr.task": key}, "state": "live"}
+
+        def runner(cmd, **kw):
+            if cmd[:3] == [hd.HERDR_BIN, "kill", "t2"]:
+                return subprocess.CompletedProcess(cmd, 1, "", "synthetic kill failure")
+            return fake(cmd, **kw)
+
+        self.assertEqual(hd.stop_run(self.cwd, out["run_id"], runner=runner)["status"], "delivery_uncertain")
+        done = hd.collect_run(self.cwd, out["run_id"], 0, runner=runner)
+        rc = self.receipt(done)
+        active = coordination.load(done["coordination_key"])["active"]
+        self.assertEqual((rc["process_exited"], active, fake.panes["second"]["state"]), (False, True, "live"))
+
+        # Admission is released once the remaining recorded terminal also has exit evidence.
+        del fake.panes["second"]
+        done2 = hd.collect_run(self.cwd, out["run_id"], 0, runner=runner)
+        self.assertEqual((self.receipt(done2)["process_exited"], coordination.load(done2["coordination_key"])["active"]),
+                         (True, False))
+
+    def test_v136_pre_port_running_receipt_collects_without_mutations(self):
+        fake = FakeSessionProjects(on_prompt=write_result())
+        fake.core_version = "hc 0.1.20"
+        out = self.run_(fake, wait_ms=0)
+        rc = self.receipt(out)
+        del rc["project_binding"]["core_id"]
+        hd.save(rc)
+        fake.commands.clear()
+        done = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((done["status"], done["last_observation"]["note"]), ("completed", None))
+        self.assertEqual(fake.mutations(), [])
+
+        # Mutating calls remain refused on a receipt without core_id.
+        fake2 = FakeSessionProjects(after_status="working")
+        fake2.core_version = "hc 0.1.20"
+        out2 = self.run_(fake2, self.task(task_id="t2"), wait_ms=0)
+        rc2 = self.receipt(out2)
+        del rc2["project_binding"]["core_id"]
+        hd.save(rc2)
+        fake2.commands.clear()
+        self.assertEqual(hd.stop_run(self.cwd, out2["run_id"], runner=fake2)["status"], "delivery_uncertain")
+        with self.assertRaises(r.InputError):
+            hd.tell_run(self.cwd, out2["run_id"], "hi", runner=fake2)
+        with self.assertRaises(r.InputError):
+            hd.resume_run(self.cwd, out2["run_id"], runner=fake2)
+        self.assertEqual((fake2.mutations(), fake2.closed, fake2.tells), ([], [], []))
+
+    def test_v137_headless_lost_start_recovers_terminal_and_collects(self):
+        fake = FakeSessionProjects(after_status="working")
+        fake.core_version = "hc 0.1.20"
+        fake.on_run = headless_cli()
+        fake.start_error = True
+        out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        self.assertIsNone(self.receipt(out).get("terminal_id"))
+        self.assertEqual(fake.panes[out["thread_id"]]["address"], "t1")
+        fake.commands.clear()
+        done = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((done["status"], done["last_observation"]["note"]), ("completed", None))
+
+    def test_v138_headless_fast_exit_found_via_all_or_get(self):
+        fake = FakeSessionProjects(after_status="working")
+        fake.core_version = "hc 0.1.20"
+
+        def finish(board, cmd):
+            headless_cli()(board, cmd)
+            next(iter(board.panes.values()))["state"] = "finished"
+
+        fake.on_run = finish
+        core = fake._core
+        empty = (SPIKE / "stop/ls_live_t0.out").read_text()
+
+        def core_hides_finished(argv):
+            if argv[0] == "ls" and "--all" not in argv and fake.panes:
+                return subprocess.CompletedProcess(argv, 0, empty, "")
+            return core(argv)
+
+        fake._core = core_hides_finished
+        out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        rc = self.receipt(out)
+        self.assertTrue(Path(rc["run_dir"], "exit_code").exists())
+        done = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((done["status"], done["last_observation"]["note"]), ("completed", None))
+
+    def test_v139_interactive_finished_terminal_collects_valid_result(self):
+        fake = FakeSessionProjects(after_status="working", on_prompt=write_result())
+        fake.core_version = "hc 0.1.20"
+        out = self.run_(fake, wait_ms=0)
+        fake.panes[out["thread_id"]]["state"] = "finished"
+        fake.detail_updates["live"] = []
+        done = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((done["status"], done["task_outcome"], done["last_observation"]["note"]),
+                         ("completed", "success", None))
+
+    def test_v140_native_collect_uses_lost_create_lookup(self):
+        fake = FakeSessionProjects(after_status="working")
+        fake.add_error = True
+        out = self.run_(fake, wait_ms=0)
+        fake.commands.clear()
+
+        def runner(cmd, **kw):
+            if cmd[:2] == [hd.PROJECTS_BIN, "list"]:
+                return fake._ok({"tasks": list(fake.tasks.values())})
+            return fake(cmd, **kw)
+
+        done = hd.collect_run(self.cwd, out["run_id"], 0, runner=runner)
+        self.assertEqual((done["thread_id"], fake.mutations()), ("repo#1", []))
+
+    def test_v141_resume_persists_resume_attempted_before_call(self):
+        fake = FakeSessionProjects(on_prompt=write_result())
+        out = self.run_(fake)
+        seen_before_resume = []
+        resume_calls = 0
+
+        def runner(cmd, **kw):
+            nonlocal resume_calls
+            if cmd[:2] == [hd.PROJECTS_BIN, "resume"]:
+                resume_calls += 1
+                seen_before_resume.append(self.receipt(out).get("resume_attempted"))
+                raise subprocess.TimeoutExpired(cmd, 15)
+            return fake(cmd, **kw)
+
+        with self.assertRaises(r.InputError):
+            hd.resume_run(self.cwd, out["run_id"], runner=runner)
+        rc = self.receipt(out)
+        self.assertEqual((seen_before_resume, rc.get("resume_attempted"), rc["status"], resume_calls),
+                         ([True], True, "delivery_uncertain", 1))
+        # Lost resume response must never replay herdr-task resume.
+        with self.assertRaisesRegex(r.InputError, "reconcile manually"):
+            hd.resume_run(self.cwd, out["run_id"], runner=runner)
+        self.assertEqual(resume_calls, 1)
+
+    def _linked_worktree(self):
+        """A task cwd that is a linked git worktree; Shepherdr (store.locate) files its cards under the main checkout."""
+        linked = os.path.join(os.path.realpath(self.tmp.name) + "-linked")
+        subprocess.run(["git", "-C", self.cwd, "worktree", "add", "-q", "-b", "side", linked], check=True, capture_output=True)
+        self.addCleanup(shutil.rmtree, linked, True)
+        return linked
+
+    def _main_checkout_board(self, fake):
+        """Wrap fake like real herdr-task: --folder resolves to the main checkout; list without --folder shows none."""
+        lists = []
+
+        def runner(cmd, **kw):
+            cmd = list(cmd)
+            if cmd[0] == hd.PROJECTS_BIN and "--folder" in cmd:
+                cmd[cmd.index("--folder") + 1] = self.cwd
+            if cmd[:2] == [hd.PROJECTS_BIN, "list"]:
+                lists.append(cmd)
+                rows = list(fake.tasks.values()) if "--folder" in cmd else []
+                return fake._ok({"folder": self.cwd, "tasks": rows})
+            return fake(cmd, **kw)
+        return runner, lists
+
+    def test_v142_linked_worktree_cwd_confirms_add_on_main_checkout(self):
+        linked = self._linked_worktree()
+        fake = FakeSessionProjects(after_status="working")
+        runner, _ = self._main_checkout_board(fake)
+        fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
+        out = hd.dispatch(self.task(cwd=linked), self.cfg, MAPPING, None, [], session="default", runner=runner, which=which,
+                          profile_id="a", selection_mode="orchestrator_pinned", wait_ms=0)
+        self.assertEqual((out["status"], out["thread_id"], len(fake.adds)), ("timed_out", "repo#1", 1))
+
+    def test_v143_linked_worktree_lost_add_found_by_lookup(self):
+        linked = self._linked_worktree()
+        fake = FakeSessionProjects(after_status="working")
+        fake.add_error = True
+        runner, lists = self._main_checkout_board(fake)
+        fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
+        out = hd.dispatch(self.task(cwd=linked), self.cfg, MAPPING, None, [], session="default", runner=runner, which=which,
+                          profile_id="a", selection_mode="orchestrator_pinned", wait_ms=0)
+        fake.commands.clear()
+        done = hd.collect_run(linked, out["run_id"], 0, runner=runner)
+        self.assertEqual((done["thread_id"], fake.mutations()), ("repo#1", []))
+        self.assertTrue(lists and all("--folder" in c for c in lists))
 
     def test_message_log_survives_unicode_line_separator(self):
         with tempfile.TemporaryDirectory() as tmp:

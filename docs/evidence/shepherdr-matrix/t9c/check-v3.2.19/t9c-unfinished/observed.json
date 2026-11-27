@@ -1,0 +1,45 @@
+{
+ "scenario": "t9c-unfinished",
+ "run_id": "c48bae6b-e56e-4473-b16f-d0575a997398",
+ "expect": "held",
+ "status": "delivery_uncertain",
+ "core": {
+  "task_protocol": "1",
+  "core_version": "hc 0.1.20",
+  "space": "demo",
+  "session": "default",
+  "core_id": "e3c5b5e139982c6231ba08823904fcf8"
+ },
+ "result_copied": false,
+ "terminals": {
+  "t4": {
+   "error": {
+    "hint": "see `hc ls --all`",
+    "kind": "not_found",
+    "message": "no terminal \"t4\""
+   }
+  }
+ },
+ "observer_terminals": [],
+ "board": {
+  "state": null,
+  "status": null,
+  "needs": null,
+  "why": null,
+  "live": null
+ },
+ "admission_active": true,
+ "ready": null,
+ "release": null,
+ "process_exited": null,
+ "calls": {
+  "router:herdr-task --version": 1,
+  "router:herdr-task --help": 1,
+  "router:hc --version": 1
+ },
+ "checks": {
+  "status delivery_uncertain": true,
+  "admission held": true,
+  "0 start/send/kill/ready/resume calls": true
+ }
+}

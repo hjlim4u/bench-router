@@ -1,0 +1,37 @@
+add	0	env herdr-task add br-1 --prompt-file /tmp/input.txt --folder /home/tester/repo --base main --branch br/1 --agent claude --model default --worktree --set review=off --set merge=ask\ me\ first --set proof=off --json 
+start	0	herdr-task start repo#1 --folder /home/tester/repo --space demo --json 
+show_before	0	herdr-task show repo#1 --folder /home/tester/repo --json 
+task_stop	2	herdr-task stop repo#1 --folder /home/tester/repo --json 
+show_after_task_stop	0	herdr-task show repo#1 --folder /home/tester/repo --json 
+get_after_task_stop	0	env HC_SESSION=default hc get t1 --json 
+kill	0	env HC_SESSION=default hc kill t1 --json 
+get_t0	0	env HC_SESSION=default hc get t1 --json 
+ls_all_t0	0	env HC_SESSION=default hc ls --all --label herdr.task=repo#1 --json 
+ls_live_t0	0	env HC_SESSION=default hc ls --label herdr.task=repo#1 --json 
+show_t0	0	herdr-task show repo#1 --folder /home/tester/repo --json 
+get_t5	0	env HC_SESSION=default hc get t1 --json 
+ls_all_t5	0	env HC_SESSION=default hc ls --all --label herdr.task=repo#1 --json 
+ls_live_t5	0	env HC_SESSION=default hc ls --label herdr.task=repo#1 --json 
+show_t5	0	herdr-task show repo#1 --folder /home/tester/repo --json 
+get_t30	0	env HC_SESSION=default hc get t1 --json 
+ls_all_t30	0	env HC_SESSION=default hc ls --all --label herdr.task=repo#1 --json 
+ls_live_t30	0	env HC_SESSION=default hc ls --label herdr.task=repo#1 --json 
+show_t30	0	herdr-task show repo#1 --folder /home/tester/repo --json 
+get_t120	0	env HC_SESSION=default hc get t1 --json 
+ls_all_t120	0	env HC_SESSION=default hc ls --all --label herdr.task=repo#1 --json 
+ls_live_t120	0	env HC_SESSION=default hc ls --label herdr.task=repo#1 --json 
+show_t120	0	herdr-task show repo#1 --folder /home/tester/repo --json 
+get_t300	0	env HC_SESSION=default hc get t1 --json 
+ls_all_t300	0	env HC_SESSION=default hc ls --all --label herdr.task=repo#1 --json 
+ls_live_t300	0	env HC_SESSION=default hc ls --label herdr.task=repo#1 --json 
+show_t300	0	herdr-task show repo#1 --folder /home/tester/repo --json 
+kill_again	0	env HC_SESSION=default hc kill t1 --json 
+server_restart	0	env HC_SESSION=default hc server restart --json 
+get_after_restart	0	env HC_SESSION=default hc get t1 --json 
+ls_all_after_restart	0	env HC_SESSION=default hc ls --all --json 
+resume	0	herdr-task resume repo#1 --folder /home/tester/repo --space demo --json 
+show_after_resume	0	herdr-task show repo#1 --folder /home/tester/repo --json 
+rm	0	env HC_SESSION=default hc rm t1 --json 
+get_after_rm	3	env HC_SESSION=default hc get t1 --json 
+add_todo	0	env herdr-task add br-2 --prompt-file /tmp/input.txt --folder /home/tester/repo --base main --branch br/2 --agent claude --model default --worktree --set review=off --set merge=ask\ me\ first --set proof=off --json 
+reopen_todo	0	herdr-task reopen repo#2 --folder /home/tester/repo --json 

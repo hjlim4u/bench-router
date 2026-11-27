@@ -16,26 +16,23 @@ from pathlib import Path
 from . import usage
 from . import locking
 from . import routing as r
+from . import shepherdr
+# Shepherdr connect/bind calls live in the adapter; these names stay importable from herdr.
+from .shepherdr import (BACKEND, HERDR_BIN, PROJECTS_BIN, SHORT_CALL_S, START_CALL_S, TASK_PROTOCOL,
+                        WORK_SETTINGS, bound_runner, project_call)
 
-PROJECTS_BIN = os.environ.get("BENCH_ROUTER_TASKS", "herdr-task")
-HERDR_BIN = os.environ.get("BENCH_ROUTER_HC", "hc")
-BACKEND = "shepherdr-3"
 LOCAL_BACKEND = "local-1"  # one-shot CLI as a local subprocess (runners.py)
 EXTERNAL_BACKEND = "external-1"  # the caller runs the agent; the router keeps receipt and result contract
 TUI_BACKEND = "herdr-tui-1"  # one-shot CLI in its own herdr TUI workspace, through the herdr CLI only (runners.py)
 TUI_BIN = os.environ.get("BENCH_ROUTER_HERDR", "herdr")
 RUNNERS = {"herdr": BACKEND, "herdr-tui": TUI_BACKEND, "local": LOCAL_BACKEND, "external": EXTERNAL_BACKEND}
-TASK_PROTOCOL = "1"  # herdr-task --version is its protocol, not Shepherdr's release number
-SHORT_CALL_S = 15
 OBSERVE_FLOOR_S = 2  # one task observation; keeps calls inside a 5s task budget
-START_CALL_S = 60  # task start may prepare a worktree before it answers
 MAX_PROMPT_ARG_BYTES = 120 * 1024  # the prompt is one argv entry (--desc); Linux caps one at 128 KiB
 DISCOVERED_KIND = {"claude": ("claude", "claude-code", "--model"),
                    "codex": ("codex", "codex-cli", "-m")}
 # Codex keeps the models its -m accepts, with each model's efforts; "hide" marks internal models.
 CODEX_MODELS_CACHE = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "models_cache.json"
 RESULT_REL = Path(".bench-router") / "runs"  # agent writes results here, relative to its board worktree
-WORK_SETTINGS = ["--worktree", "--set", "review=off", "--set", "merge=ask me first", "--set", "proof=off"]
 RESULT_MD_MAX = 10 * 1024 * 1024
 RESULT_JSON_MAX = 64 * 1024
 SETTLED_STATUSES = {"completed", "result_invalid", "execution_failed"}  # 이 외의 receipt는 새 live dispatch를 막는다
@@ -54,45 +51,24 @@ def _iso(t):
     return t.isoformat(timespec="seconds")
 
 
-# ---------- Shepherdr public CLIs ----------
+# ---------- Board providers ----------
 
-def project_call(argv, runner=subprocess.run, raw=False, timeout_s=SHORT_CALL_S, exe=None):
-    cmd = [exe or PROJECTS_BIN, *argv]
-    try:
-        p = runner(cmd, capture_output=True, text=True, encoding="utf-8", errors="strict",
-                   timeout=timeout_s, shell=False)
-        if p.returncode:
-            raise ValueError((p.stderr or p.stdout)[:300])
-        if len(p.stdout.encode("utf-8")) > r.SNAPSHOT_MAX_BYTES:
-            raise ValueError("Shepherdr response too large")
-        return (p.stdout if raw else json.loads(p.stdout)), None
-    except (OSError, subprocess.SubprocessError, ValueError) as e:
-        return None, {"code": "shepherdr_error", "message": str(e)[:300]}
+# backend id -> adapter factory(runner). New runs get their backend from resolve_runner, recorded runs from
+# rc["backend"]. project_call is looked up at call time so it stays the one replaceable Shepherdr seam.
+BOARDS = {BACKEND: lambda runner: shepherdr.ShepherdrBoard(runner, project_call)}
+
+
+def _board(backend, runner):
+    return BOARDS[backend](runner)
 
 
 def project_binding(session=None, runner=subprocess.run, core_session=None):
     """Bind to the task protocol and core build, never interpret legacy Projects receipts as tasks."""
-    core_session = core_session or os.environ.get("HC_SESSION") or "default"
-    version, err = project_call(["--version"], runner, raw=True)
-    if err or (version or "").strip() != TASK_PROTOCOL:
-        raise r.InputError("Shepherdr 3.x herdr-task protocol 1 is required for live dispatch; "
-                           "install Shepherdr, use --runner local|external, or use route --dry-run")
-    core, err = project_call(["--version"], runner, raw=True, exe=HERDR_BIN)
-    m = re.fullmatch(r"hc (\d+)\.(\d+)\.(\d+)(?:[-+ ].*)?", (core or "").strip())
-    if err or not m or tuple(map(int, m.groups())) < (0, 1, 17):
-        raise r.InputError("Shepherdr requires herdr-core (hc) >= 0.1.17")
-    space = session or os.environ.get("BENCH_ROUTER_SPACE") or os.environ.get("BENCH_ROUTER_HERDR_SESSION")
-    if not space and os.environ.get("HC_TERMINAL_ID"):
-        obj, err = project_call(["get", os.environ["HC_TERMINAL_ID"], "--json"], runner, exe=HERDR_BIN)
-        labels = (obj or {}).get("labels", {})
-        space = labels.get("herdr.space") or labels.get("herdr.task.space") or labels.get("herdr.coordinator.space")
-    if not isinstance(space, str) or not space.strip() or "/" in space:
-        raise r.InputError("a local Shepherdr space is required: use --herdr-space SPACE or BENCH_ROUTER_SPACE")
-    return {"task_protocol": TASK_PROTOCOL, "core_version": core.strip(), "space": space, "session": core_session}
+    return shepherdr.project_binding(session, runner, core_session, project_call)
 
 
 def resolve_runner(name=None, which=shutil.which):
-    """--runner → receipt backend. auto: Shepherdr when herdr-task and hc are on PATH, else a local subprocess."""
+    """--runner → receipt backend. auto: Shepherdr when its task and core CLIs are on PATH, else a local subprocess."""
     name = name or os.environ.get("BENCH_ROUTER_RUNNER") or "auto"
     if name == "auto":
         name = "herdr" if which(PROJECTS_BIN) and which(HERDR_BIN) else "local"
@@ -102,6 +78,8 @@ def resolve_runner(name=None, which=shutil.which):
 
 
 def runner_binding(backend, session=None, runner=subprocess.run, cwd=None):
+    if backend in BOARDS and backend != BACKEND:
+        return _board(backend, runner).bind(session, cwd)
     if backend != BACKEND:
         return {"runner": backend}
     path = Path(cwd) / ".bench-router" / "shepherdr.json" if cwd else None
@@ -116,21 +94,9 @@ def runner_binding(backend, session=None, runner=subprocess.run, cwd=None):
     return project_binding(session, runner, core_session)
 
 
-def bound_runner(rc, runner):
-    """Run task and core commands in the session recorded before submission."""
-    core_session = rc["project_binding"]["session"]
-    def run(cmd, **kwargs):
-        env = {**kwargs.pop("env", os.environ), "HC_SESSION": core_session}
-        if (os.environ.get("HC_SESSION") or "default") != core_session:
-            for key in ("HC_SOCKET", "HC_TERMINAL_SOCKET", "HC_TERMINAL_ID"):
-                env.pop(key, None)
-        return runner(cmd, env=env, **kwargs)
-    return run
-
-
-def same_binding(rc, session, runner):
-    current = project_binding(session, runner, rc["project_binding"]["session"])
-    return all(current[k] == rc["project_binding"][k] for k in ("task_protocol", "space", "session"))
+def same_binding(rc, session, runner, require_core_id=True):
+    current = project_binding(session, bound_runner(rc, runner), rc["project_binding"]["session"])
+    return shepherdr.matches_binding(current, rc["project_binding"], require_core_id=require_core_id)
 
 
 def _availability(availability, cfg, which, backend, requests=()):
@@ -168,7 +134,7 @@ def model_effort(profile):
 
 
 def worker_settings(profile):
-    """Profile model/effort flags expressed by herdr-task; permissions stay the user's CLI settings."""
+    """Profile model/effort flags expressed by the board's task add; permissions stay the user's CLI settings."""
     me = model_effort(profile)
     if me is None:
         return None
@@ -446,6 +412,10 @@ def settle(rc, state):
     """관찰된 herdr 상태 + 결과 파일로 receipt 상태를 결정한다. idle/done만으로는 성공이 아니다."""
     _observe(rc, state)
     if state in ("idle", "done"):
+        if not rc.get("worktree"):
+            rc.update(status="delivery_uncertain", delivery_state="uncertain")
+            _observe(rc, state, note="worktree unknown; inspect board card before collecting")
+            return rc
         src = Path(rc["worktree"]) / RESULT_REL / rc["run_id"]
         manifest, why = check_result({**rc, "run_dir": str(src)})
         if manifest:
@@ -487,36 +457,55 @@ def headless_script(rc, argv, publish=True):
 
 
 
-def _binding_unchanged(rc, session, runner):
-    """Pre-submission check. On failure nothing was sent: settle the receipt so it cannot stay `dispatching`."""
+def _checked_runner(rc, session, runner, require_core_id=True):
+    """Open the recorded session only after validating its protocol and binding."""
+    if rc.get("identity") == "mismatch":
+        raise r.InputError("resumed terminal identity mismatch; reconcile manually before any control")
+    if not same_binding(rc, session or rc["project_binding"]["space"], runner, require_core_id=require_core_id):
+        raise r.InputError("Shepherdr session or core binding differs from the receipt")
+    return bound_runner(rc, runner)
+
+
+def _bounded(rc, runner, until=None):
+    """Every call's timeout within the run's remaining deadline (and until, a monotonic end), never below the floor:
+    collect/stop after the deadline still get one short attempt per call."""
+    end = time.monotonic() + (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds()
+    end = end if until is None else min(end, until)
+
+    def run(cmd, **kw):
+        kw["timeout"] = min(kw.get("timeout") or SHORT_CALL_S, max(OBSERVE_FLOOR_S, end - time.monotonic()))
+        return runner(cmd, **kw)
+    return run
+
+
+def _submission_runner(rc, session, runner):
     try:
-        if same_binding(rc, session, runner):
-            return True
-        why = "Shepherdr binding changed before submission"
-    except r.InputError as e:
-        why = str(e)
+        return _checked_runner(rc, session, runner)
+    except r.InputError as exc:
+        why = str(exc)
     rc["status"] = "execution_failed"
     _observe(rc, note=f"{why}; nothing submitted")
     save(rc)
-    return False
+    return None
 
 
 def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=None):
+    if rc["backend"] in BOARDS and rc["backend"] != BACKEND:
+        return _execute_board(rc, prompt, session, runner, wait_ms)
     if rc["backend"] != BACKEND:
         from . import runners
         return runners.start(rc, prompt, profile, wait_ms, runner)
-    runner = bound_runner(rc, runner)
-    if not _binding_unchanged(rc, session, runner):
+    runner = _submission_runner(rc, session, runner)
+    if runner is None:
         return rc
+    board = _board(BACKEND, runner)
     settings = worker_settings(profile)
     if settings is None:
         rc["status"] = "execution_failed"
         _observe(rc, note="profile args beyond model/effort cannot be expressed; nothing submitted")
         save(rc)
         return rc
-    prompt += ("\nShepherdr: do not call herdr-task ready, done, accept or merge yourself. "
-               "Commit requested code changes, keep this worktree and branch, then write results and end your turn. "
-               "bench-router validates and copies results before marking the task Ready; the person accepts it.\n")
+    prompt += shepherdr.PROMPT_NOTE
     r.atomic_write(Path(rc["run_dir"]) / "input.txt", prompt.encode("utf-8"))
     remaining = (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds()
     if remaining <= 0:
@@ -537,12 +526,8 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
         return rc
     rc["delivery_state"] = "submission_attempted"
     save(rc)  # An add with a lost response must never be repeated, even though it starts nothing.
-    obj, err = project_call(["add", "br-" + rc["run_id"], "--prompt-file", str(Path(rc["run_dir"]) / "input.txt"),
-                             "--folder", repo_cwd(rc), "--base", base, "--branch", f"br/{rc['run_id']}",
-                             *settings, *WORK_SETTINGS, "--json"], runner, timeout_s=min(START_CALL_S, remaining))
-    if err or not isinstance(obj, dict) or not re.fullmatch(r"[^#\s]+#[0-9]+", str(obj.get("key", ""))) \
-            or type(obj.get("id")) is not int or obj["id"] < 1 or not obj["key"].endswith(f"#{obj['id']}") \
-            or obj.get("title") != "br-" + rc["run_id"] or obj.get("folder") != repo_cwd(rc) or obj.get("agent") != rc["kind"]:
+    obj, err = board.add(rc, settings, base, min(START_CALL_S, remaining))
+    if obj is None:
         rc.update(status="delivery_uncertain", delivery_state="uncertain")
         _observe(rc, error=err, note=f"task add unconfirmed; find br-{rc['run_id']}, never resubmit")
         save(rc)
@@ -562,13 +547,7 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
         return rc
     rc["start_attempted"] = True
     save(rc)
-    # Shepherdr only translates model/effort for Claude and Codex. Its public argv override keeps agy's flags.
-    # Codex's workspace-write sandbox cannot commit in a git worktree (the lock files live in the main .git).
-    launch_args = (["--argv", json.dumps([profile["executable"], *profile["args"], "--prompt-interactive"])]
-                   if profile["kind"] == "agy" else
-                   ["--argv", json.dumps([profile["executable"], *profile["args"],
-                                          "--dangerously-bypass-approvals-and-sandbox"])]
-                   if profile["kind"] == "codex" else [])
+    script = None
     if rc.get("execution") == "headless":
         argv = headless_argv(profile)
         if argv is None:
@@ -578,13 +557,15 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
         # tee keeps the pane live while output.log outlives release() closing the terminal (as the local runner's log)
         log = shlex.quote(str(Path(rc["run_dir"]) / "output.log"))
         script = f"{{ {headless_script({**rc, 'worktree': '.'}, argv)}; }} 2>&1 | tee {log}"
-        launch_args = ["--argv", json.dumps(["sh", "-c", script])]
-    obj, err = project_call(["start", rc["thread_id"], "--folder", repo_cwd(rc), "--space", rc["project_binding"]["space"],
-                             *launch_args, "--json"], runner,
-                            timeout_s=min(START_CALL_S, max(0.001, (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds())))
-    if err or not isinstance(obj, dict):
+    obj, err = board.start_task(rc, board.launch_args(profile, script),
+                                min(START_CALL_S, max(0.001, (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds())))
+    if obj is None:
         rc.update(status="delivery_uncertain", delivery_state="uncertain")
-        _observe(rc, error=err, note="task start unconfirmed; collect the recorded task, never restart")
+        try:
+            state = board.task(rc).get("state")
+        except r.InputError:
+            state = "unknown"
+        _observe(rc, state, error=err, note="task start unconfirmed; collect the recorded task, never restart")
         save(rc)
         return rc
     rc["terminal_id"] = obj.get("terminal")
@@ -592,22 +573,45 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
     save(rc)
     if rc["terminal_id"]:
         try:
-            _verify_terminal(rc, rc["terminal_id"], runner)
+            board.verify_terminal(rc, rc["terminal_id"])
         except r.InputError as e:
-            rc.update(status="delivery_uncertain", delivery_state="uncertain")
+            rc.update(status="delivery_uncertain", delivery_state="uncertain", terminal_unverified=True)
             _observe(rc, note=str(e))
             save(rc)
             return rc
-    # One durable core terminal observes the run and its later merge even when the caller disconnects.
-    import sys
-    monitor, monitor_error = project_call(["run", "--bg", "--rm", "--json", "--no-parent",
-        "--label", f"bench-router.watch={rc['run_id']}", "--", "env",
-        f"PYTHONPATH={Path(__file__).resolve().parents[1]}", sys.executable, "-m", "bench_router.lifecycle",
-        "--cwd", rc["cwd"], "--run-id", rc["run_id"]], runner, exe=HERDR_BIN)
+    monitor, monitor_error = board.watch(rc)
     rc["monitor"] = {"terminal_id": (monitor or {}).get("address"), "error": monitor_error}
     remaining = _wait(rc, wait_ms)
     rc["status"] = "timed_out"
     save(rc)
+    return collect(rc, remaining, session, runner) if remaining > 0 else rc
+
+
+def _execute_board(rc, prompt, session, runner, wait_ms):
+    """A non-Shepherdr board, through the Board port only. Stores before/after each call per board.PERSISTENCE."""
+    board = _board(rc["backend"], runner)
+    rc["binding"] = rc["project_binding"]
+    r.atomic_write(Path(rc["run_dir"]) / "input.txt", prompt.encode("utf-8"))
+    for op, attempted in (("create", ("delivery_state", "submission_attempted")), ("start", ("start_attempted", True))):
+        rc[attempted[0]] = attempted[1]
+        save(rc)  # a lost response is never re-called
+        try:
+            rc.update(getattr(board, op)(rc))
+        except r.InputError as e:
+            rc.update(status="execution_failed", process_exited=True)
+            if op == "create":
+                rc["delivery_state"] = "not_attempted"
+            _observe(rc, note=f"{e}; nothing {'submitted' if op == 'create' else 'started'}")
+            save(rc)
+            return rc
+        except Exception as e:
+            rc.update(status="delivery_uncertain", delivery_state="uncertain")
+            _observe(rc, note=f"board {op} unconfirmed ({e}); collect the recorded card, never resend")
+            save(rc)
+            return rc
+    rc["status"] = "timed_out"
+    save(rc)
+    remaining = _wait(rc, wait_ms)
     return collect(rc, remaining, session, runner) if remaining > 0 else rc
 
 
@@ -624,9 +628,34 @@ def settle_exit(rc):
     return True
 
 
+def _recorded_terminals(rc, primary=None, live_addresses=()):
+    """Every terminal id recorded for this run: primary, live workers, and every stop target."""
+    seen = []
+    for t in (primary, rc.get("terminal_id"), *live_addresses,
+              *(x["terminal_id"] for e in _events(rc) for x in e.get("terminals") or []
+                if isinstance(x, dict) and x.get("terminal_id")),
+              *(x["terminal_id"] for x in (rc.get("stop") or {}).get("terminals") or []
+                if isinstance(x, dict) and x.get("terminal_id"))):
+        if t and t not in seen:
+            seen.append(t)
+    return seen
+
+
+def _all_exited(rc, board, primary, primary_state, timeout_s, live_addresses=()):
+    """True only when every recorded terminal for this run has exited/gone evidence in the task's core."""
+    if primary_state not in ("exited", "gone"):
+        return False
+    return all(board.terminal_state(t, timeout_s, rc) in ("exited", "gone")
+               for t in _recorded_terminals(rc, primary, live_addresses) if t != primary)
+
+
 def _poll_headless(rc, runner, timeout_s):
+    board = _board(BACKEND, runner)
+    board_stopped, live_addresses = False, ()
     if rc.get("thread_id"):
-        row = _task(rc, runner, timeout_s)
+        row = board.task(rc, timeout_s)
+        board_stopped = row.get("needs") == "stopped"
+        live_addresses = [w.get("address") for w in row.get("live") or [] if isinstance(w, dict) and w.get("address")]
         if row.get("state") in ("todo", "queued", "scheduled"):
             cancelled = row.get("state") == "todo" and any(e.get("cancelled_queue") for e in _events(rc))
             if cancelled:
@@ -634,66 +663,82 @@ def _poll_headless(rc, runner, timeout_s):
             else:
                 rc["status"] = "timed_out"
             return
-    if settle_exit(rc):
-        if rc["status"] == "completed":
+    if not rc.get("terminal_id"):
+        recovered = board.find_terminal(rc, live_addresses, timeout_s)
+        if not recovered:
+            raise r.InputError("hc run response was lost; inspect the recorded run label before resolving")
+        rc["terminal_id"] = recovered
+    process = board.terminal_state(rc["terminal_id"], timeout_s, rc)
+    exited = _all_exited(rc, board, rc["terminal_id"], process, timeout_s, live_addresses)
+    stopped = board_stopped or any(e.get("state") in ("stop_attempted", "stop_sent", "stop_uncertain") for e in _events(rc))
+    if (not stopped or exited) and settle_exit(rc):
+        if rc["status"] == "completed" and (rc.get("project_binding") or {}).get("core_id"):
             release(rc, runner)
         return
-    if not rc.get("terminal_id"):
-        raise r.InputError("hc run response was lost; inspect the recorded run label before resolving")
-    if any(e.get("state") == "stop_sent" for e in _events(rc)):
-        rc.update(status="execution_failed", process_exited=True)
-        return
-    _verify_terminal(rc, rc["terminal_id"], runner)
-    obj, err = project_call(["get", rc["terminal_id"], "--json"], runner, timeout_s=timeout_s, exe=HERDR_BIN)
-    if err:
-        raise r.InputError(err["message"])
-    if not isinstance(obj, dict) or obj.get("state") not in ("live", "exited"):
-        raise r.InputError("unexpected hc terminal response")
-    if obj["state"] == "exited":
-        rc.update(status="execution_failed", process_exited=True)
-        _observe(rc, note="headless terminal ended before writing its exit code")
+    if process in ("exited", "gone"):
+        rc.update(status="execution_failed", process_exited=exited)
+        note = (f"headless terminal {process} before writing its exit code" if exited
+                else "stop incomplete; another recorded terminal is still live")
+        _observe(rc, note=note)
     else:
         rc["status"] = "timed_out"
         _observe(rc, "working", note="headless CLI still running")
 
 
-def _task(rc, runner, timeout_s=SHORT_CALL_S):
-    obj, err = project_call(["show", rc["thread_id"], "--folder", repo_cwd(rc), "--json"], runner, timeout_s=timeout_s)
-    if err or not isinstance(obj, dict) or obj.get("key") != rc["thread_id"] or type(obj.get("id")) is not int or obj.get("id") != rc.get("task_id_on_board") \
-            or obj.get("title") != "br-" + rc["run_id"] or obj.get("folder") != repo_cwd(rc) \
-            or obj.get("agent") != rc["kind"]:
-        raise r.InputError("Shepherdr task identity differs from the receipt")
-    if obj.get("state") not in ("todo", "queued", "scheduled"):
-        wt = obj.get("worktree")
-        if obj.get("mode") != "worktree" or not isinstance(wt, str) or not os.path.isabs(wt) \
-                or os.path.realpath(wt) == os.path.realpath(repo_cwd(rc)) or obj.get("branch") != f"br/{rc['run_id']}":
-            raise r.InputError("Shepherdr task worktree differs from the receipt")
-        if rc.get("worktree") and os.path.realpath(wt) != os.path.realpath(rc["worktree"]):
-            raise r.InputError("Shepherdr task worktree changed")
-        rc.update(worktree=wt, branch=obj["branch"])
-    return obj
-
-
-def _verify_terminal(rc, terminal, runner):
-    label = f"herdr.task={rc['thread_id']}" if rc.get("thread_id") else f"bench-router.run={rc['run_id']}"
-    obj, err = project_call(["ls", "--label", label, "--json"], runner, exe=HERDR_BIN)
-    if err or not isinstance(obj, dict) or not isinstance(obj.get("terminals"), list) or not any(
-            t.get("address") == terminal for t in obj["terminals"] if isinstance(t, dict)):
-        raise r.InputError("recorded terminal is absent from the task's core session")
+def _observe_board(rc, runner):
+    """One Board.observe of a non-Shepherdr board, mapped onto the receipt; success still needs the result files."""
+    obs = _board(rc["backend"], runner).observe(rc)
+    rc.update(obs.get("ids") or {})
+    task, why = obs["task"], obs["why"]
+    if obs["retryable"]:
+        rc["status"] = "timed_out"
+        _observe(rc, note=why or "board read failed; retry")
+    elif obs["identity"] != "ok":
+        raise r.InputError("board card or terminal differs from the receipt; reconcile manually")
+    elif task == "turn_done":
+        if rc.get("terminal_id") or rc["delivery_state"] not in ("uncertain", "submission_attempted"):
+            rc["delivery_state"] = "activity_observed"
+        settle(rc, "done")
+        if rc["status"] == "completed":
+            release(rc, runner)
+    elif task == "blocked":
+        rc.update(status="blocked", delivery_state="activity_observed", diagnostic_tail=why)
+        _observe(rc, "blocked", note=why)
+    elif task == "stopped":
+        rc.update(status="execution_failed", process_exited=obs["process"] == "exited")
+        _observe(rc, task, note=why or "board agent stopped")
+    elif task == "not_started":
+        rc["status"] = "delivery_uncertain"
+        _observe(rc, task, note="card not started; recovery never calls start")
+    else:
+        rc.update(status="timed_out", delivery_state="activity_observed")
+        _observe(rc, task, note=why)
 
 
 def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     """Observe the recorded board task only; never delegate, retry or re-prompt it."""
-    if rc.get("backend") not in (BACKEND, LOCAL_BACKEND, EXTERNAL_BACKEND, TUI_BACKEND):
+    if rc.get("backend") not in (*BOARDS, LOCAL_BACKEND, EXTERNAL_BACKEND, TUI_BACKEND):
         raise r.InputError("legacy receipt: inspect the original worker; automatic backend migration is refused")
     native = rc["backend"] == BACKEND
+    port = rc["backend"] in BOARDS and not native  # any other board, through the Board port only
+    deadline = time.monotonic() + wait_ms / 1000
+    has_core_id = bool((rc.get("project_binding") or {}).get("core_id"))
     if native:
-        runner = bound_runner(rc, runner)
+        try:
+            runner = _checked_runner(rc, session, _bounded(rc, runner, deadline if wait_ms > 0 else None),
+                                     require_core_id=False)
+        except r.InputError as exc:
+            if rc["status"] == "completed" and rc.get("settled_contract"):
+                return rc  # a finished record stays readable as-is; releasing needs a verified core
+            rc.update(status="delivery_uncertain", delivery_state="uncertain")
+            _observe(rc, note=str(exc))
+            save(rc)
+            return rc
     if rc["status"] == "completed" and rc.get("settled_contract"):
-        if native and rc.get("release") is None:  # completed before releasing existed, or the last close failed
+        if ((native and has_core_id) or port) and rc.get("release") is None:  # completed before releasing existed, or the last close failed
             release(rc, runner)
             save(rc)
-        elif not native:
+        elif not native and not port:
             from . import runners
             if runners.retry_release(rc, runner):
                 save(rc)
@@ -701,26 +746,45 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     if rc["delivery_state"] == "not_attempted":
         return rc
     headless = rc.get("execution") == "headless"
-    if native and not headless and not rc.get("thread_id"):
-        rc.update(status="delivery_uncertain", delivery_state="uncertain")
-        save(rc)
-        return rc
-    deadline = time.monotonic() + wait_ms / 1000
+    stops = [e["terminals"] for e in _events(rc) if e.get("terminals")]
+    if stops:
+        rc["stop"] = {"terminals": stops[-1]}  # per-terminal results of the last stop, mirrored under the lock
     # Calls stay within the wait budget, but never below a floor: a near-zero budget made the last poll time out
     # and misreported a working agent as delivery_uncertain.
     timeout = lambda: min(SHORT_CALL_S, max(OBSERVE_FLOOR_S, deadline - time.monotonic())) if wait_ms > 0 else SHORT_CALL_S
     while True:
         try:
-            if not native:
+            if native and not rc.get("thread_id") and (not headless or (not rc.get("terminal_id") and not rc.get("start_attempted"))):
+                ids, err = _board(BACKEND, runner).lookup_card(rc, timeout())
+                if err:
+                    raise r.InputError(err.get("message") or "task list failed")
+                rc.update(ids)
+                save(rc)
+            if native and rc.get("terminal_unverified"):
+                _board(BACKEND, runner).verify_terminal(rc, rc["terminal_id"])
+                rc.pop("terminal_unverified")
+            if port:
+                _observe_board(rc, runner)
+            elif not native:
                 from . import runners
                 runners.poll(rc, runner, max(0.0, deadline - time.monotonic()))  # herdr-tui waits in herdr
             elif headless:
                 _poll_headless(rc, runner, timeout())
-            elif not same_binding(rc, session, runner):
-                raise r.InputError("Shepherdr protocol, space or core version changed; inspect the recorded worker")
             else:
-                row = _task(rc, runner, timeout())
+                board = _board(BACKEND, runner)
+                row = board.task(rc, timeout())
+                terminal = rc.get("terminal_id")
+                addresses = [worker.get("address") for worker in row.get("live") or []]
+                if terminal and addresses and terminal not in addresses:
+                    raise r.InputError("board worker differs from the recorded terminal")
+                terminal = terminal or (addresses[0] if addresses else None)
+                process = board.terminal_state(terminal, timeout(), rc) if terminal else None
                 state, status, needs = row.get("state"), row.get("status"), row.get("needs")
+                stopped_by_router = any(e.get("state", "").startswith("stop_") for e in _events(rc))
+                finished_with_result = (
+                    process == "exited" and not stopped_by_router and rc.get("worktree")
+                    and check_result({**rc, "run_dir": str(Path(rc["worktree"]) / RESULT_REL / rc["run_id"])})[0] is not None
+                )
                 if state in ("todo", "queued", "scheduled"):
                     cancelled = state == "todo" and any(e.get("cancelled_queue") for e in _events(rc))
                     if cancelled:
@@ -728,10 +792,20 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
                     else:
                         rc["status"] = "delivery_uncertain" if state == "todo" else "timed_out"
                     _observe(rc, status, note="task not started; recovery never calls start")
-                elif needs == "stopped":
-                    stopped = any(e.get("state") == "stop_sent" for e in _events(rc))
-                    rc.update(status="execution_failed", process_exited=stopped)
+                elif finished_with_result:
+                    if rc.get("terminal_id") or rc["delivery_state"] not in ("uncertain", "submission_attempted"):
+                        rc["delivery_state"] = "activity_observed"
+                    settle(rc, "done")
+                    if rc["status"] == "completed" and has_core_id:
+                        release(rc, runner)
+                elif needs == "stopped" or (process in ("exited", "gone") and status not in ("ready", "done")):
+                    # Admission holds until every terminal the run recorded shows exit evidence.
+                    exited = _all_exited(rc, board, terminal, process, timeout(), addresses)
+                    rc.update(status="execution_failed", process_exited=exited)
                     _observe(rc, status, note=row.get("why") or "task agent stopped")
+                elif process == "live" and stopped_by_router:
+                    rc.update(status="timed_out", process_exited=False)
+                    _observe(rc, status, note="stop requested; terminal still live")
                 elif status == "needs" and needs != "reply":
                     rc.update(status="blocked", delivery_state="activity_observed", diagnostic_tail=row.get("why"))
                     _observe(rc, "blocked", note=row.get("why"))
@@ -743,7 +817,7 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
                     if rc.get("terminal_id") or rc["delivery_state"] not in ("uncertain", "submission_attempted"):
                         rc["delivery_state"] = "activity_observed"
                     settle(rc, "done")
-                    if rc["status"] == "completed":
+                    if rc["status"] == "completed" and has_core_id:
                         release(rc, runner)
                 elif status == "needs":
                     rc.update(status="blocked", delivery_state="activity_observed", diagnostic_tail=row.get("why"))
@@ -903,33 +977,21 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
 
 def release(rc, runner=subprocess.run):
     """End only idle terminals belonging to this run; leave working and blocked agents alone."""
-    runner = bound_runner(rc, runner)
+    if rc["backend"] == BACKEND:
+        runner = _checked_runner(rc, None, runner)
+        core_err = _board(BACKEND, runner).live_core_error(rc)
+        if core_err:
+            rc["release"] = None
+            _observe(rc, error=core_err, note=f"completed; {core_err['message']}")
+            return {"status": "delivery_uncertain", "error": core_err}
     from .lifecycle import finalize
     finalize(rc, runner)
-    argv = ["ls", "--label", f"bench-router.run={rc['run_id']}", "--json"] if not rc.get("thread_id") else \
-        ["ls", "--label", f"herdr.task={rc['thread_id']}", "--json"]
-    obj, err = project_call(argv, runner, exe=HERDR_BIN)
-    terminals = obj.get("terminals") if isinstance(obj, dict) else None
-    if err or not isinstance(terminals, list):
+    out = _board(rc["backend"], runner).cleanup(rc)
+    if out["left_open"]:
         rc["release"] = None
-        _observe(rc, error=err, note="completed; could not list core terminals, agent left open")
-        return
-    closed = []
-    for t in terminals:
-        status = t.get("status")
-        status = status.get("state") if isinstance(status, dict) else status
-        if t.get("state") != "exited" and status not in ("idle", "done") and rc.get("execution") != "headless":
-            rc["release"] = None
-            _observe(rc, note="completed; task still has an active agent, left open")
-            return
-    for t in terminals:
-        _, err = project_call(["kill", t["address"], "--json"], runner, exe=HERDR_BIN)
-        if err:
-            rc["release"] = None
-            _observe(rc, error=err, note="completed; ending the core terminal failed")
-            return
-        closed.append({"terminal_id": t["address"], "agent": t.get("agent")})
-    rc["release"] = {"at": _iso(_now()), "terminals": closed}
+        _observe(rc, error=out.get("error"), note=f"completed; {out['left_open']}")
+        return {"status": "delivery_uncertain", "error": out.get("error")}
+    rc["release"] = {"at": _iso(_now()), "terminals": out.get("terminals") or [{"terminal_id": t} for t in out["closed"]]}
 
 
 def resume_run(cwd, run_id, runner=subprocess.run):
@@ -941,16 +1003,33 @@ def resume_run(cwd, run_id, runner=subprocess.run):
             raise r.InputError("only a Shepherdr task run can be resumed")
         if rc.get("execution") == "headless":  # its card has no conversation; resume would rerun the saved argv
             raise r.InputError("headless runs cannot be resumed; dispatch a new round")
-        runner = bound_runner(rc, runner)
-        if not same_binding(rc, rc["herdr_session"], runner):
-            raise r.InputError("Shepherdr protocol or core version changed; inspect the recorded worker")
-        _task(rc, runner)
-        obj, err = project_call(["resume", rc["thread_id"], "--folder", repo_cwd(rc), "--space", rc["project_binding"]["space"], "--json"], runner, timeout_s=START_CALL_S)
+        if rc.get("resume_attempted") and rc.get("resume_state") != "confirmed":
+            raise r.InputError("previous resume was unconfirmed; observe identity and reconcile manually, never re-call")
+        runner = _checked_runner(rc, None, runner)
+        board = _board(BACKEND, runner)
+        core_err = board.live_core_error(rc)
+        if core_err:
+            raise r.InputError(core_err["message"])
+        board.task(rc)
+        rc["resume_attempted"] = True
+        rc["resume_state"] = "attempted"
+        save(rc)  # Persist before calling resume; a lost response must never re-call resume.
+        obj, err = board.resume_task(rc)
         if err or not isinstance(obj, dict) or not obj.get("terminal"):
+            rc.update(status="delivery_uncertain", delivery_state="uncertain", resume_state="uncertain")
+            _observe(rc, error=err, note="resume response lost; observe identity and reconcile manually, never re-call")
+            save(rc)
             raise r.InputError(f"resume failed: {(err or {}).get('message')}")
+        rc["resume_state"] = "confirmed"
         rc["terminal_id"] = obj["terminal"]
         rc["resumed"] = {"at": _iso(_now()), "terminal_id": obj["terminal"], "session_resumed": obj.get("resumed") is True}
+        rc["identity"] = board.resumed_identity(rc, obj["terminal"])
+        if rc["identity"] == "mismatch":  # no further control; collect only reports, coordination keeps admission
+            rc["status"] = "delivery_uncertain"
+            _observe(rc, note="resumed terminal is not this task's in the recorded core session; reconcile manually")
         save(rc)
+        if rc["identity"] == "mismatch":
+            raise r.InputError(f"resumed terminal {obj['terminal']} identity mismatch; reconcile manually")
     return {**output(None, rc), "resumed": rc["resumed"]}
 
 
@@ -976,16 +1055,17 @@ def tell_run(cwd, run_id, text, runner=subprocess.run):
         send = lambda: project_call(["agent", "prompt", rc["agent_name"], text, "--wait", "--until", "working",
                                      "--until", "blocked", "--timeout", "20000"], runner, exe=TUI_BIN)
     else:
-        runner = bound_runner(rc, runner)
-        if not same_binding(rc, rc["herdr_session"], runner):
-            raise r.InputError("Shepherdr protocol, space or core version changed; inspect the recorded worker")
-        row = _task(rc, runner)
-        live = row.get("live") or []
-        if row.get("state") != "running" or len(live) != 1 or (row.get("needs") == "reply" and not rc.get("resumed")):
-            raise r.InputError("task finished on the board or has no single live worker; collect/resume first")
-        terminal = live[0]["address"]
-        _verify_terminal(rc, terminal, runner)
-        send = lambda: project_call(["send", terminal, text, "--json"], runner, exe=HERDR_BIN)
+        runner = _checked_runner(rc, None, runner)
+        board = _board(BACKEND, runner)
+        core_err = board.live_core_error(rc)
+        if core_err:
+            digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+            log = _log_event(rc, {"sha256": digest, "state": "uncertain", "error": core_err})
+            return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain",
+                    "run_id": rc["run_id"], "thread_id": rc.get("thread_id"), "sha256": digest,
+                    "messages_path": str(log), "error": core_err}
+        terminal = board.tell_target(rc)
+        send = lambda: board.send(terminal, text)
     # No dispatch lock or receipt write: a blocking parallel/collect on this cwd must not stall the message.
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
     _log_event(rc, {"sha256": digest, "state": "attempted", "bytes": len(text.encode("utf-8")), "text": text})
@@ -1021,18 +1101,22 @@ def stop_run(cwd, run_id, runner=subprocess.run):
         return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain" if err else "stop_sent",
                 "run_id": rc["run_id"], "thread_id": None, "messages_path": str(log), **({"error": err} if err else {})}
     if rc.get("backend") != BACKEND:
-        raise r.InputError("legacy receipt: stop its original herdr-projects worker manually; no automatic migration")
-    runner = bound_runner(rc, runner)
-    if not same_binding(rc, rc["herdr_session"], runner):
-        raise r.InputError("Shepherdr protocol or core version changed; inspect the recorded worker")
+        raise r.InputError("legacy receipt: stop its original worker manually")
+    runner = _checked_runner(rc, None, _bounded(rc, runner), require_core_id=False)
+    board = _board(BACKEND, runner)
+    core_err = board.live_core_error(rc)
+    if core_err:
+        log = _log_event(rc, {"state": "stop_uncertain", "error": core_err})
+        return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain",
+                "run_id": rc["run_id"], "thread_id": rc.get("thread_id"), "messages_path": str(log),
+                "error": core_err}
     if rc.get("execution") == "headless" and not rc.get("thread_id"):
         terminals = [rc["terminal_id"]] if rc.get("terminal_id") else []
     else:
-        row = _task(rc, runner)
+        row = board.task(rc)
         if row.get("state") in ("queued", "scheduled", "todo"):
             _log_event(rc, {"state": "stop_attempted"})
-            obj, err = project_call(["reopen", rc["thread_id"], "--folder", repo_cwd(rc), "--json"], runner)
-            cancelled = not err and isinstance(obj, dict) and obj.get("key") == rc["thread_id"] and obj.get("state") == "todo"
+            cancelled = board.reopen(rc)
             log = _log_event(rc, {"state": "stop_sent" if cancelled else "stop_uncertain", "cancelled_queue": cancelled})
             return {"schema_version": r.SCHEMA_VERSION, "status": "stop_sent" if cancelled else "delivery_uncertain",
                     "run_id": rc["run_id"], "thread_id": rc["thread_id"], "messages_path": str(log)}
@@ -1040,13 +1124,10 @@ def stop_run(cwd, run_id, runner=subprocess.run):
     if not terminals:
         raise r.InputError("no recorded live terminal; inspect it before declaring the worker stopped")
     _log_event(rc, {"state": "stop_attempted"})
-    err = None
-    for terminal in terminals:
-        _verify_terminal(rc, terminal, runner)
-        _, err = project_call(["kill", terminal, "--json"], runner, raw=True, exe=HERDR_BIN)
-        if err:
-            break
-    log = _log_event(rc, {"state": "stop_uncertain" if err else "stop_sent", "error": err})
+    results = board.kill_all(rc, terminals)
+    err = next((x["error"] for x in results if x["error"]), None)
+    # collect copies terminals into the receipt and holds admission until each has exit evidence
+    log = _log_event(rc, {"state": "stop_uncertain" if err else "stop_sent", "error": err, "terminals": results})
     return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain" if err else "stop_sent",
             "run_id": rc["run_id"], "thread_id": rc.get("thread_id"), "messages_path": str(log),
             **({"error": err} if err else {})}

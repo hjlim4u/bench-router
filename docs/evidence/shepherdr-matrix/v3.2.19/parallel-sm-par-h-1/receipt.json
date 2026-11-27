@@ -1,0 +1,66 @@
+{
+ "schema_version": "1.0",
+ "task_id": "sm-par-h",
+ "round": 1,
+ "semantic_task_hash": "f84712abeeecbc91b1311579b2051c03ebe43221782f0413a12ab2d0fccc9238",
+ "run_id": "d2887ae2-1d19-4302-9e2c-c1b732ffc35f",
+ "nonce": "dfe090ac9389dd21db3f269dd8219b3b",
+ "backend": "shepherdr-3",
+ "project_binding": {
+  "task_protocol": "1",
+  "core_version": "hc 0.1.20",
+  "space": "demo",
+  "session": "shepherdr",
+  "core_id": "bea90bf88003a1fb665510ec2b01c815"
+ },
+ "kind": "claude",
+ "thread_id": "w-par#1",
+ "execution": "headless",
+ "profile": "claude-opus-medium",
+ "profile_fingerprint": "64dc49331ac2fdb9f3144821df0c238bbd5b5c7a6a7d03de3242b4e9dc39f653",
+ "cwd": "/home/tester/w/par/.bench-router/groups/switch-matrix/members/sm-par-h-1",
+ "repo_cwd": "/home/tester/w/par",
+ "run_dir": "/home/tester/w/par/.bench-router/groups/switch-matrix/members/sm-par-h-1/.bench-router/runs/d2887ae2-1d19-4302-9e2c-c1b732ffc35f",
+ "worktree": "/home/tester/.local/share/shepherdr/worktrees/par/br-d2887ae2-1d19-4302-9e2c-c1b732ffc35f",
+ "branch": "br/d2887ae2-1d19-4302-9e2c-c1b732ffc35f",
+ "herdr_session": "demo",
+ "status": "completed",
+ "delivery_state": "activity_observed",
+ "timeout_ms": 300000,
+ "created_at": "2026-11-27T03:21:07+00:00",
+ "deadline_at": "2026-11-27T03:26:07+00:00",
+ "result_path": "/home/tester/w/par/.bench-router/groups/switch-matrix/members/sm-par-h-1/.bench-router/runs/d2887ae2-1d19-4302-9e2c-c1b732ffc35f/result.md",
+ "manifest_path": "/home/tester/w/par/.bench-router/groups/switch-matrix/members/sm-par-h-1/.bench-router/runs/d2887ae2-1d19-4302-9e2c-c1b732ffc35f/result.json",
+ "task_outcome": "success",
+ "herdr_state": "done",
+ "settled_contract": true,
+ "last_observation": {
+  "at": "2026-11-27T03:21:10+00:00",
+  "agent_status": "done",
+  "error": null,
+  "note": null
+ },
+ "updated_at": "2026-11-27T03:21:11+00:00",
+ "task_id_on_board": 1,
+ "start_attempted": true,
+ "terminal_id": "t13",
+ "monitor": {
+  "terminal_id": "t14",
+  "error": null
+ },
+ "exit_code": "0",
+ "process_exited": true,
+ "ready": {
+  "state": "ready",
+  "error": null
+ },
+ "release": {
+  "at": "2026-11-27T03:21:11+00:00",
+  "terminals": [
+   {
+    "terminal_id": "t13",
+    "agent": "sh"
+   }
+  ]
+ }
+}

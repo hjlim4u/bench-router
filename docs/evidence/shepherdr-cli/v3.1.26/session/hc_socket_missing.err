@@ -1,0 +1,1 @@
+{"error":{"hint":"XDG_RUNTIME_DIR or HC_SOCKET differs from where the core started; set HC_SOCKET to the first path","kind":"unavailable","message":"the core listens at /home/tester/.local/state/herdr-core/default/default.sock, but this shell looks at /tmp/nope.sock"}}

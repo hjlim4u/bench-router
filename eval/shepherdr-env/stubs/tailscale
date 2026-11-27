@@ -1,0 +1,4 @@
+#!/bin/sh
+# stub: the tailnet share is out of scope for CLI capture
+case "$1" in status) echo '{"BackendState":"Running","Self":{"DNSName":"stub.invalid."}}';; esac
+exit 0

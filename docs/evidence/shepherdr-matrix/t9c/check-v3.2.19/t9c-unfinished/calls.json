@@ -1,0 +1,29 @@
+[
+ {
+  "t": 1795749717.805,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "--version"
+  ]
+ },
+ {
+  "t": 1795749717.99,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "--help"
+  ]
+ },
+ {
+  "t": 1795749718.009,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "--version"
+  ]
+ }
+]
