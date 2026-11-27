@@ -1,0 +1,161 @@
+[
+ {
+  "t": 1795740524.498,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "add",
+   "br-9347de05-361f-4dd5-b48b-dff33bed14a2",
+   "--prompt-file",
+   "/home/tester/w/c/.bench-router/runs/9347de05-361f-4dd5-b48b-dff33bed14a2/input.txt",
+   "--folder",
+   "/home/tester/w/c",
+   "--base",
+   "main",
+   "--branch",
+   "br/9347de05-361f-4dd5-b48b-dff33bed14a2",
+   "--agent",
+   "claude",
+   "--model",
+   "claude-opus-5-5",
+   "--effort",
+   "medium",
+   "--worktree",
+   "--set",
+   "review=off",
+   "--set",
+   "merge=ask me first",
+   "--set",
+   "proof=off",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740524.976,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "start",
+   "w-c#1",
+   "--folder",
+   "/home/tester/w/c",
+   "--space",
+   "demo",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740525.037,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "ls",
+   "--label",
+   "herdr.task=w-c#1",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740525.074,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "run",
+   "--bg",
+   "--rm",
+   "--json",
+   "--no-parent",
+   "--label",
+   "bench-router.watch=9347de05-361f-4dd5-b48b-dff33bed14a2",
+   "--",
+   "env",
+   "PYTHONPATH=/home/tester/br",
+   "/usr/bin/python3",
+   "-m",
+   "bench_router.lifecycle",
+   "--cwd",
+   "/home/tester/w/c",
+   "--run-id",
+   "9347de05-361f-4dd5-b48b-dff33bed14a2"
+  ]
+ },
+ {
+  "t": 1795740525.947,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-c#1",
+   "--folder",
+   "/home/tester/w/c",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740525.97,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "get",
+   "t1",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740527.064,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-c#1",
+   "--folder",
+   "/home/tester/w/c",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740527.272,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "ready",
+   "w-c#1",
+   "--folder",
+   "/home/tester/w/c",
+   "--summary",
+   "Results validated by bench-router",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740527.295,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "ls",
+   "--label",
+   "herdr.task=w-c#1",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740527.329,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "kill",
+   "t1",
+   "--json"
+  ]
+ }
+]

@@ -1,0 +1,249 @@
+[
+ {
+  "t": 1795740409.669,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "add",
+   "br-2c962dae-da25-49cc-9b70-7ebd4b307caf",
+   "--prompt-file",
+   "/home/tester/w/ri/.bench-router/runs/2c962dae-da25-49cc-9b70-7ebd4b307caf/input.txt",
+   "--folder",
+   "/home/tester/w/ri",
+   "--base",
+   "main",
+   "--branch",
+   "br/2c962dae-da25-49cc-9b70-7ebd4b307caf",
+   "--agent",
+   "claude",
+   "--model",
+   "claude-opus-5-5",
+   "--effort",
+   "medium",
+   "--worktree",
+   "--set",
+   "review=off",
+   "--set",
+   "merge=ask me first",
+   "--set",
+   "proof=off",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740410.101,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "start",
+   "w-ri#1",
+   "--folder",
+   "/home/tester/w/ri",
+   "--space",
+   "demo",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740410.136,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "ls",
+   "--label",
+   "herdr.task=w-ri#1",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740410.171,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "run",
+   "--bg",
+   "--rm",
+   "--json",
+   "--no-parent",
+   "--label",
+   "bench-router.watch=2c962dae-da25-49cc-9b70-7ebd4b307caf",
+   "--",
+   "env",
+   "PYTHONPATH=/home/tester/br",
+   "/usr/bin/python3",
+   "-m",
+   "bench_router.lifecycle",
+   "--cwd",
+   "/home/tester/w/ri",
+   "--run-id",
+   "2c962dae-da25-49cc-9b70-7ebd4b307caf"
+  ]
+ },
+ {
+  "t": 1795740411.089,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-ri#1",
+   "--folder",
+   "/home/tester/w/ri",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740411.11,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "get",
+   "t1",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740412.207,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-ri#1",
+   "--folder",
+   "/home/tester/w/ri",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740412.44,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "ready",
+   "w-ri#1",
+   "--folder",
+   "/home/tester/w/ri",
+   "--summary",
+   "Results validated by bench-router",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740412.462,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "ls",
+   "--label",
+   "herdr.task=w-ri#1",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740412.487,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "kill",
+   "t1",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740466.468,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-ri#1",
+   "--folder",
+   "/home/tester/w/ri",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740466.776,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "resume",
+   "w-ri#1",
+   "--folder",
+   "/home/tester/w/ri",
+   "--space",
+   "demo",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740466.792,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "ls",
+   "--label",
+   "herdr.task=w-ri#1",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740466.809,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "get",
+   "t12",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740472.559,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-ri#1",
+   "--folder",
+   "/home/tester/w/ri",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740472.577,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "ls",
+   "--label",
+   "herdr.task=w-ri#1",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740472.805,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "send",
+   "t12",
+   "matrix-resume-tell-v3.2.19",
+   "--json"
+  ]
+ }
+]

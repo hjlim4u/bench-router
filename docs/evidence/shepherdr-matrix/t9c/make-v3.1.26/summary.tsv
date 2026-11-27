@@ -1,0 +1,1 @@
+v3.1.26	hc 0.1.20	default	416e90ad4300ce4e61cb7b33235f0dd8	9347de05-361f-4dd5-b48b-dff33bed14a2	t9c-completed	completed; result copied; Ready; released; terminals finished; admission released	status=completed; result_copied=True; terminals=t1:finished/killed; admission_active=False; ready=ready; release=yes	PASS	shepherdr-matrix/t9c/make-v3.1.26/t9c-completed/observed.json

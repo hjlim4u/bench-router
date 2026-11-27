@@ -1,0 +1,69 @@
+{
+ "scenario": "parallel-sm-par-i-1",
+ "run_id": "6fd44fce-a968-44dd-bac3-7d560a72c28a",
+ "expect": "completed",
+ "status": "completed",
+ "core": {
+  "task_protocol": "1",
+  "core_version": "hc 0.1.20",
+  "space": "demo",
+  "session": "default",
+  "core_id": "d3de2a6af8e3c7a60ab79ce63526d3ab"
+ },
+ "result_copied": true,
+ "terminals": {
+  "t13": {
+   "state": "finished",
+   "reason": "killed",
+   "exit_code": null,
+   "signal": 1,
+   "status": null
+  }
+ },
+ "observer_terminals": [
+  {
+   "address": "t14",
+   "state": "live"
+  }
+ ],
+ "board": {
+  "state": "ready",
+  "status": "ready",
+  "needs": null,
+  "why": null,
+  "live": []
+ },
+ "admission_active": false,
+ "ready": {
+  "state": "ready",
+  "error": null
+ },
+ "release": {
+  "at": "2026-11-27T00:46:17+00:00",
+  "terminals": [
+   {
+    "terminal_id": "t13",
+    "agent": "sh"
+   }
+  ]
+ },
+ "process_exited": null,
+ "calls": {
+  "router:herdr-task add": 1,
+  "router:herdr-task start": 1,
+  "router:hc ls": 2,
+  "router:hc run": 1,
+  "router:herdr-task show": 2,
+  "router:hc get": 1,
+  "router:herdr-task ready": 1,
+  "router:hc kill": 1
+ },
+ "checks": {
+  "status completed": true,
+  "result copied beside receipt": true,
+  "ready handoff": true,
+  "release recorded": true,
+  "terminal finished (hc get)": true,
+  "admission released": true
+ }
+}

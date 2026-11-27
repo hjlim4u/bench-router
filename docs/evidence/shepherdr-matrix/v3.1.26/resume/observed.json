@@ -1,0 +1,82 @@
+{
+ "scenario": "resume",
+ "run_id": "e6e35542-ab40-4ab3-95be-15c5df1597b9",
+ "expect": "resumed",
+ "status": "completed",
+ "core": {
+  "task_protocol": "1",
+  "core_version": "hc 0.1.20",
+  "space": "demo",
+  "session": "default",
+  "core_id": "d3de2a6af8e3c7a60ab79ce63526d3ab"
+ },
+ "result_copied": true,
+ "terminals": {
+  "t1": {
+   "state": "finished",
+   "reason": "killed",
+   "exit_code": null,
+   "signal": 1,
+   "status": null
+  },
+  "t12": {
+   "state": "live",
+   "reason": null,
+   "exit_code": null,
+   "signal": null,
+   "status": {
+    "state": "idle"
+   }
+  }
+ },
+ "observer_terminals": [],
+ "board": {
+  "state": "running",
+  "status": "working",
+  "needs": null,
+  "why": null,
+  "live": [
+   {
+    "address": "t12",
+    "status": "idle",
+    "tab": null,
+    "role": "worker"
+   }
+  ]
+ },
+ "admission_active": false,
+ "ready": {
+  "state": "ready",
+  "error": null
+ },
+ "release": {
+  "at": "2026-11-27T00:45:13+00:00",
+  "terminals": [
+   {
+    "terminal_id": "t1",
+    "agent": "sh"
+   }
+  ]
+ },
+ "process_exited": null,
+ "calls": {
+  "router:herdr-task add": 1,
+  "router:herdr-task start": 1,
+  "router:hc ls": 4,
+  "router:hc run": 1,
+  "router:herdr-task show": 4,
+  "router:hc get": 2,
+  "router:herdr-task ready": 1,
+  "router:hc kill": 1,
+  "router:herdr-task resume": 1,
+  "router:hc send": 1
+ },
+ "checks": {
+  "status completed": true,
+  "result copied beside receipt": true,
+  "resumed terminal live, task-labelled (not auto-released)": true,
+  "admission released": true,
+  "message reached the agent": true,
+  "tell -> sent": true
+ }
+}

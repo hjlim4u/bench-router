@@ -1,0 +1,59 @@
+{
+ "scenario": "stop",
+ "run_id": "24669f47-fed4-473d-b728-73c2a3794d9f",
+ "expect": "stopped",
+ "status": "execution_failed",
+ "core": {
+  "task_protocol": "1",
+  "core_version": "hc 0.1.20",
+  "space": "demo",
+  "session": "default",
+  "core_id": "d3de2a6af8e3c7a60ab79ce63526d3ab"
+ },
+ "result_copied": false,
+ "terminals": {
+  "t10": {
+   "state": "finished",
+   "reason": "killed",
+   "exit_code": null,
+   "signal": 1,
+   "status": null
+  }
+ },
+ "observer_terminals": [
+  {
+   "address": "t11",
+   "state": "live"
+  }
+ ],
+ "board": {
+  "state": "running",
+  "status": "working",
+  "needs": null,
+  "why": null,
+  "live": []
+ },
+ "admission_active": false,
+ "ready": null,
+ "release": null,
+ "process_exited": true,
+ "calls": {
+  "router:herdr-task add": 1,
+  "router:herdr-task start": 1,
+  "router:hc ls": 2,
+  "router:hc run": 1,
+  "observer:herdr-task show": 1,
+  "observer:hc get": 1,
+  "router:herdr-task show": 2,
+  "router:hc kill": 1,
+  "router:hc get": 1
+ },
+ "checks": {
+  "status execution_failed": true,
+  "process_exited": true,
+  "terminal finished (hc get)": true,
+  "admission released": true,
+  "no result claimed": true,
+  "stop -> stop_sent": true
+ }
+}

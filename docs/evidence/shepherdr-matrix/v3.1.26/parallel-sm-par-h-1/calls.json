@@ -1,0 +1,163 @@
+[
+ {
+  "t": 1795740375.572,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "add",
+   "br-322d9a5e-50dc-4784-abae-8a6b4fad846e",
+   "--prompt-file",
+   "/home/tester/w/par/.bench-router/groups/switch-matrix/members/sm-par-h-1/.bench-router/runs/322d9a5e-50dc-4784-abae-8a6b4fad846e/input.txt",
+   "--folder",
+   "/home/tester/w/par",
+   "--base",
+   "main",
+   "--branch",
+   "br/322d9a5e-50dc-4784-abae-8a6b4fad846e",
+   "--agent",
+   "claude",
+   "--model",
+   "claude-opus-5-5",
+   "--effort",
+   "medium",
+   "--worktree",
+   "--set",
+   "review=off",
+   "--set",
+   "merge=ask me first",
+   "--set",
+   "proof=off",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740376.015,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "start",
+   "w-par#2",
+   "--folder",
+   "/home/tester/w/par",
+   "--space",
+   "demo",
+   "--argv",
+   "[\"sh\", \"-c\", \"{ cd . && claude -p --model claude-opus-5-5 --effort medium --dangerously-skip-permissions \\\"$(cat /home/tester/w/par/.bench-router/groups/switch-matrix/members/sm-par-h-1/.bench-router/runs/322d9a5e-50dc-4784-abae-8a6b4fad846e/input.txt)\\\"; echo $? > /home/tester/w/par/.bench-router/groups/switch-matrix/members/sm-par-h-1/.bench-router/runs/322d9a5e-50dc-4784-abae-8a6b4fad846e/exit_code.tmp && mv /home/tester/w/par/.bench-router/groups/switch-matrix/members/sm-par-h-1/.bench-router/runs/322d9a5e-50dc-4784-abae-8a6b4fad846e/exit_code.tmp /home/tester/w/par/.bench-router/groups/switch-matrix/members/sm-par-h-1/.bench-router/runs/322d9a5e-50dc-4784-abae-8a6b4fad846e/exit_code; } 2>&1 | tee /home/tester/w/par/.bench-router/groups/switch-matrix/members/sm-par-h-1/.bench-router/runs/322d9a5e-50dc-4784-abae-8a6b4fad846e/output.log\"]",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740376.057,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "ls",
+   "--label",
+   "herdr.task=w-par#2",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740376.092,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "run",
+   "--bg",
+   "--rm",
+   "--json",
+   "--no-parent",
+   "--label",
+   "bench-router.watch=322d9a5e-50dc-4784-abae-8a6b4fad846e",
+   "--",
+   "env",
+   "PYTHONPATH=/home/tester/br",
+   "/usr/bin/python3",
+   "-m",
+   "bench_router.lifecycle",
+   "--cwd",
+   "/home/tester/w/par/.bench-router/groups/switch-matrix/members/sm-par-h-1",
+   "--run-id",
+   "322d9a5e-50dc-4784-abae-8a6b4fad846e"
+  ]
+ },
+ {
+  "t": 1795740376.701,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-par#2",
+   "--folder",
+   "/home/tester/w/par",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740376.72,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "get",
+   "t15",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740377.602,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-par#2",
+   "--folder",
+   "/home/tester/w/par",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740377.801,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "ready",
+   "w-par#2",
+   "--folder",
+   "/home/tester/w/par",
+   "--summary",
+   "Results validated by bench-router",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740377.826,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "ls",
+   "--label",
+   "herdr.task=w-par#2",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740377.852,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "kill",
+   "t15",
+   "--json"
+  ]
+ }
+]

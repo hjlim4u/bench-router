@@ -1,0 +1,281 @@
+[
+ {
+  "t": 1795740418.977,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "add",
+   "br-a57d9fa0-d459-4201-89e0-8ab18a2149a4",
+   "--prompt-file",
+   "/home/tester/w/ob/.bench-router/runs/a57d9fa0-d459-4201-89e0-8ab18a2149a4/input.txt",
+   "--folder",
+   "/home/tester/w/ob",
+   "--base",
+   "main",
+   "--branch",
+   "br/a57d9fa0-d459-4201-89e0-8ab18a2149a4",
+   "--agent",
+   "claude",
+   "--model",
+   "claude-opus-5-5",
+   "--effort",
+   "medium",
+   "--worktree",
+   "--set",
+   "review=off",
+   "--set",
+   "merge=ask me first",
+   "--set",
+   "proof=off",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740419.334,
+  "by": "router",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "start",
+   "w-ob#1",
+   "--folder",
+   "/home/tester/w/ob",
+   "--space",
+   "demo",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740419.356,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "ls",
+   "--label",
+   "herdr.task=w-ob#1",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740419.377,
+  "by": "router",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "run",
+   "--bg",
+   "--rm",
+   "--json",
+   "--no-parent",
+   "--label",
+   "bench-router.watch=a57d9fa0-d459-4201-89e0-8ab18a2149a4",
+   "--",
+   "env",
+   "PYTHONPATH=/home/tester/br",
+   "/usr/bin/python3",
+   "-m",
+   "bench_router.lifecycle",
+   "--cwd",
+   "/home/tester/w/ob",
+   "--run-id",
+   "a57d9fa0-d459-4201-89e0-8ab18a2149a4"
+  ]
+ },
+ {
+  "t": 1795740420.078,
+  "by": "observer",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-ob#1",
+   "--folder",
+   "/home/tester/w/ob",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740420.097,
+  "by": "observer",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "get",
+   "t6",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740425.775,
+  "by": "observer",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-ob#1",
+   "--folder",
+   "/home/tester/w/ob",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740425.799,
+  "by": "observer",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "get",
+   "t6",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740431.494,
+  "by": "observer",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-ob#1",
+   "--folder",
+   "/home/tester/w/ob",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740431.51,
+  "by": "observer",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "get",
+   "t6",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740437.222,
+  "by": "observer",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-ob#1",
+   "--folder",
+   "/home/tester/w/ob",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740437.239,
+  "by": "observer",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "get",
+   "t6",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740442.898,
+  "by": "observer",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-ob#1",
+   "--folder",
+   "/home/tester/w/ob",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740442.914,
+  "by": "observer",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "get",
+   "t6",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740448.612,
+  "by": "observer",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-ob#1",
+   "--folder",
+   "/home/tester/w/ob",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740448.628,
+  "by": "observer",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "get",
+   "t6",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740449.741,
+  "by": "observer",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "show",
+   "w-ob#1",
+   "--folder",
+   "/home/tester/w/ob",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740449.996,
+  "by": "observer",
+  "exe": "herdr-task",
+  "rc": 0,
+  "argv": [
+   "ready",
+   "w-ob#1",
+   "--folder",
+   "/home/tester/w/ob",
+   "--summary",
+   "Results validated by bench-router",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740450.019,
+  "by": "observer",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "ls",
+   "--label",
+   "herdr.task=w-ob#1",
+   "--json"
+  ]
+ },
+ {
+  "t": 1795740450.062,
+  "by": "observer",
+  "exe": "hc",
+  "rc": 0,
+  "argv": [
+   "kill",
+   "t6",
+   "--json"
+  ]
+ }
+]

@@ -1,0 +1,6 @@
+{"t": 1795740542.1, "by": "router", "exe": "herdr-task", "rc": 0, "argv": ["--version"]}
+{"t": 1795740542.355, "by": "router", "exe": "herdr-task", "rc": 0, "argv": ["--help"]}
+{"t": 1795740542.377, "by": "router", "exe": "hc", "rc": 0, "argv": ["--version"]}
+{"t": 1795740543.149, "by": "router", "exe": "herdr-task", "rc": 0, "argv": ["--version"]}
+{"t": 1795740543.416, "by": "router", "exe": "herdr-task", "rc": 0, "argv": ["--help"]}
+{"t": 1795740543.437, "by": "router", "exe": "hc", "rc": 0, "argv": ["--version"]}
