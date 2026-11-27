@@ -217,6 +217,8 @@ class FakeProjects:
             self.pending = False
             t["started"] = False
             return self._ok(self._row(t))
+        if argv[0] == "list":
+            return self._ok({"tasks": [self._row(t) for t in self.tasks.values()]})
         if argv[0] == "show":
             return self._ok(self._row(self.tasks[argv[1]]))
         raise AssertionError(argv)
@@ -1906,6 +1908,20 @@ class P2(unittest.TestCase):
         done = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
         self.assertEqual((done["status"], done["task_outcome"], done["last_observation"]["note"]),
                          ("completed", "success", None))
+
+    def test_v140_native_collect_uses_lost_create_lookup(self):
+        fake = FakeSessionProjects(after_status="working")
+        fake.add_error = True
+        out = self.run_(fake, wait_ms=0)
+        fake.commands.clear()
+
+        def runner(cmd, **kw):
+            if cmd[:2] == [hd.PROJECTS_BIN, "list"]:
+                return fake._ok({"tasks": list(fake.tasks.values())})
+            return fake(cmd, **kw)
+
+        done = hd.collect_run(self.cwd, out["run_id"], 0, runner=runner)
+        self.assertEqual((done["thread_id"], fake.mutations()), ("repo#1", []))
 
     def test_message_log_survives_unicode_line_separator(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -376,18 +376,32 @@ class ShepherdrBoard:
         # show keeps status=working with live=[] for 2-5 s after a kill: fall back to the terminal.
         return "working" if process == "live" else "stopped"
 
+    def lookup_card(self, rc, timeout_s=SHORT_CALL_S):
+        """Lost create: look the card up by its run-id title only; returns (ids|None, err|None)."""
+        obj, err = self._tasks(["list", "--json"], timeout_s=timeout_s)
+        if err or not isinstance(obj, dict):
+            return None, err or {"code": "shepherdr_error", "message": "task list failed"}
+        found = [t for t in obj.get("tasks") or []
+                 if isinstance(t, dict) and t.get("title") == "br-" + rc["run_id"]
+                 and (not _repo(rc) or t.get("folder") in (None, _repo(rc)))
+                 and (not rc.get("kind") or t.get("agent") in (None, rc.get("kind")))]
+        if len(found) != 1:
+            raise r.InputError(f"{len(found)} Shepherdr cards titled br-{rc['run_id']}")
+        card = found[0]
+        key, cid = card.get("key"), card.get("id")
+        if not re.fullmatch(r"[^#\s]+#[0-9]+", str(key or "")) or type(cid) is not int or cid < 1:
+            raise r.InputError("Shepherdr task identity differs from the receipt")
+        return {"thread_id": key, "task_id_on_board": cid}, None
+
     @_board_operation
     def observe(self, rc):
         extra, key = {}, rc.get("thread_id")
         if not key:  # lost create: look the card up by its run-id title only
-            obj, err = self._tasks(["list", "--json"])
-            if err or not isinstance(obj, dict):
-                return observation(None, "unknown", retryable=True, why=(err or {}).get("message"))
-            found = [t for t in obj.get("tasks") or [] if isinstance(t, dict) and t.get("title") == "br-" + rc["run_id"]]
-            if len(found) != 1:
-                raise r.InputError(f"{len(found)} Shepherdr cards titled br-{rc['run_id']}")
-            key = found[0].get("key")
-            extra["ids"] = {"thread_id": key, "task_id_on_board": found[0].get("id")}
+            ids, err = self.lookup_card(rc)
+            if err:
+                return observation(None, "unknown", retryable=True, why=err.get("message"))
+            key = ids["thread_id"]
+            extra["ids"] = ids
         row, err = self._tasks(["show", key, "--folder", _repo(rc), "--json"])
         if err or not isinstance(row, dict):
             return observation(None, "unknown", retryable=True, why=(err or {}).get("message"))

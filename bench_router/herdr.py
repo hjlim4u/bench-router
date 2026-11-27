@@ -746,10 +746,6 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     if rc["delivery_state"] == "not_attempted":
         return rc
     headless = rc.get("execution") == "headless"
-    if native and not headless and not rc.get("thread_id"):
-        rc.update(status="delivery_uncertain", delivery_state="uncertain")
-        save(rc)
-        return rc
     stops = [e["terminals"] for e in _events(rc) if e.get("terminals")]
     if stops:
         rc["stop"] = {"terminals": stops[-1]}  # per-terminal results of the last stop, mirrored under the lock
@@ -758,6 +754,12 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     timeout = lambda: min(SHORT_CALL_S, max(OBSERVE_FLOOR_S, deadline - time.monotonic())) if wait_ms > 0 else SHORT_CALL_S
     while True:
         try:
+            if native and not rc.get("thread_id") and (not headless or (not rc.get("terminal_id") and not rc.get("start_attempted"))):
+                ids, err = _board(BACKEND, runner).lookup_card(rc, timeout())
+                if err:
+                    raise r.InputError(err.get("message") or "task list failed")
+                rc.update(ids)
+                save(rc)
             if native and rc.get("terminal_unverified"):
                 _board(BACKEND, runner).verify_terminal(rc, rc["terminal_id"])
                 rc.pop("terminal_unverified")
