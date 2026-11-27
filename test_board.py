@@ -425,6 +425,32 @@ class ShepherdrBoardContract(BoardContract, unittest.TestCase):
     def set_unsupported(self, board):
         board.fake.version = "2"
 
+    def test_v17_resume_into_foreign_terminal_is_identity_mismatch(self):
+        board, rc = self.started()
+        fake, original = board.fake, board.fake._tasks
+
+        def tasks(op, a):
+            out = original(op, a)
+            if op == "resume":  # the new terminal carries another card's label, so ls --label omits it too
+                fake.terms[out["terminal"]]["labels"] = {"herdr.task": "other#9"}
+            return out
+
+        fake._tasks = tasks
+        self.assertEqual(board.resume(rc)["identity"], "mismatch")
+
+    def test_v18_partial_stop_reports_each_terminal(self):
+        board, rc = self.started()
+        fake = board.fake
+        fake.terms["t9"] = {"address": "t9", "state": "live", "labels": {"herdr.task": rc["thread_id"]}}
+        fake.cards[rc["thread_id"]]["live"].append({"address": "t9", "status": "working"})
+        original = fake._core
+        fake._core = lambda op, a: (1, "synthetic kill failure") if op == "kill" and a[0] == "t9" else original(op, a)
+        with self.assertRaises(shepherdr.BoardError) as caught:
+            board.stop(rc)
+        self.assertEqual([(x["terminal_id"], bool(x["error"])) for x in caught.exception.error["terminals"]],
+                         [(rc["terminal_id"], False), ("t9", True)])
+        self.assertEqual(fake.terms[rc["terminal_id"]]["state"], "finished")  # the first kill still happened
+
 
 class WorktreeMemoryBoard(MemoryBoard):
     """MemoryBoard registered as a router backend; its agent works in a real directory."""

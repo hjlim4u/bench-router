@@ -455,9 +455,23 @@ def headless_script(rc, argv, publish=True):
 
 def _checked_runner(rc, session, runner):
     """Open the recorded session only after validating its protocol and binding."""
+    if rc.get("identity") == "mismatch":
+        raise r.InputError("resumed terminal identity mismatch; reconcile manually before any control")
     if not same_binding(rc, session or rc["project_binding"]["space"], runner):
         raise r.InputError("Shepherdr session or core binding differs from the receipt")
     return bound_runner(rc, runner)
+
+
+def _bounded(rc, runner, until=None):
+    """Every call's timeout within the run's remaining deadline (and until, a monotonic end), never below the floor:
+    collect/stop after the deadline still get one short attempt per call."""
+    end = time.monotonic() + (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds()
+    end = end if until is None else min(end, until)
+
+    def run(cmd, **kw):
+        kw["timeout"] = min(kw.get("timeout") or SHORT_CALL_S, max(OBSERVE_FLOOR_S, end - time.monotonic()))
+        return runner(cmd, **kw)
+    return run
 
 
 def _submission_runner(rc, session, runner):
@@ -675,9 +689,10 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
         raise r.InputError("legacy receipt: inspect the original worker; automatic backend migration is refused")
     native = rc["backend"] == BACKEND
     port = rc["backend"] in BOARDS and not native  # any other board, through the Board port only
+    deadline = time.monotonic() + wait_ms / 1000
     if native:
         try:
-            runner = _checked_runner(rc, session, runner)
+            runner = _checked_runner(rc, session, _bounded(rc, runner, deadline if wait_ms > 0 else None))
         except r.InputError as exc:
             if rc["status"] == "completed" and rc.get("settled_contract"):
                 return rc  # a finished record stays readable as-is; releasing needs a verified core
@@ -701,7 +716,9 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
         rc.update(status="delivery_uncertain", delivery_state="uncertain")
         save(rc)
         return rc
-    deadline = time.monotonic() + wait_ms / 1000
+    stops = [e["terminals"] for e in _events(rc) if e.get("terminals")]
+    if stops:
+        rc["stop"] = {"terminals": stops[-1]}  # per-terminal results of the last stop, mirrored under the lock
     # Calls stay within the wait budget, but never below a floor: a near-zero budget made the last poll time out
     # and misreported a working agent as delivery_uncertain.
     timeout = lambda: min(SHORT_CALL_S, max(OBSERVE_FLOOR_S, deadline - time.monotonic())) if wait_ms > 0 else SHORT_CALL_S
@@ -735,7 +752,11 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
                         rc["status"] = "delivery_uncertain" if state == "todo" else "timed_out"
                     _observe(rc, status, note="task not started; recovery never calls start")
                 elif needs == "stopped" or (process in ("exited", "gone") and status not in ("ready", "done")):
-                    rc.update(status="execution_failed", process_exited=process in ("exited", "gone"))
+                    # Admission holds until every terminal the last stop targeted shows exit evidence.
+                    others = [x["terminal_id"] for x in (rc.get("stop") or {}).get("terminals", []) if x["terminal_id"] != terminal]
+                    exited = process in ("exited", "gone") and all(
+                        board.terminal_state(t, timeout(), rc) in ("exited", "gone") for t in others)
+                    rc.update(status="execution_failed", process_exited=exited)
                     _observe(rc, status, note=row.get("why") or "task agent stopped")
                 elif process == "live" and any(e["state"].startswith("stop_") for e in _events(rc)):
                     rc.update(status="timed_out", process_exited=False)
@@ -940,7 +961,13 @@ def resume_run(cwd, run_id, runner=subprocess.run):
             raise r.InputError(f"resume failed: {(err or {}).get('message')}")
         rc["terminal_id"] = obj["terminal"]
         rc["resumed"] = {"at": _iso(_now()), "terminal_id": obj["terminal"], "session_resumed": obj.get("resumed") is True}
+        rc["identity"] = board.resumed_identity(rc, obj["terminal"])
+        if rc["identity"] == "mismatch":  # no further control; collect only reports, coordination keeps admission
+            rc["status"] = "delivery_uncertain"
+            _observe(rc, note="resumed terminal is not this task's in the recorded core session; reconcile manually")
         save(rc)
+        if rc["identity"] == "mismatch":
+            raise r.InputError(f"resumed terminal {obj['terminal']} identity mismatch; reconcile manually")
     return {**output(None, rc), "resumed": rc["resumed"]}
 
 
@@ -1006,7 +1033,7 @@ def stop_run(cwd, run_id, runner=subprocess.run):
                 "run_id": rc["run_id"], "thread_id": None, "messages_path": str(log), **({"error": err} if err else {})}
     if rc.get("backend") != BACKEND:
         raise r.InputError("legacy receipt: stop its original worker manually")
-    runner = _checked_runner(rc, None, runner)
+    runner = _checked_runner(rc, None, _bounded(rc, runner))
     board = _board(BACKEND, runner)
     if rc.get("execution") == "headless" and not rc.get("thread_id"):
         terminals = [rc["terminal_id"]] if rc.get("terminal_id") else []
@@ -1022,13 +1049,10 @@ def stop_run(cwd, run_id, runner=subprocess.run):
     if not terminals:
         raise r.InputError("no recorded live terminal; inspect it before declaring the worker stopped")
     _log_event(rc, {"state": "stop_attempted"})
-    err = None
-    for terminal in terminals:
-        board.verify_terminal(rc, terminal)
-        err = board.kill(terminal, raw=True)
-        if err:
-            break
-    log = _log_event(rc, {"state": "stop_uncertain" if err else "stop_sent", "error": err})
+    results = board.kill_all(rc, terminals)
+    err = next((x["error"] for x in results if x["error"]), None)
+    # collect copies terminals into the receipt and holds admission until each has exit evidence
+    log = _log_event(rc, {"state": "stop_uncertain" if err else "stop_sent", "error": err, "terminals": results})
     return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain" if err else "stop_sent",
             "run_id": rc["run_id"], "thread_id": rc.get("thread_id"), "messages_path": str(log),
             **({"error": err} if err else {})}

@@ -1430,7 +1430,9 @@ class P2(unittest.TestCase):
         fake = FakeSessionProjects(board_session="shepherdr", on_prompt=write_result())
         out = self.run_(fake)
         self.assertEqual(self.receipt(out)["project_binding"]["session"], "shepherdr")
-        self.assertTrue(all(kw["env"]["HC_SESSION"] == "shepherdr" for _, kw in fake.kwargs if "env" in kw))
+        # --version/--help probe the protocol before a session is chosen; they only drop inherited sockets.
+        self.assertTrue(all(kw["env"]["HC_SESSION"] == "shepherdr" for op, kw in fake.kwargs
+                            if "env" in kw and op not in ("--version", "--help")))
 
     def test_custom_32_session_uses_passive_core_identity_and_detects_replacement(self):
         fixtures = Path(__file__).parent / "docs/evidence/shepherdr-cli/v3.2.19/session"
@@ -1655,6 +1657,122 @@ class P2(unittest.TestCase):
 
         ready_calls = [cmd for _, cmd in fake.commands if cmd[:2] == (hd.PROJECTS_BIN, "ready")]
         self.assertEqual((fake.mutations(), ready_calls), ([], []))
+
+    def test_v128_resumed_terminal_without_task_label_is_identity_mismatch(self):
+        from bench_router import coordination
+        fake = FakeSessionProjects(after_status="working")
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, wait_ms=0)
+            key = out["thread_id"]
+
+            def runner(cmd, **kw):
+                got = fake(cmd, **kw)
+                if cmd[:2] == [hd.PROJECTS_BIN, "resume"]:  # the new terminal belongs to another card
+                    fake.panes[key]["labels"] = {"herdr.task": "other#9"}
+                return got
+
+            with self.assertRaisesRegex(r.InputError, "identity mismatch"):
+                hd.resume_run(self.cwd, out["run_id"], runner=runner)
+            self.assertEqual(self.receipt(out)["identity"], "mismatch")
+            fake.commands.clear()
+            for control in (lambda: hd.tell_run(self.cwd, out["run_id"], "hi", runner=fake),
+                            lambda: hd.stop_run(self.cwd, out["run_id"], runner=fake)):
+                with self.assertRaisesRegex(r.InputError, "reconcile manually"):
+                    control()
+            got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((got["status"], fake.commands, fake.tells, fake.closed), ("delivery_uncertain", [], [], []))
+        self.assertTrue(coordination.load(got["coordination_key"])["active"])
+
+    def test_v129_partial_stop_records_each_terminal_and_holds_admission(self):
+        from bench_router import coordination
+        fake = FakeSessionProjects(after_status="working")
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, wait_ms=0)
+            key = out["thread_id"]
+            fake.panes["second"] = {"address": "t2", "task": key, "labels": {"herdr.task": key}, "state": "live"}
+
+            def runner(cmd, **kw):
+                if cmd[:3] == [hd.HERDR_BIN, "kill", "t2"]:
+                    return subprocess.CompletedProcess(cmd, 1, "", "synthetic kill failure")
+                return fake(cmd, **kw)
+
+            stop = hd.stop_run(self.cwd, out["run_id"], runner=runner)
+            self.assertEqual(stop["status"], "delivery_uncertain")
+            self.assertEqual(fake.closed, ["t1"])
+            fake.panes["second"]["task"] = None  # the board no longer lists t2, but hc still has it live
+            got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+            rc = self.receipt(got)
+            self.assertEqual([(x["terminal_id"], bool(x["error"])) for x in rc["stop"]["terminals"]],
+                             [("t1", False), ("t2", True)])
+            self.assertEqual((got["status"], rc["process_exited"]), ("execution_failed", False))
+            self.assertTrue(coordination.load(got["coordination_key"])["active"])
+            del fake.panes["second"]  # exit evidence for the last terminal
+            got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertTrue(self.receipt(got)["process_exited"])
+        self.assertFalse(coordination.load(got["coordination_key"])["active"])
+
+    def test_v130_collect_and_stop_calls_are_bounded_by_the_run_deadline(self):
+        fake = FakeSessionProjects(after_status="working")
+        timeouts = []
+
+        def runner(cmd, **kw):
+            timeouts.append((cmd[0], cmd[1], kw["timeout"]))
+            return fake(cmd, **kw)
+
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, wait_ms=0)  # timeout_ms 5000: under 5 s remain
+            hd.collect_run(self.cwd, out["run_id"], 0, runner=runner)
+            hd.stop_run(self.cwd, out["run_id"], runner=runner)
+        self.assertIn((hd.HERDR_BIN, "kill"), {call[:2] for call in timeouts})
+        self.assertTrue(all(0 < t <= 5 for *_, t in timeouts), timeouts)
+
+    def test_v131_inherited_foreign_sockets_never_reach_task_or_core_calls(self):
+        fake = FakeSessionProjects(after_status="working")
+        envs = []
+
+        def runner(cmd, **kw):
+            envs.append((cmd[:2], kw.get("env", os.environ)))
+            return fake(cmd, **kw)
+
+        with patch.dict(os.environ, {"HC_SESSION": "default", "HC_SOCKET": "/run/foreign.sock",
+                                     "HC_TERMINAL_SOCKET": "/run/foreign-terminal.sock", "HC_TERMINAL_ID": "t77"}):
+            fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
+            out = self.run_(runner, wait_ms=0)
+            hd.collect_run(self.cwd, out["run_id"], 0, runner=runner)
+            hd.stop_run(self.cwd, out["run_id"], runner=runner)
+        leaked = [(cmd, k) for cmd, env in envs for k in hd.shepherdr.INHERITED_SOCKETS if k in env]
+        self.assertEqual(leaked, [])
+        self.assertIn([hd.PROJECTS_BIN, "--version"], [cmd for cmd, _ in envs])
+
+    def test_v132_compatible_hc_patch_update_still_binds_and_runs(self):
+        fake = FakeProjects(on_prompt=write_result())
+        fake.core_version = "hc 0.1.21"
+        out = self.run_(fake)
+        self.assertEqual((out["status"], self.receipt(out)["project_binding"]["core_version"]), ("completed", "hc 0.1.21"))
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "completed")
+
+    def test_v133_unknown_task_protocol_or_release_is_refused_before_any_mutation(self):
+        def unknown_release(fake):
+            original = fake.__call__
+            return lambda cmd, **kw: (subprocess.CompletedProcess(cmd, 0, "usage: herdr-task [-h] COMMAND", "")
+                                      if cmd[1:] == ["--help"] else original(cmd, **kw))
+
+        cases = {"protocol 2": lambda fake: setattr(fake, "version", "2") or fake, "unrecognised release": unknown_release}
+        for name, make in cases.items():
+            with self.subTest(name), patch.dict(os.environ, {"HC_SESSION": "default"}):
+                fake = FakeSessionProjects(on_prompt=write_result())
+                with self.assertRaises(r.InputError):
+                    self.run_(make(fake))
+                ready = [cmd for _, cmd in fake.commands if cmd[1] == "ready"]
+                self.assertEqual((fake.mutations(), ready, fake.prompts, hd.receipts(self.cwd)), ([], [], [], []))
+        fake = FakeSessionProjects(after_status="working")
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
+            out = self.run_(fake, wait_ms=0)
+            fake.version = "2"
+            fake.commands.clear()
+            with self.assertRaises(r.InputError):
+                hd.stop_run(self.cwd, out["run_id"], runner=fake)
+        self.assertEqual((fake.mutations(), fake.closed), ([], []))
 
     def test_message_log_survives_unicode_line_separator(self):
         with tempfile.TemporaryDirectory() as tmp:

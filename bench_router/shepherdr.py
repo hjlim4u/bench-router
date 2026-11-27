@@ -54,11 +54,12 @@ def project_binding(session=None, runner=subprocess.run, core_session=None, call
     """Bind to the task protocol and core build, never interpret legacy Projects receipts as tasks.
     call: the project_call to use (the router passes its own so it can be replaced as one seam)."""
     call = call or project_call
-    version, err = call(["--version"], runner, raw=True)
+    probe = _without_sockets(runner)
+    version, err = call(["--version"], probe, raw=True)
     if err or (version or "").strip() != TASK_PROTOCOL:
         raise r.InputError("Shepherdr 3.x herdr-task protocol 1 is required for live dispatch; "
                            "install Shepherdr, use --runner local|external, or use route --dry-run")
-    help_text, err = call(["--help"], runner, raw=True)
+    help_text, err = call(["--help"], probe, raw=True)
     commands = re.search(r"\{([^{}]*\bstart\b[^{}]*)\}", help_text or "")
     if err or not commands:
         raise r.InputError("cannot identify the installed Shepherdr subcommands")
@@ -99,13 +100,25 @@ def project_binding(session=None, runner=subprocess.run, core_session=None, call
             "session": selected, "core_id": identity["id"]}
 
 
+# A caller's own terminal sockets: hc lets HC_SOCKET beat HC_SESSION, herdr-task 3.1 refuses any HC_SOCKET and
+# 3.2 any but its session's (spike Q2). Unset works on both, so every task/hc call drops them.
+INHERITED_SOCKETS = ("HC_SOCKET", "HC_TERMINAL_SOCKET", "HC_TERMINAL_ID")
+
+
+def _without_sockets(runner):
+    def run(cmd, **kwargs):
+        env = {k: v for k, v in kwargs.pop("env", os.environ).items() if k not in INHERITED_SOCKETS}
+        return runner(cmd, env=env, **kwargs)
+    return run
+
+
 def bound_runner(rc, runner):
     """Run task and core commands in the session recorded before submission."""
     core_session = rc["project_binding"]["session"]
     def run(cmd, **kwargs):
         env = {**kwargs.pop("env", os.environ), "HC_SESSION": core_session}
         env["SHEPHERDR_SESSION"] = core_session
-        for key in ("HC_SOCKET", "HC_TERMINAL_SOCKET", "HC_TERMINAL_ID"):
+        for key in INHERITED_SOCKETS:
             env.pop(key, None)
         return runner(cmd, env=env, **kwargs)
     run._shepherdr_session = core_session
@@ -242,6 +255,13 @@ class ShepherdrBoard:
         """End one core terminal; returns the call's error or None."""
         return self._core(["kill", terminal, "--json"], raw=raw)[1]
 
+    def kill_all(self, rc, terminals):
+        """Check every terminal's ownership (InputError, nothing killed), then kill each even after one fails.
+        Returns [{terminal_id, error}] per terminal."""
+        for terminal in terminals:
+            self.verify_terminal(rc, terminal)
+        return [{"terminal_id": t, "error": self.kill(t, raw=True)} for t in terminals]
+
     def reopen(self, rc):
         """Cancel a queued card back to To do; True only when the board confirms it."""
         obj, err = self._tasks(["reopen", rc["thread_id"], "--folder", _repo(rc), "--json"])
@@ -267,6 +287,15 @@ class ShepherdrBoard:
     def resume_task(self, rc):
         return self._tasks(["resume", rc["thread_id"], "--folder", _repo(rc), "--space", rc["project_binding"]["space"],
                             "--json"], timeout_s=START_CALL_S)
+
+    def resumed_identity(self, rc, terminal):
+        """"ok" only when the resumed terminal is listed in the recorded core session and labelled herdr.task=<key>."""
+        try:
+            self.verify_terminal(rc, terminal)
+            self.terminal_state(terminal, SHORT_CALL_S, rc)
+        except r.InputError:
+            return "mismatch"
+        return "ok"
 
     # ---- Board port ----
 
@@ -335,12 +364,11 @@ class ShepherdrBoard:
         terminals = [t["address"] for t in row.get("live") or []] or ([rc["terminal_id"]] if rc.get("terminal_id") else [])
         if not terminals:
             raise r.InputError("no live terminal to stop")
-        for terminal in terminals:
-            self.verify_terminal(rc, terminal)
-            err = self.kill(terminal, raw=True)
-            if err:
-                raise BoardError(err)
-        return self.observe(rc)
+        results = self.kill_all(rc, terminals)
+        failed = [x["error"] for x in results if x["error"]]
+        if failed:
+            raise BoardError({**failed[0], "terminals": results})
+        return {**self.observe(rc), "terminals": results}
 
     @_board_operation
     def handoff(self, rc):
@@ -389,7 +417,8 @@ class ShepherdrBoard:
         obj, err = self.resume_task(rc)
         if err or not isinstance(obj, dict) or not obj.get("terminal"):
             raise BoardError(err or {"code": "shepherdr_error", "message": "resume returned no terminal"})
-        return {"terminal_id": obj["terminal"], "resumed": obj.get("resumed") is True}
+        return {"terminal_id": obj["terminal"], "resumed": obj.get("resumed") is True,
+                "identity": self.resumed_identity(rc, obj["terminal"])}
 
     @_board_operation
     def create(self, rc):
