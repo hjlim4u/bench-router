@@ -660,7 +660,10 @@ def _poll_headless(rc, runner, timeout_s):
                 rc["status"] = "timed_out"
             return
     if not rc.get("terminal_id"):
-        raise r.InputError("hc run response was lost; inspect the recorded run label before resolving")
+        recovered = board.find_terminal(rc, live_addresses, timeout_s)
+        if not recovered:
+            raise r.InputError("hc run response was lost; inspect the recorded run label before resolving")
+        rc["terminal_id"] = recovered
     process = board.terminal_state(rc["terminal_id"], timeout_s, rc)
     exited = _all_exited(rc, board, rc["terminal_id"], process, timeout_s, live_addresses)
     stopped = board_stopped or any(e.get("state") in ("stop_attempted", "stop_sent", "stop_uncertain") for e in _events(rc))

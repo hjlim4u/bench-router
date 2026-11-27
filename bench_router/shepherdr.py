@@ -222,10 +222,29 @@ class ShepherdrBoard:
 
     def verify_terminal(self, rc, terminal):
         label = f"herdr.task={rc['thread_id']}" if rc.get("thread_id") else f"bench-router.run={rc['run_id']}"
-        obj, err = self._core(["ls", "--label", label, "--json"])
-        if err or not isinstance(obj, dict) or not isinstance(obj.get("terminals"), list) or not any(
-                t.get("address") == terminal for t in obj["terminals"] if isinstance(t, dict)):
-            raise r.InputError("recorded terminal is absent from the task's core session")
+        obj, err = self._core(["ls", "--all", "--label", label, "--json"])
+        terminals = obj.get("terminals") if not err and isinstance(obj, dict) else None
+        if isinstance(terminals, list) and any(
+                t.get("address") == terminal for t in terminals if isinstance(t, dict)):
+            return
+        if not err and isinstance(obj, dict) and obj.get("hidden_finished"):
+            if self.terminal_state(terminal, SHORT_CALL_S, rc) != "gone":
+                return
+        raise r.InputError("recorded terminal is absent from the task's core session")
+
+    def find_terminal(self, rc, live_addresses=(), timeout_s=SHORT_CALL_S):
+        """Recover a single terminal owned by this run (including finished terminals) after a lost start response."""
+        label = f"herdr.task={rc['thread_id']}" if rc.get("thread_id") else f"bench-router.run={rc['run_id']}"
+        obj, err = self._core(["ls", "--all", "--label", label, "--json"], timeout_s=timeout_s)
+        found = [t["address"] for t in (obj.get("terminals") or [])
+                 if not err and isinstance(obj, dict) and isinstance(t, dict) and isinstance(t.get("address"), str)]
+        if len(live_addresses) == 1 and live_addresses[0] in found:
+            candidate = live_addresses[0]
+        elif len(found) == 1:
+            candidate = found[0]
+        else:
+            return None
+        return candidate if self.terminal_state(candidate, timeout_s, rc) != "gone" else None
 
     def _terminal(self, terminal, timeout_s):
         obj, err = self._core(["get", terminal, "--json"], timeout_s=timeout_s)

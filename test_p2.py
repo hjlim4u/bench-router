@@ -1861,6 +1861,42 @@ class P2(unittest.TestCase):
             hd.resume_run(self.cwd, out2["run_id"], runner=fake2)
         self.assertEqual((fake2.mutations(), fake2.closed, fake2.tells), ([], [], []))
 
+    def test_v137_headless_lost_start_recovers_terminal_and_collects(self):
+        fake = FakeSessionProjects(after_status="working")
+        fake.core_version = "hc 0.1.20"
+        fake.on_run = headless_cli()
+        fake.start_error = True
+        out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        self.assertIsNone(self.receipt(out).get("terminal_id"))
+        self.assertEqual(fake.panes[out["thread_id"]]["address"], "t1")
+        fake.commands.clear()
+        done = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((done["status"], done["last_observation"]["note"]), ("completed", None))
+
+    def test_v138_headless_fast_exit_found_via_all_or_get(self):
+        fake = FakeSessionProjects(after_status="working")
+        fake.core_version = "hc 0.1.20"
+
+        def finish(board, cmd):
+            headless_cli()(board, cmd)
+            next(iter(board.panes.values()))["state"] = "finished"
+
+        fake.on_run = finish
+        core = fake._core
+        empty = (SPIKE / "stop/ls_live_t0.out").read_text()
+
+        def core_hides_finished(argv):
+            if argv[0] == "ls" and "--all" not in argv and fake.panes:
+                return subprocess.CompletedProcess(argv, 0, empty, "")
+            return core(argv)
+
+        fake._core = core_hides_finished
+        out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        rc = self.receipt(out)
+        self.assertTrue(Path(rc["run_dir"], "exit_code").exists())
+        done = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((done["status"], done["last_observation"]["note"]), ("completed", None))
+
     def test_message_log_survives_unicode_line_separator(self):
         with tempfile.TemporaryDirectory() as tmp:
             rc = {"run_dir": tmp}
