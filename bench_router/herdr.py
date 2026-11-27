@@ -1003,12 +1003,24 @@ def resume_run(cwd, run_id, runner=subprocess.run):
             raise r.InputError("only a Shepherdr task run can be resumed")
         if rc.get("execution") == "headless":  # its card has no conversation; resume would rerun the saved argv
             raise r.InputError("headless runs cannot be resumed; dispatch a new round")
+        if rc.get("resume_attempted") and rc.get("resume_state") != "confirmed":
+            raise r.InputError("previous resume was unconfirmed; observe identity and reconcile manually, never re-call")
         runner = _checked_runner(rc, None, runner)
         board = _board(BACKEND, runner)
+        core_err = board.live_core_error(rc)
+        if core_err:
+            raise r.InputError(core_err["message"])
         board.task(rc)
+        rc["resume_attempted"] = True
+        rc["resume_state"] = "attempted"
+        save(rc)  # Persist before calling resume; a lost response must never re-call resume.
         obj, err = board.resume_task(rc)
         if err or not isinstance(obj, dict) or not obj.get("terminal"):
+            rc.update(status="delivery_uncertain", delivery_state="uncertain", resume_state="uncertain")
+            _observe(rc, error=err, note="resume response lost; observe identity and reconcile manually, never re-call")
+            save(rc)
             raise r.InputError(f"resume failed: {(err or {}).get('message')}")
+        rc["resume_state"] = "confirmed"
         rc["terminal_id"] = obj["terminal"]
         rc["resumed"] = {"at": _iso(_now()), "terminal_id": obj["terminal"], "session_resumed": obj.get("resumed") is True}
         rc["identity"] = board.resumed_identity(rc, obj["terminal"])

@@ -41,7 +41,7 @@ Identifier persistence contract (the adapter only returns identifiers; the route
 | op      | router stores before call          | router stores on success   | on lost response                                          |
 | create  | delivery_state=submission_attempted| returned ids               | delivery_uncertain; no re-call; lookup only by run-id title |
 | start   | start_attempted                    | terminal/worktree/branch   | delivery_uncertain; no restart; only observe stored card  |
-| resume  | resume_attempted                   | new terminal id            | no re-call; observe identity then manual reconciliation   |
+| resume  | resume_attempted, resume_state     | new terminal id            | no re-call; observe identity then manual reconciliation   |
 | tell    | send attempt in event log          | send confirmed             | no automatic resend                                       |
 | stop    | stop_sent in event log             | process=exited evidence    | keep admission; re-observe                                |
 | handoff | ready.state=attempted              | board-given state          | uncertain; no re-call                                     |
@@ -60,7 +60,7 @@ CAPABILITIES = frozenset({"tell", "resume"})
 PERSISTENCE = {
     "create": ("delivery_state=submission_attempted", "returned ids", "delivery_uncertain; no re-call; lookup only by run-id title"),
     "start": ("start_attempted", "terminal/worktree/branch", "delivery_uncertain; no restart; only observe stored card"),
-    "resume": ("resume_attempted", "new terminal id", "no re-call; observe identity then manual reconciliation"),
+    "resume": ("resume_attempted, resume_state", "new terminal id", "no re-call; observe identity then manual reconciliation"),
     "tell": ("send attempt in event log", "send confirmed", "no automatic resend"),
     "stop": ("stop_sent in event log", "process=exited evidence", "keep admission; re-observe"),
     "handoff": ("ready.state=attempted", "board-given state", "uncertain; no re-call"),

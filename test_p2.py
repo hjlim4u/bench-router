@@ -1923,6 +1923,30 @@ class P2(unittest.TestCase):
         done = hd.collect_run(self.cwd, out["run_id"], 0, runner=runner)
         self.assertEqual((done["thread_id"], fake.mutations()), ("repo#1", []))
 
+    def test_v141_resume_persists_resume_attempted_before_call(self):
+        fake = FakeSessionProjects(on_prompt=write_result())
+        out = self.run_(fake)
+        seen_before_resume = []
+        resume_calls = 0
+
+        def runner(cmd, **kw):
+            nonlocal resume_calls
+            if cmd[:2] == [hd.PROJECTS_BIN, "resume"]:
+                resume_calls += 1
+                seen_before_resume.append(self.receipt(out).get("resume_attempted"))
+                raise subprocess.TimeoutExpired(cmd, 15)
+            return fake(cmd, **kw)
+
+        with self.assertRaises(r.InputError):
+            hd.resume_run(self.cwd, out["run_id"], runner=runner)
+        rc = self.receipt(out)
+        self.assertEqual((seen_before_resume, rc.get("resume_attempted"), rc["status"], resume_calls),
+                         ([True], True, "delivery_uncertain", 1))
+        # Lost resume response must never replay herdr-task resume.
+        with self.assertRaisesRegex(r.InputError, "reconcile manually"):
+            hd.resume_run(self.cwd, out["run_id"], runner=runner)
+        self.assertEqual(resume_calls, 1)
+
     def test_message_log_survives_unicode_line_separator(self):
         with tempfile.TemporaryDirectory() as tmp:
             rc = {"run_dir": tmp}
