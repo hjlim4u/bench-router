@@ -118,12 +118,16 @@ location, and therefore whether section 3 backs it up.
 restored together, and the existing tasks open. The image already has `hc` 0.1.20 (a copy of the host's
 binary), so the replica exercises the same core.
 
-1. Start a throwaway container from `eval/shepherdr-env` (`shepherdr-env:v3.1.26`, Ubuntu 24.04). Use a
+`eval/shepherdr_rehearsal.sh` runs steps 1 to 5 end to end. Its header shows the `docker run` line.
+
+1. Start a throwaway container from `eval/shepherdr-env` (`shepherdr-env:v3.2.19`, Ubuntu 24.04; it holds the
+   3.2.19 source for step 4). Use a
    user whose home path matches the host's, because the `~/.herdr` links are absolute. Mount the archive
    read-only.
    ```sh
-   docker run --rm -it -u root -v "$B/shepherdr-3.1.26.tar":/backup.tar:ro shepherdr-env:v3.1.26 bash
-   # inside: useradd -m -d /home/<user> <user>; cd / && tar -xpf /backup.tar --numeric-owner; chown -R <user> /home/<user>
+   docker run --rm -it -u root -v "$B/shepherdr-3.1.26.tar":/backup.tar:ro shepherdr-env:v3.2.19 bash
+   # inside: free uid 1000, useradd -u 1000 -d /home/<user> <user>, tar -xpf /backup.tar --numeric-owner -C /,
+   # then chown the parent folders the archive does not hold (~/.config, ~/.local/*, ~/.claude, ~/.codex)
    ```
    Nothing of the host besides the archive is mounted. No systemd user manager runs here: start the service
    by hand only if you need it.
@@ -132,7 +136,9 @@ binary), so the replica exercises the same core.
    - `grep -c HC_SESSION ~/.config/systemd/user/shepherdr.service` prints 0.
    - `cat ~/.local/share/shepherdr/LAYOUT` prints `2`, and the `~/.herdr/*` links resolve (`ls -L ~/.herdr`).
 3. **Check that the existing tasks open.**
-   - `herdr-task list --json` shows the same 98 cards and folders as the host.
+   - `herdr-task list --all --json` plus `herdr-task list --all --archived --json` show the same 98 cards as
+     the host. 3.1 lists a folder's cards only when that folder exists, so the replica creates an empty git
+     repository at each card folder's path first.
    - `herdr-task show <key> --folder <repo> --json` opens a done card and a running card.
    - The core starts in `default` (`hc server status --json` reports session `default`; inside the replica
      this probe is allowed).
@@ -177,6 +183,8 @@ binary), so the replica exercises the same core.
 3. **Remove 3.2.** Run `systemctl --user stop shepherdr.service`, then `shepherdr uninstall`. Uninstall
    removes only the files whose hashes match its record. It keeps the data folders and puts back the
    `~/.local/bin` links it replaced.
+   - If the install stopped halfway, the `shepherdr` and `herdr-task` links may already be gone. Skip
+     uninstall and go straight to step 4: the rehearsal restored a half-switched home from the archive alone.
 4. **Restore 3.1.**
    - Restore from the archive every payload and config path in section 3.4. Do not restore the board data
      yet: `tasks/`, `artifacts/` and `secrets/` under `~/.local/share/shepherdr`.
@@ -203,7 +211,8 @@ binary), so the replica exercises the same core.
 
 ## 7. Known gaps
 
-- Nobody has run 3.1.26 against card data that 3.2 wrote. The rehearsal's step 4 and 5 is the first check.
+- 3.1.26 lists card data that the 3.2.19 installer wrote (it adds `project_id` to each folder file). The
+  rehearsal checked this. Fields the 3.2 service writes while it runs (it needs bun) were not exercised.
 - `herdr-core` and `herdr-app` have no versioned copies on disk. The switch does not change them, so they
   are out of this runbook. Updating them is a separate change with its own backup.
 - The program that performed the 2026-11-26 layout move is unknown. Its journal lists kinds only, with no
@@ -233,4 +242,38 @@ The runbook leaves `~/.herdr/worktrees` out of the archive. Its worktrees were c
 
 | Date | Image | Before: cards / folders | After rollback: cards / folders | Result | Notes |
 |---|---|---|---|---|---|
-| | | | | | |
+| 2026-11-27 | `shepherdr-env:v3.2.19`, hc 0.1.20 | 98 / 8 (active 24, archived 74) | 98 / 8 (active 24, archived 74) | **pass** | Archive taken live at 13:31 KST. See below. |
+
+Findings from the 2026-11-27 run (`eval/shepherdr_rehearsal.sh`):
+- **Baseline.**
+  - The restored home has the 3.1 payload: `herdr-task` points into `~/.config/herdr-app/mods`, and the unit
+    has no `HC_SESSION`.
+  - `LAYOUT` is 2 and the `~/.herdr` links resolve.
+  - All 98 cards list. A done card and a running card open with `show`.
+- **The install refuses while cards are working.** Without `--force`, 3.2.19 stopped with "11 tasks are still
+  working on the old version … Nothing was changed". On the host, those 11 `running` cards must be settled
+  first. The replica used `--force`, which is never to be used on the host.
+- **The forced install changed:**
+  - 30 mods, 8 artifact mods, the layout and 74 other files were removed from `~/.config/herdr-app`.
+  - The 3.1 install record was removed and the 8 artifacts were converted to pages.
+  - The links were repointed into `~/.local/share/shepherdr`.
+  - 3.2 hooks went into `~/.claude/settings.json`.
+  - "Session: nothing to carry over" (the replica has no live agents).
+  - Its backup folder was written.
+- **`shepherdr doctor` exited 1 in the replica:**
+  - It found no `HC_SESSION` in the unit, because the service step needs bun, which the image lacks.
+  - The service was not answering.
+  - Expect neither on the host once bun is present.
+- **Rollback (section 6).**
+  - `shepherdr uninstall` put back the 5 `~/.local/bin` links.
+  - Restoring the payload and config paths, while keeping the board data, brought back the 3.1 payload.
+  - All 98 cards listed and opened again with the `project_id` field 3.2 had added.
+  - `~/.claude/settings.json`, `~/.codex/hooks.json`, the unit and `keys.json` are byte-identical to the archive.
+- **A half-failed install also rolls back.** An earlier run hit a permission error halfway through, an artifact
+  of the replica set-up. That left the `herdr-task` and `shepherdr` links missing. Restoring from the archive
+  alone returned the home to a working 3.1.
+- **Not exercised:**
+  - the 3.2 service and web app (no bun) and the unit rewrite;
+  - moving live agents between core sessions;
+  - real repositories (the card folders were empty stub repositories);
+  - task worktrees (not in the archive).
