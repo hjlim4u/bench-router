@@ -130,8 +130,9 @@ def _repo(rc):
     return rc.get("repo_cwd", rc["cwd"]) if "cwd" in rc else rc.get("repo_cwd") or (rc.get("binding") or {}).get("folder")
 
 
-def matches_binding(current, recorded):
-    return all(current.get(k) == recorded.get(k) for k in ("task_protocol", "space", "session", "core_id"))
+def matches_binding(current, recorded, require_core_id=True):
+    keys = ("task_protocol", "space", "session", "core_id") if require_core_id or recorded.get("core_id") else ("task_protocol", "space", "session")
+    return all(current.get(k) == recorded.get(k) for k in keys)
 
 
 def _board_operation(method):

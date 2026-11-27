@@ -94,9 +94,9 @@ def runner_binding(backend, session=None, runner=subprocess.run, cwd=None):
     return project_binding(session, runner, core_session)
 
 
-def same_binding(rc, session, runner):
+def same_binding(rc, session, runner, require_core_id=True):
     current = project_binding(session, bound_runner(rc, runner), rc["project_binding"]["session"])
-    return shepherdr.matches_binding(current, rc["project_binding"])
+    return shepherdr.matches_binding(current, rc["project_binding"], require_core_id=require_core_id)
 
 
 def _availability(availability, cfg, which, backend, requests=()):
@@ -453,11 +453,11 @@ def headless_script(rc, argv, publish=True):
 
 
 
-def _checked_runner(rc, session, runner):
+def _checked_runner(rc, session, runner, require_core_id=True):
     """Open the recorded session only after validating its protocol and binding."""
     if rc.get("identity") == "mismatch":
         raise r.InputError("resumed terminal identity mismatch; reconcile manually before any control")
-    if not same_binding(rc, session or rc["project_binding"]["space"], runner):
+    if not same_binding(rc, session or rc["project_binding"]["space"], runner, require_core_id=require_core_id):
         raise r.InputError("Shepherdr session or core binding differs from the receipt")
     return bound_runner(rc, runner)
 
@@ -665,7 +665,7 @@ def _poll_headless(rc, runner, timeout_s):
     exited = _all_exited(rc, board, rc["terminal_id"], process, timeout_s, live_addresses)
     stopped = board_stopped or any(e.get("state") in ("stop_attempted", "stop_sent", "stop_uncertain") for e in _events(rc))
     if (not stopped or exited) and settle_exit(rc):
-        if rc["status"] == "completed":
+        if rc["status"] == "completed" and (rc.get("project_binding") or {}).get("core_id"):
             release(rc, runner)
         return
     if process in ("exited", "gone"):
@@ -715,9 +715,11 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     native = rc["backend"] == BACKEND
     port = rc["backend"] in BOARDS and not native  # any other board, through the Board port only
     deadline = time.monotonic() + wait_ms / 1000
+    has_core_id = bool((rc.get("project_binding") or {}).get("core_id"))
     if native:
         try:
-            runner = _checked_runner(rc, session, _bounded(rc, runner, deadline if wait_ms > 0 else None))
+            runner = _checked_runner(rc, session, _bounded(rc, runner, deadline if wait_ms > 0 else None),
+                                     require_core_id=False)
         except r.InputError as exc:
             if rc["status"] == "completed" and rc.get("settled_contract"):
                 return rc  # a finished record stays readable as-is; releasing needs a verified core
@@ -726,7 +728,7 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
             save(rc)
             return rc
     if rc["status"] == "completed" and rc.get("settled_contract"):
-        if (native or port) and rc.get("release") is None:  # completed before releasing existed, or the last close failed
+        if ((native and has_core_id) or port) and rc.get("release") is None:  # completed before releasing existed, or the last close failed
             release(rc, runner)
             save(rc)
         elif not native and not port:
@@ -795,7 +797,7 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
                     if rc.get("terminal_id") or rc["delivery_state"] not in ("uncertain", "submission_attempted"):
                         rc["delivery_state"] = "activity_observed"
                     settle(rc, "done")
-                    if rc["status"] == "completed":
+                    if rc["status"] == "completed" and has_core_id:
                         release(rc, runner)
                 elif status == "needs":
                     rc.update(status="blocked", delivery_state="activity_observed", diagnostic_tail=row.get("why"))
@@ -1068,7 +1070,7 @@ def stop_run(cwd, run_id, runner=subprocess.run):
                 "run_id": rc["run_id"], "thread_id": None, "messages_path": str(log), **({"error": err} if err else {})}
     if rc.get("backend") != BACKEND:
         raise r.InputError("legacy receipt: stop its original worker manually")
-    runner = _checked_runner(rc, None, _bounded(rc, runner))
+    runner = _checked_runner(rc, None, _bounded(rc, runner), require_core_id=False)
     board = _board(BACKEND, runner)
     core_err = board.live_core_error(rc)
     if core_err:

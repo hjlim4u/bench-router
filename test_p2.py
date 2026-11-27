@@ -1834,6 +1834,33 @@ class P2(unittest.TestCase):
         self.assertEqual((self.receipt(done2)["process_exited"], coordination.load(done2["coordination_key"])["active"]),
                          (True, False))
 
+    def test_v136_pre_port_running_receipt_collects_without_mutations(self):
+        fake = FakeSessionProjects(on_prompt=write_result())
+        fake.core_version = "hc 0.1.20"
+        out = self.run_(fake, wait_ms=0)
+        rc = self.receipt(out)
+        del rc["project_binding"]["core_id"]
+        hd.save(rc)
+        fake.commands.clear()
+        done = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((done["status"], done["last_observation"]["note"]), ("completed", None))
+        self.assertEqual(fake.mutations(), [])
+
+        # Mutating calls remain refused on a receipt without core_id.
+        fake2 = FakeSessionProjects(after_status="working")
+        fake2.core_version = "hc 0.1.20"
+        out2 = self.run_(fake2, self.task(task_id="t2"), wait_ms=0)
+        rc2 = self.receipt(out2)
+        del rc2["project_binding"]["core_id"]
+        hd.save(rc2)
+        fake2.commands.clear()
+        self.assertEqual(hd.stop_run(self.cwd, out2["run_id"], runner=fake2)["status"], "delivery_uncertain")
+        with self.assertRaises(r.InputError):
+            hd.tell_run(self.cwd, out2["run_id"], "hi", runner=fake2)
+        with self.assertRaises(r.InputError):
+            hd.resume_run(self.cwd, out2["run_id"], runner=fake2)
+        self.assertEqual((fake2.mutations(), fake2.closed, fake2.tells), ([], [], []))
+
     def test_message_log_survives_unicode_line_separator(self):
         with tempfile.TemporaryDirectory() as tmp:
             rc = {"run_dir": tmp}
