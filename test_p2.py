@@ -1897,6 +1897,16 @@ class P2(unittest.TestCase):
         done = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
         self.assertEqual((done["status"], done["last_observation"]["note"]), ("completed", None))
 
+    def test_v139_interactive_finished_terminal_collects_valid_result(self):
+        fake = FakeSessionProjects(after_status="working", on_prompt=write_result())
+        fake.core_version = "hc 0.1.20"
+        out = self.run_(fake, wait_ms=0)
+        fake.panes[out["thread_id"]]["state"] = "finished"
+        fake.detail_updates["live"] = []
+        done = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((done["status"], done["task_outcome"], done["last_observation"]["note"]),
+                         ("completed", "success", None))
+
     def test_message_log_survives_unicode_line_separator(self):
         with tempfile.TemporaryDirectory() as tmp:
             rc = {"run_dir": tmp}

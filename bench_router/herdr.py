@@ -778,6 +778,11 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
                 terminal = terminal or (addresses[0] if addresses else None)
                 process = board.terminal_state(terminal, timeout(), rc) if terminal else None
                 state, status, needs = row.get("state"), row.get("status"), row.get("needs")
+                stopped_by_router = any(e.get("state", "").startswith("stop_") for e in _events(rc))
+                finished_with_result = (
+                    process == "exited" and not stopped_by_router and rc.get("worktree")
+                    and check_result({**rc, "run_dir": str(Path(rc["worktree"]) / RESULT_REL / rc["run_id"])})[0] is not None
+                )
                 if state in ("todo", "queued", "scheduled"):
                     cancelled = state == "todo" and any(e.get("cancelled_queue") for e in _events(rc))
                     if cancelled:
@@ -785,12 +790,18 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
                     else:
                         rc["status"] = "delivery_uncertain" if state == "todo" else "timed_out"
                     _observe(rc, status, note="task not started; recovery never calls start")
+                elif finished_with_result:
+                    if rc.get("terminal_id") or rc["delivery_state"] not in ("uncertain", "submission_attempted"):
+                        rc["delivery_state"] = "activity_observed"
+                    settle(rc, "done")
+                    if rc["status"] == "completed" and has_core_id:
+                        release(rc, runner)
                 elif needs == "stopped" or (process in ("exited", "gone") and status not in ("ready", "done")):
                     # Admission holds until every terminal the run recorded shows exit evidence.
                     exited = _all_exited(rc, board, terminal, process, timeout(), addresses)
                     rc.update(status="execution_failed", process_exited=exited)
                     _observe(rc, status, note=row.get("why") or "task agent stopped")
-                elif process == "live" and any(e["state"].startswith("stop_") for e in _events(rc)):
+                elif process == "live" and stopped_by_router:
                     rc.update(status="timed_out", process_exited=False)
                     _observe(rc, status, note="stop requested; terminal still live")
                 elif status == "needs" and needs != "reply":
