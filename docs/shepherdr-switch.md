@@ -114,6 +114,7 @@ reads the current cards through them.
 |---|---|---|---|---|---|
 | First host: WSL2, uid 1000, `/home/<user>`, layout 2, 100 cards | yes | by hand, same paths | pass | yes | pass |
 | Docker replica of another host: uid 1500, home `/srv/op`, fresh 3.1.26, layout 1, 3 cards | yes (stale card found) | yes | pass | no (no bun) | no |
+| Second host: WSL2, uid 1000, 3.1.14, layout 1, no Docker | yes | yes | not run (no Docker) | yes | pass |
 
 Not checked anywhere: a host with linked machines, a 3.1 web-only install, and non-default `XDG_*_HOME`.
 
@@ -138,3 +139,4 @@ Not checked anywhere: a host with linked machines, a 3.1 web-only install, and n
 | Date | Host | From → to | Blockers settled | Doctor | Smoke |
 |---|---|---|---|---|---|
 | 2026-11-27 | WSL2, hc 0.1.20 | 3.1.26 (`7d183cf7`) → 3.2.19 (`d2ed8301`) | 11 stale running cards marked done, 1 live card settled, Herdr app closed | ✓ whole | pass (run `6c407dde`) |
+| 2026-11-27 | WSL2, hc 0.1.18 | 3.1.14 (`4552191`) → 3.2.19 (`d2ed8301`) | 1 card whose repo was deleted (idle shell, TERM ignored, needed HUP; `done` needed the folder recreated), `hc kill t14` | ✓ whole | pass (run `a93ffd21`) |
