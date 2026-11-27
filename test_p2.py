@@ -1774,6 +1774,42 @@ class P2(unittest.TestCase):
                 hd.stop_run(self.cwd, out["run_id"], runner=fake)
         self.assertEqual((fake.mutations(), fake.closed), ([], []))
 
+    def test_v134_foreign_core_blocks_mutating_hc(self):
+        fake = FakeSessionProjects(board_session="shepherdr", after_status="working")
+        path = Path(os.environ["XDG_STATE_HOME"]) / "herdr-core/shepherdr/core.json"
+        path.parent.mkdir(parents=True)
+        path.write_bytes((SPIKE / "session/core_json_after_shepherdr.out").read_bytes())
+        out = self.run_(fake, wait_ms=0)
+        key = out["thread_id"]
+        foreign = fake.add_unrelated_terminal("default")
+        foreign.update(task=key, labels={"herdr.task": key}, cwd="/another/worktree")
+        fake.hc_session = "default"
+        fake.commands.clear()
+
+        def runner(cmd, **kw):
+            if cmd[:3] == [hd.HERDR_BIN, "server", "status"]:
+                return subprocess.CompletedProcess(cmd, 0, (SPIKE / "session/status_default.out").read_text(), "")
+            return fake(cmd, **kw)
+
+        response = hd.stop_run(self.cwd, out["run_id"], runner=runner)
+        self.assertEqual((response["status"], "other#1" in fake.sessions["default"], fake.closed),
+                         ("delivery_uncertain", True, []))
+        self.assertEqual(fake.mutations(), [])
+        self.assertIn("error", response)
+
+        # Release/cleanup also refuses when the live core mismatches core.json, with 0 mutations.
+        rc = self.receipt(out)
+        rc.update(status="completed", task_outcome="success", settled_contract=True)
+        write_result()(fake, fake.prompts[0])
+        src = Path(rc["worktree"]) / hd.RESULT_REL / rc["run_id"]
+        for name in ("result.json", "result.md"):
+            Path(rc["run_dir"], name).write_bytes((src / name).read_bytes())
+        fake.commands.clear()
+        rel = hd.release(rc, runner=runner)
+        self.assertEqual((rel["status"], rc["release"], fake.mutations(), fake.closed),
+                         ("delivery_uncertain", None, [], []))
+        self.assertEqual(rc["last_observation"]["error"]["code"], "core_id_mismatch")
+
     def test_message_log_survives_unicode_line_separator(self):
         with tempfile.TemporaryDirectory() as tmp:
             rc = {"run_dir": tmp}

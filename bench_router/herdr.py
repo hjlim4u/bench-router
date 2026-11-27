@@ -934,13 +934,18 @@ def release(rc, runner=subprocess.run):
     """End only idle terminals belonging to this run; leave working and blocked agents alone."""
     if rc["backend"] == BACKEND:
         runner = _checked_runner(rc, None, runner)
+        core_err = _board(BACKEND, runner).live_core_error(rc)
+        if core_err:
+            rc["release"] = None
+            _observe(rc, error=core_err, note=f"completed; {core_err['message']}")
+            return {"status": "delivery_uncertain", "error": core_err}
     from .lifecycle import finalize
     finalize(rc, runner)
     out = _board(rc["backend"], runner).cleanup(rc)
     if out["left_open"]:
         rc["release"] = None
         _observe(rc, error=out.get("error"), note=f"completed; {out['left_open']}")
-        return
+        return {"status": "delivery_uncertain", "error": out.get("error")}
     rc["release"] = {"at": _iso(_now()), "terminals": out.get("terminals") or [{"terminal_id": t} for t in out["closed"]]}
 
 
@@ -995,6 +1000,13 @@ def tell_run(cwd, run_id, text, runner=subprocess.run):
     else:
         runner = _checked_runner(rc, None, runner)
         board = _board(BACKEND, runner)
+        core_err = board.live_core_error(rc)
+        if core_err:
+            digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+            log = _log_event(rc, {"sha256": digest, "state": "uncertain", "error": core_err})
+            return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain",
+                    "run_id": rc["run_id"], "thread_id": rc.get("thread_id"), "sha256": digest,
+                    "messages_path": str(log), "error": core_err}
         terminal = board.tell_target(rc)
         send = lambda: board.send(terminal, text)
     # No dispatch lock or receipt write: a blocking parallel/collect on this cwd must not stall the message.
@@ -1035,6 +1047,12 @@ def stop_run(cwd, run_id, runner=subprocess.run):
         raise r.InputError("legacy receipt: stop its original worker manually")
     runner = _checked_runner(rc, None, _bounded(rc, runner))
     board = _board(BACKEND, runner)
+    core_err = board.live_core_error(rc)
+    if core_err:
+        log = _log_event(rc, {"state": "stop_uncertain", "error": core_err})
+        return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain",
+                "run_id": rc["run_id"], "thread_id": rc.get("thread_id"), "messages_path": str(log),
+                "error": core_err}
     if rc.get("execution") == "headless" and not rc.get("thread_id"):
         terminals = [rc["terminal_id"]] if rc.get("terminal_id") else []
     else:

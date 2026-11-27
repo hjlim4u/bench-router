@@ -251,13 +251,35 @@ class ShepherdrBoard:
                 raise r.InputError("terminal identity mismatch in the recorded core session")
         return state
 
+    def live_core_error(self, rc):
+        """Confirm the live hc server answering this runner matches the receipt's core_id; None when verified."""
+        binding = rc.get("project_binding") or rc.get("binding") or {}
+        recorded = binding.get("core_id")
+        if not isinstance(recorded, str) or not recorded:
+            return {"code": "core_id_missing",
+                    "message": "receipt has no recorded core_id; verify and record core identity before mutating hc"}
+        obj, err = self._core(["server", "status", "--json"])
+        live = (obj.get("core") or {}).get("id") if not err and isinstance(obj, dict) else None
+        if not isinstance(live, str) or not live:
+            return {"code": "core_status_unavailable",
+                    "message": f"cannot confirm live core identity: {(err or {}).get('message', 'missing core id')}",
+                    "recorded_core_id": recorded}
+        if live != recorded:
+            return {"code": "core_id_mismatch",
+                    "message": f"connected core id {live!r} differs from recorded {recorded!r}",
+                    "recorded_core_id": recorded, "live_core_id": live}
+        return None
+
     def kill(self, terminal, raw=False):
         """End one core terminal; returns the call's error or None."""
         return self._core(["kill", terminal, "--json"], raw=raw)[1]
 
     def kill_all(self, rc, terminals):
-        """Check every terminal's ownership (InputError, nothing killed), then kill each even after one fails.
+        """Check live core and every terminal's ownership (InputError, nothing killed), then kill each even after one fails.
         Returns [{terminal_id, error}] per terminal."""
+        core_err = self.live_core_error(rc)
+        if core_err:
+            raise r.InputError(core_err["message"])
         for terminal in terminals:
             self.verify_terminal(rc, terminal)
         return [{"terminal_id": t, "error": self.kill(t, raw=True)} for t in terminals]
@@ -382,6 +404,9 @@ class ShepherdrBoard:
     def cleanup(self, rc):
         """End only idle terminals belonging to this run; leave working and blocked agents alone.
         Also returns error (the failed call's error) and terminals ([{terminal_id, agent}] closed)."""
+        core_err = self.live_core_error(rc)
+        if core_err:
+            return {"closed": [], "left_open": core_err["message"], "error": core_err}
         argv = ["ls", "--label", f"bench-router.run={rc['run_id']}", "--json"] if not rc.get("thread_id") else \
             ["ls", "--label", f"herdr.task={rc['thread_id']}", "--json"]
         obj, err = self._core(argv)
@@ -405,6 +430,9 @@ class ShepherdrBoard:
     @_board_operation
     def tell(self, rc, text):
         self._need("tell")
+        core_err = self.live_core_error(rc)
+        if core_err:
+            raise r.InputError(core_err["message"])
         _, err = self.send(self.tell_target(dict(rc)), text)
         if err:
             raise BoardError(err)

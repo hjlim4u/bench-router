@@ -395,6 +395,11 @@ SHEPHERDR_ROWS = {"not_started": ("todo", "todo", None, None), "queued": ("queue
 
 
 class ShepherdrBoardContract(BoardContract, unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.enterContext(patch.dict(os.environ, {"XDG_STATE_HOME": tmp.name, "HC_SESSION": "", "SHEPHERDR_SESSION": ""}))
+
     def make_board(self, capabilities=CAPABILITIES):
         board = shepherdr.ShepherdrBoard(FakeShepherdr(), capabilities=capabilities)
         board.fake = board.runner
