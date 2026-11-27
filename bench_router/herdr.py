@@ -453,18 +453,22 @@ def headless_script(rc, argv, publish=True):
 
 
 
-def _binding_unchanged(rc, session, runner):
-    """Pre-submission check. On failure nothing was sent: settle the receipt so it cannot stay `dispatching`."""
+def _checked_runner(rc, session, runner):
+    """Open the recorded session only after validating its protocol and binding."""
+    if not same_binding(rc, session or rc["project_binding"]["space"], runner):
+        raise r.InputError("Shepherdr session or core binding differs from the receipt")
+    return bound_runner(rc, runner)
+
+
+def _submission_runner(rc, session, runner):
     try:
-        if same_binding(rc, session, runner):
-            return True
-        why = "Shepherdr binding changed before submission"
-    except r.InputError as e:
-        why = str(e)
+        return _checked_runner(rc, session, runner)
+    except r.InputError as exc:
+        why = str(exc)
     rc["status"] = "execution_failed"
     _observe(rc, note=f"{why}; nothing submitted")
     save(rc)
-    return False
+    return None
 
 
 def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=None):
@@ -473,10 +477,10 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
     if rc["backend"] != BACKEND:
         from . import runners
         return runners.start(rc, prompt, profile, wait_ms, runner)
-    runner = bound_runner(rc, runner)
-    board = _board(BACKEND, runner)
-    if not _binding_unchanged(rc, session, runner):
+    runner = _submission_runner(rc, session, runner)
+    if runner is None:
         return rc
+    board = _board(BACKEND, runner)
     settings = worker_settings(profile)
     if settings is None:
         rc["status"] = "execution_failed"
@@ -668,7 +672,13 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     native = rc["backend"] == BACKEND
     port = rc["backend"] in BOARDS and not native  # any other board, through the Board port only
     if native:
-        runner = bound_runner(rc, runner)
+        try:
+            runner = _checked_runner(rc, session, runner)
+        except r.InputError as exc:
+            rc.update(status="delivery_uncertain", delivery_state="uncertain")
+            _observe(rc, note=str(exc))
+            save(rc)
+            return rc
     if rc["status"] == "completed" and rc.get("settled_contract"):
         if (native or port) and rc.get("release") is None:  # completed before releasing existed, or the last close failed
             release(rc, runner)
@@ -698,8 +708,6 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
                 runners.poll(rc, runner, max(0.0, deadline - time.monotonic()))  # herdr-tui waits in herdr
             elif headless:
                 _poll_headless(rc, runner, timeout())
-            elif not same_binding(rc, session, runner):
-                raise r.InputError("Shepherdr protocol, space or core version changed; inspect the recorded worker")
             else:
                 # T5: this still reads raw Shepherdr rows; the mapping to Board.observe states lives in the adapter.
                 row = _board(BACKEND, runner).task(rc, timeout())
@@ -887,7 +895,7 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
 def release(rc, runner=subprocess.run):
     """End only idle terminals belonging to this run; leave working and blocked agents alone."""
     if rc["backend"] == BACKEND:
-        runner = bound_runner(rc, runner)
+        runner = _checked_runner(rc, None, runner)
     from .lifecycle import finalize
     finalize(rc, runner)
     out = _board(rc["backend"], runner).cleanup(rc)
@@ -907,9 +915,7 @@ def resume_run(cwd, run_id, runner=subprocess.run):
             raise r.InputError("only a Shepherdr task run can be resumed")
         if rc.get("execution") == "headless":  # its card has no conversation; resume would rerun the saved argv
             raise r.InputError("headless runs cannot be resumed; dispatch a new round")
-        runner = bound_runner(rc, runner)
-        if not same_binding(rc, rc["herdr_session"], runner):
-            raise r.InputError("Shepherdr protocol or core version changed; inspect the recorded worker")
+        runner = _checked_runner(rc, None, runner)
         board = _board(BACKEND, runner)
         board.task(rc)
         obj, err = board.resume_task(rc)
@@ -943,9 +949,7 @@ def tell_run(cwd, run_id, text, runner=subprocess.run):
         send = lambda: project_call(["agent", "prompt", rc["agent_name"], text, "--wait", "--until", "working",
                                      "--until", "blocked", "--timeout", "20000"], runner, exe=TUI_BIN)
     else:
-        runner = bound_runner(rc, runner)
-        if not same_binding(rc, rc["herdr_session"], runner):
-            raise r.InputError("Shepherdr protocol, space or core version changed; inspect the recorded worker")
+        runner = _checked_runner(rc, None, runner)
         board = _board(BACKEND, runner)
         terminal = board.tell_target(rc)
         send = lambda: board.send(terminal, text)
@@ -984,11 +988,9 @@ def stop_run(cwd, run_id, runner=subprocess.run):
         return {"schema_version": r.SCHEMA_VERSION, "status": "delivery_uncertain" if err else "stop_sent",
                 "run_id": rc["run_id"], "thread_id": None, "messages_path": str(log), **({"error": err} if err else {})}
     if rc.get("backend") != BACKEND:
-        raise r.InputError("legacy receipt: stop its original herdr-projects worker manually; no automatic migration")
-    runner = bound_runner(rc, runner)
+        raise r.InputError("legacy receipt: stop its original worker manually")
+    runner = _checked_runner(rc, None, runner)
     board = _board(BACKEND, runner)
-    if not same_binding(rc, rc["herdr_session"], runner):
-        raise r.InputError("Shepherdr protocol or core version changed; inspect the recorded worker")
     if rc.get("execution") == "headless" and not rc.get("thread_id"):
         terminals = [rc["terminal_id"]] if rc.get("terminal_id") else []
     else:

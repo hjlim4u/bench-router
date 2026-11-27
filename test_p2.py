@@ -1556,7 +1556,6 @@ class P2(unittest.TestCase):
         self.assertIn(("ls", 0), queries)
         self.assertEqual(([query for query in queries if query[1] >= remaining], fake.mutations()), ([], []))
 
-    @unittest.expectedFailure
     def test_v126_unsupported_protocol_headless_collect_sends_no_mutations(self):
         fake = FakeSessionProjects()
         fake.on_run = headless_cli()
@@ -1575,7 +1574,6 @@ class P2(unittest.TestCase):
         ready_calls = [cmd for _, cmd in fake.commands if cmd[:2] == (hd.PROJECTS_BIN, "ready")]
         self.assertEqual((fake.mutations(), ready_calls), ([], []))
 
-    @unittest.expectedFailure
     def test_v127_unsupported_protocol_cleanup_retry_sends_no_mutations(self):
         fake = FakeSessionProjects(on_prompt=write_result())
         # Produce a completed receipt interrupted before either ready or terminal cleanup ran.

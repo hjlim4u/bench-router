@@ -18,6 +18,8 @@ def finalize(rc, runner=subprocess.run):
     _, why = h.check_result(rc)  # Results must survive native worktree cleanup.
     if why:
         raise r.InputError(why)
+    if rc["backend"] == h.BACKEND:
+        runner = h._checked_runner(rc, None, runner)
     board = h._board(rc["backend"], runner)
     if hasattr(board, "verify"):  # adapter's identity check before the mutating handoff
         board.verify(rc)
