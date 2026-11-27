@@ -7,7 +7,7 @@
 # take part in selection or hashes). `models` is required: only the models the quoted page itself covers. `when` is verbatim page text; `text` is the prompt snippet the page supplies.
 # Gemini gives model roles and a model-independent thinking rule (`effort_class`), resolved per model from
 # that page's `default`/`supported` levels.
-version = "2026-11-26.1"
+version = "2026-11-27.1"
 as_of = "2026-11-26"
 
 [sources.openai]
@@ -302,18 +302,18 @@ efforts = ["max"]
 when = "`max` is for measuring the model\u2019s ceiling or for the rare task where time and tokens don\u2019t matter. It is most reasonable to use `max` for open-ended problems such as scientific discovery and mathematics. Turns are slow and use many more tokens than at `xhigh`."
 
 [vendor.gemini]
-revision = "2026-11-26.1"
+revision = "2026-11-27.1"
 sources = ["gemini_models", "gemini_thinking", "gemini_choosing_a_model", "gemini_whats_new_neon"]
 strategy = "Start with `high` for most complex tasks, and reserve `xhigh` for hard, multi-step problems where `high` falls short. Using `xhigh` increases latency and token use and can cause overthinking or exhaust `max_output_tokens` on simpler prompts such as text or JSON extraction. Run your evaluations at all four levels with a high `max_output_tokens` so the limit doesn’t cut answers short, then pick the lowest `thinking_level` that meets your quality bar."
 
 [[vendor.gemini.model]]
 id = "gemini-3.5-flash-lite"
-role = "Our fastest, most cost-effective 3.5 model for high-throughput execution."
+role = "Our fastest, lowest-cost general model for high-volume tasks. Choose it for translation, summarization, and structured JSON extraction at scale, or when you have sub-second latency targets."
 default = "minimal"
 supported = ["minimal", "low", "medium", "high"]
 [[vendor.gemini.model]]
 id = "gemini-3.8-flash"
-role = "Our most intelligent Flash model, engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows."
+role = "Our previous-generation Flash model for software engineering, autonomous agents, and complex enterprise workflows."
 default = "medium"
 supported = ["low", "medium", "high"]
 [[vendor.gemini.model]]
@@ -329,14 +329,14 @@ supported = ["low", "medium", "high"]
 
 [[vendor.gemini.model]]
 id = "gemini-4-carbon"
-role = "Our strongest reasoning model, built for complex software engineering, multimodal knowledge work, scientific reasoning, and cybersecurity defense."
+role = "Built for long-horizon asynchronous work and deep verification. Carbon spends more thinking tokens per turn to test hypotheses, isolate root causes across repositories, and check fixes against tests. Choose it for multi-hour background runs, deep research, formal proofs, and security audits, or escalate to Carbon when Neon at `high` or `xhigh` thinking gets stuck."
 default = "medium"
 supported = ["low", "medium", "high"]
 
 
 [[vendor.gemini.model]]
 id = "gemini-4-neon"
-role = "Sits between Hydrogen and Carbon. Finishes faster with fewer output tokens than Carbon while handling harder reasoning than Hydrogen. Choose it for complex software engineering, dense knowledge work, and science workflows where Hydrogen isn't enough and you don't need Carbon's extra verification."
+role = "Built for complex, interactive software engineering, dense knowledge work, and science workflows. Neon delivers deeper reasoning than Hydrogen while finishing faster with fewer output tokens than Carbon. Choose it for multi-file refactoring, repository-wide debugging, and analytical tasks where a developer or coding agent is waiting on the response."
 default = "high"
 supported = ["low", "medium", "high", "xhigh"]
 advanced = "high"
@@ -344,7 +344,7 @@ advanced = "high"
 
 [[vendor.gemini.model]]
 id = "gemini-4-hydrogen"
-role = "Brings cutting-edge intelligence to everyone, with speed and efficiency for everyday coding and agentic workflows, featuring a shared 1M context window and long decodes up to 1M tokens."
+role = "Fast and cost-efficient for everyday coding and agentic workflows. Hydrogen cuts fabricated claims by more than 5x compared to Gemini 3.8 Flash by flagging missing context instead of guessing, and batches read and search tool calls in parallel. Choose it for interactive web apps, routine code edits, multimodal document pipelines, and parallel worker subagents."
 default = "high"
 supported = ["low", "medium", "high", "xhigh"]
 advanced = "high"

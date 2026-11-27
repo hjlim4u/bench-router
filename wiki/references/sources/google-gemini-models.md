@@ -28,14 +28,16 @@ snapshots:
 
 The official catalog describes model capabilities and intended uses. The following is a dated subset, not an exhaustive list or a price comparison.
 
-> For any new projects, use our latest models: 3.5 Flash-Lite or 3.8 Flash.
+> For any new projects, use our latest models: Gemini 4 Hydrogen or 3.5 Flash-Lite.
+
+(Wording as of the 2026-11-26 capture `_raw/_archived/2026-11-26-google-gemini-models.md`; the 2026-10-24 page named 3.5 Flash-Lite or 3.8 Flash.)
 
 > Most production apps should use a specific stable model.
 
 | Model listed on 2026-10-24 | Published description, verbatim |
 |---|---|
 | Gemini 3.5 Flash-Lite | Our fastest, most cost-effective 3.5 model for high-throughput execution. |
-| Gemini 3.8 Flash | Our most intelligent Flash model, engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows. |
+| Gemini 3.8 Flash | Our most intelligent Flash model, engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows. (2026-11-26 page: "Our previous-generation Flash model for software engineering, autonomous agents, and complex enterprise workflows.") |
 | Gemini 4 Argon | Our flagship reasoning model with a unified 1M context window and long decodes up to 1M tokens. |
 | Gemini 3.1 Pro preview | Listed as `gemini-3.1-pro-preview` without a description; its preview status must remain explicit. |
 

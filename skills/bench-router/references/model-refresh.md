@@ -36,6 +36,8 @@ Overrides name providers only. Bind any wiki or index writer explicitly to the d
 
 ### Stage 2 — Wiki update
 1. Update affected `wiki/references/sources/*.md` and `wiki/synthesis/*.md` pages (folded `>-` scalars for `title`/`summary`, explicit `as_of` dates, `snapshots:` wikilinks, and a closing `## Sources` section).
+   - When a source page is re-captured, re-read the whole page, not only the new model's section: update every existing model's status and description (e.g. "previous-generation", "legacy", deprecation), the "for new projects use…" banner, and upgrade/migration tables.
+   - Mark wiki summaries as such. Text inside quotes or tables labeled "verbatim" must match the capture; labels like "Default to" that the page does not literally say are `^[inferred]`, not `^[extracted]`.
 2. Keep all newly created pages at `lifecycle: draft` and omit `## Index` TOML blocks on model/effort guidance pages (per `wiki/AGENTS.md`, guidance is reference knowledge, not a benchmark unit or facet).
 3. Directly verify new/edited pages' `lifecycle`, `sources`, and capture links before running `wiki_sync` (or leaving managed files untouched as `wiki sync pending` if unavailable), then run `python3 -m bench_router.cli wiki compile --check` once from the checkout and run `search_index`.
 
@@ -43,13 +45,15 @@ Overrides name providers only. Bind any wiki or index writer explicitly to the d
 1. Update `bench_router/guidelines.toml` only where canonical evidence changed:
    - Preserve each vendor's schema shape: OpenAI and Claude use combo `start` rows, conditional `escalation` rows, and optional role-only `model` rows; Gemini uses factored `model` rows (`supported`, `default`, optional `advanced`) + `effort_class` (never add a `start` key to Gemini, which switches `decision.py`'s loader branch).
    - Keep every `strategy`, `role`, `when`, and `text` verbatim from its own vendor capture. Retain legacy `[sources.*]` entries under their own IDs when older rows still quote them. Bump `version`, `as_of`, and `[vendor.<id>].revision` only for substantive changes; leave unchanged evidence and revisions alone.
+   - Re-diff every existing `role` and `strategy` of a vendor against that vendor's newest captures, not only the rows of newly released models. A row can still match an older capture after the vendor changed it (e.g. Gemini 3.8 Flash stayed "Our most intelligent Flash model" in config after the 2026-11-26 page called it "previous-generation"), so `test_v109` does not catch this.
+   - Where the vendor publishes model-selection guidance ("When to choose each model", "Start with", upgrade targets), quote that text as the model's `role` instead of a catalog card blurb. The decider matches `role` text against the task, so a stale or generic blurb steers selection to the wrong model.
    - Keep model-scoped `prompt_guidance` isolated to the models its source covers (e.g., `claude-sonnet-5-5` is tested to pull only from its own prompting guide).
 2. Sync `bench_router/defaults/{profiles,aliases}.toml` and `examples/{profiles.default,aliases.example}.toml` **byte-for-byte** (and `bench_router/defaults/env` ↔ `.env.example` if touched; *why*: `test_p1.py:test_v63` enforces exact byte equality).
 3. Update dated assertions in `test_p0.py` only when official vendor guidance genuinely changed.
 
 ### Stage 4 — Verify & refresh
 1. Run the full offline test suite:
-   `python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codexbar test_usage test_evidence_policy`
+   `python3 -m unittest test_p0 test_p1 test_p2 test_p3 test_coordination test_codexbar test_usage test_evidence_policy test_board`
 2. If bundled defaults changed, verify the affected default models and aliases against a temporary cache without touching user config:
    `python3 -m bench_router.cli --config-dir bench_router/defaults --cache-dir <tmp> refresh`
 3. Run shared `refresh` and `status` as **separate** commands (never `refresh && status`, because partial fetch failure returns exit 16 and would suppress `status`), and report per-source results, fresh skips, and unmatched names (distinguishing unresolved aliases from missing profiles).

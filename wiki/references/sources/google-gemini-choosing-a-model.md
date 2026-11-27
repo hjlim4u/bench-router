@@ -45,6 +45,8 @@ Google's official selection guide (`aistudio.google.com/docs/choosing-a-model.md
 - **Escalate to `gemini-4-neon`**: Sits between Hydrogen and Carbon. Finishes faster with fewer output tokens than Carbon while handling harder reasoning than Hydrogen. Choose when Hydrogen is not enough and Carbon's extra verification is not required. ^[extracted]
 - **Escalate to `gemini-4-carbon`**: Spends more thinking tokens per turn to test hypotheses, isolate root causes across repositories, and check fixes against tests. ^[extracted]
 - **Pair models via Interactions API**: Because Carbon, Neon, and Hydrogen share the same request schema, 1M unified context window, and tools, workflows can pass `previous_interaction_id` from a planner (`gemini-4-carbon` or `gemini-4-neon`) to an executor (`gemini-4-hydrogen`). ^[extracted]
+- **Upgrade paths** (verbatim table, 2026-11-26 capture): `gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3-flash-preview` → `gemini-4-hydrogen`; `gemini-3.1-pro-preview` → `gemini-4-neon` (or `gemini-4-carbon` for your hardest problems). ^[extracted]
+- **Wording note**: the page's "When to choose each model" bullets carry no literal "default" for Hydrogen; the "Default/Escalate" labels above are this wiki's summary. `bench_router/guidelines.toml` quotes those bullets verbatim as the Gemini 4 and Flash-Lite roles. ^[inferred]
 - **Specialized models**: `gemini-decision-1` for zero-output-token classification/routing/scoring, Nano Banana for images, Gemini Omni for video, and Gemini 3.8 Live for real-time voice. ^[extracted]
 
 ## Limits
