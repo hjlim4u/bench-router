@@ -1,26 +1,32 @@
 #!/bin/bash
-# Replica rehearsal of docs/shepherdr-rollback.md section 4 (T10): restore the 3.1.26 archive, check it, install
-# 3.2.19 over it, roll back with section 6, check again. Runs as root inside a throwaway container; only the
-# archive (read-only) comes from the host. Usage, from the repository root:
-#   docker run --rm -i -u root --entrypoint bash -e REPLICA_USER="$USER" \
-#     -v ~/.local/backups/shepherdr/shepherdr-3.1.26.tar:/backup.tar:ro \
+# Replica rehearsal of docs/shepherdr-rollback.md section 4: restore the 3.1 archive, check it, install the image's
+# Shepherdr (3.2.19) over it, roll back with section 6, check again. Runs as root inside a throwaway container; only
+# the archive (read-only) comes from the host. Build the image once (eval/shepherdr-env/run.sh build v3.2.19), then,
+# from the repository root:
+#   docker run --rm -i -u root --entrypoint bash \
+#     -e REPLICA_USER="$USER" -e REPLICA_UID="$(id -u)" -e REPLICA_HOME="$HOME" \
+#     -v ~/.local/backups/shepherdr/shepherdr-3.1.tar:/backup.tar:ro \
 #     -v "$PWD/eval/shepherdr_rehearsal.sh:/rehearsal.sh:ro" shepherdr-env:v3.2.19 /rehearsal.sh
-# The user gets uid 1000 and the host's home path, because the archive's ~/.herdr links are absolute.
+# The replica user gets the host's uid and home path: the archive keeps numeric owners and absolute ~/.herdr links.
+# The last line is "REHEARSAL PASS" or "REHEARSAL FAIL". Running cards make the install refuse; the replica then
+# forces it, which is never done on the host.
 set -u
-U=${REPLICA_USER:?set REPLICA_USER to the host user name}; H=/home/$U
+U=${REPLICA_USER:?set REPLICA_USER to the host user name}; H=${REPLICA_HOME:-/home/$U}; ID=${REPLICA_UID:-1000}
+R=${H#/}; SRC=/home/tester/shepherdr; TV=$(git -c safe.directory="$SRC" -C "$SRC" describe --tags | sed 's/^v//')
+[ -n "$TV" ] || { echo "REHEARSAL FAIL: cannot read the image's Shepherdr version"; exit 1; }
 step() { printf '\n##### %s\n' "$*"; }
 as() { su - "$U" -c "export PATH=$H/.local/bin:/usr/local/bin:/usr/bin:/bin; $*"; }
 
-step "A. restore archive into $H (uid 1000)"
-getent passwd 1000 | cut -d: -f1 | xargs -r userdel -r 2>/dev/null
-useradd -u 1000 -M -d "$H" -s /bin/bash "$U" && mkdir -p "$H" && chown 1000:1000 "$H"
+step "A. restore archive into $H (uid $ID)"
+{ getent passwd "$ID" | cut -d: -f1; getent passwd "$U" | cut -d: -f1; } | sort -u | grep -vx tester | xargs -r -n1 userdel -r 2>/dev/null
+useradd -u "$ID" -M -d "$H" -s /bin/bash "$U" && mkdir -p "$H" && chown "$ID:$ID" "$H" || { echo "REHEARSAL FAIL: cannot create user $U (uid $ID)"; exit 1; }
 tar -xpf /backup.tar --numeric-owner -C / && echo "extract rc=0"
-chown 1000:1000 "$H" "$H"/.config "$H"/.local "$H"/.local/share "$H"/.local/state "$H"/.local/bin "$H"/.claude "$H"/.codex "$H"/.config/systemd "$H"/.config/systemd/user 2>/dev/null; true
+chown "$ID:$ID" "$H" "$H"/.config "$H"/.local "$H"/.local/share "$H"/.local/state "$H"/.local/bin "$H"/.claude "$H"/.codex "$H"/.config/systemd "$H"/.config/systemd/user 2>/dev/null; true
 as 'git config --global user.email r@example.invalid; git config --global user.name r'
 # shortcut: the cards' repositories are not in the archive; empty repos at the same paths let list/show open them
 as 'python3 - <<E
 import json,glob,os,subprocess
-for p in glob.glob(os.path.expanduser("~/.local/share/shepherdr/tasks/*.json")):
+for p in glob.glob(os.path.expanduser("~/.herdr/tasks/*.json")):
     f=json.load(open(p)).get("folder")
     if f and not os.path.isdir(f):
         os.makedirs(f); subprocess.run(["git","init","-q",f]); subprocess.run(["git","-C",f,"commit","-q","--allow-empty","-m","replica"])
@@ -31,11 +37,11 @@ check() {
   step "$1: payload, session settings, layout"
   as 'readlink ~/.local/bin/herdr-task ~/.local/bin/shepherdr'
   as 'echo "HC_SESSION lines in unit: $(grep -c HC_SESSION ~/.config/systemd/user/shepherdr.service)"'
-  as 'echo "LAYOUT=$(cat ~/.local/share/shepherdr/LAYOUT)"; ls -L ~/.herdr >/dev/null && echo "~/.herdr links resolve"'
+  as 'echo "LAYOUT=$(cat ~/.local/share/shepherdr/LAYOUT 2>/dev/null || echo "none, layout 1")"; ls -L ~/.herdr >/dev/null && echo "~/.herdr resolves"'
   as 'python3 - <<E
 import json,glob,os
 n=0; f=0
-for p in glob.glob(os.path.expanduser("~/.local/share/shepherdr/tasks/*.json")):
+for p in glob.glob(os.path.expanduser("~/.herdr/tasks/*.json")):
     d=json.load(open(p)); f+=1; n+=len(d.get("tasks",[]))
 print("on-disk cards", n, "files", f)
 E'
@@ -47,6 +53,7 @@ active=[(g["folder"],t) for g in json.load(open("/tmp/list.json")) for t in g["t
 arch=[(g["folder"],t) for g in json.load(open("/tmp/arch.json")) for t in g["tasks"]]
 print("listed: active", len(active), "archived", len(arch), "total", len(active)+len(arch),
       "folders", len({f for f,_ in active+arch}))
+open("/tmp/count","w").write(str(len(active)+len(arch)))
 print("states", dict(collections.Counter(t.get("state") for _,t in active+arch)))
 by={}
 for f,t in active+arch: by.setdefault(t.get("state"), (f,t))
@@ -66,25 +73,26 @@ for s in ("done","running"):
 E'
   as 'hc server status --json 2>&1 | python3 -c "import json,sys;d=json.load(sys.stdin);print(\"core status\",json.dumps(d)[:300])" 2>&1'
   as 'hc server stop >/dev/null 2>&1; true'
+  cp /tmp/count "/tmp/count_$2" 2>/dev/null; rm -f /tmp/count /tmp/show_done /tmp/show_running
 }
 
-check "B. baseline (3.1.26 restored)"
+check "B. baseline (3.1 restored)" before
 
-step "C. forward path: install 3.2.19 over the restored 3.1.26"
-cp -a /home/tester/shepherdr "$H/shepherdr" && chown -R 1000:1000 "$H/shepherdr"
+step "C. forward path: install $TV over the restored 3.1"
+rm -rf "$H/shepherdr"; cp -a "$SRC" "$H/shepherdr" && chown -R "$ID:$ID" "$H/shepherdr"
 as 'cd ~/shepherdr && git describe --tags && ./install.sh --no-build --yes > /tmp/install1.log 2>&1; echo "install (no --force) rc=$?"; tail -25 /tmp/install1.log'
-if ! as 'test -f ~/.local/share/shepherdr/installed.json && grep -q "\"version\": \"3.2.19\"" ~/.local/share/shepherdr/installed.json'; then
+if ! as 'test -f ~/.local/share/shepherdr/installed.json && grep -q "\"version\": \"'"$TV"'\"" ~/.local/share/shepherdr/installed.json'; then
   step "C2. replica only: retry with --force (never on the host)"
   as 'cd ~/shepherdr && ./install.sh --no-build --yes --force > /tmp/install2.log 2>&1; echo "install --force rc=$?"; tail -25 /tmp/install2.log'
 fi
 as 'shepherdr doctor > /tmp/doctor.log 2>&1; echo "doctor rc=$?"; tail -30 /tmp/doctor.log'
 as 'shepherdr where 2>&1 | head -40'
 as 'cat ~/.local/state/shepherdr/migrate.json; echo; grep -n "HC_SESSION\|SHEPHERDR_SESSION" ~/.config/systemd/user/shepherdr.service; ls ~/.local/share/shepherdr/.shepherdr-backup 2>&1; readlink ~/.local/bin/herdr-task; ls ~/.config/herdr-app/mods 2>&1 | head; test -e ~/.config/herdr-app/data/shepherdr/installed.json && echo "3.1 record present" || echo "3.1 record removed"'
-as 'herdr-task list --all --json > /tmp/l32.json; echo "3.2 list rc=$?"; python3 -c "import json;d=json.load(open(\"/tmp/l32.json\"));t=(d if isinstance(d,list) else d.get(\"tasks\",[]));print(\"3.2 listed\",len(t))"'
+as 'herdr-task list --all --json > /tmp/l32.json; echo "3.2 list rc=$?"; python3 -c "import json;d=json.load(open(\"/tmp/l32.json\"));print(\"3.2 listed\",sum(len(g[\"tasks\"]) for g in d))"'
 as 'python3 - <<E
 import json,glob,os,collections
 c=collections.Counter()
-for p in glob.glob(os.path.expanduser("~/.local/share/shepherdr/tasks/*.json")):
+for p in glob.glob(os.path.expanduser("~/.herdr/tasks/*.json")):
     d=json.load(open(p)); c.update(k for k in d if k!="tasks")
     for t in d.get("tasks",[]): c.update("task."+k for k in t)
 print(sorted(c.items()))
@@ -92,28 +100,29 @@ E' > /tmp/fields_after.txt
 as 'grep -c . ~/.claude/settings.json; grep -o "shepherdr/hooks[^\"]*\|herdr-app/mods/chat[^\"]*" ~/.claude/settings.json | sort | uniq -c'
 
 step "D. rollback (section 6)"
-as 'cd / && tar -cpf /tmp/shepherdr-3.2.19-failed.tar home/'"$U"'/.config/herdr-app home/'"$U"'/.config/shepherdr home/'"$U"'/.local/share/shepherdr home/'"$U"'/.local/state/shepherdr home/'"$U"'/.herdr 2>/dev/null; echo "failed-state archive rc=$?"'
+as 'cd / && tar -cpf /tmp/shepherdr-failed.tar --exclude='"$R"'/.herdr/worktrees --exclude='"$R"'/.local/share/shepherdr/worktrees '"$R"'/.config/herdr-app '"$R"'/.config/shepherdr '"$R"'/.local/share/shepherdr '"$R"'/.local/state/shepherdr '"$R"'/.herdr 2>/dev/null; echo "failed-state archive rc=$?"'
 as 'shepherdr uninstall > /tmp/uninstall.log 2>&1; echo "uninstall rc=$?"; tail -20 /tmp/uninstall.log'
-tar -xpf /backup.tar --numeric-owner -C / \
-  --exclude="home/$U/.local/share/shepherdr/tasks" --exclude="home/$U/.local/share/shepherdr/artifacts" \
-  --exclude="home/$U/.local/share/shepherdr/secrets" && echo "restore (payload+config, board data kept) rc=0"
+# ~/.herdr is not restored: after the install it holds links to the moved data, which 3.1 reads through
+tar -xpf /backup.tar --numeric-owner -C / --exclude="$R/.herdr" \
+  --exclude="$R/.local/share/shepherdr/tasks" --exclude="$R/.local/share/shepherdr/artifacts" \
+  --exclude="$R/.local/share/shepherdr/secrets" && echo "restore (payload+config; board data and ~/.herdr kept) rc=0"
 
-check "E. after rollback (3.1.26 payload, post-switch board data)"
+check "E. after rollback (3.1 payload, post-switch board data)" after
 
 step "E2. 3.2-written fields still in the kept board data"
 as 'python3 - <<E
 import json,glob,os,collections
 c=collections.Counter()
-for p in glob.glob(os.path.expanduser("~/.local/share/shepherdr/tasks/*.json")):
+for p in glob.glob(os.path.expanduser("~/.herdr/tasks/*.json")):
     d=json.load(open(p)); c.update(k for k in d if k!="tasks")
     for t in d.get("tasks",[]): c.update("task."+k for k in t)
 print(sorted(c.items()))
 E' > /tmp/fields_rollback.txt
-tar -xOf /backup.tar --wildcards "home/$U/.local/share/shepherdr/tasks/*.json" >/dev/null
-as 'mkdir -p /tmp/orig && tar -xf /backup.tar -C /tmp/orig --wildcards "home/'"$U"'/.local/share/shepherdr/tasks/*.json" && python3 - <<E
+mkdir -p /tmp/orig && tar -xf /backup.tar -C /tmp/orig --wildcards "$R/.local/share/shepherdr/tasks/*.json" "$R/.herdr/tasks/*.json" 2>/dev/null; chmod -R a+rX /tmp/orig
+as 'python3 - <<E
 import json,glob,collections
 c=collections.Counter()
-for p in glob.glob("/tmp/orig/home/'"$U"'/.local/share/shepherdr/tasks/*.json"):
+for p in glob.glob("/tmp/orig/'"$R"'/.local/share/shepherdr/tasks/*.json")+glob.glob("/tmp/orig/'"$R"'/.herdr/tasks/*.json"):
     d=json.load(open(p)); c.update(k for k in d if k!="tasks")
     for t in d.get("tasks",[]): c.update("task."+k for k in t)
 print(sorted(c.items()))
@@ -127,5 +136,10 @@ print("fields removed:", [k for k in b if k not in a])
 print("count changes:", {k:(b[k],a[k]) for k in b if k in a and a[k]!=b[k]})
 E
 step "F. hooks after rollback"
-for f in .claude/settings.json .codex/hooks.json .config/systemd/user/shepherdr.service .config/herdr-app/keys.json; do tar -xOf /backup.tar "home/$U/$f" | cmp -s - "$H/$f" && echo "same as archive: $f" || echo "DIFFERS: $f"; done
-echo "##### done"
+for f in .claude/settings.json .codex/hooks.json .config/systemd/user/shepherdr.service .config/herdr-app/keys.json; do tar -tf /backup.tar "$R/$f" >/dev/null 2>&1 || { echo "not in archive: $f"; continue; }
+  tar -xOf /backup.tar "$R/$f" | cmp -s - "$H/$f" && echo "same as archive: $f" || { echo "DIFFERS: $f"; differs=1; }; done
+b=$(cat /tmp/count_before 2>/dev/null); a=$(cat /tmp/count_after 2>/dev/null)
+link=$(readlink "$H/.local/bin/herdr-task")
+echo "cards listed before: ${b:-none}, after rollback: ${a:-none}; herdr-task -> $link"
+case "$link" in *"/.config/herdr-app/"*) ;; *) differs=1 ;; esac
+[ -n "$b" ] && [ "$b" = "$a" ] && [ -z "${differs:-}" ] && echo "REHEARSAL PASS" || { echo "REHEARSAL FAIL"; exit 1; }

@@ -2,10 +2,15 @@
 
 This is the operator runbook for plan step 5 (work unit T10). A person runs every command in it. Agents
 only prepared it, from a read-only survey of the host on 2026-11-27 and from the 3.1.26 and 3.2.19 sources.
-No Shepherdr, `herdr-task` or `hc` command was run on the host. Paths use `~` for the operator's home.
+No Shepherdr, `herdr-task` or `hc` command was run on the host while it was prepared. Paths use `~` for the
+operator's home.
 
 Gate G3 (approval to switch) needs a passed rehearsal (section 4). The switch itself (T11, section 5)
 covers one repository at a time.
+
+That host was switched on 2026-11-27. Sections 1 and 2 describe its state before the switch. To switch another
+host, follow [shepherdr-switch.md](shepherdr-switch.md), which uses `eval/shepherdr_switch.sh`, and come back
+here for the location table and the rollback.
 
 ## 1. Baseline: what is installed now
 
@@ -118,7 +123,9 @@ location, and therefore whether section 3 backs it up.
 restored together, and the existing tasks open. The image already has `hc` 0.1.20 (a copy of the host's
 binary), so the replica exercises the same core.
 
-`eval/shepherdr_rehearsal.sh` runs steps 1 to 5 end to end. Its header shows the `docker run` line.
+`eval/shepherdr_rehearsal.sh` runs steps 1 to 5 end to end and ends with `REHEARSAL PASS` or `REHEARSAL FAIL`.
+Its header shows the `docker run` line; it takes the host's user name, uid and home path, and works for a
+layout 1 archive as well.
 
 1. Start a throwaway container from `eval/shepherdr-env` (`shepherdr-env:v3.2.19`, Ubuntu 24.04; it holds the
    3.2.19 source for step 4). Use a
@@ -157,6 +164,9 @@ binary), so the replica exercises the same core.
 
 ## 5. Switch one repository (T11, a person runs it)
 
+[shepherdr-switch.md](shepherdr-switch.md) has the same steps as a checklist, with the blockers found on the
+first host.
+
 1. Do sections 3.1 to 3.4 again on the day of the switch, so the archive is fresh.
 2. Fetch the tag (`git -C ~/shepherdr fetch --tags`), check out `v3.2.19`, and run `shepherdr update`.
    Then run `shepherdr doctor`; it must exit 0.
@@ -188,6 +198,10 @@ binary), so the replica exercises the same core.
 4. **Restore 3.1.**
    - Restore from the archive every payload and config path in section 3.4. Do not restore the board data
      yet: `tasks/`, `artifacts/` and `secrets/` under `~/.local/share/shepherdr`.
+   - Do not restore `~/.herdr` either. If the host was on layout 1, the install moved its data out of
+     `~/.herdr` and left links there; 3.1 reads the current cards through those links. Restoring `~/.herdr`
+     would put the old card files back in front of them. (`tar --exclude="<home>/.herdr"`; the rehearsal
+     script does this.)
    - Restoring the payload restores the 3.1 window layout, mods and hooks, the 3.1 unit file and the
      `~/.local/bin` links. The 3.2 installer removed the 3.1 layout and mods, and only the archive (or the
      3.1 installer) brings them back. `herdr-core` and the Herdr app were not changed by the switch.
