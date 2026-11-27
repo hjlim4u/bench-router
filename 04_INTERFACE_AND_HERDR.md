@@ -10,6 +10,7 @@ Global options are `--config-dir`, `--cache-dir`, and `--herdr-session`, placed 
 |---|---|
 | `route --task FILE --dry-run` / `explain --task FILE` | Offline decision packet and selection replay / Text explanation covering all candidates and constraints |
 | `route --task FILE [--wait-ms N]` | Live submission and finite wait after selection; 0 returns immediately after submission |
+| `route --task FILE --selection FILE --wait-ms 0 --notify-codex` | Single local headless run only; queues a completion message to the calling Codex CLI thread (`CODEX_THREAD_ID`) when the run settles |
 | `evaluate --task FILE [--context FILE] [--format 1\|2\|3]` | Evaluation without selection. Default schema 2.0; format 3 yields schema 4.0 |
 | `select --assessment FILE --profile ID --policy-id ID --policy-version V --reason TEXT [--accept-provisional]` | Generates selection 6.0 from completed format 3 evaluation. No execution or side-effects |
 | `route --task FILE --selection FILE [--dry-run]` | Validates and replays selection 2.0, 5.0, or 6.0 |
