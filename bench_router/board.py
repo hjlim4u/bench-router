@@ -35,7 +35,7 @@ both, so bind() must return that session and core id and every later board/hc ca
             (or a resumed session was not the recorded one) -> manual reconciliation, never auto-repair
   retryable True when the read failed transiently; task is then None and nothing else is inferred
   why       board-provided reason text or None
-  ids       identifiers found by lookup (only when rc had none; see create row below)
+  ids       identifiers found by lookup (only keys missing from rc, e.g. create or lost-start ids)
 
 Identifier persistence contract (the adapter only returns identifiers; the router persists):
 | op      | router stores before call          | router stores on success   | on lost response                                          |

@@ -393,6 +393,11 @@ class ShepherdrBoard:
             return observation(None, "unknown", retryable=True, why=(err or {}).get("message"))
         live = [x for x in row.get("live") or [] if isinstance(x, dict)]
         addresses = [x.get("address") for x in live]
+        recovered = {k: v for k, v in (("terminal_id", addresses[0] if addresses else None),
+                                       ("worktree", row.get("worktree")), ("branch", row.get("branch")))
+                     if v and not rc.get(k)}
+        if recovered:
+            extra.setdefault("ids", {}).update(recovered)
         process, label_ok = self._process(rc.get("terminal_id") or (addresses[0] if addresses else None), key)
         ok = label_ok and row.get("key") == key and row.get("title") == "br-" + rc["run_id"] \
             and (not rc.get("task_id_on_board") or row.get("id") == rc["task_id_on_board"]) \

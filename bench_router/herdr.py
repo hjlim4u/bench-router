@@ -412,6 +412,10 @@ def settle(rc, state):
     """관찰된 herdr 상태 + 결과 파일로 receipt 상태를 결정한다. idle/done만으로는 성공이 아니다."""
     _observe(rc, state)
     if state in ("idle", "done"):
+        if not rc.get("worktree"):
+            rc.update(status="delivery_uncertain", delivery_state="uncertain")
+            _observe(rc, state, note="worktree unknown; inspect board card before collecting")
+            return rc
         src = Path(rc["worktree"]) / RESULT_REL / rc["run_id"]
         manifest, why = check_result({**rc, "run_dir": str(src)})
         if manifest:

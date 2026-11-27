@@ -56,13 +56,17 @@ class MemoryBoard:
         self._done("create")
         return {"thread_id": key, "task_id_on_board": f"uid/{n}"}
 
+    def _worktree(self, key):
+        return f"/mem/{key}"
+
     def start(self, rc):
         if self.bind(rc["binding"]["session"], None) != rc["binding"]:
             raise InputError("board binding changed since bind")
         card = self.cards[rc["thread_id"]]
-        card.update(raw="busy", proc="up", terminal=f"tty-{rc['thread_id']}", session=f"s-{rc['thread_id']}")
+        card.update(raw="busy", proc="up", terminal=f"tty-{rc['thread_id']}", session=f"s-{rc['thread_id']}",
+                    worktree=self._worktree(rc["thread_id"]), branch=f"mem/{rc['thread_id']}")
         self._done("start")
-        return {"terminal_id": card["terminal"], "worktree": f"/mem/{rc['thread_id']}", "branch": f"mem/{rc['thread_id']}"}
+        return {"terminal_id": card["terminal"], "worktree": card["worktree"], "branch": card["branch"]}
 
     def observe(self, rc):
         if self.flaky:
@@ -78,6 +82,11 @@ class MemoryBoard:
         card = self.cards.get(key)
         if card is None:
             raise InputError(f"card {key} not found")
+        recovered = {k: v for k, v in (("terminal_id", card.get("terminal")),
+                                       ("worktree", card.get("worktree")), ("branch", card.get("branch")))
+                     if v and not rc.get(k)}
+        if recovered:
+            extra.setdefault("ids", {}).update(recovered)
         ok = (not rc.get("task_id_on_board") or card["uid"] == rc["task_id_on_board"]) and \
              (not rc.get("terminal_id") or card["terminal"] == rc["terminal_id"])
         return observation(RAW_TASK[card["raw"]], RAW_PROC[card["proc"]], "ok" if ok else "mismatch", **extra)
@@ -465,8 +474,8 @@ class WorktreeMemoryBoard(MemoryBoard):
         super().__init__()
         self.root = root
 
-    def start(self, rc):
-        return {**super().start(rc), "worktree": str(self.root / rc["thread_id"])}
+    def _worktree(self, key):
+        return str(self.root / key)
 
 
 class RouterBoardIntegration(unittest.TestCase):
@@ -512,6 +521,58 @@ class RouterBoardIntegration(unittest.TestCase):
         self.assertEqual(+board.calls, Counter(create=1, start=1, handoff=1))
         self.assertEqual([c for c in commands if c[0] in (shepherdr.HERDR_BIN, shepherdr.PROJECTS_BIN)], [])
         self.assertEqual(commands, [])
+
+    def test_v19_memory_board_lost_start_collect(self):
+        from types import SimpleNamespace
+        from test_p0 import MAPPING, config, profile
+        from test_p2 import cleanup_temp, git_repo, projects_environment, which, write_result
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(cleanup_temp, tmp)
+        projects_environment(self, tmp.name)
+        cwd = Path(os.path.realpath(tmp.name)) / "repo"
+        cwd.mkdir()
+        git_repo(cwd)
+        cfg = config([profile("a", kind="claude", executable="claude", args=["--model", "m"])])
+        task = r.validate_task({"schema_version": "1.0", "task_id": "t1", "round": 1, "summary": "s", "prompt": "do it",
+                                "cwd": str(cwd), "constraints": {"timeout_ms": 60000}})
+        board = WorktreeMemoryBoard(cwd / "wt")
+        board.lose.add("start")
+
+        def offline_runner(cmd, **kw):
+            self.fail(f"unexpected CLI command {cmd}")
+
+        with patch.dict(hd.BOARDS, {board.backend: lambda runner: board}):
+            out = hd.dispatch(task, cfg, MAPPING, None, [], session="default", runner=offline_runner, which=which,
+                              profile_id="a", selection_mode="orchestrator_pinned", wait_ms=0, backend=board.backend)
+            rc = json.loads(Path(out["receipt_path"]).read_text("utf-8"))
+            self.assertEqual((out["status"], rc["worktree"]), ("delivery_uncertain", None))
+            key = out["thread_id"]
+            prompt = Path(rc["run_dir"], "input.txt").read_text("utf-8")
+            write_result()(SimpleNamespace(worktree_of=lambda _: board.root / key), prompt)
+            board.cards[key].update(raw="finished", proc="ended")
+            done = hd.collect_run(str(cwd), out["run_id"], 0, runner=offline_runner)
+            self.assertEqual((done["status"], board.calls["start"]), ("completed", 1))
+
+        # A board that cannot supply the missing worktree stays delivery_uncertain instead of crashing Path(None).
+        class NoWorktreeBoard(WorktreeMemoryBoard):
+            backend = "memory-nowt"
+
+            def observe(self, rc):
+                obs = super().observe(rc)
+                if "ids" in obs:
+                    obs["ids"] = {k: v for k, v in obs["ids"].items() if k != "worktree"}
+                return obs
+
+        board2 = NoWorktreeBoard(cwd / "wt2")
+        board2.lose.add("start")
+        task2 = r.validate_task({"schema_version": "1.0", "task_id": "t2", "round": 1, "summary": "s", "prompt": "do it",
+                                 "cwd": str(cwd), "constraints": {"timeout_ms": 60000}})
+        with patch.dict(hd.BOARDS, {board2.backend: lambda runner: board2}):
+            out2 = hd.dispatch(task2, cfg, MAPPING, None, [], session="default", runner=offline_runner, which=which,
+                               profile_id="a", selection_mode="orchestrator_pinned", wait_ms=0, backend=board2.backend)
+            board2.cards[out2["thread_id"]].update(raw="finished", proc="ended")
+            done2 = hd.collect_run(str(cwd), out2["run_id"], 0, runner=offline_runner)
+            self.assertEqual((done2["status"], board2.calls["start"]), ("delivery_uncertain", 1))
 
 
 class ObservationTest(unittest.TestCase):
