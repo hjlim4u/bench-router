@@ -469,14 +469,14 @@ class P2(unittest.TestCase):
         def collect_offline(*args, **kw):
             if len(statuses) == 3 or "execution_failed" in statuses:
                 self.fail(f"observer kept polling at {clock.elapsed}s after {statuses}")
-            kw["runner"] = runner
             result = collect_run(*args, **kw)
             statuses.append(result["status"])
             return result
 
         with patch.object(hd, "collect_run", side_effect=collect_offline), \
              patch.object(hd, "time", clock), patch.object(hd, "_now", clock.now), \
-             patch.object(lifecycle, "time", clock):
+             patch.object(lifecycle, "time", clock), patch.object(lifecycle, "subprocess",
+                 SimpleNamespace(run=runner, TimeoutExpired=subprocess.TimeoutExpired)):
             lifecycle.watch(self.cwd, out["run_id"])
 
     def test_v99_discovery_uses_native_models_without_usage_queries(self):
@@ -1553,7 +1553,6 @@ class P2(unittest.TestCase):
                           fake.mutations()), ("execution_failed", "execution_failed", False, []))
         self.assertEqual(transient["status"], "delivery_uncertain")
 
-    @unittest.expectedFailure
     def test_v124_observer_retries_transient_lookup_and_ends_on_board_stop(self):
         fake = FakeSessionProjects(after_status="working")
         task = self.task(execution="headless", constraints={"timeout_ms": 20000})
@@ -1568,7 +1567,7 @@ class P2(unittest.TestCase):
         def runner(cmd, **kw):
             if cmd[:2] == [hd.PROJECTS_BIN, "show"]:
                 board_queries.append(clock.elapsed)
-            if cmd[:2] == [hd.HERDR_BIN, "ls"] and "--label" in cmd and not failures:
+            if cmd[:2] == [hd.HERDR_BIN, "get"] and not failures:
                 failures.append(clock.elapsed)
                 fake.pane_error = "synthetic core lookup timeout"
                 try:
@@ -1585,7 +1584,6 @@ class P2(unittest.TestCase):
         self.assertTrue(all(query < remaining for query in board_queries), board_queries)
         self.assertLess(clock.elapsed, remaining)
 
-    @unittest.expectedFailure
     def test_v125_observer_never_requeries_transient_lookup_after_deadline(self):
         fake = FakeSessionProjects(after_status="working")
         with patch.dict(os.environ, {"HC_SESSION": "default"}):
@@ -1596,15 +1594,16 @@ class P2(unittest.TestCase):
         fake.commands.clear()
 
         def runner(cmd, **kw):
-            if cmd[:2] == [hd.PROJECTS_BIN, "show"] or (cmd[:2] == [hd.HERDR_BIN, "ls"] and "--label" in cmd):
+            if cmd[:2] == [hd.PROJECTS_BIN, "show"] or cmd[:2] == [hd.HERDR_BIN, "get"]:
                 queries.append((cmd[1], clock.elapsed))
-            if cmd[:2] == [hd.HERDR_BIN, "ls"] and "--label" in cmd:
+            if cmd[:2] == [hd.HERDR_BIN, "get"]:
+                self.assertLessEqual(kw["timeout"], remaining)
                 clock.elapsed += remaining  # The transient lookup consumes the remaining budget.
                 fake.pane_error = "synthetic core lookup timeout"
             return fake(cmd, **kw)
 
         self.watch_(out, runner, clock)
-        self.assertIn(("ls", 0), queries)
+        self.assertIn(("get", 0), queries)
         self.assertEqual(([query for query in queries if query[1] >= remaining], fake.mutations()), ([], []))
 
     def test_v126_unsupported_protocol_headless_collect_sends_no_mutations(self):

@@ -40,17 +40,31 @@ def finalize(rc, runner=subprocess.run):
 
 def watch(cwd, run_id):
     """The core owns this observer's lifetime; no resubmission, merge, or paid model calls."""
-    while True:
+    receipt = h.load_receipt(cwd, run_id)
+    deadline = time.monotonic() + h._wait(receipt, None) / 1000
+
+    def run(cmd, **kwargs):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(cmd, 0)
+        kwargs["timeout"] = min(kwargs["timeout"], remaining)
+        return subprocess.run(cmd, **kwargs)
+
+    while time.monotonic() < deadline:
         try:
-            out = h.collect_run(cwd, run_id, 0)
-            if out["status"] in ("execution_failed", "result_invalid"):
+            out = h.collect_run(cwd, run_id, 0, runner=run)
+            if out["status"] == "execution_failed":
+                receipt = h.load_receipt(cwd, run_id)
+                if receipt.get("process_exited") or receipt["delivery_state"] == "not_attempted":
+                    return
+            if out["status"] == "result_invalid":
                 return
             if out["status"] == "completed":
                 return  # collect/release already recorded the Ready handoff.
         except (h.Busy, r.InputError, OSError, ValueError) as exc:
             # ponytail: retry transient core/Git contention every 5s; add backoff if fleets need it.
             print(f"bench-router observer: {exc}", flush=True)
-        time.sleep(5)
+        time.sleep(min(5, max(0, deadline - time.monotonic())))
 
 
 if __name__ == "__main__":
