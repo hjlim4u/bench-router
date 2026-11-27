@@ -6,6 +6,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -16,6 +17,7 @@ from unittest.mock import patch
 from pathlib import Path
 from types import SimpleNamespace
 
+from bench_router import coordination, runners
 from bench_router import herdr as hd
 from bench_router import lifecycle
 from bench_router import routing as r
@@ -913,7 +915,7 @@ class P2(unittest.TestCase):
             with patch.object(hd, "headless_argv", return_value=argv):
                 out = self.run_(FakeProjects(), self.task(task_id=f"t{i}", execution="headless"), backend=hd.LOCAL_BACKEND)
             self.assertEqual((out["status"], self.receipt(out)["exit_code"]), (status, code), out["last_observation"])
-        with patch.object(hd, "headless_argv", return_value=["sleep", "30"]):
+        with patch.object(hd, "headless_argv", return_value=["sh", "-c", "exec sleep 30"]):
             out = self.run_(FakeProjects(), self.task(task_id="slow", execution="headless"), backend=hd.LOCAL_BACKEND, wait_ms=0)
         self.assertEqual(out["status"], "timed_out")
         self.assertEqual(hd.stop_run(self.cwd, out["run_id"])["status"], "stop_sent")
@@ -925,6 +927,149 @@ class P2(unittest.TestCase):
         self.assertEqual((res["status"], self.receipt(res)["process_exited"]), ("execution_failed", True))
         with self.assertRaisesRegex(r.InputError, "headless"):
             self.run_(FakeProjects(), self.task(task_id="board"), backend=hd.LOCAL_BACKEND)
+
+    def _local_without_pid(self):
+        proc = self.enterContext(patch.object(runners, "subprocess"))
+        proc.Popen.return_value = SimpleNamespace(pid=12345)
+        probe = self.enterContext(patch.object(runners, "os"))
+        probe.waitpid.side_effect = ChildProcessError
+        probe.killpg.side_effect = ProcessLookupError
+        return self.run_(FakeProjects(), self.task(execution="headless"), backend=hd.LOCAL_BACKEND, wait_ms=0)
+
+    def test_local_missing_pid_waits_for_late_exit_and_validates_result(self):
+        out = self._local_without_pid()
+        rc = self.receipt(out)
+        self.assertEqual(out["status"], "delivery_uncertain")
+        self.assertEqual(coordination.inspect()["active"], 1)
+        rd = Path(rc["run_dir"])
+
+        def publish(seconds):
+            clock.elapsed += seconds
+            write_result()(SimpleNamespace(worktree_of=lambda _: rc["worktree"]), (rd / "input.txt").read_text())
+            (rd / "exit_code").write_text("0")
+
+        clock = ObserverClock(rc["deadline_at"], 5)
+        with patch.object(hd, "time", clock), patch.object(clock, "sleep", side_effect=publish):
+            out = hd.collect_run(self.cwd, rc["run_id"], 3000)
+        self.assertEqual((clock.elapsed, out["status"], out["task_outcome"]), (1, "completed", "success"))
+        self.assertEqual(coordination.inspect()["active"], 0)
+        self.assertEqual(hd.collect_run(self.cwd, rc["run_id"], 0)["last_observation"], out["last_observation"])
+
+    def test_local_missing_pid_keeps_slot_through_wait_budget_and_unconfirmed_stop(self):
+        out = self._local_without_pid()
+        self.assertEqual(hd.stop_run(self.cwd, out["run_id"])["status"], "delivery_uncertain")
+        clock = ObserverClock(out["deadline_at"], 3)
+        with patch.object(hd, "time", clock):
+            res = hd.collect_run(self.cwd, out["run_id"], 2500)
+        self.assertEqual((clock.elapsed, res["status"], res["reassignment"]), (2.5, "delivery_uncertain", "collect_first"))
+        self.assertFalse(self.receipt(res).get("process_exited"))
+        self.assertEqual(coordination.inspect()["active"], 1)
+        coordination.resolve(res["coordination_key"], "worker stopped and effects inspected")
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0)["status"], "execution_failed")
+        self.assertEqual(coordination.inspect()["active"], 0)
+        next_run = self.run_(FakeProjects(), self.task(task_id="next", execution="headless"),
+                             backend=hd.LOCAL_BACKEND, wait_ms=0)
+        self.assertIsNotNone(next_run["run_id"])
+
+    def test_local_legacy_pid_failure_rechecks_only_without_a_stop(self):
+        rc = self.receipt(self._local_without_pid())
+        rd = Path(rc["run_dir"])
+        rc.update(status="execution_failed", process_exited=True)
+        old_note = "local CLI ended without an exit code (killed or stopped)"
+        hd._observe(rc, note=old_note)
+        hd.save(rc)
+        self.assertEqual(hd.collect_run(self.cwd, rc["run_id"], 0)["status"], "execution_failed")
+        (rd / "exit_code").write_text("0")
+        write_result(sha="bad")(SimpleNamespace(worktree_of=lambda _: rc["worktree"]), (rd / "input.txt").read_text())
+        self.assertEqual(hd.collect_run(self.cwd, rc["run_id"], 0)["status"], "result_invalid")
+        write_result()(SimpleNamespace(worktree_of=lambda _: rc["worktree"]), (rd / "input.txt").read_text())
+        self.assertEqual(hd.collect_run(self.cwd, rc["run_id"], 0)["status"], "result_invalid")
+        hd.save(rc)
+        recovered = hd.collect_run(self.cwd, rc["run_id"], 0)
+        self.assertEqual((recovered["status"], recovered["task_outcome"]), ("completed", "success"))
+        hd._observe(rc, note="local CLI stopped without an exit code")
+        hd.save(rc)
+        self.assertEqual(hd.collect_run(self.cwd, rc["run_id"], 0)["status"], "execution_failed")
+        hd._observe(rc, note=old_note)
+        hd.save(rc)
+        hd._log_event(rc, {"state": "stop_sent"})
+        self.assertEqual(hd.collect_run(self.cwd, rc["run_id"], 0)["status"], "execution_failed")
+
+    def test_local_observer_collects_exit_in_last_poll_gap(self):
+        rc = self.receipt(self._local_without_pid())
+        runners.os.killpg.side_effect = None  # the CLI is still running at every in-loop poll
+        rd, remaining, notified = Path(rc["run_dir"]), 7, []
+        clock = ObserverClock(rc["deadline_at"], remaining)
+
+        def sleep(seconds):
+            clock.elapsed += seconds
+            if clock.elapsed >= remaining:  # exit evidence lands after the last poll, before the deadline
+                write_result()(SimpleNamespace(worktree_of=lambda _: rc["worktree"]), (rd / "input.txt").read_text())
+                (rd / "exit_code").write_text("0")
+
+        with patch.object(hd, "time", clock), patch.object(hd, "_now", clock.now), \
+             patch.object(lifecycle, "time", clock), patch.object(clock, "sleep", side_effect=sleep), \
+             patch.object(hd, "_notify_settled", side_effect=lambda x: notified.append(x["status"])):
+            lifecycle.watch(self.cwd, rc["run_id"])
+        self.assertEqual((clock.elapsed, hd.load_receipt(self.cwd, rc["run_id"])["status"], notified[-1]),
+                         (remaining, "completed", "completed"))
+        self.assertEqual(coordination.inspect()["active"], 0)
+
+    def test_local_waitpid_confirms_forced_exit(self):
+        self.enterContext(patch.object(hd, "time", time))
+        with patch.object(hd, "headless_argv", return_value=["sh", "-c", "exec sleep 30"]):
+            out = self.run_(FakeProjects(), self.task(execution="headless"), backend=hd.LOCAL_BACKEND, wait_ms=0)
+        os.killpg(self.receipt(out)["pid"], signal.SIGKILL)
+        result = hd.collect_run(self.cwd, out["run_id"], 3000)
+        self.assertEqual((result["status"], self.receipt(result)["exit_signal"]), ("execution_failed", signal.SIGKILL))
+        self.assertEqual(coordination.inspect()["active"], 0)
+
+    def test_notify_codex_binds_before_observer_and_delivers_persisted_fast_result(self):
+        from bench_router import codex_notify
+        caller = "11111111-1111-4111-8111-111111111111"
+        task = self.task(execution="headless")
+        self.enterContext(patch.object(codex_notify, "caller_binding", return_value=caller))
+        self.enterContext(patch.object(runners, "subprocess")).Popen.return_value.pid = 12345
+
+        def finish(rc):
+            saved = hd.load_receipt(self.cwd, rc["run_id"])
+            self.assertEqual((saved["pid"], saved["codex_notify_thread"], saved["codex_notify_home"]),
+                             (12345, caller, codex_notify.daemon_home()))
+            rd = Path(rc["run_dir"])
+            write_result(status="partial")(SimpleNamespace(worktree_of=lambda _: rc["worktree"]), (rd / "input.txt").read_text())
+            (rd / "exit_code").write_text("0")
+            return True
+
+        def delivered(rc):
+            with hd.dispatch_lock(self.cwd):  # Dispatch and collect deliver outside the workspace lock.
+                saved = hd.load_receipt(self.cwd, rc["run_id"])
+                self.assertEqual((saved["status"], saved["task_outcome"]), ("completed", "partial"))
+                self.assertTrue(Path(saved["result_path"]).is_file())
+
+        observer = self.enterContext(patch.object(codex_notify, "spawn_local_observer", side_effect=finish))
+        notify = self.enterContext(patch.object(codex_notify, "notify_final", side_effect=delivered))
+        out = self.run_(FakeProjects(), task, backend=hd.LOCAL_BACKEND, wait_ms=0, notify_codex=True)
+        self.assertEqual(out["status"], "completed")
+        notify.assert_called_once()
+        self.assertTrue(self.run_(FakeProjects(), task, backend=hd.LOCAL_BACKEND, notify_codex=True)["reused_receipt"])
+        observer.assert_called_once()
+        with patch.object(codex_notify, "caller_binding", return_value="22222222-2222-4222-8222-222222222222"):
+            conflict = self.run_(FakeProjects(), task, backend=hd.LOCAL_BACKEND, notify_codex=True)
+        self.assertEqual(conflict["status"], "conflict")
+        self.assertEqual(self.receipt(out)["codex_notify_thread"], caller)
+
+    def test_notify_codex_requires_new_or_matching_local_binding(self):
+        from bench_router import cli, codex_notify
+        task = self.task(execution="headless")
+        with self.assertRaisesRegex(r.InputError, "live local"):
+            cli._load(SimpleNamespace(notify_codex=True, dry_run=True))
+        with self.assertRaisesRegex(r.InputError, "single local"):
+            self.run_(FakeProjects(), task, backend=hd.EXTERNAL_BACKEND, notify_codex=True)
+        out = self._local_without_pid()
+        with patch.object(codex_notify, "caller_binding", return_value="11111111-1111-4111-8111-111111111111"):
+            conflict = self.run_(FakeProjects(), task, backend=hd.LOCAL_BACKEND, notify_codex=True)
+        self.assertEqual(conflict["status"], "conflict")
+        self.assertNotIn("codex_notify_thread", self.receipt(out))
 
     def test_v113b_herdr_tui_runner_runs_in_its_own_workspace(self):
         self.enterContext(patch.object(hd, "time", time))  # a real process needs real waiting
@@ -1616,14 +1761,17 @@ class P2(unittest.TestCase):
             if cmd[:2] == [hd.PROJECTS_BIN, "show"] or cmd[:2] == [hd.HERDR_BIN, "get"]:
                 queries.append((cmd[1], clock.elapsed))
             if cmd[:2] == [hd.HERDR_BIN, "get"]:
-                self.assertLessEqual(kw["timeout"], remaining)
+                # In the loop within the budget; the one final observation at the deadline gets the floor.
+                self.assertLessEqual(kw["timeout"], remaining if clock.elapsed < remaining else hd.OBSERVE_FLOOR_S)
                 clock.elapsed += remaining  # The transient lookup consumes the remaining budget.
                 fake.pane_error = "synthetic core lookup timeout"
             return fake(cmd, **kw)
 
         self.watch_(out, runner, clock)
         self.assertIn(("get", 0), queries)
-        self.assertEqual(([query for query in queries if query[1] >= remaining], fake.mutations()), ([], []))
+        late = [query for query in queries if query[1] >= remaining]
+        self.assertEqual(([query for query in late if query[1] > remaining], fake.mutations()), ([], []))
+        self.assertEqual([name for name, _ in late].count("get"), 1)  # a single final collect, then the observer ends
 
     def test_v126_unsupported_protocol_headless_collect_sends_no_mutations(self):
         fake = FakeSessionProjects()

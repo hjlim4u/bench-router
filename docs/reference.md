@@ -187,6 +187,7 @@ All commands emit a **single JSON object** to stdout (except `explain` and `evid
 | `select --assessment FILE --profile ID --policy-id ID --policy-version V --reason TEXT [--accept-provisional]` | Produces selection 6.0 from a completed format 3 assessment; save only the inner `selection` object |
 | `route --task FILE --selection FILE` | Dispatches the profile chosen by the Orchestrator with selection evidence; returns `stale_assessment` if inputs changed |
 | `route --task FILE [--wait-ms N]` | Selects profile, delegates via Herdr, and waits/collects within timeout budget; `--wait-ms 0` returns immediately after dispatch |
+| `route --task FILE --selection FILE --wait-ms 0 --notify-codex` | Single local headless run only; an observer queues a completion message to the calling Codex CLI thread (`CODEX_THREAD_ID`) when the run settles |
 | `parallel --group FILE [--dry-run]` | Dispatches multiple agents into isolated worktrees in parallel ([Parallel Dispatch](#parallel-dispatch-and-collaboration-levels)) |
 | `collect --run-id ID --cwd DIR [--wait-ms N]` | Observes and collects an active run; **never re-sends prompts** |
 | `collect --run CWD ID [--run …] --until any\|all [--wait-ms N]` | Observes multiple runs until one (`any`) or all (`all`) settle |
@@ -367,6 +368,8 @@ The global `--runner auto|herdr|herdr-tui|local|external` option (env `BENCH_ROU
 | `external` | nothing; the caller runs the agent | any | same as local | records the caller's statement that its agent stopped | no |
 
 `external` returns `handed_off` (exit 11) plus `invocation`: `cwd` (worktree), `prompt_path` (prompt with result contract), `result_dir`, `argv` (suggested one-shot CLI for CLI profiles, else null), `model_id` and `deadline_at`. It does not probe local CLIs (availability stays unverified), so schema 2.0 caller-owned profiles are eligible; `local` and `herdr` exclude them as `unsupported_execution_profile`. `collect` on an external run completes once `result_dir` holds a valid `result.json`/`result.md` pair; a re-dispatch of the same round reports without waiting.
+
+`local` reports `delivery_uncertain` when the PID was not recorded or the process group is gone without an exit code, a stop or a signal; collect again. `stop` on a vanished group returns `delivery_uncertain` with error `stop_uncertain`, and `coordination release` on an uncertain local run settles its receipt.
 
 Live `route` (without `--dry-run`) proceeds as follows:
 

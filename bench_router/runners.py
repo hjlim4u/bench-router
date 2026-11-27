@@ -233,12 +233,21 @@ def start(rc, prompt, profile, wait_ms, runner=subprocess.run):
         return _fail(rc, f"local: could not start sh ({e})")
     rc["pid"] = p.pid
     h.save(rc)
+    if rc.get("codex_notify_thread"):
+        from . import codex_notify
+        if not codex_notify.spawn_local_observer(rc):
+            rc["monitor"] = {"error": "local observer could not start; collect the recorded run"}
+            h.save(rc)
     return h.collect(rc, h._wait(rc, wait_ms))
 
 
 def poll(rc, runner=subprocess.run, wait_s=0):
-    """One observation of a local, herdr-tui or external run; settled receipts stay settled."""
+    """Observe once. Return True when an uncertain local observation should use the remaining wait budget."""
     if rc["status"] in h.SETTLED_STATUSES:
+        if (rc["backend"] == h.LOCAL_BACKEND and rc["status"] == "execution_failed"
+                and (rc.get("last_observation") or {}).get("note") == "local CLI ended without an exit code (killed or stopped)"
+                and not any(e.get("state", "").startswith("stop_") for e in h._events(rc))):
+            h.settle_exit(rc)  # Older receipts treated one missing process group as proof of failure.
         retry_release(rc, runner)
         return
     if rc["backend"] == h.EXTERNAL_BACKEND:
@@ -275,8 +284,14 @@ def poll(rc, runner=subprocess.run, wait_s=0):
             rc["status"] = "timed_out"
             h._observe(rc, error=err, note="herdr unreachable; the CLI may still be running, collect again")
         return
+    if not rc.get("pid"):  # The submitting process may have exited before saving the PID.
+        rc["status"] = "delivery_uncertain"
+        h._observe(rc, note="local PID not recorded and exit_code missing; collect this run again")
+        return True
     try:
-        os.waitpid(rc["pid"], os.WNOHANG)  # reap our own child so a dead shell is not seen as a live zombie
+        child, status = os.waitpid(rc["pid"], os.WNOHANG)
+        if child and os.WIFSIGNALED(status):
+            rc["exit_signal"] = os.WTERMSIG(status)
     except ChildProcessError:
         pass  # started by another router process
     try:
@@ -284,8 +299,15 @@ def poll(rc, runner=subprocess.run, wait_s=0):
         rc["status"] = "timed_out"
         h._observe(rc, "working", note="local CLI still running")
     except ProcessLookupError:
-        rc.update(status="execution_failed", process_exited=True)
-        h._observe(rc, note="local CLI ended without an exit code (killed or stopped)")
+        if h.settle_exit(rc):  # Publication can race the PID check.
+            return
+        if rc.get("exit_signal") or any(e.get("state") == "stop_sent" for e in h._events(rc)):
+            rc.update(status="execution_failed", process_exited=True)
+            h._observe(rc, note="local CLI stopped without an exit code")
+        else:
+            rc["status"] = "delivery_uncertain"
+            h._observe(rc, note="local process group not visible and exit_code missing; collect this run again")
+            return True
     # shortcut: pid reuse is not detected, compare /proc start time if runs outlive a reboot or last for days
 
 
@@ -308,7 +330,7 @@ def stop(rc, runner=subprocess.run):
     try:
         os.killpg(rc["pid"], signal.SIGTERM)
     except ProcessLookupError:
-        pass  # already gone; collect records it
+        return {"code": "stop_uncertain", "message": "local process group not visible; collect to check for exit evidence"}
     except (OSError, KeyError) as e:
         return {"code": "stop_error", "message": str(e)[:300]}
     return None

@@ -135,10 +135,28 @@ def inspect():
 
 
 def resolve(key, note):
+    from . import herdr
     if not isinstance(note, str) or not note.strip():
         raise r.InputError("a reason confirming the worker stopped and effects were inspected is required")
     with operation(key):
-        return update(key, active=False, released=True, resolution=note)
+        rec = load(key)
+        if rec["backend"] == herdr.LOCAL_BACKEND and rec.get("reference") and rec["status"] == "delivery_uncertain":
+            ref = rec["reference"]
+            try:
+                with herdr.dispatch_lock(ref["cwd"]):
+                    rc = herdr.load_receipt(ref["cwd"], ref["run_id"])
+                    if rc["status"] == "delivery_uncertain":
+                        if not herdr.settle_exit(rc):
+                            rc.update(status="execution_failed", process_exited=True)
+                            herdr._observe(rc, note=f"worker confirmed stopped: {note}")
+                        herdr.save(rc)
+                    rec = update(key, status=rc["status"], active=False, released=True, resolution=note)
+            except herdr.Busy as e:
+                raise Conflict(f"{e}; retry resolution when collect returns") from e
+        else:
+            return update(key, active=False, released=True, resolution=note)
+    herdr._notify_settled(rc)
+    return rec
 
 
 def feedback(key, input_hash, decision, note):

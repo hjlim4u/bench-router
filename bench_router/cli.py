@@ -54,6 +54,8 @@ def _init(args):
 
 
 def _load(args):
+    if getattr(args, "notify_codex", False) and args.dry_run:
+        raise r.InputError("--notify-codex requires a live local route")
     task = r.validate_task(r.load_json_strict(args.task, r.TASK_MAX_BYTES))
     cfg, mapping = _config(args)
     context = (r.validate_context(r.load_json_strict(args.context, r.TASK_MAX_BYTES),
@@ -86,7 +88,8 @@ def _load(args):
         return herdr.dispatch(task, cfg, mapping, snap, snap_warnings, args.herdr_session,
                               profile_id=args.profile, context=context, selection_mode="orchestrator_pinned",
                               selection=selection, decision_options={**options, "allow_network": True},
-                              wait_ms=args.wait_ms, backend=herdr.resolve_runner(args.runner))
+                              wait_ms=args.wait_ms, backend=herdr.resolve_runner(args.runner),
+                              notify_codex=getattr(args, "notify_codex", False))
     now = datetime.now(timezone.utc)
     if args.cmd == "evaluate":
         availability = None
@@ -633,6 +636,8 @@ def main(argv=None):
     pin.add_argument("--selection", help="JSON file containing the complete selection object from select, not its output wrapper; mutually exclusive with --profile")
     pin.add_argument("--profile", help="explicit eligible profile ID from profiles.toml; legacy pin without a selection record (warns); exclusive with --selection")
     rp.add_argument("--dry-run", action="store_true", help="select only; no network, herdr or file writes")
+    rp.add_argument("--notify-codex", action="store_true",
+                    help="notify the calling Codex CLI thread when a live local headless run settles")
     rp.add_argument("--wait-ms", type=_wait_ms, help="nonnegative milliseconds to wait after submission; default: task deadline (constraints.timeout_ms, default 900000); 0: return at once, collect later; unused with --dry-run")
     vp = sub.add_parser("evaluate", help="report facts, constraint results and evaluations for every profile; no selection")
     vp.add_argument("--task", required=True, help=TASK_HELP)
