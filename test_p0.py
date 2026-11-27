@@ -1311,6 +1311,27 @@ class P0VendorGuidance(unittest.TestCase):
             popen.assert_not_called()
             self.assertFalse((root / "cache").exists())
 
+    def test_v144_cli_evaluate_uses_jev_key_unless_offline(self):
+        root = Path(self.tmp.name)
+        task = root / "task.json"
+        task.write_text(json.dumps({"schema_version": "1.0", **self.task}))
+        command = ["--cache-dir", str(root / "cache"), "evaluate", "--format", "3", "--task", str(task), "--host", "codex"]
+        seen = []
+
+        def fake_decide(request, env=None, response=None, host=None):
+            seen.append(env.get("JEV_API_KEY"))
+            return {"status": "subagent_required", "reason": "jev_unavailable", "request": request}
+
+        for extra, key in (([], "k"), (["--offline"], None)):
+            seen.clear()
+            with mock.patch.object(cli, "_config", return_value=(self.cfg, MAPPING)), \
+                    mock.patch.object(r, "env_with_dotenv", return_value={"JEV_API_KEY": "k"}), \
+                    mock.patch.object(self.d.provider, "decide", side_effect=fake_decide), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(cli.main([*command, *extra]), 17)
+            self.assertTrue(seen)
+            self.assertEqual(set(seen), {key})
+
     def test_v98_cli_preflight_filters_before_decisions_and_preserves_selection_cohort(self):
         from bench_router import evidence, herdr, codexbar
         from types import SimpleNamespace

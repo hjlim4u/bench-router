@@ -74,7 +74,7 @@ The default configuration directory is `$XDG_CONFIG_HOME/bench-router` (`~/.conf
 | `categories.toml` | No | Uses internal `bench_router/categories.toml` if absent |
 | `env` | No | API key storage (recommended permissions: `chmod 600`). Load via `set -a; . ~/.config/bench-router/env; set +a` |
 | `ARTIFICIAL_ANALYSIS_API_KEY` | No (for `aa` refresh) | Free API key for Artificial Analysis. Public `arena`, `mg` and `tb_auto` data and `wiki compile` work without it |
-| `TYPESAFE_API_KEY` (or `JEV_API_KEY`) | No (for Skill decisions) | Optional external API key for Jev in live route/parallel or `decide.py`. If absent or failed, falls back to native decision packets handled by the host agent's `bench-decider` |
+| `TYPESAFE_API_KEY` (or `JEV_API_KEY`) | No (for Skill decisions) | Optional external API key for Jev in `evaluate --format 3` (unless `--offline`), live route/parallel, or `decide.py`. If absent or failed, falls back to native decision packets handled by the host agent's `bench-decider` |
 
 <a id="profilestoml"></a>
 ### profiles.toml
