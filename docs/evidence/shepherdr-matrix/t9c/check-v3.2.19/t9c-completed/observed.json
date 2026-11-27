@@ -1,6 +1,6 @@
 {
  "scenario": "t9c-completed",
- "run_id": "9347de05-361f-4dd5-b48b-dff33bed14a2",
+ "run_id": "2d3c3a78-1075-4515-9f95-27750cf5c22d",
  "expect": "unchanged",
  "status": "completed",
  "core": {
@@ -8,7 +8,7 @@
   "core_version": "hc 0.1.20",
   "space": "demo",
   "session": "default",
-  "core_id": "416e90ad4300ce4e61cb7b33235f0dd8"
+  "core_id": "e3c5b5e139982c6231ba08823904fcf8"
  },
  "result_copied": true,
  "terminals": {
@@ -35,7 +35,7 @@
   "error": null
  },
  "release": {
-  "at": "2026-11-27T00:48:47+00:00",
+  "at": "2026-11-27T03:21:47+00:00",
   "terminals": [
    {
     "terminal_id": "t1",

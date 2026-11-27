@@ -1,20 +1,20 @@
 [
  {
-  "t": 1795740311.495,
+  "t": 1795749498.763,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
   "argv": [
    "add",
-   "br-e6e35542-ab40-4ab3-95be-15c5df1597b9",
+   "br-26730be5-264f-4f80-8648-5433e551087a",
    "--prompt-file",
-   "/home/tester/w/ri/.bench-router/runs/e6e35542-ab40-4ab3-95be-15c5df1597b9/input.txt",
+   "/home/tester/w/ri/.bench-router/runs/26730be5-264f-4f80-8648-5433e551087a/input.txt",
    "--folder",
    "/home/tester/w/ri",
    "--base",
    "main",
    "--branch",
-   "br/e6e35542-ab40-4ab3-95be-15c5df1597b9",
+   "br/26730be5-264f-4f80-8648-5433e551087a",
    "--agent",
    "claude",
    "--model",
@@ -32,7 +32,7 @@
   ]
  },
  {
-  "t": 1795740311.821,
+  "t": 1795749499.288,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
@@ -47,19 +47,20 @@
   ]
  },
  {
-  "t": 1795740311.847,
+  "t": 1795749499.369,
   "by": "router",
   "exe": "hc",
   "rc": 0,
   "argv": [
    "ls",
+   "--all",
    "--label",
    "herdr.task=w-ri#1",
    "--json"
   ]
  },
  {
-  "t": 1795740311.872,
+  "t": 1795749499.451,
   "by": "router",
   "exe": "hc",
   "rc": 0,
@@ -70,7 +71,7 @@
    "--json",
    "--no-parent",
    "--label",
-   "bench-router.watch=e6e35542-ab40-4ab3-95be-15c5df1597b9",
+   "bench-router.watch=26730be5-264f-4f80-8648-5433e551087a",
    "--",
    "env",
    "PYTHONPATH=/home/tester/br",
@@ -80,11 +81,11 @@
    "--cwd",
    "/home/tester/w/ri",
    "--run-id",
-   "e6e35542-ab40-4ab3-95be-15c5df1597b9"
+   "26730be5-264f-4f80-8648-5433e551087a"
   ]
  },
  {
-  "t": 1795740312.429,
+  "t": 1795749500.232,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
@@ -97,7 +98,7 @@
   ]
  },
  {
-  "t": 1795740312.447,
+  "t": 1795749500.255,
   "by": "router",
   "exe": "hc",
   "rc": 0,
@@ -108,7 +109,7 @@
   ]
  },
  {
-  "t": 1795740313.295,
+  "t": 1795749501.302,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
@@ -121,7 +122,7 @@
   ]
  },
  {
-  "t": 1795740313.494,
+  "t": 1795749501.517,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
@@ -136,7 +137,7 @@
   ]
  },
  {
-  "t": 1795740313.515,
+  "t": 1795749501.565,
   "by": "router",
   "exe": "hc",
   "rc": 0,
@@ -148,7 +149,7 @@
   ]
  },
  {
-  "t": 1795740313.541,
+  "t": 1795749501.593,
   "by": "router",
   "exe": "hc",
   "rc": 0,

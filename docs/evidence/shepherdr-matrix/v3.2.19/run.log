@@ -30,8 +30,8 @@
 [parallel/evaluate] rc=0
 [parallel/select] rc=0
 [parallel/parallel] rc=0
-[parallel-sm-par-i-1] PASS status=completed; result_copied=True; terminals=t13:finished/killed; admission_active=False; ready=ready; release=yes
-[parallel-sm-par-h-1] PASS status=completed; result_copied=True; terminals=t15:finished/killed; admission_active=False; ready=ready; release=yes
+[parallel-sm-par-i-1] PASS status=completed; result_copied=True; terminals=t15:finished/killed; admission_active=False; ready=ready; release=yes
+[parallel-sm-par-h-1] PASS status=completed; result_copied=True; terminals=t13:finished/killed; admission_active=False; ready=ready; release=yes
 [restart/evaluate] rc=0
 [restart/select] rc=0
 [restart/route] rc=11

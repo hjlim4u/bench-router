@@ -1,6 +1,6 @@
 {
  "scenario": "observer",
- "run_id": "a57d9fa0-d459-4201-89e0-8ab18a2149a4",
+ "run_id": "898774d0-c57f-403e-857d-12f78f0279ae",
  "expect": "completed",
  "status": "completed",
  "core": {
@@ -34,7 +34,7 @@
   "error": null
  },
  "release": {
-  "at": "2026-11-27T00:47:30+00:00",
+  "at": "2026-11-27T03:20:39+00:00",
   "terminals": [
    {
     "terminal_id": "t6",

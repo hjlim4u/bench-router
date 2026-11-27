@@ -1,6 +1,6 @@
 {
  "scenario": "route-headless",
- "run_id": "7ba1e6b8-4aed-40d2-8790-ec7878de90b6",
+ "run_id": "95bf1786-97b5-452d-bf45-2f1c706a4e1c",
  "expect": "completed",
  "status": "completed",
  "core": {
@@ -8,7 +8,7 @@
   "core_version": "hc 0.1.20",
   "space": "demo",
   "session": "default",
-  "core_id": "d3de2a6af8e3c7a60ab79ce63526d3ab"
+  "core_id": "331e749b16680ddce83447df23c0a458"
  },
  "result_copied": true,
  "terminals": {
@@ -39,7 +39,7 @@
   "error": null
  },
  "release": {
-  "at": "2026-11-27T00:45:17+00:00",
+  "at": "2026-11-27T03:18:26+00:00",
   "terminals": [
    {
     "terminal_id": "t4",

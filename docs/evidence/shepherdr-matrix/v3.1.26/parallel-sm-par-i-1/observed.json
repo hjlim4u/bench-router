@@ -1,6 +1,6 @@
 {
  "scenario": "parallel-sm-par-i-1",
- "run_id": "6fd44fce-a968-44dd-bac3-7d560a72c28a",
+ "run_id": "e79a7ace-0e17-450c-ae93-41dd88435fc0",
  "expect": "completed",
  "status": "completed",
  "core": {
@@ -8,11 +8,11 @@
   "core_version": "hc 0.1.20",
   "space": "demo",
   "session": "default",
-  "core_id": "d3de2a6af8e3c7a60ab79ce63526d3ab"
+  "core_id": "331e749b16680ddce83447df23c0a458"
  },
  "result_copied": true,
  "terminals": {
-  "t13": {
+  "t15": {
    "state": "finished",
    "reason": "killed",
    "exit_code": null,
@@ -22,7 +22,7 @@
  },
  "observer_terminals": [
   {
-   "address": "t14",
+   "address": "t16",
    "state": "live"
   }
  ],
@@ -39,10 +39,10 @@
   "error": null
  },
  "release": {
-  "at": "2026-11-27T00:46:17+00:00",
+  "at": "2026-11-27T03:19:26+00:00",
   "terminals": [
    {
-    "terminal_id": "t13",
+    "terminal_id": "t15",
     "agent": "sh"
    }
   ]

@@ -1,6 +1,6 @@
 {
  "scenario": "route-interactive",
- "run_id": "e6e35542-ab40-4ab3-95be-15c5df1597b9",
+ "run_id": "26730be5-264f-4f80-8648-5433e551087a",
  "expect": "completed",
  "status": "completed",
  "core": {
@@ -8,7 +8,7 @@
   "core_version": "hc 0.1.20",
   "space": "demo",
   "session": "default",
-  "core_id": "d3de2a6af8e3c7a60ab79ce63526d3ab"
+  "core_id": "331e749b16680ddce83447df23c0a458"
  },
  "result_copied": true,
  "terminals": {
@@ -39,7 +39,7 @@
   "error": null
  },
  "release": {
-  "at": "2026-11-27T00:45:13+00:00",
+  "at": "2026-11-27T03:18:21+00:00",
   "terminals": [
    {
     "terminal_id": "t1",

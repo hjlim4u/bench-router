@@ -1,6 +1,6 @@
 {
  "scenario": "parallel-sm-par-h-1",
- "run_id": "380c6ac7-f176-4d96-a773-8e12458cddba",
+ "run_id": "d2887ae2-1d19-4302-9e2c-c1b732ffc35f",
  "expect": "completed",
  "status": "completed",
  "core": {
@@ -12,7 +12,7 @@
  },
  "result_copied": true,
  "terminals": {
-  "t15": {
+  "t13": {
    "state": "finished",
    "reason": "killed",
    "exit_code": null,
@@ -22,7 +22,7 @@
  },
  "observer_terminals": [
   {
-   "address": "t16",
+   "address": "t14",
    "state": "live"
   }
  ],
@@ -39,10 +39,10 @@
   "error": null
  },
  "release": {
-  "at": "2026-11-27T00:48:01+00:00",
+  "at": "2026-11-27T03:21:11+00:00",
   "terminals": [
    {
-    "terminal_id": "t15",
+    "terminal_id": "t13",
     "agent": "sh"
    }
   ]

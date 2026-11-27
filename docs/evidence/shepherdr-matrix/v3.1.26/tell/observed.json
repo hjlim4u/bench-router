@@ -1,6 +1,6 @@
 {
  "scenario": "tell",
- "run_id": "01fae190-c4a5-471b-ab76-cefd599a96c8",
+ "run_id": "390a6946-c57f-404c-8b58-232eb10ff1ff",
  "expect": "completed",
  "status": "completed",
  "core": {
@@ -8,7 +8,7 @@
   "core_version": "hc 0.1.20",
   "space": "demo",
   "session": "default",
-  "core_id": "d3de2a6af8e3c7a60ab79ce63526d3ab"
+  "core_id": "331e749b16680ddce83447df23c0a458"
  },
  "result_copied": true,
  "terminals": {
@@ -39,7 +39,7 @@
   "error": null
  },
  "release": {
-  "at": "2026-11-27T00:45:57+00:00",
+  "at": "2026-11-27T03:19:06+00:00",
   "terminals": [
    {
     "terminal_id": "t8",

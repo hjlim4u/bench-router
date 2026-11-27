@@ -1,6 +1,6 @@
 {
  "scenario": "resume",
- "run_id": "2c962dae-da25-49cc-9b70-7ebd4b307caf",
+ "run_id": "1351481d-5bae-44c7-bfbb-0acdb18d455a",
  "expect": "resumed",
  "status": "completed",
  "core": {
@@ -50,7 +50,7 @@
   "error": null
  },
  "release": {
-  "at": "2026-11-27T00:46:52+00:00",
+  "at": "2026-11-27T03:20:00+00:00",
   "terminals": [
    {
     "terminal_id": "t1",

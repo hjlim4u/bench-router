@@ -1,6 +1,6 @@
 {
  "scenario": "stop",
- "run_id": "24669f47-fed4-473d-b728-73c2a3794d9f",
+ "run_id": "4561531e-9577-41d2-8ad4-72f90c74db97",
  "expect": "stopped",
  "status": "execution_failed",
  "core": {
@@ -8,7 +8,7 @@
   "core_version": "hc 0.1.20",
   "space": "demo",
   "session": "default",
-  "core_id": "d3de2a6af8e3c7a60ab79ce63526d3ab"
+  "core_id": "331e749b16680ddce83447df23c0a458"
  },
  "result_copied": false,
  "terminals": {

@@ -1,6 +1,6 @@
 {
  "scenario": "tell",
- "run_id": "b8706ce0-2e69-47a6-a26d-4d9361ca7eca",
+ "run_id": "8b578299-c4be-49b0-8ff6-0ad48979fa3f",
  "expect": "completed",
  "status": "completed",
  "core": {
@@ -39,7 +39,7 @@
   "error": null
  },
  "release": {
-  "at": "2026-11-27T00:47:38+00:00",
+  "at": "2026-11-27T03:20:48+00:00",
   "terminals": [
    {
     "terminal_id": "t8",

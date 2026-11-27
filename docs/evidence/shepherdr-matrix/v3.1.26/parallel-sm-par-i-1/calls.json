@@ -1,20 +1,20 @@
 [
  {
-  "t": 1795740375.539,
+  "t": 1795749564.19,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
   "argv": [
    "add",
-   "br-6fd44fce-a968-44dd-bac3-7d560a72c28a",
+   "br-e79a7ace-0e17-450c-ae93-41dd88435fc0",
    "--prompt-file",
-   "/home/tester/w/par/.bench-router/groups/switch-matrix/members/sm-par-i-1/.bench-router/runs/6fd44fce-a968-44dd-bac3-7d560a72c28a/input.txt",
+   "/home/tester/w/par/.bench-router/groups/switch-matrix/members/sm-par-i-1/.bench-router/runs/e79a7ace-0e17-450c-ae93-41dd88435fc0/input.txt",
    "--folder",
    "/home/tester/w/par",
    "--base",
    "main",
    "--branch",
-   "br/6fd44fce-a968-44dd-bac3-7d560a72c28a",
+   "br/e79a7ace-0e17-450c-ae93-41dd88435fc0",
    "--agent",
    "claude",
    "--model",
@@ -32,13 +32,13 @@
   ]
  },
  {
-  "t": 1795740375.862,
+  "t": 1795749564.648,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
   "argv": [
    "start",
-   "w-par#1",
+   "w-par#2",
    "--folder",
    "/home/tester/w/par",
    "--space",
@@ -47,19 +47,20 @@
   ]
  },
  {
-  "t": 1795740375.894,
+  "t": 1795749564.687,
   "by": "router",
   "exe": "hc",
   "rc": 0,
   "argv": [
    "ls",
+   "--all",
    "--label",
-   "herdr.task=w-par#1",
+   "herdr.task=w-par#2",
    "--json"
   ]
  },
  {
-  "t": 1795740375.921,
+  "t": 1795749564.713,
   "by": "router",
   "exe": "hc",
   "rc": 0,
@@ -70,7 +71,7 @@
    "--json",
    "--no-parent",
    "--label",
-   "bench-router.watch=6fd44fce-a968-44dd-bac3-7d560a72c28a",
+   "bench-router.watch=e79a7ace-0e17-450c-ae93-41dd88435fc0",
    "--",
    "env",
    "PYTHONPATH=/home/tester/br",
@@ -80,54 +81,54 @@
    "--cwd",
    "/home/tester/w/par/.bench-router/groups/switch-matrix/members/sm-par-i-1",
    "--run-id",
-   "6fd44fce-a968-44dd-bac3-7d560a72c28a"
+   "e79a7ace-0e17-450c-ae93-41dd88435fc0"
   ]
  },
  {
-  "t": 1795740376.583,
+  "t": 1795749565.32,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
   "argv": [
    "show",
-   "w-par#1",
+   "w-par#2",
    "--folder",
    "/home/tester/w/par",
    "--json"
   ]
  },
  {
-  "t": 1795740376.601,
+  "t": 1795749565.339,
   "by": "router",
   "exe": "hc",
   "rc": 0,
   "argv": [
    "get",
-   "t13",
+   "t15",
    "--json"
   ]
  },
  {
-  "t": 1795740377.537,
+  "t": 1795749566.217,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
   "argv": [
    "show",
-   "w-par#1",
+   "w-par#2",
    "--folder",
    "/home/tester/w/par",
    "--json"
   ]
  },
  {
-  "t": 1795740377.735,
+  "t": 1795749566.413,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
   "argv": [
    "ready",
-   "w-par#1",
+   "w-par#2",
    "--folder",
    "/home/tester/w/par",
    "--summary",
@@ -136,25 +137,25 @@
   ]
  },
  {
-  "t": 1795740377.76,
+  "t": 1795749566.456,
   "by": "router",
   "exe": "hc",
   "rc": 0,
   "argv": [
    "ls",
    "--label",
-   "herdr.task=w-par#1",
+   "herdr.task=w-par#2",
    "--json"
   ]
  },
  {
-  "t": 1795740377.786,
+  "t": 1795749566.48,
   "by": "router",
   "exe": "hc",
   "rc": 0,
   "argv": [
    "kill",
-   "t13",
+   "t15",
    "--json"
   ]
  }

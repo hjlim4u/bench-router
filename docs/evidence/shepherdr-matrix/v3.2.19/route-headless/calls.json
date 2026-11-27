@@ -1,20 +1,20 @@
 [
  {
-  "t": 1795740414.547,
+  "t": 1795749603.191,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
   "argv": [
    "add",
-   "br-082aec6a-9c18-4233-b3df-d943880f99dd",
+   "br-e1a1fd48-4266-47ee-be53-7bb29fdb5a64",
    "--prompt-file",
-   "/home/tester/w/rh/.bench-router/runs/082aec6a-9c18-4233-b3df-d943880f99dd/input.txt",
+   "/home/tester/w/rh/.bench-router/runs/e1a1fd48-4266-47ee-be53-7bb29fdb5a64/input.txt",
    "--folder",
    "/home/tester/w/rh",
    "--base",
    "main",
    "--branch",
-   "br/082aec6a-9c18-4233-b3df-d943880f99dd",
+   "br/e1a1fd48-4266-47ee-be53-7bb29fdb5a64",
    "--agent",
    "claude",
    "--model",
@@ -32,7 +32,7 @@
   ]
  },
  {
-  "t": 1795740414.882,
+  "t": 1795749603.582,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
@@ -44,24 +44,25 @@
    "--space",
    "demo",
    "--argv",
-   "[\"sh\", \"-c\", \"{ cd . && claude -p --model claude-opus-5-5 --effort medium --dangerously-skip-permissions \\\"$(cat /home/tester/w/rh/.bench-router/runs/082aec6a-9c18-4233-b3df-d943880f99dd/input.txt)\\\"; echo $? > /home/tester/w/rh/.bench-router/runs/082aec6a-9c18-4233-b3df-d943880f99dd/exit_code.tmp && mv /home/tester/w/rh/.bench-router/runs/082aec6a-9c18-4233-b3df-d943880f99dd/exit_code.tmp /home/tester/w/rh/.bench-router/runs/082aec6a-9c18-4233-b3df-d943880f99dd/exit_code; } 2>&1 | tee /home/tester/w/rh/.bench-router/runs/082aec6a-9c18-4233-b3df-d943880f99dd/output.log\"]",
+   "[\"sh\", \"-c\", \"{ cd . && claude -p --model claude-opus-5-5 --effort medium --dangerously-skip-permissions \\\"$(cat /home/tester/w/rh/.bench-router/runs/e1a1fd48-4266-47ee-be53-7bb29fdb5a64/input.txt)\\\"; echo $? > /home/tester/w/rh/.bench-router/runs/e1a1fd48-4266-47ee-be53-7bb29fdb5a64/exit_code.tmp && mv /home/tester/w/rh/.bench-router/runs/e1a1fd48-4266-47ee-be53-7bb29fdb5a64/exit_code.tmp /home/tester/w/rh/.bench-router/runs/e1a1fd48-4266-47ee-be53-7bb29fdb5a64/exit_code; } 2>&1 | tee /home/tester/w/rh/.bench-router/runs/e1a1fd48-4266-47ee-be53-7bb29fdb5a64/output.log\"]",
    "--json"
   ]
  },
  {
-  "t": 1795740414.906,
+  "t": 1795749603.608,
   "by": "router",
   "exe": "hc",
   "rc": 0,
   "argv": [
    "ls",
+   "--all",
    "--label",
    "herdr.task=w-rh#1",
    "--json"
   ]
  },
  {
-  "t": 1795740414.928,
+  "t": 1795749603.632,
   "by": "router",
   "exe": "hc",
   "rc": 0,
@@ -72,7 +73,7 @@
    "--json",
    "--no-parent",
    "--label",
-   "bench-router.watch=082aec6a-9c18-4233-b3df-d943880f99dd",
+   "bench-router.watch=e1a1fd48-4266-47ee-be53-7bb29fdb5a64",
    "--",
    "env",
    "PYTHONPATH=/home/tester/br",
@@ -82,11 +83,11 @@
    "--cwd",
    "/home/tester/w/rh",
    "--run-id",
-   "082aec6a-9c18-4233-b3df-d943880f99dd"
+   "e1a1fd48-4266-47ee-be53-7bb29fdb5a64"
   ]
  },
  {
-  "t": 1795740415.564,
+  "t": 1795749604.362,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
@@ -99,7 +100,7 @@
   ]
  },
  {
-  "t": 1795740415.584,
+  "t": 1795749604.381,
   "by": "router",
   "exe": "hc",
   "rc": 0,
@@ -110,7 +111,7 @@
   ]
  },
  {
-  "t": 1795740416.644,
+  "t": 1795749605.564,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
@@ -123,7 +124,7 @@
   ]
  },
  {
-  "t": 1795740416.904,
+  "t": 1795749605.848,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
@@ -138,7 +139,7 @@
   ]
  },
  {
-  "t": 1795740416.925,
+  "t": 1795749605.905,
   "by": "router",
   "exe": "hc",
   "rc": 0,
@@ -150,7 +151,7 @@
   ]
  },
  {
-  "t": 1795740416.948,
+  "t": 1795749605.928,
   "by": "router",
   "exe": "hc",
   "rc": 0,

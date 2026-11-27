@@ -1,6 +1,6 @@
 {
  "scenario": "route-headless",
- "run_id": "082aec6a-9c18-4233-b3df-d943880f99dd",
+ "run_id": "e1a1fd48-4266-47ee-be53-7bb29fdb5a64",
  "expect": "completed",
  "status": "completed",
  "core": {
@@ -39,7 +39,7 @@
   "error": null
  },
  "release": {
-  "at": "2026-11-27T00:46:56+00:00",
+  "at": "2026-11-27T03:20:05+00:00",
   "terminals": [
    {
     "terminal_id": "t4",

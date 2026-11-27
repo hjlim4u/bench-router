@@ -1,6 +1,6 @@
 {
  "scenario": "restart",
- "run_id": "3915723b-4c18-4701-b4d3-74721a5a68a7",
+ "run_id": "10715c53-9545-49f9-b589-2064a4e6b329",
  "expect": "completed",
  "status": "completed",
  "core": {
@@ -39,7 +39,7 @@
   "error": null
  },
  "release": {
-  "at": "2026-11-27T00:48:36+00:00",
+  "at": "2026-11-27T03:21:42+00:00",
   "terminals": [
    {
     "terminal_id": "t17",
@@ -55,8 +55,8 @@
   "router:hc run": 1,
   "observer:herdr-task show": 1,
   "observer:hc get": 1,
-  "router:herdr-task show": 14,
-  "router:hc get": 13,
+  "router:herdr-task show": 19,
+  "router:hc get": 18,
   "router:herdr-task ready": 1,
   "router:hc kill": 1
  },

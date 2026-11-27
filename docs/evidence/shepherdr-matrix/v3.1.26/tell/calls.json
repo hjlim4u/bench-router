@@ -1,20 +1,20 @@
 [
  {
-  "t": 1795740354.108,
+  "t": 1795749543.567,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
   "argv": [
    "add",
-   "br-01fae190-c4a5-471b-ab76-cefd599a96c8",
+   "br-390a6946-c57f-404c-8b58-232eb10ff1ff",
    "--prompt-file",
-   "/home/tester/w/te/.bench-router/runs/01fae190-c4a5-471b-ab76-cefd599a96c8/input.txt",
+   "/home/tester/w/te/.bench-router/runs/390a6946-c57f-404c-8b58-232eb10ff1ff/input.txt",
    "--folder",
    "/home/tester/w/te",
    "--base",
    "main",
    "--branch",
-   "br/01fae190-c4a5-471b-ab76-cefd599a96c8",
+   "br/390a6946-c57f-404c-8b58-232eb10ff1ff",
    "--agent",
    "claude",
    "--model",
@@ -32,7 +32,7 @@
   ]
  },
  {
-  "t": 1795740354.423,
+  "t": 1795749543.872,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
@@ -47,19 +47,20 @@
   ]
  },
  {
-  "t": 1795740354.452,
+  "t": 1795749543.896,
   "by": "router",
   "exe": "hc",
   "rc": 0,
   "argv": [
    "ls",
+   "--all",
    "--label",
    "herdr.task=w-te#1",
    "--json"
   ]
  },
  {
-  "t": 1795740354.48,
+  "t": 1795749543.92,
   "by": "router",
   "exe": "hc",
   "rc": 0,
@@ -70,7 +71,7 @@
    "--json",
    "--no-parent",
    "--label",
-   "bench-router.watch=01fae190-c4a5-471b-ab76-cefd599a96c8",
+   "bench-router.watch=390a6946-c57f-404c-8b58-232eb10ff1ff",
    "--",
    "env",
    "PYTHONPATH=/home/tester/br",
@@ -80,11 +81,11 @@
    "--cwd",
    "/home/tester/w/te",
    "--run-id",
-   "01fae190-c4a5-471b-ab76-cefd599a96c8"
+   "390a6946-c57f-404c-8b58-232eb10ff1ff"
   ]
  },
  {
-  "t": 1795740355.186,
+  "t": 1795749544.653,
   "by": "observer",
   "exe": "herdr-task",
   "rc": 0,
@@ -97,7 +98,7 @@
   ]
  },
  {
-  "t": 1795740355.219,
+  "t": 1795749544.672,
   "by": "observer",
   "exe": "hc",
   "rc": 0,
@@ -108,7 +109,7 @@
   ]
  },
  {
-  "t": 1795740355.314,
+  "t": 1795749544.743,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
@@ -121,19 +122,20 @@
   ]
  },
  {
-  "t": 1795740355.333,
+  "t": 1795749544.761,
   "by": "router",
   "exe": "hc",
   "rc": 0,
   "argv": [
    "ls",
+   "--all",
    "--label",
    "herdr.task=w-te#1",
    "--json"
   ]
  },
  {
-  "t": 1795740355.562,
+  "t": 1795749544.995,
   "by": "router",
   "exe": "hc",
   "rc": 0,
@@ -145,7 +147,7 @@
   ]
  },
  {
-  "t": 1795740356.212,
+  "t": 1795749545.607,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
@@ -158,7 +160,7 @@
   ]
  },
  {
-  "t": 1795740356.23,
+  "t": 1795749545.624,
   "by": "router",
   "exe": "hc",
   "rc": 0,
@@ -169,7 +171,7 @@
   ]
  },
  {
-  "t": 1795740357.136,
+  "t": 1795749546.49,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
@@ -182,7 +184,7 @@
   ]
  },
  {
-  "t": 1795740357.333,
+  "t": 1795749546.698,
   "by": "router",
   "exe": "herdr-task",
   "rc": 0,
@@ -197,7 +199,7 @@
   ]
  },
  {
-  "t": 1795740357.356,
+  "t": 1795749546.739,
   "by": "router",
   "exe": "hc",
   "rc": 0,
@@ -209,7 +211,7 @@
   ]
  },
  {
-  "t": 1795740357.383,
+  "t": 1795749546.765,
   "by": "router",
   "exe": "hc",
   "rc": 0,

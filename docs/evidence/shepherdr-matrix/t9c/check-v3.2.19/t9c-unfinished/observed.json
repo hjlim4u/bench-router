@@ -1,6 +1,6 @@
 {
  "scenario": "t9c-unfinished",
- "run_id": "2127a17c-8c80-43da-835c-ffe213d32744",
+ "run_id": "c48bae6b-e56e-4473-b16f-d0575a997398",
  "expect": "held",
  "status": "delivery_uncertain",
  "core": {
@@ -8,7 +8,7 @@
   "core_version": "hc 0.1.20",
   "space": "demo",
   "session": "default",
-  "core_id": "416e90ad4300ce4e61cb7b33235f0dd8"
+  "core_id": "e3c5b5e139982c6231ba08823904fcf8"
  },
  "result_copied": false,
  "terminals": {
