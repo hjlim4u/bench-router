@@ -1734,6 +1734,49 @@ class P0VendorGuidance(unittest.TestCase):
                          r.canonical_hash({k: v for k, v in r._load_toml(self.d.GUIDELINES)["vendor"]["claude"].items()
                                            if k != "prompt_guidance"}))
 
+    def test_v118_registered_vendor_guides_cover_new_complete_captures(self):
+        archive = Path(__file__).resolve().parent / "wiki" / "_raw" / "_archived"
+        date_prefix = re.compile(r"^\d{4}-\d{2}-\d{2}(?:T\d{6}Z)?-")
+        guide = self.d.load_guidelines()
+        vendors = guide["vendors"].values()
+        active_sources = {sid for vendor in vendors for sid in vendor["sources"]}
+        active_sources.update(row["source"] for vendor in vendors for row in vendor["prompt_guidance"])
+        registered = {}
+        for sid in active_sources:
+            name = Path(guide["sources"][sid]["capture"]).name
+            family = date_prefix.sub("", name)
+            registered[family] = max(name, registered.get(family, ""))
+
+        for capture in sorted(archive.glob("*.md")):
+            newest = registered.get(date_prefix.sub("", capture.name))
+            if newest and capture.name > newest:
+                frontmatter = capture.read_text("utf-8").split("\n---\n", 1)[0]
+                if re.search(r"(?m)^scope: Complete verbatim Markdown\b", frontmatter):
+                    with self.subTest(capture=capture.name):
+                        self.fail(f"Review {capture.name} and update its active source in guidelines.toml (now {newest})")
+
+    def test_v119_gemini_routing_uses_captured_model_roles(self):
+        guide = self.d.load_guidelines()
+        wiki = Path(__file__).resolve().parent / "wiki"
+        self.cfg = config([profile("gemini-check", model_id="gemini-3.8-flash", reasoning_effort="medium")])
+        request, = self.fit_packet()["decision"]["requests"]
+        roles = request["request"]["questions"]["guidance:gemini:model"]["criteria"]
+
+        choosing = (wiki / guide["sources"]["gemini_choosing_a_model"]["capture"]).read_text("utf-8")
+        section = choosing.split('id="when-to-choose" %}', 1)[1].split("\n## ", 1)[0]
+        choices = dict(re.findall(r"(?m)^\* \*\*.+? \(`([^`]+)`\):\*\* (.+)$", section))
+        self.assertTrue(choices, "Could not find Gemini model roles in the selection guide")
+        for model, passage in choices.items():
+            with self.subTest(model=model):
+                plain = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", passage)
+                self.assertTrue(roles[f"model:{model}"])
+                self.assertIn(roles[f"model:{model}"], plain)
+
+        catalog = (wiki / guide["sources"]["gemini_models"]["capture"]).read_text("utf-8")
+        flash_card = re.search(r'description="([^"]+)" href="/docs/models/gemini-3\.8-flash"', catalog)
+        self.assertIsNotNone(flash_card)
+        self.assertEqual(roles["model:gemini-3.8-flash"], flash_card[1])
+
     def test_v105_removed_default_and_fallback_keys_are_rejected(self):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "profiles.toml"

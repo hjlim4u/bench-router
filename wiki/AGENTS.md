@@ -19,6 +19,8 @@ Model and effort guidance is reference knowledge, not a benchmark unit or a new 
 
 Source captures under `_raw/_archived/` may contain a bounded verbatim excerpt rather than a complete document. Each capture declares its scope and canonical origin; never describe an excerpt as a full original. Keep captures immutable and save a new dated capture when evidence changes.
 
+When ingesting a vendor model-selection, effort, or prompting guide used by bench-router, follow [Model & Guideline Refresh](../skills/bench-router/references/model-refresh.md) through runtime sync and verification. The wiki compiler checks benchmark indexing. Run the vendor guidance tests to check the link from captures to routing.
+
 Allowed axes: `task`, `lang`, `domain`, `difficulty`, `shape`, `agent_signal`.
 
 ## `## Index` contract
