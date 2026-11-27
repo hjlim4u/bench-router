@@ -22,7 +22,7 @@ from bench_router import routing as r
 from test_p0 import MAPPING, config, profile, guided_reply, guided_responses, NOW
 
 
-SPIKE = Path(__file__).parent / "docs/evidence/shepherdr-cli/v3.2.19"
+SPIKE = Path(__file__).parent / "fixtures/shepherdr-cli/v3.2.19"  # subset of docs/evidence/shepherdr-cli (not tracked)
 
 
 def which(name):
@@ -1438,7 +1438,7 @@ class P2(unittest.TestCase):
                             if "env" in kw and op not in ("--version", "--help")))
 
     def test_custom_32_session_uses_passive_core_identity_and_detects_replacement(self):
-        fixtures = Path(__file__).parent / "docs/evidence/shepherdr-cli/v3.2.19/session"
+        fixtures = SPIKE / "session"
         core = Path(os.environ["XDG_STATE_HOME"]) / "herdr-core/custom/core.json"
         core.parent.mkdir(parents=True)
         core.write_bytes((fixtures / "core_json_after_shepherdr.out").read_bytes())

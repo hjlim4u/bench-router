@@ -11,6 +11,7 @@ It takes about 4 minutes. Raw evidence is in `shepherdr-matrix/<tag>/<path>/`: C
 `observed.json` (every check and its inputs), and `calls.json` (the router's and observer's herdr-task/hc calls for that run).
 Each container also leaves `calls.jsonl` (the full call log), `hc_ls_all.json`, `coordination.json`, `stub-log.jsonl`
 (each agent's argv tail and HC_/HERDR env), `told.log` and `run.log`. `shepherdr-matrix/summary.tsv` holds the rows below.
+Only `summary.tsv` is tracked in git; the per-tag directories linked below exist after a local run of the script.
 
 ## Setup inside each container
 

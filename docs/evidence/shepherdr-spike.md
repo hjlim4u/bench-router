@@ -7,6 +7,8 @@ commits `agent.txt`, then idles in `sleep`); see `shepherdr-cli/scripts/lib.sh`.
 Reproduce: `sh docs/evidence/shepherdr-cli/scripts/capture.sh [TAG...]` (`SCENARIOS="stop"` for a subset).
 Fixtures: `docs/evidence/shepherdr-cli/<tag>/<scenario>/<name>.out|.err|.rc`, `index.tsv` (name, exit code,
 exact argv), `run.log` (scenario stderr), `agent_env.txt` (the HC_*/HERDR_* env the agent saw).
+The `<tag>/` captures are not tracked in git; run `capture.sh` to regenerate them. The five files the tests
+read are copied to `fixtures/shepherdr-cli/v3.2.19/`.
 
 | scenario | script | covers |
 |---|---|---|

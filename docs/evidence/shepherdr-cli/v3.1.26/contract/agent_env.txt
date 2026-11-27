@@ -1,5 +1,0 @@
-HC_SCOPE=2840487-93e75ddc83e09637f80130be1105035c
-HC_TERMINAL_ID=t1
-HC_TERMINAL_SOCKET=/home/tester/.local/state/herdr-core/default/default.sock
-HERDR_BROWSER_TASK=repo#2
-HC_SCOPE=2840515-caf93f5ddd70c93d3002c20c629f6062
