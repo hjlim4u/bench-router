@@ -65,6 +65,12 @@ def watch(cwd, run_id):
             # ponytail: retry transient core/Git contention every 5s; add backoff if fleets need it.
             print(f"bench-router observer: {exc}", flush=True)
         time.sleep(min(5, max(0, deadline - time.monotonic())))
+    # An exit in the last poll gap would otherwise wait for a manual collect (no notification or handoff).
+    final = lambda cmd, **kwargs: subprocess.run(cmd, **{**kwargs, "timeout": min(kwargs["timeout"], h.SHORT_CALL_S)})
+    try:
+        h.collect_run(cwd, run_id, 0, runner=final)
+    except (h.Busy, r.InputError, OSError, ValueError) as exc:
+        print(f"bench-router observer: {exc}", flush=True)
 
 
 if __name__ == "__main__":

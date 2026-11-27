@@ -995,6 +995,26 @@ class P2(unittest.TestCase):
         hd._log_event(rc, {"state": "stop_sent"})
         self.assertEqual(hd.collect_run(self.cwd, rc["run_id"], 0)["status"], "execution_failed")
 
+    def test_local_observer_collects_exit_in_last_poll_gap(self):
+        rc = self.receipt(self._local_without_pid())
+        runners.os.killpg.side_effect = None  # the CLI is still running at every in-loop poll
+        rd, remaining, notified = Path(rc["run_dir"]), 7, []
+        clock = ObserverClock(rc["deadline_at"], remaining)
+
+        def sleep(seconds):
+            clock.elapsed += seconds
+            if clock.elapsed >= remaining:  # exit evidence lands after the last poll, before the deadline
+                write_result()(SimpleNamespace(worktree_of=lambda _: rc["worktree"]), (rd / "input.txt").read_text())
+                (rd / "exit_code").write_text("0")
+
+        with patch.object(hd, "time", clock), patch.object(hd, "_now", clock.now), \
+             patch.object(lifecycle, "time", clock), patch.object(clock, "sleep", side_effect=sleep), \
+             patch.object(hd, "_notify_settled", side_effect=lambda x: notified.append(x["status"])):
+            lifecycle.watch(self.cwd, rc["run_id"])
+        self.assertEqual((clock.elapsed, hd.load_receipt(self.cwd, rc["run_id"])["status"], notified[-1]),
+                         (remaining, "completed", "completed"))
+        self.assertEqual(coordination.inspect()["active"], 0)
+
     def test_local_waitpid_confirms_forced_exit(self):
         self.enterContext(patch.object(hd, "time", time))
         with patch.object(hd, "headless_argv", return_value=["sh", "-c", "exec sleep 30"]):
@@ -1741,14 +1761,17 @@ class P2(unittest.TestCase):
             if cmd[:2] == [hd.PROJECTS_BIN, "show"] or cmd[:2] == [hd.HERDR_BIN, "get"]:
                 queries.append((cmd[1], clock.elapsed))
             if cmd[:2] == [hd.HERDR_BIN, "get"]:
-                self.assertLessEqual(kw["timeout"], remaining)
+                # In the loop within the budget; the one final observation at the deadline gets the floor.
+                self.assertLessEqual(kw["timeout"], remaining if clock.elapsed < remaining else hd.OBSERVE_FLOOR_S)
                 clock.elapsed += remaining  # The transient lookup consumes the remaining budget.
                 fake.pane_error = "synthetic core lookup timeout"
             return fake(cmd, **kw)
 
         self.watch_(out, runner, clock)
         self.assertIn(("get", 0), queries)
-        self.assertEqual(([query for query in queries if query[1] >= remaining], fake.mutations()), ([], []))
+        late = [query for query in queries if query[1] >= remaining]
+        self.assertEqual(([query for query in late if query[1] > remaining], fake.mutations()), ([], []))
+        self.assertEqual([name for name, _ in late].count("get"), 1)  # a single final collect, then the observer ends
 
     def test_v126_unsupported_protocol_headless_collect_sends_no_mutations(self):
         fake = FakeSessionProjects()

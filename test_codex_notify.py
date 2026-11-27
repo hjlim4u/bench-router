@@ -59,6 +59,10 @@ class CodexNotifications(unittest.TestCase):
         self.assertEqual(args[:6], ["codex", "queue", "--thread", self.thread, "--resume", "--message"])
         self.assertNotIn("untrusted", args[6])
         self.assertIn('"task_outcome":"partial"', args[6])
+        payload = json.loads(args[6].removeprefix("bench-router completion "))
+        self.assertEqual((payload["receipt"], payload["result"]),
+                         (str(self.directory / "receipt.json"), str(self.directory / "result.md")))
+        self.assertTrue(Path(payload["receipt"]).is_absolute() and Path(payload["receipt"]).is_file())
         self.assertEqual(json.loads(self.state.read_text()), {"state": "queued", "returncode": 0,
                          "queue_id": self.queue_id, "warning": "warning: resume unavailable"})
 

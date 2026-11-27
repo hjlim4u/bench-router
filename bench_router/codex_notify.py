@@ -62,12 +62,12 @@ def notify_final(rc):
             os.fsync(fd)
         finally:
             os.close(fd)
-        location = Path(".bench-router", "runs", run_id)
         successful_contract = saved["status"] == "completed"
+        # Absolute: the notified thread may run in another cwd than the run's repository.
         payload = {"run_id": run_id, "status": saved["status"],
                    "task_outcome": saved["task_outcome"] if successful_contract else None,
-                   "receipt": str(location / "receipt.json"),
-                   "result": str(location / "result.md") if successful_contract else None}
+                   "receipt": str(directory / "receipt.json"),
+                   "result": str(directory / "result.md") if successful_contract else None}
         command = ["codex", "queue", "--thread", thread, "--resume", "--message",
                    "bench-router completion " + json.dumps(payload, separators=(",", ":"))]
         try:
