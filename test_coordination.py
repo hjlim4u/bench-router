@@ -99,7 +99,7 @@ class CoordinationTests(unittest.TestCase):
         co.reserve(self.task(), herdr.BACKEND, herdr.project_binding(runner=FakeProjects()))
         fake = FakeProjects()
         self.assertEqual(self.run_(fake)["status"], "conflict")
-        self.assertEqual(fake.calls, [["--version"], ["hc", "--version"]])  # binding only; nothing added
+        self.assertEqual(fake.calls, [["--version"], ["--help"], ["hc", "--version"], ["hc", "server", "status"]])  # binding only; nothing added
 
     def test_v51a_error_before_receipt_releases_admission(self):
         with self.assertRaises(r.InputError):

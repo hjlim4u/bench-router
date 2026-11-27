@@ -95,8 +95,8 @@ def runner_binding(backend, session=None, runner=subprocess.run, cwd=None):
 
 
 def same_binding(rc, session, runner):
-    current = project_binding(session, runner, rc["project_binding"]["session"])
-    return all(current[k] == rc["project_binding"][k] for k in ("task_protocol", "space", "session"))
+    current = project_binding(session, bound_runner(rc, runner), rc["project_binding"]["session"])
+    return shepherdr.matches_binding(current, rc["project_binding"])
 
 
 def _availability(availability, cfg, which, backend, requests=()):
@@ -543,7 +543,11 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
                                 min(START_CALL_S, max(0.001, (datetime.fromisoformat(rc["deadline_at"]) - _now()).total_seconds())))
     if obj is None:
         rc.update(status="delivery_uncertain", delivery_state="uncertain")
-        _observe(rc, error=err, note="task start unconfirmed; collect the recorded task, never restart")
+        try:
+            state = board.task(rc).get("state")
+        except r.InputError:
+            state = "unknown"
+        _observe(rc, state, error=err, note="task start unconfirmed; collect the recorded task, never restart")
         save(rc)
         return rc
     rc["terminal_id"] = obj.get("terminal")
@@ -710,7 +714,10 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
                 _poll_headless(rc, runner, timeout())
             else:
                 # T5: this still reads raw Shepherdr rows; the mapping to Board.observe states lives in the adapter.
-                row = _board(BACKEND, runner).task(rc, timeout())
+                board = _board(BACKEND, runner)
+                row = board.task(rc, timeout())
+                if row.get("live") and rc.get("terminal_id"):
+                    board.verify_terminal(rc, rc["terminal_id"])
                 state, status, needs = row.get("state"), row.get("status"), row.get("needs")
                 if state in ("todo", "queued", "scheduled"):
                     cancelled = state == "todo" and any(e.get("cancelled_queue") for e in _events(rc))

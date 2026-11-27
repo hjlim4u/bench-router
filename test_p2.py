@@ -47,7 +47,8 @@ def git_repo(path):
 
 
 def projects_environment(case, base):
-    case.enterContext(patch.dict(os.environ, {"BENCH_ROUTER_HERDR_SESSION": "default",
+    case.enterContext(patch.dict(os.environ, {"BENCH_ROUTER_HERDR_SESSION": "default", "HC_SESSION": "",
+                                            "SHEPHERDR_SESSION": "", "XDG_STATE_HOME": str(Path(base) / "state"),
                                             "BENCH_ROUTER_COORDINATION_DIR": str(Path(base) / "admission")}))
     case.enterContext(patch.object(hd, "probe_profiles", side_effect=lambda profiles, which=hd.shutil.which:
                                   {p["id"]: hd.probe(p, which) for p in profiles}))
@@ -106,6 +107,8 @@ class FakeProjects:
         self.calls.append(["hc", *argv[:2]])
         if argv == ["--version"]:
             return subprocess.CompletedProcess([], 0, self.core_version + "\n", "")
+        if argv == ["server", "status", "--json"]:
+            return self._ok({"core": {"id": "fake-core"}})
         if self.pane_error:
             return subprocess.CompletedProcess([], 1, "", self.pane_error)
         if argv[0] == "ls":
@@ -155,6 +158,9 @@ class FakeProjects:
         self.calls.append(argv[:2])
         if argv == ["--version"]:
             return subprocess.CompletedProcess(cmd, 0, self.version + "\n", "")
+        if argv == ["--help"]:
+            modern = getattr(self, "board_session", "default") != "default"
+            return subprocess.CompletedProcess(cmd, 0, "{add,start,stop}" if modern else "{add,start}", "")
         if argv[0] == "add":
             with self.lock:
                 n = len(self.tasks) + 1
@@ -255,7 +261,7 @@ class FakeSessionProjects(FakeProjects):
         return super().__call__(cmd, **kw)
 
     def mutations(self):
-        reads = {"--version", "show", "status", "list", "ls", "get"}
+        reads = {"--version", "--help", "server", "show", "status", "list", "ls", "get"}
         return [(session, cmd) for session, cmd in self.commands if cmd[1] not in reads]
 
 
@@ -818,7 +824,7 @@ class P2(unittest.TestCase):
         fake = FakeProjects(on_prompt=write_result())
         original_core = fake._core
         # The first ls checks the newly started terminal. Fail the later release.
-        checks = iter((False, True))
+        checks = iter((False, False, True))
         def core(argv):
             if argv[0] == "ls" and next(checks, False):
                 fake.pane_error = "herdr server not running"
@@ -1308,7 +1314,7 @@ class P2(unittest.TestCase):
         fake = FakeProjects(after_status="working")
         out = self.run_(fake)
         self.assertEqual(out["status"], "timed_out")
-        self.assertTrue(all(0 < kw["timeout"] <= 5 for cmd, kw in fake.kwargs if cmd not in ("--version",)))
+        self.assertTrue(all(0 < kw["timeout"] <= 5 for cmd, kw in fake.kwargs if cmd not in ("--version", "--help")))
         again = self.run_(fake)
         self.assertEqual((len(fake.prompts), again["reused_receipt"], again["run_id"]), (1, True, out["run_id"]))
         write_result()(fake, fake.prompts[0])
@@ -1402,10 +1408,29 @@ class P2(unittest.TestCase):
         path = Path(self.cwd) / ".bench-router" / "shepherdr.json"
         path.parent.mkdir(exist_ok=True)
         path.write_text('{"core_session":"shepherdr"}', "utf-8")
-        fake = FakeProjects(on_prompt=write_result())
+        fake = FakeSessionProjects(board_session="shepherdr", on_prompt=write_result())
         out = self.run_(fake)
         self.assertEqual(self.receipt(out)["project_binding"]["session"], "shepherdr")
         self.assertTrue(all(kw["env"]["HC_SESSION"] == "shepherdr" for _, kw in fake.kwargs if "env" in kw))
+
+    def test_custom_32_session_uses_passive_core_identity_and_detects_replacement(self):
+        fixtures = Path(__file__).parent / "docs/evidence/shepherdr-cli/v3.2.19/session"
+        core = Path(os.environ["XDG_STATE_HOME"]) / "herdr-core/custom/core.json"
+        core.parent.mkdir(parents=True)
+        core.write_bytes((fixtures / "core_json_after_shepherdr.out").read_bytes())
+        fake = FakeSessionProjects(board_session="custom", after_status="working")
+        with patch.dict(os.environ, {"SHEPHERDR_SESSION": "custom", "HC_SESSION": "default",
+                                     "HC_SOCKET": "/foreign.sock"}):
+            out = self.run_(fake, wait_ms=0)
+            binding = self.receipt(out)["project_binding"]
+            self.assertEqual((binding["session"], binding["core_id"]), ("custom", json.loads(core.read_text())["id"]))
+            self.assertFalse(any(cmd[1] == "server" for _, cmd in fake.commands))
+            with patch.dict(os.environ, {"SHEPHERDR_SESSION": "other"}):
+                self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "timed_out")
+            core.write_text('{"id":"replacement"}')
+            fake.commands.clear()
+            got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+            self.assertEqual((got["status"], fake.mutations()), ("delivery_uncertain", []))
 
     def test_start_rejects_terminal_missing_from_recorded_session(self):
         fake = FakeProjects(after_status="working")
@@ -1415,7 +1440,6 @@ class P2(unittest.TestCase):
         self.assertEqual(out["status"], "delivery_uncertain")
         self.assertEqual(fake.closed, [])
 
-    @unittest.expectedFailure
     def test_v119_collect_after_32_core_session_mismatch_keeps_run_uncertain(self):
         fake = FakeSessionProjects(board_session="shepherdr", hc_session="default", after_status="working")
         foreign = fake.add_unrelated_terminal("default")
@@ -1429,11 +1453,11 @@ class P2(unittest.TestCase):
 
         got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
         foreign_controls = [cmd for session, cmd in fake.mutations() if session == "default" and cmd[0] == hd.HERDR_BIN]
+        self.assertIn("session", self.receipt(got)["last_observation"]["note"])
         self.assertEqual((got["status"], got["thread_id"], got["release"], foreign_controls,
                           fake.sessions["default"].get(foreign["task"])),
                          ("delivery_uncertain", key, None, [], foreign))
 
-    @unittest.expectedFailure
     def test_v120_31_missing_named_session_is_diagnosed_before_add(self):
         fake = FakeSessionProjects(after_status="working")
         with patch.dict(os.environ, {"HC_SESSION": "misspelled"}):
@@ -1448,12 +1472,11 @@ class P2(unittest.TestCase):
         self.assertEqual(fake.mutations(), [], diagnosis)
         self.assertRegex(diagnosis, r"(?i)session.*misspelled|misspelled.*session")
 
-    @unittest.expectedFailure
     def test_v121_31_start_rejection_records_unstarted_card_without_resubmission(self):
         fake = FakeSessionProjects(after_status="working")
         fake.add_unrelated_terminal("other")  # The named core is reachable before the board rejects start.
         fake.reject_start = True
-        with patch.dict(os.environ, {"HC_SESSION": "other"}):
+        with patch.dict(os.environ, {"HC_SESSION": "default"}):
             out = self.run_(fake, wait_ms=0)
             before_replay = self.receipt(out)
             fake.commands.clear()

@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+from functools import wraps
 from pathlib import Path
 
 from . import routing as r
@@ -52,24 +53,49 @@ def project_binding(session=None, runner=subprocess.run, core_session=None, call
     """Bind to the task protocol and core build, never interpret legacy Projects receipts as tasks.
     call: the project_call to use (the router passes its own so it can be replaced as one seam)."""
     call = call or project_call
-    # T5: 3.2 runs in $SHEPHERDR_SESSION or "shepherdr", not HC_SESSION/default (docs/evidence/shepherdr-spike.md).
-    core_session = core_session or os.environ.get("HC_SESSION") or "default"
     version, err = call(["--version"], runner, raw=True)
     if err or (version or "").strip() != TASK_PROTOCOL:
         raise r.InputError("Shepherdr 3.x herdr-task protocol 1 is required for live dispatch; "
                            "install Shepherdr, use --runner local|external, or use route --dry-run")
+    help_text, err = call(["--help"], runner, raw=True)
+    commands = re.search(r"\{([^{}]*\bstart\b[^{}]*)\}", help_text or "")
+    if err or not commands:
+        raise r.InputError("cannot identify the installed Shepherdr subcommands")
+    modern = "stop" in commands[1].split(",")
+    selected = "default"
+    if modern:
+        selected = getattr(runner, "_shepherdr_session", None) or os.environ.get("SHEPHERDR_SESSION") or "shepherdr"
+    if selected in (".", "..") or "/" in selected or not selected.strip():
+        raise r.InputError("invalid Shepherdr core session")
+    if core_session and selected != core_session:
+        raise r.InputError(f"Shepherdr session {selected!r} differs from recorded/configured {core_session!r}")
+    caller = os.environ.get("HC_SESSION")
+    if not core_session and caller and caller not in (("default", "shepherdr", selected) if modern else ("default",)):
+        raise r.InputError(f"caller session {caller!r} is incompatible with Shepherdr session {selected!r}")
+    runner = bound_runner({"project_binding": {"session": selected}}, runner)
     core, err = call(["--version"], runner, raw=True, exe=HERDR_BIN)
     m = re.fullmatch(r"hc (\d+)\.(\d+)\.(\d+)(?:[-+ ].*)?", (core or "").strip())
     if err or not m or tuple(map(int, m.groups())) < (0, 1, 17):
         raise r.InputError("Shepherdr requires herdr-core (hc) >= 0.1.17")
     space = session or os.environ.get("BENCH_ROUTER_SPACE") or os.environ.get("BENCH_ROUTER_HERDR_SESSION")
-    if not space and os.environ.get("HC_TERMINAL_ID"):
+    if not space and (caller or "default") == selected and not os.environ.get("HC_SOCKET") and os.environ.get("HC_TERMINAL_ID"):
         obj, err = call(["get", os.environ["HC_TERMINAL_ID"], "--json"], runner, exe=HERDR_BIN)
         labels = (obj or {}).get("labels", {})
         space = labels.get("herdr.space") or labels.get("herdr.task.space") or labels.get("herdr.coordinator.space")
     if not isinstance(space, str) or not space.strip() or "/" in space:
         raise r.InputError("a local Shepherdr space is required: use --herdr-space SPACE or BENCH_ROUTER_SPACE")
-    return {"task_protocol": TASK_PROTOCOL, "core_version": core.strip(), "space": space, "session": core_session}
+    state = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state")
+    try:
+        identity = json.loads((state / "herdr-core" / selected / "core.json").read_text("utf-8"))
+    except FileNotFoundError:
+        obj, err = call(["server", "status", "--json"], runner, exe=HERDR_BIN)
+        identity = obj.get("core") if not err and isinstance(obj, dict) else None
+    except (OSError, ValueError) as exc:
+        raise r.InputError(f"cannot read core identity for session {selected!r}: {exc}") from exc
+    if not isinstance(identity, dict) or not isinstance(identity.get("id"), str) or not identity["id"]:
+        raise r.InputError(f"missing core identity for session {selected!r}")
+    return {"task_protocol": TASK_PROTOCOL, "core_version": core.strip(), "space": space,
+            "session": selected, "core_id": identity["id"]}
 
 
 def bound_runner(rc, runner):
@@ -77,16 +103,37 @@ def bound_runner(rc, runner):
     core_session = rc["project_binding"]["session"]
     def run(cmd, **kwargs):
         env = {**kwargs.pop("env", os.environ), "HC_SESSION": core_session}
-        if (os.environ.get("HC_SESSION") or "default") != core_session:
-            for key in ("HC_SOCKET", "HC_TERMINAL_SOCKET", "HC_TERMINAL_ID"):
-                env.pop(key, None)
+        env["SHEPHERDR_SESSION"] = core_session
+        for key in ("HC_SOCKET", "HC_TERMINAL_SOCKET", "HC_TERMINAL_ID"):
+            env.pop(key, None)
         return runner(cmd, env=env, **kwargs)
+    run._shepherdr_session = core_session
     return run
 
 
 def _repo(rc):
     """herdr.repo_cwd; a port-only rc (no receipt) uses the folder given to bind()."""
     return rc.get("repo_cwd", rc["cwd"]) if "cwd" in rc else rc.get("repo_cwd") or (rc.get("binding") or {}).get("folder")
+
+
+def matches_binding(current, recorded):
+    return all(current.get(k) == recorded.get(k) for k in ("task_protocol", "space", "session", "core_id"))
+
+
+def _board_operation(method):
+    """Port callers supply the binding in rc. Router calls already use a checked runner."""
+    @wraps(method)
+    def checked(self, rc, *args):
+        if "binding" not in rc:
+            return method(self, rc, *args)
+        binding = rc["binding"]
+        runner = bound_runner({"project_binding": binding}, self.runner)
+        current = project_binding(binding["space"], runner, binding["session"], self.call)
+        if not matches_binding(current, binding):
+            raise r.InputError("Shepherdr session or core binding differs from the receipt")
+        scoped = ShepherdrBoard(runner, self.call, self.capabilities)
+        return method(scoped, rc, *args)
+    return checked
 
 
 class ShepherdrBoard:
@@ -245,6 +292,7 @@ class ShepherdrBoard:
         # show keeps status=working with live=[] for 2-5 s after a kill: fall back to the terminal.
         return "working" if process == "live" else "stopped"
 
+    @_board_operation
     def observe(self, rc):
         extra, key = {}, rc.get("thread_id")
         if not key:  # lost create: look the card up by its run-id title only
@@ -268,6 +316,7 @@ class ShepherdrBoard:
         return observation(self._task_state(row, live, process), process, "ok" if ok else "mismatch",
                            why=row.get("why"), **extra)
 
+    @_board_operation
     def stop(self, rc):
         row = self.task(dict(rc))
         terminals = [t["address"] for t in row.get("live") or []] or ([rc["terminal_id"]] if rc.get("terminal_id") else [])
@@ -280,6 +329,7 @@ class ShepherdrBoard:
                 raise BoardError(err)
         return self.observe(rc)
 
+    @_board_operation
     def handoff(self, rc):
         obj, err = self._tasks(["ready", rc["thread_id"], "--folder", _repo(rc),
                                 "--summary", "Results validated by bench-router", "--json"])
@@ -287,6 +337,7 @@ class ShepherdrBoard:
             raise BoardError(err)
         return (obj or {}).get("state", "uncertain")
 
+    @_board_operation
     def cleanup(self, rc):
         """End only idle terminals belonging to this run; leave working and blocked agents alone.
         Also returns error (the failed call's error) and terminals ([{terminal_id, agent}] closed)."""
@@ -311,12 +362,14 @@ class ShepherdrBoard:
             closed.append({"terminal_id": t["address"], "agent": t.get("agent")})
         return {"closed": [c["terminal_id"] for c in closed], "left_open": None, "error": None, "terminals": closed}
 
+    @_board_operation
     def tell(self, rc, text):
         self._need("tell")
         _, err = self.send(self.tell_target(dict(rc)), text)
         if err:
             raise BoardError(err)
 
+    @_board_operation
     def resume(self, rc):
         self._need("resume")
         rc = {**rc, "project_binding": rc.get("project_binding") or rc["binding"]}
@@ -326,17 +379,16 @@ class ShepherdrBoard:
             raise BoardError(err or {"code": "shepherdr_error", "message": "resume returned no terminal"})
         return {"terminal_id": obj["terminal"], "resumed": obj.get("resumed") is True}
 
+    @_board_operation
     def create(self, rc):
         obj, err = self.add(rc, rc.get("board_settings", []), rc.get("base", "main"), START_CALL_S)
         if obj is None:
             raise BoardError(err or {"code": "shepherdr_error", "message": "task add unconfirmed"})
         return {"thread_id": obj["key"], "task_id_on_board": obj["id"]}
 
+    @_board_operation
     def start(self, rc):
         b = rc["binding"]
-        current = project_binding(b["space"], self.runner, b["session"], self.call)
-        if any(current[k] != b[k] for k in ("task_protocol", "space", "session")):
-            raise r.InputError("Shepherdr binding changed since bind; nothing started")
         obj, err = self.start_task({**rc, "project_binding": b}, rc.get("launch_args", []), START_CALL_S)
         if obj is None:
             raise BoardError(err or {"code": "shepherdr_error", "message": "task start unconfirmed"})

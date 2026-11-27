@@ -338,6 +338,8 @@ class FakeShepherdr:
         self.calls[op] += 1
         if op == "--version":
             return self.version + "\n"
+        if op == "--help":
+            return "{add,start,stop}"
         if op == "add":
             n = len(self.cards) + 1
             card = {"id": n, "key": f"repo#{n}", "ref": f"REPO-{n}", "title": a[0], "folder": arg("--folder"),
@@ -361,6 +363,8 @@ class FakeShepherdr:
     def _core(self, op, a):
         if op == "--version":
             return "hc 0.1.20\n"
+        if op == "server":
+            return {"core": {"id": "fake-core"}}
         if op == "get":
             t = self.terms.get(a[0])
             if t is None:
