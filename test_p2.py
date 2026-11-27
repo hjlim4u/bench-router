@@ -1810,6 +1810,30 @@ class P2(unittest.TestCase):
                          ("delivery_uncertain", None, [], []))
         self.assertEqual(rc["last_observation"]["error"]["code"], "core_id_mismatch")
 
+    def test_v135_headless_partial_stop_holds_admission(self):
+        from bench_router import coordination
+        fake = FakeSessionProjects(after_status="working")
+        out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        key = out["thread_id"]
+        fake.panes["second"] = {"address": "t2", "task": key, "labels": {"herdr.task": key}, "state": "live"}
+
+        def runner(cmd, **kw):
+            if cmd[:3] == [hd.HERDR_BIN, "kill", "t2"]:
+                return subprocess.CompletedProcess(cmd, 1, "", "synthetic kill failure")
+            return fake(cmd, **kw)
+
+        self.assertEqual(hd.stop_run(self.cwd, out["run_id"], runner=runner)["status"], "delivery_uncertain")
+        done = hd.collect_run(self.cwd, out["run_id"], 0, runner=runner)
+        rc = self.receipt(done)
+        active = coordination.load(done["coordination_key"])["active"]
+        self.assertEqual((rc["process_exited"], active, fake.panes["second"]["state"]), (False, True, "live"))
+
+        # Admission is released once the remaining recorded terminal also has exit evidence.
+        del fake.panes["second"]
+        done2 = hd.collect_run(self.cwd, out["run_id"], 0, runner=runner)
+        self.assertEqual((self.receipt(done2)["process_exited"], coordination.load(done2["coordination_key"])["active"]),
+                         (True, False))
+
     def test_message_log_survives_unicode_line_separator(self):
         with tempfile.TemporaryDirectory() as tmp:
             rc = {"run_dir": tmp}

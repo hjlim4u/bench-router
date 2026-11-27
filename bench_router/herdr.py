@@ -624,12 +624,34 @@ def settle_exit(rc):
     return True
 
 
+def _recorded_terminals(rc, primary=None, live_addresses=()):
+    """Every terminal id recorded for this run: primary, live workers, and every stop target."""
+    seen = []
+    for t in (primary, rc.get("terminal_id"), *live_addresses,
+              *(x["terminal_id"] for e in _events(rc) for x in e.get("terminals") or []
+                if isinstance(x, dict) and x.get("terminal_id")),
+              *(x["terminal_id"] for x in (rc.get("stop") or {}).get("terminals") or []
+                if isinstance(x, dict) and x.get("terminal_id"))):
+        if t and t not in seen:
+            seen.append(t)
+    return seen
+
+
+def _all_exited(rc, board, primary, primary_state, timeout_s, live_addresses=()):
+    """True only when every recorded terminal for this run has exited/gone evidence in the task's core."""
+    if primary_state not in ("exited", "gone"):
+        return False
+    return all(board.terminal_state(t, timeout_s, rc) in ("exited", "gone")
+               for t in _recorded_terminals(rc, primary, live_addresses) if t != primary)
+
+
 def _poll_headless(rc, runner, timeout_s):
     board = _board(BACKEND, runner)
-    board_stopped = False
+    board_stopped, live_addresses = False, ()
     if rc.get("thread_id"):
         row = board.task(rc, timeout_s)
         board_stopped = row.get("needs") == "stopped"
+        live_addresses = [w.get("address") for w in row.get("live") or [] if isinstance(w, dict) and w.get("address")]
         if row.get("state") in ("todo", "queued", "scheduled"):
             cancelled = row.get("state") == "todo" and any(e.get("cancelled_queue") for e in _events(rc))
             if cancelled:
@@ -640,14 +662,17 @@ def _poll_headless(rc, runner, timeout_s):
     if not rc.get("terminal_id"):
         raise r.InputError("hc run response was lost; inspect the recorded run label before resolving")
     process = board.terminal_state(rc["terminal_id"], timeout_s, rc)
+    exited = _all_exited(rc, board, rc["terminal_id"], process, timeout_s, live_addresses)
     stopped = board_stopped or any(e.get("state") in ("stop_attempted", "stop_sent", "stop_uncertain") for e in _events(rc))
-    if (not stopped or process in ("exited", "gone")) and settle_exit(rc):
+    if (not stopped or exited) and settle_exit(rc):
         if rc["status"] == "completed":
             release(rc, runner)
         return
     if process in ("exited", "gone"):
-        rc.update(status="execution_failed", process_exited=True)
-        _observe(rc, note=f"headless terminal {process} before writing its exit code")
+        rc.update(status="execution_failed", process_exited=exited)
+        note = (f"headless terminal {process} before writing its exit code" if exited
+                else "stop incomplete; another recorded terminal is still live")
+        _observe(rc, note=note)
     else:
         rc["status"] = "timed_out"
         _observe(rc, "working", note="headless CLI still running")
@@ -752,10 +777,8 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
                         rc["status"] = "delivery_uncertain" if state == "todo" else "timed_out"
                     _observe(rc, status, note="task not started; recovery never calls start")
                 elif needs == "stopped" or (process in ("exited", "gone") and status not in ("ready", "done")):
-                    # Admission holds until every terminal the last stop targeted shows exit evidence.
-                    others = [x["terminal_id"] for x in (rc.get("stop") or {}).get("terminals", []) if x["terminal_id"] != terminal]
-                    exited = process in ("exited", "gone") and all(
-                        board.terminal_state(t, timeout(), rc) in ("exited", "gone") for t in others)
+                    # Admission holds until every terminal the run recorded shows exit evidence.
+                    exited = _all_exited(rc, board, terminal, process, timeout(), addresses)
                     rc.update(status="execution_failed", process_exited=exited)
                     _observe(rc, status, note=row.get("why") or "task agent stopped")
                 elif process == "live" and any(e["state"].startswith("stop_") for e in _events(rc)):
