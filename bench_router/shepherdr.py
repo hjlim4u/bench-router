@@ -41,7 +41,8 @@ def project_call(argv, runner=subprocess.run, raw=False, timeout_s=SHORT_CALL_S,
         p = runner(cmd, capture_output=True, text=True, encoding="utf-8", errors="strict",
                    timeout=timeout_s, shell=False)
         if p.returncode:
-            raise ValueError((p.stderr or p.stdout)[:300])
+            message = (p.stderr or p.stdout)[:300]
+            return None, {"code": "shepherdr_error", "message": message, "returncode": p.returncode}
         if len(p.stdout.encode("utf-8")) > r.SNAPSHOT_MAX_BYTES:
             raise ValueError("Shepherdr response too large")
         return (p.stdout if raw else json.loads(p.stdout)), None
@@ -212,15 +213,30 @@ class ShepherdrBoard:
                 t.get("address") == terminal for t in obj["terminals"] if isinstance(t, dict)):
             raise r.InputError("recorded terminal is absent from the task's core session")
 
-    def terminal_state(self, terminal, timeout_s):
-        """hc get state: "live" or "exited"; InputError otherwise."""
+    def _terminal(self, terminal, timeout_s):
         obj, err = self._core(["get", terminal, "--json"], timeout_s=timeout_s)
         if err:
+            if err.get("returncode") == 3:
+                try:
+                    detail = json.loads(err["message"])
+                except ValueError:
+                    detail = None
+                if isinstance(detail, dict) and isinstance(detail.get("error"), dict) and detail["error"].get("kind") == "not_found":
+                    return "gone", {}
             raise r.InputError(err["message"])
-        # T5: hc 0.1.20 reports an ended terminal as "finished", which this rejects (docs/evidence/shepherdr-spike.md).
-        if not isinstance(obj, dict) or obj.get("state") not in ("live", "exited"):
+        if not isinstance(obj, dict) or obj.get("state") not in ("live", "finished", "exited"):
             raise r.InputError("unexpected hc terminal response")
-        return obj["state"]
+        return ("live" if obj["state"] == "live" else "exited"), obj
+
+    def terminal_state(self, terminal, timeout_s, rc=None):
+        state, obj = self._terminal(terminal, timeout_s)
+        if rc and state != "gone":
+            labels = obj.get("labels") or {}
+            owned = (labels.get("herdr.task") == rc["thread_id"] if rc.get("thread_id")
+                     else labels.get("bench-router.run") == rc["run_id"])
+            if not owned or obj.get("address") != terminal:
+                raise r.InputError("terminal identity mismatch in the recorded core session")
+        return state
 
     def kill(self, terminal, raw=False):
         """End one core terminal; returns the call's error or None."""
@@ -265,14 +281,11 @@ class ShepherdrBoard:
         """(process state, label matches key) from hc get; finished -> exited, rc 3 not_found -> gone."""
         if not terminal:
             return "gone", True
-        obj, err = self._core(["get", terminal, "--json"])
-        if err:
-            return ("gone" if "not_found" in (err.get("message") or "") else "unknown"), True
-        if not isinstance(obj, dict):
+        try:
+            state, obj = self._terminal(terminal, SHORT_CALL_S)
+        except r.InputError:
             return "unknown", True
-        label = (obj.get("labels") or {}).get("herdr.task")
-        state = obj.get("state")
-        return ("live" if state == "live" else "exited" if state in ("finished", "exited") else "unknown"), label in (None, key)
+        return state, state == "gone" or (obj.get("labels") or {}).get("herdr.task") == key
 
     @staticmethod
     def _task_state(row, live, process):
@@ -350,8 +363,7 @@ class ShepherdrBoard:
         for t in terminals:
             status = t.get("status")
             status = status.get("state") if isinstance(status, dict) else status
-            # T5: hc 0.1.20 reports an ended terminal as "finished", which this treats as active.
-            if t.get("state") != "exited" and status not in ("idle", "done") and rc.get("execution") != "headless":
+            if t.get("state") not in ("exited", "finished") and status not in ("idle", "done") and rc.get("execution") != "headless":
                 return {"closed": [], "left_open": "task still has an active agent, left open", "error": None}
         closed = []
         for t in terminals:

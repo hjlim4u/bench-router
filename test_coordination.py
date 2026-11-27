@@ -203,7 +203,6 @@ class CoordinationTests(unittest.TestCase):
             with redirect_stdout(io.StringIO()):
                 self.assertEqual(cli.main(["collect", "--cwd", str(self.cwd), "--run-id", run["run_id"]]), 0)
 
-    @unittest.expectedFailure
     def test_v60_headless_stop_acknowledgment_retains_admission_until_worker_exit(self):
         fake = FakeSessionProjects(after_status="working")
         fake.acknowledge_kill = True

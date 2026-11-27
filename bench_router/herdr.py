@@ -557,7 +557,7 @@ def execute(rc, prompt, profile, session=None, runner=subprocess.run, wait_ms=No
         try:
             board.verify_terminal(rc, rc["terminal_id"])
         except r.InputError as e:
-            rc.update(status="delivery_uncertain", delivery_state="uncertain")
+            rc.update(status="delivery_uncertain", delivery_state="uncertain", terminal_unverified=True)
             _observe(rc, note=str(e))
             save(rc)
             return rc
@@ -612,8 +612,10 @@ def settle_exit(rc):
 
 def _poll_headless(rc, runner, timeout_s):
     board = _board(BACKEND, runner)
+    board_stopped = False
     if rc.get("thread_id"):
         row = board.task(rc, timeout_s)
+        board_stopped = row.get("needs") == "stopped"
         if row.get("state") in ("todo", "queued", "scheduled"):
             cancelled = row.get("state") == "todo" and any(e.get("cancelled_queue") for e in _events(rc))
             if cancelled:
@@ -621,19 +623,17 @@ def _poll_headless(rc, runner, timeout_s):
             else:
                 rc["status"] = "timed_out"
             return
-    if settle_exit(rc):
+    if not rc.get("terminal_id"):
+        raise r.InputError("hc run response was lost; inspect the recorded run label before resolving")
+    process = board.terminal_state(rc["terminal_id"], timeout_s, rc)
+    stopped = board_stopped or any(e.get("state") in ("stop_attempted", "stop_sent", "stop_uncertain") for e in _events(rc))
+    if (not stopped or process in ("exited", "gone")) and settle_exit(rc):
         if rc["status"] == "completed":
             release(rc, runner)
         return
-    if not rc.get("terminal_id"):
-        raise r.InputError("hc run response was lost; inspect the recorded run label before resolving")
-    if any(e.get("state") == "stop_sent" for e in _events(rc)):
+    if process in ("exited", "gone"):
         rc.update(status="execution_failed", process_exited=True)
-        return
-    board.verify_terminal(rc, rc["terminal_id"])
-    if board.terminal_state(rc["terminal_id"], timeout_s) == "exited":
-        rc.update(status="execution_failed", process_exited=True)
-        _observe(rc, note="headless terminal ended before writing its exit code")
+        _observe(rc, note=f"headless terminal {process} before writing its exit code")
     else:
         rc["status"] = "timed_out"
         _observe(rc, "working", note="headless CLI still running")
@@ -705,6 +705,9 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     timeout = lambda: min(SHORT_CALL_S, max(OBSERVE_FLOOR_S, deadline - time.monotonic())) if wait_ms > 0 else SHORT_CALL_S
     while True:
         try:
+            if native and rc.get("terminal_unverified"):
+                _board(BACKEND, runner).verify_terminal(rc, rc["terminal_id"])
+                rc.pop("terminal_unverified")
             if port:
                 _observe_board(rc, runner)
             elif not native:
@@ -713,11 +716,14 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
             elif headless:
                 _poll_headless(rc, runner, timeout())
             else:
-                # T5: this still reads raw Shepherdr rows; the mapping to Board.observe states lives in the adapter.
                 board = _board(BACKEND, runner)
                 row = board.task(rc, timeout())
-                if row.get("live") and rc.get("terminal_id"):
-                    board.verify_terminal(rc, rc["terminal_id"])
+                terminal = rc.get("terminal_id")
+                addresses = [worker.get("address") for worker in row.get("live") or []]
+                if terminal and addresses and terminal not in addresses:
+                    raise r.InputError("board worker differs from the recorded terminal")
+                terminal = terminal or (addresses[0] if addresses else None)
+                process = board.terminal_state(terminal, timeout(), rc) if terminal else None
                 state, status, needs = row.get("state"), row.get("status"), row.get("needs")
                 if state in ("todo", "queued", "scheduled"):
                     cancelled = state == "todo" and any(e.get("cancelled_queue") for e in _events(rc))
@@ -726,10 +732,12 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
                     else:
                         rc["status"] = "delivery_uncertain" if state == "todo" else "timed_out"
                     _observe(rc, status, note="task not started; recovery never calls start")
-                elif needs == "stopped":
-                    stopped = any(e.get("state") == "stop_sent" for e in _events(rc))
-                    rc.update(status="execution_failed", process_exited=stopped)
+                elif needs == "stopped" or (process in ("exited", "gone") and status not in ("ready", "done")):
+                    rc.update(status="execution_failed", process_exited=process in ("exited", "gone"))
                     _observe(rc, status, note=row.get("why") or "task agent stopped")
+                elif process == "live" and any(e["state"].startswith("stop_") for e in _events(rc)):
+                    rc.update(status="timed_out", process_exited=False)
+                    _observe(rc, status, note="stop requested; terminal still live")
                 elif status == "needs" and needs != "reply":
                     rc.update(status="blocked", delivery_state="activity_observed", diagnostic_tail=row.get("why"))
                     _observe(rc, "blocked", note=row.get("why"))

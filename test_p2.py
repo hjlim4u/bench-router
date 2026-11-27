@@ -21,6 +21,9 @@ from bench_router import routing as r
 from test_p0 import MAPPING, config, profile, guided_reply, guided_responses, NOW
 
 
+SPIKE = Path(__file__).parent / "docs/evidence/shepherdr-cli/v3.2.19"
+
+
 def which(name):
     return f"/usr/bin/{name}"
 
@@ -101,7 +104,7 @@ class FakeProjects:
 
     def _pane(self, t):
         self.panes[t["key"]] = {"address": self._terminal_address(t), "cwd": t["worktree"], "agent": t["agent"],
-                                "task": t["key"], "state": "live"}
+                                "task": t["key"], "labels": {"herdr.task": t["key"]}, "state": "live"}
 
     def _core(self, argv):
         self.calls.append(["hc", *argv[:2]])
@@ -129,8 +132,10 @@ class FakeProjects:
                 self.on_run(self, self.runs[-1])
             return self._ok({"address": address})
         if argv[0] == "get":
-            return self._ok(next((p for p in self.panes.values() if p["address"] == argv[1]),
-                                 {"address": argv[1], "state": "exited"}))
+            pane = next((p for p in self.panes.values() if p["address"] == argv[1]), None)
+            if pane is None:
+                return subprocess.CompletedProcess(argv, 3, "", (SPIKE / "stop/get_after_rm.err").read_text())
+            return self._ok(pane)
         if argv[0] in ("keep", "rm"):
             return self._ok({"ok": True})
         if argv[0] == "kill":
@@ -740,8 +745,8 @@ class P2(unittest.TestCase):
         out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
         self.assertEqual(out["status"], "timed_out")
         self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "timed_out")
-        fake.panes.clear()  # closed by hand = stopped
-        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "delivery_uncertain")
+        fake.panes.clear()  # hc get now reports rc 3 not_found
+        self.assertEqual(hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)["status"], "execution_failed")
 
     def test_headless_failing_cli_without_result(self):
         fake = FakeProjects()
@@ -824,7 +829,7 @@ class P2(unittest.TestCase):
         fake = FakeProjects(on_prompt=write_result())
         original_core = fake._core
         # The first ls checks the newly started terminal. Fail the later release.
-        checks = iter((False, False, True))
+        checks = iter((False, True))
         def core(argv):
             if argv[0] == "ls" and next(checks, False):
                 fake.pane_error = "herdr server not running"
@@ -1489,7 +1494,30 @@ class P2(unittest.TestCase):
         self.assertRegex(f"{observation.get('agent_status')} {observation.get('note')}",
                          r"(?i)todo|not[ _-]started|nothing started|never started|start (?:was )?(?:refused|rejected)")
 
-    def test_v122_missing_headless_terminal_without_board_confirmation_stays_uncertain(self):
+    def test_board_stopped_with_live_terminal_holds_headless_admission(self):
+        fake = FakeSessionProjects(board_session="shepherdr", after_status="working")
+        fake.on_run = headless_cli(exit_code=143, result=False)
+        out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        fake.stopped.add(out["thread_id"])
+        got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        from bench_router import coordination
+        self.assertEqual((got["status"], coordination.load(out["coordination_key"])["active"]), ("timed_out", True))
+        self.assertFalse(self.receipt(got).get("process_exited"))
+
+    def test_finished_fixture_ends_headless_run_and_allows_cleanup(self):
+        fake = FakeProjects(after_status="working")
+        out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
+        pane = fake.panes[out["thread_id"]]
+        ended = json.loads((SPIKE / "stop/get_t0.out").read_text())
+        pane.update(ended, address=pane["address"], labels=pane["labels"], task=pane["task"])
+        got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertTrue(self.receipt(got)["process_exited"])
+        self.assertEqual(got["status"], "execution_failed")
+        rc = dict(self.receipt(got), execution="interactive")
+        hd.release(rc, fake)
+        self.assertEqual(fake.closed, [pane["address"]])
+
+    def test_v122_not_found_in_bound_core_confirms_headless_terminal_gone(self):
         fake = FakeSessionProjects(after_status="working")
         with patch.dict(os.environ, {"HC_SESSION": "default"}):
             out = self.run_(fake, self.task(execution="headless"), wait_ms=0)
@@ -1498,9 +1526,8 @@ class P2(unittest.TestCase):
 
         got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
         self.assertEqual((got["status"], bool(self.receipt(got).get("process_exited")), fake.mutations()),
-                         ("delivery_uncertain", False, []))
+                         ("execution_failed", True, []))
 
-    @unittest.expectedFailure
     def test_v123_terminal_absence_board_stop_and_lookup_error_are_distinct(self):
         fake = FakeSessionProjects(after_status="working")
         with patch.dict(os.environ, {"HC_SESSION": "default"}):
@@ -1523,7 +1550,8 @@ class P2(unittest.TestCase):
             return rc["status"], evidence
 
         self.assertEqual((missing["status"], confirmed["status"], observation(missing) == observation(transient),
-                          fake.mutations()), ("delivery_uncertain", "execution_failed", False, []))
+                          fake.mutations()), ("execution_failed", "execution_failed", False, []))
+        self.assertEqual(transient["status"], "delivery_uncertain")
 
     @unittest.expectedFailure
     def test_v124_observer_retries_transient_lookup_and_ends_on_board_stop(self):
