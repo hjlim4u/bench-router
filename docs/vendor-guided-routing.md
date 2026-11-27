@@ -30,7 +30,7 @@ python3 -m bench_router.cli route --task task.json --host codex --decision-respo
 python3 -m bench_router.cli route --task task.json --host codex --decision-response response.json
 ```
 
-The first command outputs `decision_required` alongside the `decision` packet. Dry-run never invokes network calls or file writes, even if Jev keys are present.
+The first command outputs `decision_required` alongside the `decision` packet. Dry-run never invokes network calls or file writes, even if Jev keys are present. `evaluate --format 3` calls Jev when a key is present; add `--offline` to get native packets only.
 The host forwards only the current packet's `request` to the native decision agent. The response file contains verified prior stages from `decision.completed` and the new response in sequence:
 
 ```json

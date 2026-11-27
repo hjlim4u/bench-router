@@ -96,7 +96,8 @@ def _load(args):
         if args.format == "3":
             from . import decision
             result = decision.evaluate(task, cfg, mapping, snap, snap_warnings, now,
-                                       availability=availability, context=context, **options)
+                                       availability=availability, context=context,
+                                       allow_network=not args.offline, **options)
         else:
             if response is not None:
                 raise r.InputError("--decision-response requires evaluate --format 3")
@@ -489,7 +490,9 @@ The JSON candidate list is capped at three; use explain to inspect all.""",
 When status is ok, inspect candidates, suitability, observations and diagnostics;
 choose a profile and use select --assessment assessment.json (see select --help).
 --decision-response requires --format 3; --host is unused for formats 1 and 2.
-All formats are offline unless --refresh or --preflight is supplied.
+Format 3 calls Jev for decisions when TYPESAFE_API_KEY or JEV_API_KEY is set;
+--offline skips it (native bench-decider packets only). Formats 1 and 2 are
+offline unless --refresh or --preflight is supplied.
 --preflight filters static constraints, then checks CodexBar quotas/credits before decision
 requests; keep it on response replays. It never dispatches. External runners
 leave availability to the caller. Live route checks availability again.""",
@@ -637,7 +640,8 @@ def main(argv=None):
     vp.add_argument("--refresh", action="store_true", help="check due benchmark sources before the initial assessment; report failures and keep last-good data; omit when replaying decision responses")
     vp.add_argument("--preflight", action="store_true", help="check CLI/model access, CodexBar quotas/credits and default 5% reserve before candidate decisions; includes preflight observations; may access the network; keep on response replays; external runner skips local checks")
     vp.add_argument("--format", choices=["1", "2", "3"], default="2",
-                    help="output format: 1 = legacy candidate evidence; 2 = facts, constraints and benchmark evaluations (default); 3 = staged vendor-guided assessment for select; offline unless --refresh or --preflight")
+                    help="output format: 1 = legacy candidate evidence; 2 = facts, constraints and benchmark evaluations (default); 3 = staged vendor-guided assessment for select; calls Jev when a key is set unless --offline")
+    vp.add_argument("--offline", action="store_true", help="format 3: never call Jev; unresolved decisions return native bench-decider packets")
     selp = sub.add_parser("select", help="record an upstream choice from an evaluate --format 3 assessment; no dispatch")
     selp.add_argument("--assessment", required=True, help="saved output of evaluate --format 3 (status ok)")
     selp.add_argument("--profile", required=True, help="the chosen profile ID from the assessment")
