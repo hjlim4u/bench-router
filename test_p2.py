@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -1946,6 +1947,50 @@ class P2(unittest.TestCase):
         with self.assertRaisesRegex(r.InputError, "reconcile manually"):
             hd.resume_run(self.cwd, out["run_id"], runner=runner)
         self.assertEqual(resume_calls, 1)
+
+    def _linked_worktree(self):
+        """A task cwd that is a linked git worktree; Shepherdr (store.locate) files its cards under the main checkout."""
+        linked = os.path.join(os.path.realpath(self.tmp.name) + "-linked")
+        subprocess.run(["git", "-C", self.cwd, "worktree", "add", "-q", "-b", "side", linked], check=True, capture_output=True)
+        self.addCleanup(shutil.rmtree, linked, True)
+        return linked
+
+    def _main_checkout_board(self, fake):
+        """Wrap fake like real herdr-task: --folder resolves to the main checkout; list without --folder shows none."""
+        lists = []
+
+        def runner(cmd, **kw):
+            cmd = list(cmd)
+            if cmd[0] == hd.PROJECTS_BIN and "--folder" in cmd:
+                cmd[cmd.index("--folder") + 1] = self.cwd
+            if cmd[:2] == [hd.PROJECTS_BIN, "list"]:
+                lists.append(cmd)
+                rows = list(fake.tasks.values()) if "--folder" in cmd else []
+                return fake._ok({"folder": self.cwd, "tasks": rows})
+            return fake(cmd, **kw)
+        return runner, lists
+
+    def test_v142_linked_worktree_cwd_confirms_add_on_main_checkout(self):
+        linked = self._linked_worktree()
+        fake = FakeSessionProjects(after_status="working")
+        runner, _ = self._main_checkout_board(fake)
+        fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
+        out = hd.dispatch(self.task(cwd=linked), self.cfg, MAPPING, None, [], session="default", runner=runner, which=which,
+                          profile_id="a", selection_mode="orchestrator_pinned", wait_ms=0)
+        self.assertEqual((out["status"], out["thread_id"], len(fake.adds)), ("timed_out", "repo#1", 1))
+
+    def test_v143_linked_worktree_lost_add_found_by_lookup(self):
+        linked = self._linked_worktree()
+        fake = FakeSessionProjects(after_status="working")
+        fake.add_error = True
+        runner, lists = self._main_checkout_board(fake)
+        fake.profiles = {p["id"]: p for p in self.cfg["profile"]}
+        out = hd.dispatch(self.task(cwd=linked), self.cfg, MAPPING, None, [], session="default", runner=runner, which=which,
+                          profile_id="a", selection_mode="orchestrator_pinned", wait_ms=0)
+        fake.commands.clear()
+        done = hd.collect_run(linked, out["run_id"], 0, runner=runner)
+        self.assertEqual((done["thread_id"], fake.mutations()), ("repo#1", []))
+        self.assertTrue(lists and all("--folder" in c for c in lists))
 
     def test_message_log_survives_unicode_line_separator(self):
         with tempfile.TemporaryDirectory() as tmp:

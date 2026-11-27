@@ -130,6 +130,21 @@ def _repo(rc):
     return rc.get("repo_cwd", rc["cwd"]) if "cwd" in rc else rc.get("repo_cwd") or (rc.get("binding") or {}).get("folder")
 
 
+def _board_folders(folder):
+    """Folders a card for `folder` may carry: herdr-task (store.locate) files a linked worktree's cards under its
+    main checkout, the directory of the git common dir."""
+    out = {folder}
+    try:
+        p = subprocess.run(["git", "-C", folder, "rev-parse", "--path-format=absolute", "--git-common-dir",
+                            "--show-toplevel"], capture_output=True, text=True, timeout=SHORT_CALL_S)
+        common, top = p.stdout.split("\n")[:2] if p.returncode == 0 else ("", "")
+        if top:
+            out.add(common[:-5] if common.endswith("/.git") else top)
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        pass
+    return out
+
+
 def matches_binding(current, recorded, require_core_id=True):
     keys = ("task_protocol", "space", "session", "core_id") if require_core_id or recorded.get("core_id") else ("task_protocol", "space", "session")
     return all(current.get(k) == recorded.get(k) for k in keys)
@@ -173,7 +188,8 @@ class ShepherdrBoard:
                                 *settings, *WORK_SETTINGS, "--json"], timeout_s=timeout_s)
         if err or not isinstance(obj, dict) or not re.fullmatch(r"[^#\s]+#[0-9]+", str(obj.get("key", ""))) \
                 or type(obj.get("id")) is not int or obj["id"] < 1 or not obj["key"].endswith(f"#{obj['id']}") \
-                or obj.get("title") != "br-" + rc["run_id"] or obj.get("folder") != _repo(rc) or obj.get("agent") != rc.get("kind"):
+                or obj.get("title") != "br-" + rc["run_id"] or obj.get("folder") not in _board_folders(_repo(rc)) \
+                or obj.get("agent") != rc.get("kind"):
             return None, err
         return obj, None
 
@@ -207,7 +223,7 @@ class ShepherdrBoard:
         """show the recorded card; InputError unless it is this run's. Records the card's worktree/branch in rc."""
         obj, err = self._tasks(["show", rc["thread_id"], "--folder", _repo(rc), "--json"], timeout_s=timeout_s)
         if err or not isinstance(obj, dict) or obj.get("key") != rc["thread_id"] or type(obj.get("id")) is not int or obj.get("id") != rc.get("task_id_on_board") \
-                or obj.get("title") != "br-" + rc["run_id"] or obj.get("folder") != _repo(rc) \
+                or obj.get("title") != "br-" + rc["run_id"] or obj.get("folder") not in _board_folders(_repo(rc)) \
                 or obj.get("agent") != rc.get("kind"):
             raise r.InputError("Shepherdr task identity differs from the receipt")
         if obj.get("state") not in ("todo", "queued", "scheduled"):
@@ -378,12 +394,12 @@ class ShepherdrBoard:
 
     def lookup_card(self, rc, timeout_s=SHORT_CALL_S):
         """Lost create: look the card up by its run-id title only; returns (ids|None, err|None)."""
-        obj, err = self._tasks(["list", "--json"], timeout_s=timeout_s)
+        obj, err = self._tasks(["list", *(["--folder", _repo(rc)] if _repo(rc) else []), "--json"], timeout_s=timeout_s)
         if err or not isinstance(obj, dict):
             return None, err or {"code": "shepherdr_error", "message": "task list failed"}
         found = [t for t in obj.get("tasks") or []
                  if isinstance(t, dict) and t.get("title") == "br-" + rc["run_id"]
-                 and (not _repo(rc) or t.get("folder") in (None, _repo(rc)))
+                 and (not _repo(rc) or t.get("folder") in (None, *_board_folders(_repo(rc))))
                  and (not rc.get("kind") or t.get("agent") in (None, rc.get("kind")))]
         if len(found) != 1:
             raise r.InputError(f"{len(found)} Shepherdr cards titled br-{rc['run_id']}")
