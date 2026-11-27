@@ -679,6 +679,8 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
         try:
             runner = _checked_runner(rc, session, runner)
         except r.InputError as exc:
+            if rc["status"] == "completed" and rc.get("settled_contract"):
+                return rc  # a finished record stays readable as-is; releasing needs a verified core
             rc.update(status="delivery_uncertain", delivery_state="uncertain")
             _observe(rc, note=str(exc))
             save(rc)

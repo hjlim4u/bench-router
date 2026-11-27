@@ -697,6 +697,20 @@ class P2(unittest.TestCase):
         self.assertEqual(fake.closed, ["t1"])  # a resumed session is never closed again by the router
         self.assertEqual(len(fake.prompts), 1)  # resume sends nothing
 
+    def test_completed_receipt_without_core_id_stays_readable(self):
+        fake = FakeProjects(on_prompt=write_result())
+        out = self.run_(fake)
+        rc = self.receipt(out)
+        rc["project_binding"].pop("core_id", None)  # written before T5 recorded the core identity
+        hd.save(rc)
+        path = Path(out["receipt_path"])
+        before = path.read_bytes()
+        fake.closed.clear()
+        got = hd.collect_run(self.cwd, out["run_id"], 0, runner=fake)
+        self.assertEqual((got["status"], got["task_outcome"]), ("completed", "success"))
+        self.assertEqual(path.read_bytes(), before)  # a finished record is never rewritten as uncertain
+        self.assertEqual(fake.closed, [])
+
     def test_poll_near_deadline_keeps_call_budget(self):
         fake = FakeProjects(after_status="working")
         out = self.run_(fake)
