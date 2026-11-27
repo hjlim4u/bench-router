@@ -1,6 +1,0 @@
-[t9c-occupy/t1_shepherdr] rc=0
-[t9c-occupy/t1_default] rc=0
-[t9c-completed/collect] rc=0
-[t9c-completed] PASS status=completed; result_copied=True; terminals=t1:live/None; admission_active=False; ready=ready; release=yes
-[t9c-unfinished/collect] rc=11
-[t9c-unfinished] PASS status=delivery_uncertain; result_copied=False; terminals=t4:None/None; admission_active=True; ready=None; release=no

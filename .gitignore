@@ -8,3 +8,7 @@ build/
 dist/
 *.egg-info/
 .agent/
+# Raw Shepherdr captures: regenerate with the scripts named in docs/evidence/shepherdr-*.md
+docs/evidence/shepherdr-cli/v*/
+docs/evidence/shepherdr-matrix/v*/
+docs/evidence/shepherdr-matrix/t9c/
