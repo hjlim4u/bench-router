@@ -753,6 +753,7 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
     # and misreported a working agent as delivery_uncertain.
     timeout = lambda: min(SHORT_CALL_S, max(OBSERVE_FLOOR_S, deadline - time.monotonic())) if wait_ms > 0 else SHORT_CALL_S
     while True:
+        retry_observation = False
         try:
             if native and not rc.get("thread_id") and (not headless or (not rc.get("terminal_id") and not rc.get("start_attempted"))):
                 ids, err = _board(BACKEND, runner).lookup_card(rc, timeout())
@@ -767,7 +768,7 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
                 _observe_board(rc, runner)
             elif not native:
                 from . import runners
-                runners.poll(rc, runner, max(0.0, deadline - time.monotonic()))  # herdr-tui waits in herdr
+                retry_observation = runners.poll(rc, runner, max(0.0, deadline - time.monotonic()))
             elif headless:
                 _poll_headless(rc, runner, timeout())
             else:
@@ -829,7 +830,8 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
             rc.update(status="delivery_uncertain", delivery_state="uncertain")
             _observe(rc, note=str(e))
         save(rc)
-        if rc["status"] in SETTLED_STATUSES | {"blocked", "delivery_uncertain"} or time.monotonic() >= deadline:
+        if (rc["status"] in SETTLED_STATUSES | {"blocked", "delivery_uncertain"} and not retry_observation
+                or time.monotonic() >= deadline):
             return rc
         time.sleep(min(1, max(0, deadline - time.monotonic())))
 
@@ -837,17 +839,26 @@ def collect(rc, wait_ms=0, session=None, runner=subprocess.run):
 def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
              profile_id=None, context=None, selection_mode="parallel_pinned",
              selection=None, check_digest=True, decision_options=None, wait_ms=None, availability=None,
-             backend=BACKEND, repo_cwd=None, repo_prepared=False):
+             backend=BACKEND, repo_cwd=None, repo_prepared=False, notify_codex=False):
     """wait_ms: how long to wait after submission (None = until the task deadline; 0 = return at once).
     backend: BACKEND (Herdr), LOCAL_BACKEND or EXTERNAL_BACKEND; a recorded run keeps its own backend."""
     from . import coordination as co
     key = co.key_for(t)
+    caller = None
+    if notify_codex:
+        if backend != LOCAL_BACKEND or repo_prepared or t["execution"] != "headless":
+            raise r.InputError("--notify-codex requires a single local headless route")
+        from . import codex_notify
+        caller = {"codex_notify_thread": codex_notify.caller_binding(), "codex_notify_home": codex_notify.daemon_home()}
     try:
         with co.operation(key):
             existing = [x for x in receipts(t["cwd"]) if x["task_id"] == t["task_id"] and x["round"] == t["round"]]
             if existing and session is not None and existing[0]["herdr_session"] != session:
                 raise co.Conflict("dispatch space differs from the recorded native run; use collect")
             if existing:
+                if caller and (existing[0].get("backend") != LOCAL_BACKEND or
+                               any(existing[0].get(k) != v for k, v in caller.items())):
+                    raise co.Conflict("existing receipt has a different notification binding; collect the recorded run")
                 co.observe_receipt(existing[0])
                 backend = existing[0].get("backend", BACKEND)
             elif backend == LOCAL_BACKEND and t["execution"] != "headless":
@@ -871,16 +882,19 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
             try:
                 result = _dispatch(t, cfg, mapping, snap, snap_warnings, session, runner, which,
                                    profile_id, context, selection_mode, selection, check_digest, decision_options, wait_ms,
-                                   availability, backend, repo_cwd, repo_prepared)
+                                   availability, backend, repo_cwd, repo_prepared, caller)
             except BaseException:
                 if fresh and not any(x["task_id"] == t["task_id"] and x["round"] == t["round"] for x in receipts(t["cwd"])):
                     co.discard(key)  # failed before any receipt: nothing was sent, so release the admission record
                 raise
-            if result.get("run_id"):
-                co.observe_receipt(load_receipt(t["cwd"], result["run_id"]))
+            receipt = load_receipt(t["cwd"], result["run_id"]) if result.get("run_id") else None
+            if receipt:
+                co.observe_receipt(receipt)
             elif fresh:
                 co.discard(key)  # No native receipt means dispatch never reached execution.
-            return {**result, "coordination_key": key}
+        if receipt and result["status"] == receipt["status"]:
+            _notify_settled(receipt)
+        return {**result, "coordination_key": key}
     except co.Conflict as e:
         return co.conflict(t, e)
 
@@ -888,7 +902,7 @@ def dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproce
 def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subprocess.run, which=shutil.which,
              profile_id=None, context=None, selection_mode="parallel_pinned",
              selection=None, check_digest=True, decision_options=None, wait_ms=None, availability=None,
-             backend=BACKEND, repo_cwd=None, repo_prepared=False):
+              backend=BACKEND, repo_cwd=None, repo_prepared=False, caller=None):
     """live route. 선택 → receipt → herdr 실행. 같은 (task_id, round)는 재전송 없이 collect.
     profile_id: 제약·가용성을 통과한 후보 중 이 프로필로 고정(parallel fanout).
     selection: Orchestrator 선택 기록(validate_selection). digest가 지금 입력과 다르면 실행하지 않는다(stale_assessment).
@@ -954,6 +968,8 @@ def _dispatch(t, cfg, mapping, snap, snap_warnings, session=None, runner=subproc
                   "deadline_at": _iso(now + timedelta(milliseconds=t["constraints"]["timeout_ms"])),
                   "result_path": None, "manifest_path": None, "task_outcome": None, "herdr_state": None,
                   "settled_contract": False, "last_observation": None}
+            if caller:
+                rc.update(caller)
             prompt = t["prompt"] + contract_text({**rc, "run_dir": (RESULT_REL / run_id).as_posix()})
             if len(prompt.encode("utf-8")) > MAX_PROMPT_ARG_BYTES:
                 raise r.InputError(f"prompt + contract exceeds {MAX_PROMPT_ARG_BYTES} bytes (argument limit)")
@@ -1171,7 +1187,14 @@ def collect_run(cwd, run_id, wait_ms, session=None, runner=subprocess.run):
     except (Busy, co.Conflict) as e:
         return {"schema_version": r.SCHEMA_VERSION, "status": "conflict", "run_id": run_id,
                 "warnings": [r.warn("dispatch_lock", str(e))]}
+    _notify_settled(rc)
     return {**output(None, rc), "coordination_key": co.key_for(rc)}
+
+
+def _notify_settled(rc):
+    if rc.get("backend") == LOCAL_BACKEND and rc.get("codex_notify_thread") and rc["status"] in SETTLED_STATUSES:
+        from . import codex_notify
+        codex_notify.notify_final(rc)
 
 
 def collect_many(runs, wait_ms, until="any", session=None, runner=subprocess.run):
